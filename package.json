@@ -6,6 +6,7 @@
   "scripts": {
     "build": "node scripts/build_mods.js",
     "validate": "node scripts/validate_tags.js",
+    "compress-glbs": "node scripts/compress_glbs.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -22,5 +23,8 @@
   "homepage": "https://github.com/spuddeh/nc-zoning-board#readme",
   "dependencies": {
     "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "gltf-pipeline": "^4.3.1"
   }
 }
