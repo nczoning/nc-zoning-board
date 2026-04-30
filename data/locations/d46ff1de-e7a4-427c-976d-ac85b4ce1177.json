@@ -1,0 +1,22 @@
+{
+    "id": "d46ff1de-e7a4-427c-976d-ac85b4ce1177",
+    "name": "Golden Glen Apartment - ArchiveXL",
+    "authors": [
+        "hnovak1"
+    ],
+    "credits": "",
+    "coordinates": [
+        -1525.6711,
+        -969.4567,
+        9.0737
+    ],
+    "nexus_id": "29106",
+    "description": "A makeover of V's Glen apartment inspired by Jackie and the Valentinos. Style: neokitsch/neomilitary",
+    "category": "location-overhaul",
+    "tags": [
+        "apartment",
+        "neokitsch",
+        "neomilitarism"
+    ],
+    "yaw": -0.8
+}

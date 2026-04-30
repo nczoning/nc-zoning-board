@@ -1,0 +1,22 @@
+{
+    "id": "11528cdf-5cf4-4ce0-9e6a-e4351f13a05a",
+    "name": "Jig Jig Revolution",
+    "authors": [
+        "ProximaDust"
+    ],
+    "credits": "",
+    "coordinates": [
+        -640.1577,
+        883.9499,
+        19.9066
+    ],
+    "nexus_id": "28736",
+    "description": "Overhaul of Jig Jig Street. Includes 100+ new thematic NPCs, dozens of interactions, a purchasable pod apartment with customization, and in-game settings to adjust the extra content to your preference",
+    "category": "location-overhaul",
+    "tags": [
+        "apartment",
+        "entertainment",
+        "streetkid"
+    ],
+    "yaw": -171.5556
+}

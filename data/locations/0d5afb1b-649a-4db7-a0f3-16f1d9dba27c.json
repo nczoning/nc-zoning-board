@@ -1,0 +1,22 @@
+{
+    "id": "0d5afb1b-649a-4db7-a0f3-16f1d9dba27c",
+    "name": "Rancho Coronado Private House",
+    "authors": [
+        "8eartic"
+    ],
+    "credits": "",
+    "coordinates": [
+        -65.209,
+        -1948.5612,
+        4.737
+    ],
+    "nexus_id": "29048",
+    "description": "A little private house in rancho",
+    "category": "new-location",
+    "tags": [
+        "apartment",
+        "house",
+        "infrastructure"
+    ],
+    "yaw": -125.5839
+}
