@@ -71,6 +71,13 @@ NCZ.NEXUS_BATCH_SIZE = 50;
 NCZ.DATA_MODS_PATH = "mods.json";
 NCZ.DATA_TAGS_PATH = "data/tags.json";
 
+// 3D scene GLB source folder. Flip to "assets/glb" to load the original
+// uncompressed meshes; "assets/glb-meshopt" loads the gltfpack-compressed copies
+// (~79% smaller, decoded via MeshoptDecoder — small ~30 KB WASM, fast decode,
+// preserves vertex/index ordering for GPU efficiency).
+// Both folders are committed, so toggling is a one-line revert with no asset redeploy.
+NCZ.GLB_DIR = "assets/glb-meshopt";
+
 // Content limits
 NCZ.DESCRIPTION_MAX_LENGTH = 500;
 NCZ.COPY_FEEDBACK_MS = 2000;

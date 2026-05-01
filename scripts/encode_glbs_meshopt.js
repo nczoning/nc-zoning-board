@@ -1,0 +1,87 @@
+#!/usr/bin/env node
+/**
+ * Encode every GLB in assets/glb/ → assets/glb-meshopt/ via gltfpack.
+ *
+ * gltfpack uses the EXT_meshopt_compression extension (and KHR_meshopt_compression
+ * fallback). Compared to Draco, meshopt prioritises decode speed and preserves
+ * vertex/index ordering (so vertex cache + fetch optimisations remain effective).
+ * Files end up similar size to Draco; decoder bundle is ~30 KB vs Draco's ~200 KB.
+ *
+ * Per-asset quantization mirrors the Draco settings:
+ *   - World-coord meshes (terrain, cliffs, water, roads, metro): -vp 16 (CET 12 km extent)
+ *   - Local-space landmarks: -vp 14 (small bounding box, sub-cm precision)
+ *   - Normals: -vn 10, texcoords: -vt 12, colors: -vc 8
+ *
+ * Three.js wires this up via gltfLoader.setMeshoptDecoder(MeshoptDecoder).
+ */
+
+const { spawnSync } = require('child_process');
+const fs   = require('fs');
+const path = require('path');
+
+const SRC = path.join(__dirname, '..', 'assets', 'glb');
+const DST = path.join(__dirname, '..', 'assets', 'glb-meshopt');
+
+// Per-asset position quantization bits — same precision targets as Draco settings.
+const PRESETS = {
+  '3dmap_terrain.glb':       { vp: 16 },
+  '3dmap_cliffs.glb':        { vp: 16 },
+  '3dmap_water.glb':         { vp: 16 },
+  '3dmap_roads.glb':         { vp: 16 },
+  '3dmap_roads_borders.glb': { vp: 16 },
+  '3dmap_metro.glb':         { vp: 16 },
+};
+const LANDMARK_DEFAULT = { vp: 14 };
+
+// gltfpack flags shared across all assets:
+//   -cc: aggressive EXT_meshopt_compression
+//   -vn 10: normal quantization bits
+//   -vt 12: texcoord quantization bits
+//   -vc 8: vertex color quantization bits
+//   -kn: keep node hierarchy intact (matters for landmark GLBs with nested transforms)
+//   -ke: keep extras (no-op for our GLBs but cheap insurance)
+//   -noq: NOT used — we want quantization on
+const SHARED_FLAGS = ['-cc', '-vn', '10', '-vt', '12', '-vc', '8', '-kn', '-ke'];
+
+function runGltfpack(args) {
+  // Use npx so the locally-installed gltfpack from devDependencies is found
+  // regardless of platform (Windows resolves .cmd shims, Unix resolves bin scripts).
+  const result = spawnSync('npx', ['--no-install', 'gltfpack', ...args], {
+    encoding: 'utf8',
+    shell: true,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`gltfpack exited ${result.status}: ${result.stderr || result.stdout}`);
+  }
+  return result.stdout;
+}
+
+(async () => {
+  if (!fs.existsSync(DST)) fs.mkdirSync(DST, { recursive: true });
+
+  const files = fs.readdirSync(SRC).filter(f => f.endsWith('.glb'));
+  console.log(`Encoding ${files.length} GLBs from ${SRC}\n`);
+
+  let totalIn = 0, totalOut = 0;
+  for (const f of files) {
+    const inPath  = path.join(SRC, f);
+    const outPath = path.join(DST, f);
+    const q = PRESETS[f] || LANDMARK_DEFAULT;
+
+    try {
+      runGltfpack(['-i', inPath, '-o', outPath, '-vp', String(q.vp), ...SHARED_FLAGS]);
+      const inputSize  = fs.statSync(inPath).size;
+      const outputSize = fs.statSync(outPath).size;
+      totalIn  += inputSize;
+      totalOut += outputSize;
+      const pct = ((1 - outputSize / inputSize) * 100).toFixed(1);
+      console.log(`  ${(inputSize/1024).toFixed(0).padStart(6)} KB → ${(outputSize/1024).toFixed(0).padStart(5)} KB  (-${pct}%, vp=${q.vp})  ${f}`);
+    } catch (err) {
+      console.error(`  FAILED  ${f}:  ${err.message}`);
+    }
+  }
+
+  const totalPct = ((1 - totalOut / totalIn) * 100).toFixed(1);
+  console.log(`\nTotal: ${(totalIn/1024/1024).toFixed(2)} MB → ${(totalOut/1024/1024).toFixed(2)} MB  (-${totalPct}%)`);
+})();

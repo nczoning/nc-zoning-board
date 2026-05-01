@@ -17,6 +17,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import Stats from 'three/addons/libs/stats.module.js';
 
 window.NCZ = window.NCZ || {};
@@ -97,9 +98,16 @@ const ThreeScene = (() => {
     });
   }
 
-  function loadGLB(path) {
+  // Hoisted singleton: MeshoptDecoder is attached so GLBs encoded with
+  // EXT_meshopt_compression decode transparently. The decoder is a no-op for
+  // uncompressed GLBs (the extension is only triggered when present). The
+  // decoder ships with three.js examples — no extra dependency.
+  const gltfLoader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+
+  function loadGLB(file) {
+    const path = `${NCZ.GLB_DIR}/${file}`;
     return new Promise((resolve, reject) => {
-      new GLTFLoader().load(path, gltf => resolve(gltf.scene), undefined, reject);
+      gltfLoader.load(path, gltf => resolve(gltf.scene), undefined, reject);
     });
   }
 
@@ -326,9 +334,9 @@ const ThreeScene = (() => {
     try {
       // Tier 1: terrain + water + cliffs in parallel
       const [terrainScene, waterScene, cliffsScene] = await Promise.all([
-        loadGLB('assets/glb/3dmap_terrain.glb'),
-        loadGLB('assets/glb/3dmap_water.glb'),
-        loadGLB('assets/glb/3dmap_cliffs.glb'),
+        loadGLB('3dmap_terrain.glb'),
+        loadGLB('3dmap_water.glb'),
+        loadGLB('3dmap_cliffs.glb'),
       ]);
 
       terrainMat = makeHillshadeMaterial('--scene-terrain', '#566c88');
@@ -387,9 +395,9 @@ const ThreeScene = (() => {
     registerLoadStep(); // roads + metro
     try {
       const [roadsScene, metroScene, bordersScene] = await Promise.all([
-        loadGLB('assets/glb/3dmap_roads.glb'),
-        loadGLB('assets/glb/3dmap_metro.glb'),
-        loadGLB('assets/glb/3dmap_roads_borders.glb'),
+        loadGLB('3dmap_roads.glb'),
+        loadGLB('3dmap_metro.glb'),
+        loadGLB('3dmap_roads_borders.glb'),
       ]);
 
       // All road GLBs have inverted X axis — rotate 180° around Y to correct
@@ -573,7 +581,7 @@ const ThreeScene = (() => {
       // Unique GLB files (ferris wheel is shared)
       const uniqueFiles = [...new Set(LANDMARK_META.map(m => m.file))];
       const glbMap = Object.fromEntries(
-        await Promise.all(uniqueFiles.map(async f => [f, await loadGLB(`assets/glb/${f}`)]))
+        await Promise.all(uniqueFiles.map(async f => [f, await loadGLB(f)]))
       );
 
       const group = new THREE.Group();
