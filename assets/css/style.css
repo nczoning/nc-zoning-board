@@ -2268,6 +2268,15 @@ body::before {
         font-size: 15px;
         color: var(--color-white);
     }
+
+    /* Active cluster — the one whose contents are currently in the cluster
+       panel. Shared between Leaflet (SAT) and ThreeMarkers (SCHEMA) views. */
+    &.marker-cluster-active {
+        box-shadow:
+            0 0 0 2px var(--secondary),
+            0 0 var(--space-lg) var(--secondary-30);
+        z-index: 999 !important;
+    }
 }
 
 

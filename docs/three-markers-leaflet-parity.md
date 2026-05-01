@@ -43,6 +43,8 @@ These are live in the current PR. Nothing to action.
 | A16 | Sidebar item click → camera fly-to-pin | `markerClusterGroup.zoomToShowLayer` | ✅ (was B3) |
 | A17 | Discover button works in 3D | `focusRandomVisibleMarker` | ✅ (was B5) |
 | A18 | Popup chrome (background, arrows, category colours) shared between Leaflet and 3D — single CSS source of truth | `.ncz-dynamic-popup` chrome rules | ✅ |
+| A19 | Pin clustering (screen-space proximity grouping at low zoom, dissolves on zoom-in) | `L.markerClusterGroup` | ✅ (was C1) |
+| A20 | Cluster click → cluster panel; map-aware (track-and-update successor; close on view switch); active-bubble visual indicator | `clusterclick` event + populateClusterPanel | ✅ (was C2) |
 
 ---
 
@@ -62,14 +64,8 @@ Most of B is now in Section A. Only B4 remains, deferred to discussion (see Sect
 
 | ID | Item | Why it matters | Est. LOC | Notes (you fill in) |
 | --- | --- | --- | --- | --- |
-| C1 | **Pin clustering** (proximity grouping at low zoom) | Pin density is heavy in city centre — at full zoom-out it's an unreadable mess of dots | ~150 | ✓ |
-| C2 | **Cluster click → cluster panel** (existing DOM panel reused) | Same UX as Leaflet — click a cluster bubble, side panel lists mods inside | ~50 (depends on C1) | ✓ |
 | C3 | **Pannable bounds** (constrain camera to world bounds + padding) | OrbitControls currently lets you pan to infinity; Leaflet has bounds | ~20 | ✓ |
 | C4 | **Distance scale bar** (moved from D2) | Orthographic projection means scale is uniform across screen along the camera's screen-X axis; works fine in 3D, just needs different math than Leaflet's | ~30 | ✓ |
-
-**C1 details** — Project each visible pin to screen pixels via `pin.position.project(camera)`, group within ~80px radius using a simple spatial grid. Each cluster becomes a CSS2DObject showing the count. Re-cluster on `controls.change` event with rAF debouncing. The colour-step ramp from Leaflet ([app.js:766](assets/js/app.js#L766)) ports directly. Spiderfy is **not** included — that's its own Section D item (won't translate cleanly).
-
-**C2 details** — Cluster click → call `populateClusterPanel(modsInCluster)` (the existing handler at [app.js:1097](assets/js/app.js#L1097) is generic — sort of). Need to refactor to take a mod list directly rather than a Leaflet cluster object.
 
 **C3 details** — Set `controls.minPan` / `controls.maxPan` to the world bbox + 500m padding. May want soft bounds (rubber-banding) rather than hard stops.
 

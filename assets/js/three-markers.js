@@ -38,6 +38,19 @@ const ThreeMarkers = (() => {
   let _flyTween = null;
   let _flyLastTime = 0;
 
+  // Clustering — pool CSS2DObjects (cluster bubbles), recompute on filter
+  // change or camera move. Filter-visible set is tracked separately from
+  // pin.visible because clustering OVERRIDES pin.visible to hide grouped pins.
+  let _clusterLayer = null;
+  const _clusterPool = [];          // CSS2DObject[] — reused across recomputes
+  let _filterVisibleIds = new Set();
+  let _recomputeFrame = null;
+  let _onClusterClick = null;       // cluster-click callback (set by app.js)
+  let _onClustersChanged = null;    // recompute-fired callback (set by app.js)
+  let _activeClusterMods = null;    // Set<modId> | null — mods of the cluster
+                                    // whose contents the cluster panel is showing
+  const _projectVec = new THREE.Vector3();
+
   // Tooltip — single reusable CSS2DObject created at attach time. Hidden by
   // default; show()/hide() toggle .visible and update text/position.
   let tooltipObj = null;
@@ -69,6 +82,16 @@ const ThreeMarkers = (() => {
     pinsLayer = new THREE.Group();
     pinsLayer.name = 'three-markers';
     scene.add(pinsLayer);
+
+    // Cluster bubble layer — sibling of pinsLayer at scene root so buildPins
+    // doesn't disturb it. Pool grows on demand and is reused across recomputes.
+    _clusterLayer = new THREE.Group();
+    _clusterLayer.name = 'three-clusters';
+    scene.add(_clusterLayer);
+
+    // Re-cluster on any camera move (rAF-debounced — at most one recompute
+    // per frame, regardless of how often controls fires 'change').
+    if (controls) controls.addEventListener('change', scheduleRecomputeClusters);
 
     // Tooltip — one persistent CSS2DObject, hidden by default. Shown on pin
     // hover with the mod's name. renderOrder=999 places it above pins
@@ -114,6 +137,9 @@ const ThreeMarkers = (() => {
       if (dist > NCZ.PIN_3D_DRAG_THRESHOLD_PX) return;  // was a drag, not a click
       if (e.target.closest('.three-popup')) return;
       if (e.target.closest('.three-marker')) return;
+      // Cluster click opens the cluster panel; matches Leaflet's behaviour
+      // where clicking a cluster does NOT close an already-open popup.
+      if (e.target.closest('.marker-cluster')) return;
       closePopup();
     });
 
@@ -180,6 +206,12 @@ const ThreeMarkers = (() => {
       pinsLayer.add(css);
       pins.set(mod.id, css);
     }
+
+    // Default filter set = all mods. app.js's applyFilters will overwrite
+    // this once the user touches a filter, but seeding here makes the initial
+    // SCHEMA load show clusters immediately rather than waiting for a click.
+    _filterVisibleIds = new Set(_modsState.mods.map(m => m.id));
+    recomputeClusters();
   }
 
   function setPulse(modId, on) {
@@ -206,21 +238,183 @@ const ThreeMarkers = (() => {
   }
 
   function applyFilters(visibleIdSet) {
+    _filterVisibleIds = visibleIdSet;
     for (const [id, obj] of pins) {
       obj.visible = visibleIdSet.has(id);
     }
     if (popupModId && !visibleIdSet.has(popupModId)) closePopup();
+    // Re-cluster synchronously: filter changes affect which pins exist for
+    // the proximity grouper, and the user expects immediate visual feedback.
+    recomputeClusters();
   }
 
-  // Returns mod IDs of pins whose CSS2DObject is currently visible (i.e. passed
-  // the active filters). Used by the Discover button to pick a random
-  // unfiltered pin in 3D mode.
+  // Returns mod IDs of pins that pass the active filter (regardless of cluster
+  // grouping). Discover uses this to pick a random target — clustered pins
+  // are valid choices because the fly-to tween zooms in past the cluster
+  // radius, dissolving the cluster around the target by the time the fly ends.
   function getVisibleModIds() {
-    const ids = [];
+    return [..._filterVisibleIds];
+  }
+
+  // ── Clustering ────────────────────────────────────────────────────────
+  // Project every filter-visible pin to screen pixels, group within
+  // PIN_3D_CLUSTER_RADIUS_PX via greedy O(N²) walk, render groups of size 2+
+  // as cluster bubbles + hide their pins. Singletons stay as visible pins.
+
+  function scheduleRecomputeClusters() {
+    if (_recomputeFrame !== null) return;
+    _recomputeFrame = requestAnimationFrame(() => {
+      _recomputeFrame = null;
+      recomputeClusters();
+    });
+  }
+
+  function recomputeClusters() {
+    if (!_clusterLayer || !camera || !container) return;
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+    const halfW = w * 0.5;
+    const halfH = h * 0.5;
+
+    // Project filter-visible pins to viewport pixel space
+    const points = [];
     for (const [id, pin] of pins) {
-      if (pin.visible) ids.push(id);
+      if (!_filterVisibleIds.has(id)) continue;
+      _projectVec.copy(pin.position).project(camera);
+      // Skip pins behind camera or way off-screen — clustering them is wasted work
+      if (_projectVec.z > 1 || _projectVec.z < -1) continue;
+      const sx = (_projectVec.x + 1) * halfW;
+      const sy = (1 - _projectVec.y) * halfH;
+      points.push({ id, pin, sx, sy, used: false });
     }
-    return ids;
+
+    // Greedy proximity grouping. For each unassigned pin, sweep all unassigned
+    // pins and pull in any within radius. O(N²) — fine at our N (~207 max).
+    const radiusSq = NCZ.PIN_3D_CLUSTER_RADIUS_PX * NCZ.PIN_3D_CLUSTER_RADIUS_PX;
+    const groups = [];
+    for (const p of points) {
+      if (p.used) continue;
+      p.used = true;
+      const group = [p];
+      for (const q of points) {
+        if (q.used) continue;
+        const dx = q.sx - p.sx;
+        const dy = q.sy - p.sy;
+        if (dx * dx + dy * dy < radiusSq) {
+          q.used = true;
+          group.push(q);
+        }
+      }
+      groups.push(group);
+    }
+
+    // Render groups: singletons → show pin; multi → hide pins, show cluster bubble
+    let poolIdx = 0;
+    for (const group of groups) {
+      if (group.length < 2) {
+        group[0].pin.visible = true;
+        continue;
+      }
+      for (const m of group) m.pin.visible = false;
+      const cluster = getOrCreateClusterObj(poolIdx++);
+      // Centroid in world space — CSS2DRenderer projects this each frame
+      let cx = 0, cy = 0, cz = 0;
+      for (const m of group) {
+        cx += m.pin.position.x;
+        cy += m.pin.position.y;
+        cz += m.pin.position.z;
+      }
+      const n = group.length;
+      cluster.position.set(cx / n, cy / n, cz / n);
+      const count = group.length;
+      const colorStep = Math.round(Math.max(0, Math.min(count, 100)) / 11);
+      const root = cluster.element;
+      root.className = `marker-cluster marker-cluster-step marker-cluster-step-${colorStep}`;
+      root.querySelector('span').textContent = String(count);
+      cluster.userData.modIds = group.map(g => g.id);
+      cluster.visible = true;
+    }
+    // Hide unused pool entries from a previous larger cluster set
+    for (let i = poolIdx; i < _clusterPool.length; i++) {
+      _clusterPool[i].visible = false;
+    }
+
+    // Re-apply the active-cluster mark: pool DOM is reused, but visibility
+    // and modIds change per recompute, so the previously-marked bubble may
+    // not be the right one anymore.
+    refreshActiveClusterMark();
+
+    // Notify app.js so it can dismiss a stale cluster panel (one that was
+    // opened for a cluster whose membership no longer matches any current
+    // cluster after this recompute).
+    if (_onClustersChanged) {
+      const sets = [];
+      for (let i = 0; i < poolIdx; i++) {
+        sets.push(_clusterPool[i].userData.modIds || []);
+      }
+      _onClustersChanged(sets);
+    }
+  }
+
+  // Mark the cluster bubble whose modIds best overlap _activeClusterMods.
+  // When _activeClusterMods is null, clear all marks. Called after every
+  // recompute (since pool membership changes) and via setActiveClusterMods().
+  function refreshActiveClusterMark() {
+    for (const obj of _clusterPool) {
+      if (obj.element) obj.element.classList.remove('marker-cluster-active');
+    }
+    if (!_activeClusterMods || _activeClusterMods.size === 0) return;
+    let bestObj = null;
+    let bestOverlap = 0;
+    for (const obj of _clusterPool) {
+      if (!obj.visible) continue;
+      const ids = obj.userData.modIds || [];
+      let overlap = 0;
+      for (const id of ids) if (_activeClusterMods.has(id)) overlap++;
+      if (overlap > bestOverlap) {
+        bestOverlap = overlap;
+        bestObj = obj;
+      }
+    }
+    if (bestObj && bestObj.element) {
+      bestObj.element.classList.add('marker-cluster-active');
+    }
+  }
+
+  function setActiveClusterMods(modSet) {
+    _activeClusterMods = modSet || null;
+    refreshActiveClusterMark();
+  }
+
+  function getOrCreateClusterObj(idx) {
+    if (idx < _clusterPool.length) return _clusterPool[idx];
+    const root = document.createElement('div');
+    root.className = 'marker-cluster marker-cluster-step';
+    // Leaflet sets size via iconSize inline; for 3D we set it directly.
+    root.style.width = '40px';
+    root.style.height = '40px';
+    root.style.pointerEvents = 'auto';
+    root.style.cursor = 'pointer';
+    root.innerHTML = '<div><span>0</span></div>';
+    const obj = new CSS2DObject(root);
+    root.addEventListener('click', (e) => {
+      e.stopPropagation();
+      // userData.modIds is set by recomputeClusters each time the bubble is
+      // assigned to a group; pass to whatever handler app.js registered.
+      const ids = obj.userData.modIds || [];
+      _onClusterClick?.(ids);
+    });
+    _clusterPool.push(obj);
+    _clusterLayer.add(obj);
+    return obj;
+  }
+
+  function setClusterClickHandler(fn) {
+    _onClusterClick = fn;
+  }
+
+  function setClustersChangedHandler(fn) {
+    _onClustersChanged = fn;
   }
 
   function openPopup(mod) {
@@ -404,6 +598,9 @@ const ThreeMarkers = (() => {
     getVisibleModIds,
     focusMod,
     setPulse,
+    setClusterClickHandler,
+    setClustersChangedHandler,
+    setActiveClusterMods,
     closePopup,
     render,
     onResize,
