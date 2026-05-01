@@ -185,6 +185,9 @@ const ThreeScene = (() => {
     renderer.domElement.style.inset    = '0';
     container.appendChild(renderer.domElement);
 
+    // TEMP DEBUG: expose for chrome-devtools mcp inspection. Remove after debugging.
+    if (DEBUG_MODE) window.NCZ.__debug = { renderer, scene, camera, controls };
+
     initStats(container);
 
     // Scene background matches theme primary color
