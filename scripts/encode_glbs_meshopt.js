@@ -38,10 +38,17 @@ const LANDMARK_DEFAULT = { vp: 14 };
 //   -vn 10: normal quantization bits
 //   -vt 12: texcoord quantization bits
 //   -vc 8: vertex color quantization bits
-//   -kn: keep node hierarchy intact (matters for landmark GLBs with nested transforms)
 //   -ke: keep extras (no-op for our GLBs but cheap insurance)
-//   -noq: NOT used — we want quantization on
-const SHARED_FLAGS = ['-cc', '-vn', '10', '-vt', '12', '-vc', '8', '-kn', '-ke'];
+//
+// Intentionally NOT using -kn (keep names): with -kn, gltfpack inserts named
+// wrapper groups above the dequantization transform nodes. Three.js r170's
+// GLTFLoader appears to lose the child transform when the hierarchy is two
+// levels deep with quantization on the inner level — meshes render at int16
+// scale (4–5× too large). Without -kn, gltfpack puts the dequant transform
+// directly on the root nodes, which Three.js handles correctly. Trade-off:
+// loses original mesh names like "submesh_00_LOD_1" — but our code doesn't
+// reference them, so no functional impact.
+const SHARED_FLAGS = ['-cc', '-vn', '10', '-vt', '12', '-vc', '8', '-ke'];
 
 function runGltfpack(args) {
   // Use npx so the locally-installed gltfpack from devDependencies is found
