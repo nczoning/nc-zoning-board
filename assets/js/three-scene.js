@@ -814,9 +814,16 @@ const ThreeScene = (() => {
   const tiltDisplay = document.getElementById('scene-tilt-display');
 
   // Debug instrumentation — only active when URL has ?debug=1.
-  // stats.js panels (click to cycle): FPS / MS / MB / draw calls / triangles.
+  // stats.js panels (vertical stack, all visible): FPS / MS / MB / draw calls / triangles.
   const DEBUG_MODE = new URLSearchParams(window.location.search).has('debug');
   let stats = null, statsCallsPanel = null, statsTrisPanel = null;
+
+  // Rolling buffer of frame intervals — feeds dumpDebugInfo() with avg/p50/p95.
+  // 120 samples ≈ 2s at 60fps, 8s at 15fps. Big enough to smooth jitter without
+  // hiding sustained performance changes.
+  const FRAME_SAMPLE_SIZE = 120;
+  const _frameTimes = [];
+  let _lastFrameTime = 0;
 
   function initStats(container) {
     if (!DEBUG_MODE || stats) return;
@@ -845,9 +852,30 @@ const ThreeScene = (() => {
     // screen at once so the user can read every metric without interaction.
     for (const child of stats.dom.children) child.style.display = 'block';
     container.appendChild(stats.dom);
+
+    // "Copy debug info" button — sits below the 5 stats panels.
+    // Stats height: 5 × 48px panels + 4 × 4px gaps = 256px → button starts at 16+256+8 = 280px.
+    const dumpBtn = document.createElement('button');
+    dumpBtn.textContent  = 'Copy debug info';
+    dumpBtn.style.cssText = [
+      'position:absolute', 'top:280px', 'right:20px', 'z-index:9999',
+      'padding:6px 10px', 'background:#221', 'color:#ff8',
+      'border:1px solid #ff8', 'border-radius:3px',
+      'font-family:monospace', 'font-size:11px', 'cursor:pointer',
+      'pointer-events:auto', 'opacity:0.9',
+    ].join(';');
+    dumpBtn.addEventListener('click', () => {
+      dumpDebugInfo();
+      const orig = dumpBtn.textContent;
+      dumpBtn.textContent = 'Copied ✓';
+      setTimeout(() => { dumpBtn.textContent = orig; }, 1500);
+    });
+    container.appendChild(dumpBtn);
+
     console.log('[NCZ] Debug mode active. Try:');
     console.log('  NCZ.ThreeScene.getRenderInfo()       → draw calls / tris / textures snapshot');
     console.log('  NCZ.ThreeScene.setOverrideMaterial(true|false)  → flat-shade everything to test fragment cost');
+    console.log('  NCZ.ThreeScene.dumpDebugInfo()       → full diagnostic snapshot (also bound to the "Copy debug info" button)');
   }
 
   function renderLoop() {
@@ -860,6 +888,13 @@ const ThreeScene = (() => {
       statsTrisPanel .update(renderer.info.render.triangles/1000, 2000);
       stats.end();
     }
+    // Frame-time sampling for dumpDebugInfo() — runs whether stats panel is on or not.
+    const _now = performance.now();
+    if (_lastFrameTime) {
+      _frameTimes.push(_now - _lastFrameTime);
+      if (_frameTimes.length > FRAME_SAMPLE_SIZE) _frameTimes.shift();
+    }
+    _lastFrameTime = _now;
     // Compute tilt: 0° = horizontal, 90° = straight down (top-down)
     // Convert OrbitControls polarAngle (distance from up vector) to camera tilt angle
     // tilt = 90° - polarAngle
@@ -909,6 +944,124 @@ const ThreeScene = (() => {
     } else {
       scene.overrideMaterial = null;
     }
+  }
+
+  // Comprehensive diagnostic snapshot — bound to the "Copy debug info" button
+  // and exposed for console use. Logs human-readable text, copies it to the
+  // clipboard, and returns the structured object for programmatic use.
+  function dumpDebugInfo() {
+    // FPS stats from the rolling frame-time buffer
+    let fps = { available: false };
+    if (_frameTimes.length > 10) {
+      const sorted = [..._frameTimes].sort((a, b) => a - b);
+      const avg    = _frameTimes.reduce((s, t) => s + t, 0) / _frameTimes.length;
+      const p50    = sorted[Math.floor(sorted.length * 0.5)];
+      const p95    = sorted[Math.floor(sorted.length * 0.95)];
+      fps = {
+        available:     true,
+        avgFps:        Math.round(1000 / avg),
+        p50Fps:        Math.round(1000 / p50),
+        worstP95Fps:   Math.round(1000 / p95),
+        sampleSeconds: (_frameTimes.reduce((s, t) => s + t, 0) / 1000).toFixed(1),
+      };
+    }
+
+    // GPU details via WEBGL_debug_renderer_info extension (where allowed)
+    let gpu = 'unknown', vendor = 'unknown', maxTexture = '?', maxRb = '?';
+    if (renderer) {
+      const gl = renderer.getContext();
+      try {
+        const ext = gl.getExtension('WEBGL_debug_renderer_info');
+        if (ext) {
+          gpu    = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
+          vendor = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL);
+        }
+        maxTexture = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+        maxRb      = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
+      } catch (_) { /* extension not available */ }
+    }
+
+    const shadowTypeNames = ['BasicShadowMap', 'PCFShadowMap', 'PCFSoftShadowMap', 'VSMShadowMap'];
+    const dump = {
+      timestamp: new Date().toISOString(),
+      fps,
+      render: renderer ? {
+        drawCalls:  renderer.info.render.calls,
+        triangles:  renderer.info.render.triangles,
+        lines:      renderer.info.render.lines,
+        geometries: renderer.info.memory.geometries,
+        textures:   renderer.info.memory.textures,
+        programs:   renderer.info.programs ? renderer.info.programs.length : 0,
+      } : null,
+      rendererSettings: renderer ? {
+        pixelRatio:     renderer.getPixelRatio(),
+        antialias:      !!(renderer.getContextAttributes() && renderer.getContextAttributes().antialias),
+        shadowsEnabled: renderer.shadowMap.enabled,
+        shadowMapType:  shadowTypeNames[renderer.shadowMap.type] || String(renderer.shadowMap.type),
+      } : null,
+      display: {
+        windowSize:       `${window.innerWidth}x${window.innerHeight}`,
+        screenSize:       `${screen.width}x${screen.height}`,
+        canvasSize:       renderer ? `${renderer.domElement.width}x${renderer.domElement.height}` : 'unknown',
+        devicePixelRatio: window.devicePixelRatio,
+        effectivePixels:  Math.round(window.innerWidth * window.innerHeight * window.devicePixelRatio),
+      },
+      hardware: {
+        gpu, vendor,
+        hardwareConcurrency: navigator.hardwareConcurrency || 'unknown',
+        deviceMemoryGB:      navigator.deviceMemory || 'unknown',
+        maxTextureSize:      maxTexture,
+        maxRenderbufferSize: maxRb,
+      },
+      browser: {
+        userAgent: navigator.userAgent,
+        language:  navigator.language,
+      },
+    };
+
+    // Build the human-readable text format
+    const lines = [
+      `NCZoning Debug Dump — ${dump.timestamp}`,
+      '─'.repeat(50),
+    ];
+    if (fps.available) {
+      lines.push(`FPS:           avg ${fps.avgFps} / p50 ${fps.p50Fps} / worst-5% ${fps.worstP95Fps}    (${fps.sampleSeconds}s sample)`);
+    } else {
+      lines.push('FPS:           (not enough samples — render loop not running?)');
+    }
+    if (dump.render) {
+      lines.push(`Draw calls:    ${dump.render.drawCalls}`);
+      lines.push(`Triangles:     ${dump.render.triangles.toLocaleString()}`);
+      lines.push(`Geometries:    ${dump.render.geometries}    Textures: ${dump.render.textures}    Programs: ${dump.render.programs}`);
+    }
+    if (dump.rendererSettings) {
+      const r = dump.rendererSettings;
+      lines.push('');
+      lines.push(`Renderer:      DPR ${r.pixelRatio} / AA ${r.antialias ? 'on' : 'off'} / Shadows ${r.shadowsEnabled ? r.shadowMapType : 'off'}`);
+    }
+    lines.push(`Display:       ${dump.display.windowSize} window, ${dump.display.screenSize} screen, ${dump.display.devicePixelRatio} DPR`);
+    lines.push(`Effective px:  ${dump.display.effectivePixels.toLocaleString()}`);
+    lines.push(`Canvas:        ${dump.display.canvasSize}`);
+    lines.push('');
+    lines.push(`GPU:           ${dump.hardware.gpu}`);
+    lines.push(`Vendor:        ${dump.hardware.vendor}`);
+    lines.push(`Cores:         ${dump.hardware.hardwareConcurrency}    Memory: ${dump.hardware.deviceMemoryGB} GB`);
+    lines.push(`Max texture:   ${dump.hardware.maxTextureSize}`);
+    lines.push('');
+    lines.push(`User agent:    ${dump.browser.userAgent}`);
+
+    const text = lines.join('\n');
+    console.log('[NCZ] Debug dump:\n' + text);
+    console.log('[NCZ] Dump object:', dump);
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        () => console.log('[NCZ] Copied to clipboard ✓'),
+        err => console.warn('[NCZ] Could not copy to clipboard:', err)
+      );
+    }
+
+    return dump;
   }
 
   // ── Flyover API ────────────────────────────────────────────────────────
@@ -1223,7 +1376,7 @@ const ThreeScene = (() => {
     }
   }
 
-  return { init, startRenderLoop, stopRenderLoop, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, setOverrideMaterial };
+  return { init, startRenderLoop, stopRenderLoop, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, setOverrideMaterial, dumpDebugInfo };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;
