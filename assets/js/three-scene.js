@@ -818,11 +818,14 @@ const ThreeScene = (() => {
   const DEBUG_MODE = new URLSearchParams(window.location.search).has('debug');
   let stats = null, statsCallsPanel = null, statsTrisPanel = null;
 
-  // Rolling buffer of frame intervals — feeds dumpDebugInfo() with avg/p50/p95.
-  // 120 samples ≈ 2s at 60fps, 8s at 15fps. Big enough to smooth jitter without
-  // hiding sustained performance changes.
-  const FRAME_SAMPLE_SIZE = 120;
+  // Rolling time-based buffer of frame intervals — feeds dumpDebugInfo() with
+  // avg/p50/p95. The window is *time*, not frame count: a count-based cap was
+  // 0.4s on a 280fps machine and 4s on a 15fps machine, defeating the point of
+  // a "wait a few seconds and click" workflow. 5s is enough to smooth jitter
+  // without hiding sustained changes, at any FPS.
+  const FRAME_SAMPLE_DURATION_MS = 5000;
   const _frameTimes = [];
+  let _frameTimeSum = 0;        // running sum, for O(1) eviction-boundary check
   let _lastFrameTime = 0;
 
   function initStats(container) {
@@ -891,8 +894,14 @@ const ThreeScene = (() => {
     // Frame-time sampling for dumpDebugInfo() — runs whether stats panel is on or not.
     const _now = performance.now();
     if (_lastFrameTime) {
-      _frameTimes.push(_now - _lastFrameTime);
-      if (_frameTimes.length > FRAME_SAMPLE_SIZE) _frameTimes.shift();
+      const dt = _now - _lastFrameTime;
+      _frameTimes.push(dt);
+      _frameTimeSum += dt;
+      // Evict oldest while doing so still leaves ≥ FRAME_SAMPLE_DURATION_MS of data —
+      // keeps exactly the time-window we want, never under-shoots at the boundary.
+      while (_frameTimes.length > 1 && _frameTimeSum - _frameTimes[0] > FRAME_SAMPLE_DURATION_MS) {
+        _frameTimeSum -= _frameTimes.shift();
+      }
     }
     _lastFrameTime = _now;
     // Compute tilt: 0° = horizontal, 90° = straight down (top-down)
@@ -1045,7 +1054,14 @@ const ThreeScene = (() => {
     lines.push('');
     lines.push(`GPU:           ${dump.hardware.gpu}`);
     lines.push(`Vendor:        ${dump.hardware.vendor}`);
-    lines.push(`Cores:         ${dump.hardware.hardwareConcurrency}    Memory: ${dump.hardware.deviceMemoryGB} GB`);
+    // navigator.hardwareConcurrency returns logical processors (threads), not physical cores.
+    // navigator.deviceMemory is power-of-2 floor-rounded and clamped (spec max 8 GB; Chrome
+    // returns higher values but still floor-rounded), so "≥X GB (approx)" reflects the API's
+    // lossiness rather than implying false precision.
+    const memText = typeof dump.hardware.deviceMemoryGB === 'number'
+      ? `≥${dump.hardware.deviceMemoryGB} GB (approx)`
+      : 'unknown';
+    lines.push(`CPU threads:   ${dump.hardware.hardwareConcurrency}    Memory: ${memText}`);
     lines.push(`Max texture:   ${dump.hardware.maxTextureSize}`);
     lines.push('');
     lines.push(`User agent:    ${dump.browser.userAgent}`);
