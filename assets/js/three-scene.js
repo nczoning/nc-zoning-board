@@ -17,6 +17,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import Stats from 'three/addons/libs/stats.module.js';
 
 window.NCZ = window.NCZ || {};
 
@@ -175,6 +176,8 @@ const ThreeScene = (() => {
     renderer.domElement.style.position = 'absolute';
     renderer.domElement.style.inset    = '0';
     container.appendChild(renderer.domElement);
+
+    initStats();
 
     // Scene background matches theme primary color
     scene = new THREE.Scene();
@@ -810,10 +813,36 @@ const ThreeScene = (() => {
 
   const tiltDisplay = document.getElementById('scene-tilt-display');
 
+  // Debug instrumentation — only active when URL has ?debug=1.
+  // stats.js panels (click to cycle): FPS / MS / MB / draw calls / triangles.
+  const DEBUG_MODE = new URLSearchParams(window.location.search).has('debug');
+  let stats = null, statsCallsPanel = null, statsTrisPanel = null;
+
+  function initStats() {
+    if (!DEBUG_MODE || stats) return;
+    stats = new Stats();
+    stats.dom.style.position = 'fixed';
+    stats.dom.style.top      = '8px';
+    stats.dom.style.left     = '8px';
+    stats.dom.style.zIndex   = '9999';
+    statsCallsPanel = stats.addPanel(new Stats.Panel('Calls', '#ff8', '#221'));
+    statsTrisPanel  = stats.addPanel(new Stats.Panel('Tris/k', '#f8f', '#212'));
+    document.body.appendChild(stats.dom);
+    console.log('[NCZ] Debug mode active. Try:');
+    console.log('  NCZ.ThreeScene.getRenderInfo()       → draw calls / tris / textures snapshot');
+    console.log('  NCZ.ThreeScene.setOverrideMaterial(true|false)  → flat-shade everything to test fragment cost');
+  }
+
   function renderLoop() {
     animationId = requestAnimationFrame(renderLoop);
+    if (stats) stats.begin();
     controls.update();
     renderer.render(scene, camera);
+    if (stats) {
+      statsCallsPanel.update(renderer.info.render.calls,         200);
+      statsTrisPanel .update(renderer.info.render.triangles/1000, 2000);
+      stats.end();
+    }
     // Compute tilt: 0° = horizontal, 90° = straight down (top-down)
     // Convert OrbitControls polarAngle (distance from up vector) to camera tilt angle
     // tilt = 90° - polarAngle
@@ -832,6 +861,36 @@ const ThreeScene = (() => {
     if (animationId !== null) {
       cancelAnimationFrame(animationId);
       animationId = null;
+    }
+  }
+
+  // ── Debug helpers (always exposed; useful from DevTools console) ───────
+
+  // Snapshot of renderer.info — counts that explain CPU vs GPU bottlenecks.
+  function getRenderInfo() {
+    if (!renderer) return null;
+    return {
+      drawCalls:  renderer.info.render.calls,
+      triangles:  renderer.info.render.triangles,
+      points:     renderer.info.render.points,
+      lines:      renderer.info.render.lines,
+      geometries: renderer.info.memory.geometries,
+      textures:   renderer.info.memory.textures,
+      programs:   renderer.info.programs ? renderer.info.programs.length : 0,
+    };
+  }
+
+  // Override-material diagnostic: replaces every material in the scene with a
+  // flat MeshBasicMaterial. If FPS jumps when enabled → fragment-bound (shader cost).
+  // If FPS stays the same → vertex/CPU-bound (geometry or draw calls).
+  let _debugOverrideMat = null;
+  function setOverrideMaterial(enabled) {
+    if (!scene) return;
+    if (enabled) {
+      if (!_debugOverrideMat) _debugOverrideMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+      scene.overrideMaterial = _debugOverrideMat;
+    } else {
+      scene.overrideMaterial = null;
     }
   }
 
@@ -1147,7 +1206,7 @@ const ThreeScene = (() => {
     }
   }
 
-  return { init, startRenderLoop, stopRenderLoop, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getCameraState, setCameraState, getSceneColorVars };
+  return { init, startRenderLoop, stopRenderLoop, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, setOverrideMaterial };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;
