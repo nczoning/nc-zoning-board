@@ -823,11 +823,17 @@ const ThreeScene = (() => {
     stats = new Stats();
     // Anchor inside #map-3d so the panel sits below the page header automatically,
     // regardless of header height. top-right keeps it clear of the scene-tilt display.
-    stats.dom.style.position = 'absolute';
-    stats.dom.style.top      = '8px';
-    stats.dom.style.right    = '8px';
-    stats.dom.style.left     = 'auto';
-    stats.dom.style.zIndex   = '9999';
+    // Flex-column stacks the visible panels vertically so the rightmost ones don't
+    // overflow into the viewport edge — Stats.addPanel()'d entries (Calls, Tris/k)
+    // bypass the built-in showPanel(0) cycling and stay permanently visible.
+    stats.dom.style.position      = 'absolute';
+    stats.dom.style.top           = '8px';
+    stats.dom.style.right         = '8px';
+    stats.dom.style.left          = 'auto';
+    stats.dom.style.zIndex        = '9999';
+    stats.dom.style.display       = 'flex';
+    stats.dom.style.flexDirection = 'column';
+    stats.dom.style.gap           = '4px';
     statsCallsPanel = stats.addPanel(new Stats.Panel('Calls', '#ff8', '#221'));
     statsTrisPanel  = stats.addPanel(new Stats.Panel('Tris/k', '#f8f', '#212'));
     container.appendChild(stats.dom);
