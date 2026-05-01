@@ -177,7 +177,7 @@ const ThreeScene = (() => {
     renderer.domElement.style.inset    = '0';
     container.appendChild(renderer.domElement);
 
-    initStats();
+    initStats(container);
 
     // Scene background matches theme primary color
     scene = new THREE.Scene();
@@ -818,16 +818,19 @@ const ThreeScene = (() => {
   const DEBUG_MODE = new URLSearchParams(window.location.search).has('debug');
   let stats = null, statsCallsPanel = null, statsTrisPanel = null;
 
-  function initStats() {
+  function initStats(container) {
     if (!DEBUG_MODE || stats) return;
     stats = new Stats();
-    stats.dom.style.position = 'fixed';
+    // Anchor inside #map-3d so the panel sits below the page header automatically,
+    // regardless of header height. top-right keeps it clear of the scene-tilt display.
+    stats.dom.style.position = 'absolute';
     stats.dom.style.top      = '8px';
-    stats.dom.style.left     = '8px';
+    stats.dom.style.right    = '8px';
+    stats.dom.style.left     = 'auto';
     stats.dom.style.zIndex   = '9999';
     statsCallsPanel = stats.addPanel(new Stats.Panel('Calls', '#ff8', '#221'));
     statsTrisPanel  = stats.addPanel(new Stats.Panel('Tris/k', '#f8f', '#212'));
-    document.body.appendChild(stats.dom);
+    container.appendChild(stats.dom);
     console.log('[NCZ] Debug mode active. Try:');
     console.log('  NCZ.ThreeScene.getRenderInfo()       → draw calls / tris / textures snapshot');
     console.log('  NCZ.ThreeScene.setOverrideMaterial(true|false)  → flat-shade everything to test fragment cost');
