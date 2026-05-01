@@ -834,8 +834,16 @@ const ThreeScene = (() => {
     stats.dom.style.display       = 'flex';
     stats.dom.style.flexDirection = 'column';
     stats.dom.style.gap           = '4px';
-    statsCallsPanel = stats.addPanel(new Stats.Panel('Calls', '#ff8', '#221'));
+    // pointer-events:none disables stats.js's built-in click-to-cycle handler
+    // (so all panels stay visible always) AND lets mouse drags pass through
+    // to the canvas underneath — useful since the panel sits over the 3D map.
+    stats.dom.style.pointerEvents = 'none';
+    statsCallsPanel = stats.addPanel(new Stats.Panel('Calls',  '#ff8', '#221'));
     statsTrisPanel  = stats.addPanel(new Stats.Panel('Tris/k', '#f8f', '#212'));
+    // Force every panel visible — the constructor calls showPanel(0) which
+    // hides MS and MB. We want all five (FPS / MS / MB / Calls / Tris/k) on
+    // screen at once so the user can read every metric without interaction.
+    for (const child of stats.dom.children) child.style.display = 'block';
     container.appendChild(stats.dom);
     console.log('[NCZ] Debug mode active. Try:');
     console.log('  NCZ.ThreeScene.getRenderInfo()       → draw calls / tris / textures snapshot');
