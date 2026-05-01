@@ -269,9 +269,6 @@ const ThreeScene = (() => {
 
     window.addEventListener('resize', onResize);
 
-    // TEMP DEBUG: expose for chrome-devtools mcp inspection. Remove after debugging.
-    if (DEBUG_MODE) window.NCZ.__debug = { renderer, scene, camera, controls };
-
     loadTerrain();
   }
 
