@@ -827,8 +827,8 @@ const ThreeScene = (() => {
     // overflow into the viewport edge — Stats.addPanel()'d entries (Calls, Tris/k)
     // bypass the built-in showPanel(0) cycling and stay permanently visible.
     stats.dom.style.position      = 'absolute';
-    stats.dom.style.top           = '8px';
-    stats.dom.style.right         = '8px';
+    stats.dom.style.top           = '16px';
+    stats.dom.style.right         = '20px';
     stats.dom.style.left          = 'auto';
     stats.dom.style.zIndex        = '9999';
     stats.dom.style.display       = 'flex';
