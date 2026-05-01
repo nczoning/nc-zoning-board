@@ -261,6 +261,12 @@ const ThreeScene = (() => {
 
     window.addEventListener('resize', onResize);
 
+    // Attach the marker layer (CSS2DRenderer overlay + pin group) before assets load,
+    // so app.js can call NCZ.ThreeMarkers.setMods() as soon as mod data is fetched
+    // even if GLBs haven't finished loading yet. controls is passed so the marker
+    // layer can drive camera fly-to-pin tweens on focusMod().
+    NCZ.ThreeMarkers?.attach?.(scene, camera, container, controls);
+
     loadTerrain();
   }
 
@@ -281,6 +287,7 @@ const ThreeScene = (() => {
     for (const mat of districtLineMaterials) {
       mat.resolution.set(w, h);
     }
+    NCZ.ThreeMarkers?.onResize?.(w, h);
   }
 
   // ── Layer registry ─────────────────────────────────────────────────────
@@ -886,6 +893,7 @@ const ThreeScene = (() => {
     if (stats) stats.begin();
     controls.update();
     renderer.render(scene, camera);
+    NCZ.ThreeMarkers?.render?.();
     if (stats) {
       statsCallsPanel.update(renderer.info.render.calls,         200);
       statsTrisPanel .update(renderer.info.render.triangles/1000, 2000);

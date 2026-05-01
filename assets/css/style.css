@@ -1024,90 +1024,95 @@ body.cluster-panel-resizing * {
     background-color: var(--secondary) !important;
 }
 
-.leaflet-popup.ncz-dynamic-popup {
+/* ── Popup chrome — shared by Leaflet (2D) and ThreeMarkers (3D) ──────────
+   Leaflet renders the popup inside `.leaflet-popup.ncz-dynamic-popup >
+   .leaflet-popup-content-wrapper`. ThreeMarkers renders it as
+   `.three-popup.ncz-dynamic-popup` directly (no auto-generated wrapper).
+   Both views get the same styled card via the shared selectors below. */
+
+/* Default + per-category border colour. Applies to either view because
+   `.popup-cat-*` is on the same element as `.ncz-dynamic-popup`. */
+.ncz-dynamic-popup {
     --popup-border-color: var(--secondary);
+
+    &.popup-cat-location-overhaul { --popup-border-color: var(--category-location-overhaul); }
+    &.popup-cat-new-location      { --popup-border-color: var(--category-new-location); }
+    &.popup-cat-other             { --popup-border-color: var(--category-other); }
+}
+
+/* Leaflet-only structural reset — strip Leaflet's default close button, tip,
+   and outer wrapper margins so our chrome can render cleanly. */
+.leaflet-popup.ncz-dynamic-popup {
     margin: 0 !important;
 
-    .leaflet-popup-content {
-        margin: 0 !important;
-    }
+    .leaflet-popup-content       { margin: 0 !important; }
+    .leaflet-popup-close-button  { display: none !important; }
+    .leaflet-popup-tip-container { display: none !important; }
+}
 
-    .leaflet-popup-close-button {
-        display: none !important;
-    }
+/* The styled card — Leaflet's content-wrapper or 3D's .three-popup. */
+.leaflet-popup.ncz-dynamic-popup .leaflet-popup-content-wrapper,
+.three-popup.ncz-dynamic-popup {
+    position: relative;
+    overflow: visible;
+    border: 1px solid transparent;
+    border-color: transparent;
+    background:
+        linear-gradient(var(--primary), var(--primary)) padding-box,
+        linear-gradient(
+            180deg,
+            var(--popup-border-color) var(--ncz-popup-gradient-top-stop, 220px),
+            var(--secondary) var(--ncz-popup-gradient-bottom-stop, 240px)
+        ) border-box;
 
-    .leaflet-popup-tip-container {
-        display: none !important;
-    }
-
-    .leaflet-popup-content-wrapper {
-        position: relative;
-        overflow: visible;
-        border-color: transparent;
-        background:
-            linear-gradient(var(--primary), var(--primary)) padding-box,
-            linear-gradient(
-                180deg,
-                var(--popup-border-color) var(--ncz-popup-gradient-top-stop, 220px),
-                var(--secondary) var(--ncz-popup-gradient-bottom-stop, 240px)
-            ) border-box;
-
-        &::after {
-            content: "";
-            position: absolute;
-            width: 0;
-            height: 0;
-            pointer-events: none;
-        }
-    }
-
-    &.ncz-popup-top .leaflet-popup-content-wrapper::after {
-        top: 100%;
-        left: var(--ncz-popup-arrow-x, 50%);
-        transform: translateX(-50%);
-        border-left: var(--space-md) solid transparent;
-        border-right: var(--space-md) solid transparent;
-        border-top: var(--space-md) solid var(--secondary);
-    }
-
-    &.ncz-popup-bottom .leaflet-popup-content-wrapper::after {
-        bottom: 100%;
-        left: var(--ncz-popup-arrow-x, 50%);
-        transform: translateX(-50%);
-        border-left: var(--space-md) solid transparent;
-        border-right: var(--space-md) solid transparent;
-        border-bottom: var(--space-md) solid var(--popup-border-color);
-    }
-
-    &.ncz-popup-left .leaflet-popup-content-wrapper::after {
-        left: 100%;
-        top: var(--ncz-popup-arrow-y, 50%);
-        transform: translateY(-50%);
-        border-top: var(--space-md) solid transparent;
-        border-bottom: var(--space-md) solid transparent;
-        border-left: var(--space-md) solid var(--popup-border-color);
-    }
-
-    &.ncz-popup-right .leaflet-popup-content-wrapper::after {
-        right: 100%;
-        top: var(--ncz-popup-arrow-y, 50%);
-        transform: translateY(-50%);
-        border-top: var(--space-md) solid transparent;
-        border-bottom: var(--space-md) solid transparent;
-        border-right: var(--space-md) solid var(--popup-border-color);
+    &::after {
+        content: "";
+        position: absolute;
+        width: 0;
+        height: 0;
+        pointer-events: none;
     }
 }
 
-.leaflet-popup.ncz-dynamic-popup.popup-cat-location-overhaul {
-    --popup-border-color: var(--category-location-overhaul);
+/* Direction classes — ncz-popup-top = popup is above pin (arrow at popup
+   bottom pointing down). ncz-popup-bottom = popup below pin (arrow at top
+   pointing up). top/bottom work for both views; left/right are Leaflet-only. */
+.leaflet-popup.ncz-dynamic-popup.ncz-popup-top .leaflet-popup-content-wrapper::after,
+.three-popup.ncz-dynamic-popup.ncz-popup-top::after {
+    top: 100%;
+    left: var(--ncz-popup-arrow-x, 50%);
+    transform: translateX(-50%);
+    border-left: var(--space-md) solid transparent;
+    border-right: var(--space-md) solid transparent;
+    border-top: var(--space-md) solid var(--secondary);
 }
 
-.leaflet-popup.ncz-dynamic-popup.popup-cat-new-location {
-    --popup-border-color: var(--category-new-location);
+.leaflet-popup.ncz-dynamic-popup.ncz-popup-bottom .leaflet-popup-content-wrapper::after,
+.three-popup.ncz-dynamic-popup.ncz-popup-bottom::after {
+    bottom: 100%;
+    left: var(--ncz-popup-arrow-x, 50%);
+    transform: translateX(-50%);
+    border-left: var(--space-md) solid transparent;
+    border-right: var(--space-md) solid transparent;
+    border-bottom: var(--space-md) solid var(--popup-border-color);
 }
 
-.leaflet-popup.ncz-dynamic-popup.popup-cat-other {
-    --popup-border-color: var(--category-other);
+.leaflet-popup.ncz-dynamic-popup.ncz-popup-left .leaflet-popup-content-wrapper::after {
+    left: 100%;
+    top: var(--ncz-popup-arrow-y, 50%);
+    transform: translateY(-50%);
+    border-top: var(--space-md) solid transparent;
+    border-bottom: var(--space-md) solid transparent;
+    border-left: var(--space-md) solid var(--popup-border-color);
+}
+
+.leaflet-popup.ncz-dynamic-popup.ncz-popup-right .leaflet-popup-content-wrapper::after {
+    right: 100%;
+    top: var(--ncz-popup-arrow-y, 50%);
+    transform: translateY(-50%);
+    border-top: var(--space-md) solid transparent;
+    border-bottom: var(--space-md) solid transparent;
+    border-right: var(--space-md) solid var(--popup-border-color);
 }
 
 /* Global link/button components */
@@ -2262,5 +2267,85 @@ body::before {
         font-weight: bold;
         font-size: 15px;
         color: var(--color-white);
+    }
+}
+
+
+/* ── 3D pin layer (CSS2DRenderer overlay) ─────────────────────────────────
+   .three-marker is the pin element CSS2DRenderer anchors at the world point.
+   .three-popup-anchor is a zero-size wrapper at the world point; the inner
+   .three-popup card is absolutely positioned above it so the height of the
+   card never affects where it anchors. ::after draws the downward arrow.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.three-marker {
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+/* 3D tooltip anchor — wraps the shared `.pin-tooltip` skin (defined above).
+   CSS2DRenderer projects the anchor to the pin's world position; the inner
+   .pin-tooltip is then offset upward in screen space so the arrow points
+   down at the pin. Single instance reused on every hover. */
+.three-tooltip-anchor {
+    position: relative;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    /* Above pins (auto inline 0–~300), below popup (500). 400 is the deliberate
+       middle slot. !important is required to beat CSS2DRenderer's per-frame
+       inline z-index. */
+    z-index: 400 !important;
+
+    /* Override Leaflet's left:0/top:0 (set dynamically there) so the inner
+       .pin-tooltip sits centred horizontally and above the world point. */
+    .pin-tooltip {
+        left: 50%;
+        top: auto;
+        bottom: 16px;
+        transform: translateX(-50%);
+    }
+}
+
+.three-popup-anchor {
+    /* CSS2DRenderer applies translate(-50%, -50%) — a zero-size box centres
+       its inner content's reference point exactly on the world position. */
+    position: relative;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    /* CSS2DRenderer sets style.zIndex inline per frame based on camera
+       distance, which can place a closer pin in front of a popup attached
+       to a further pin. !important is the only way to beat inline styles
+       — combined with renderOrder=1000 on the CSS2DObject (see three-markers.js)
+       this guarantees the popup always paints above every pin.
+       Value 500 is deliberately chosen between:
+         - CSS2DRenderer's auto-assigned zIndex range (0–~300 for our pin count)
+         - the sidebar's z-index 1000
+       so the popup wins against pins but still loses to the sidebar/header/modals. */
+    z-index: 500 !important;
+}
+
+/* 3D-specific positioning — sizes the popup and floats it above (default)
+   or below (when `.ncz-popup-bottom` is added) the anchor's world point.
+   Visual chrome (background, arrow, category colour) comes from the shared
+   `.ncz-dynamic-popup` rules above; this rule only deals with layout. */
+.three-popup.ncz-dynamic-popup {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 360px;
+    max-width: 360px;
+    pointer-events: auto;
+    /* Default: popup is above the pin, 18px clearance for the arrow. */
+    bottom: 18px;
+    top: auto;
+    z-index: 10;
+
+    /* Auto-flip: shared `.ncz-popup-bottom` direction class repositions the
+       popup below the pin (arrow handled by the shared chrome rules). */
+    &.ncz-popup-bottom {
+        bottom: auto;
+        top: 18px;
     }
 }

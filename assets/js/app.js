@@ -562,6 +562,9 @@ async function initMap() {
   // View switching (SAT ↔ SCHEMA)
   const mapEl   = document.getElementById("map");
   const map3dEl = document.getElementById("map-3d");
+  // Set inside the data-load try block once mods + markers are available.
+  // switchView calls it after toggling so the open popup persists across views.
+  let onViewSwitched = null;
   function switchView(viewName) {
     document.querySelectorAll(".map-view-btn").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.view === viewName);
@@ -583,6 +586,7 @@ async function initMap() {
       NCZ.ThreeScene.stopRenderLoop();
       map.invalidateSize();
     }
+    onViewSwitched?.(viewName);
   }
 
   document.querySelectorAll(".map-view-btn").forEach(btn => {
@@ -1071,15 +1075,28 @@ async function initMap() {
   }
 
   function focusRandomVisibleMarker() {
-    const visibleMarkers = allMarkers.filter((marker) => markerClusterGroup.hasLayer(marker));
-    if (visibleMarkers.length === 0) {
-      alert("No visible locations match the current filters.");
-      return;
-    }
+    // Route to whichever view is currently active. Each view holds its own
+    // pin layer; visibility (after filters) is queried per-layer rather than
+    // re-running the filter computation.
+    const isSchema = mapEl.style.display === "none";
 
-    const randomIndex = Math.floor(Math.random() * visibleMarkers.length);
-    const randomMarker = visibleMarkers[randomIndex];
-    focusMarker(randomMarker);
+    if (isSchema) {
+      const visibleIds = NCZ.ThreeMarkers?.getVisibleModIds?.() ?? [];
+      if (visibleIds.length === 0) {
+        alert("No visible locations match the current filters.");
+        return;
+      }
+      const randomId = visibleIds[Math.floor(Math.random() * visibleIds.length)];
+      NCZ.ThreeMarkers.focusMod(randomId);
+    } else {
+      const visibleMarkers = allMarkers.filter((marker) => markerClusterGroup.hasLayer(marker));
+      if (visibleMarkers.length === 0) {
+        alert("No visible locations match the current filters.");
+        return;
+      }
+      const randomMarker = visibleMarkers[Math.floor(Math.random() * visibleMarkers.length)];
+      focusMarker(randomMarker);
+    }
     hideClusterPanel();
 
     if (window.innerWidth < NCZ.MOBILE_BREAKPOINT) {
@@ -1252,7 +1269,12 @@ async function initMap() {
       }
     }
 
-    mods.sort(NCZ.sortModsByUpdated).forEach((mod) => {
+    const sortedMods = mods.sort(NCZ.sortModsByUpdated);
+    // Hand the same data set to the 3D pin layer — pins won't appear until ThreeScene
+    // is initialised (first switch to SCHEMA), but the call is safe before that and the
+    // data is held internally so the layer can build pins on attach.
+    NCZ.ThreeMarkers?.setMods?.(sortedMods, nexusThumbs, tagsDict);
+    sortedMods.forEach((mod) => {
         const [lat, lng] = NCZ.cetToLeaflet(mod.coordinates[0], mod.coordinates[1]);
         const { catStyle, popupHtml, thumbSrc, fullSrc } = NCZ.prepareModRenderData(mod, nexusThumbs, tagsDict);
 
@@ -1316,13 +1338,21 @@ async function initMap() {
             `;
         li.addEventListener("click", (e) => {
           if (e.target.tagName !== "A") {
-            focusMarker(marker);
+            // Route to whichever view is currently active. mapEl hidden = 3D mode.
+            if (mapEl.style.display === "none") {
+              NCZ.ThreeMarkers?.focusMod?.(mod.id);
+            } else {
+              focusMarker(marker);
+            }
             hideClusterPanel();
             if (window.innerWidth < NCZ.MOBILE_BREAKPOINT) sidebar.classList.add("hidden");
           }
         });
 
-        // Pulse marker (or parent cluster) on sidebar hover
+        // Pulse marker (or parent cluster) on sidebar hover. Both views share
+        // the `.pulsing` class + @keyframes markerPulse — calling both layers
+        // is idempotent and keeps SAT/SCHEMA in sync without checking which
+        // is active.
         li.addEventListener("mouseenter", () => {
           const element = marker.getElement();
           if (element) {
@@ -1335,6 +1365,7 @@ async function initMap() {
               if (clusterEl) clusterEl.classList.add("pulsing");
             }
           }
+          NCZ.ThreeMarkers?.setPulse?.(mod.id, true);
         });
         li.addEventListener("mouseleave", () => {
           const element = marker.getElement();
@@ -1348,6 +1379,7 @@ async function initMap() {
               if (clusterEl) clusterEl.classList.remove("pulsing");
             }
           }
+          NCZ.ThreeMarkers?.setPulse?.(mod.id, false);
         });
 
         modListEl.appendChild(li);
@@ -1370,6 +1402,25 @@ async function initMap() {
       );
       if (targetMarker) focusMarker(targetMarker);
     }
+
+    // Re-open the popup in the freshly-activated view. Both ThreeMarkers and
+    // the Leaflet popupopen handler keep ?mod= in sync, so this restore picks
+    // up whatever was open before the switch — popups stay coherent across modes.
+    onViewSwitched = (viewName) => {
+      const param = new URLSearchParams(window.location.search).get(NCZ.URL_PARAM_MOD);
+      if (!param) return;
+      if (viewName === "schema") {
+        const mod = mods.find(
+          (m) => String(m.nexus_id) === param || m.id === param,
+        );
+        if (mod) NCZ.ThreeMarkers?.focusMod?.(mod.id);
+      } else {
+        const targetMarker = allMarkers.find(
+          (m) => String(m.modData.nexus_id) === param || m.modData.id === param,
+        );
+        if (targetMarker) focusMarker(targetMarker);
+      }
+    };
 
     // 5. Setup Category Filters
     const activeCategories = new Set(mods.map((m) => m.category));
@@ -1552,6 +1603,9 @@ async function initMap() {
           visibleMarkers.push(marker);
         }
       });
+
+      // Apply same filter set to 3D pin layer
+      NCZ.ThreeMarkers?.applyFilters?.(visibleIds);
 
       // Filter the sidebar list items
       const listItems = modListEl.querySelectorAll(".mod-item");

@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### ThreeMarkers — pin/popup layer for the 3D view
+
+The 3D scene now has interactive mod pins matching the Leaflet view's behaviour. Pins, popups, sidebar interactions, and the Discover button all work in SCHEMA mode.
+
+- **Pin rendering** — one `CSS2DObject` per mod, anchored at the player's CET (X, Y, Z) position with a small visual lift (`PIN_3D_GROUND_OFFSET`). Validated against in-game readings (see `docs/cet-z-terrain-experiment.md`): CET Z and terrain GLB Y are in the same coordinate space — no raycast or offset needed beyond the cosmetic lift.
+- **Popups** — click a pin to open a popup with the same HTML, border gradient, category colour, and arrow as the Leaflet view. Auto-flips above/below the pin based on viewport position. Closes on outside-click (drag-aware: dragging the camera does not close the popup).
+- **Click selected pin to deselect** — Leaflet-style toggle behaviour.
+- **Hover pin → tooltip** — single reusable `CSS2DObject` shows the mod name on pin hover; reuses the Leaflet `.pin-tooltip` skin so 2D and 3D tooltips look identical.
+- **Sidebar integration** — the same sidebar (filters, search, mod list) drives both views. Filter checkboxes affect 3D pin visibility via `applyFilters()`. Sidebar item hover pulses the corresponding pin in both views simultaneously. Sidebar item click flies the camera to the pin (smooth tween, configurable via `PIN_3D_FLY_DURATION_MS` / `PIN_3D_FLY_ZOOM`) and opens the popup.
+- **Camera fly-to** — tweens `controls.target` and `camera.position` by the same delta (preserving the spherical offset) plus `camera.zoom` over `PIN_3D_FLY_DURATION_MS` (default 700ms, ease-in-out cubic). Cancels immediately on user input. Targets the pin's full Y so rooftop pins (e.g. Crystal Palace Resort) land at screen centre regardless of camera tilt.
+- **Discover button works in 3D** — `focusRandomVisibleMarker` routes to ThreeMarkers in SCHEMA mode, picking a random pin whose CSS2DObject is visible (i.e. passed the active filters).
+- **Cross-view popup state sync** — opening a popup in either view updates `?mod=` in the URL. Switching SAT ↔ SCHEMA re-opens the same pin in the new view.
+- **Popup chrome unified** — `.ncz-dynamic-popup` is now the single source of truth for popup background gradient, arrows, and category colours. Both `.leaflet-popup-content-wrapper` (2D) and `.three-popup` (3D) target the same shared rules; only Leaflet's structural reset and the 3D anchor positioning are view-specific. Removed ~100 lines of duplicated CSS in the process.
+- **Coordinate-system finding (retraction)** — the previous "elevation gap" claim between CET Z and terrain GLB Y (7–23m) was sampling bias from readings taken on top of platforms. In-game teleport experiment to five terrain-only locations confirmed the two are in the same coordinate space (±6m noise from player height + LOD smoothing). See `wiki/learnings/cet-z-equals-terrain-y.md`.
+
+New constants in [`constants.js`](assets/js/constants.js):
+
+- `PIN_3D_GROUND_OFFSET` (5) — visual lift above CET Z
+- `PIN_3D_DRAG_THRESHOLD_PX` (4) — drag-vs-click pixel detection
+- `PIN_3D_POPUP_FLIP_PADDING_PX` (24) — auto-flip viewport padding
+- `PIN_3D_FLY_DURATION_MS` (700) — fly-to-pin tween length
+- `PIN_3D_FLY_ZOOM` (15) — target camera zoom at end of fly
+
+New helper script: [`scripts/query_terrain_heights.py`](scripts/query_terrain_heights.py) — raycasts the terrain GLB at given CET (X, Y) coordinates, used to compute safe teleport heights for the coordinate-system experiment. Documents the axis-convention mismatch with `generate_terrain_contours.py` (corrected pattern in the new script's comments).
+
 #### Landmarks (Task 4)
 
 - **7 GLBs, 8 instances** — The Needle (obelisk), Heavy Hearts Club (pyramid), De-votion statue, Brainporium AV building, North Oak arch gate, Brave Atlas icosphere, Pacifica ferris wheel (upright), Rancho Coronado ferris wheel (collapsed on its side)
