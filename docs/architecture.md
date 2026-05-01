@@ -110,7 +110,7 @@ Load order on `main`: `constants.js` → `utils.js` → `services.js` → `app.j
 | --- | --- |
 | `overlay.js` | District/subdistrict GeoJSON border overlays for the satellite view |
 | `three-scene.js` | Three.js scene: renderer, camera, GLBs, buildings, sun/shadows (`NCZ.ThreeScene`) |
-| `three-markers.js` | Phase 0 stub — 3D location pins planned for Phase 4 (`NCZ.ThreeMarkers`) |
+| `three-markers.js` | 3D pin/popup/tooltip/cluster layer — interactive parity with Leaflet (`NCZ.ThreeMarkers`). See [three-markers.md](three-markers.md) for the full architecture. |
 | `flyover.js` | Optional cinematic flyover showcase — include/exclude via `<script>` tag |
 
 Load order on `dev`/feature branches: `constants.js` → `utils.js` → `services.js` → `overlay.js` → `three-scene.js` (module) → `three-markers.js` (module) → `app.js` → `[flyover.js optional]`
