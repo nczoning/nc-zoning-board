@@ -36,6 +36,8 @@ const ThreeScene = (() => {
   let _shadowsOn     = true;  // shadows on by default; checkbox reflects this via poll
   let _sunSphere     = null; // visible sun disc — shown during showcase only
   let _sunAz = Math.PI * 0.25, _sunEl = Math.PI * 0.35; // last setSunPosition args
+  let _terrainBox = null;     // THREE.Box3 of the terrain GLB; gates pan-bound clamp
+                              // because the bound shouldn't activate before terrain loads
 
   // Material refs — stored so updateMaterials() can re-apply theme colors live
   let terrainMat = null;
@@ -257,6 +259,54 @@ const ThreeScene = (() => {
       updateDistrictZoom();
       if (metroShader) metroShader.uniforms.uMetroZoom.value = camera.zoom;
       updateShadowFrustum();
+      updateScaleBar();
+    });
+
+    // Pan bounds — clamp controls.target so the camera can't drift
+    // arbitrarily far from the visible terrain. OrbitControls has no built-in
+    // min/maxPan, so we listen for 'change' and snap target back if it leaves
+    // bounds, also moving camera.position by the same delta so the spherical
+    // offset stays consistent.
+    //
+    // Bounds use the *terrain GLB extent* (the visible square ~[-8000, 8000]
+    // in both Three X and Three Z) rather than the playable CET world extent
+    // (which is asymmetric — playable area sits in the northern half of the
+    // Y range). This gives the same "perfect square" feel Leaflet has on the
+    // SAT view, where the user can pan equally far past every edge.
+    //
+    // panEdgeFraction = 0.5 collapses to zero offset → target clamps at the
+    // terrain edge → at max pan, terrain edge sits at viewport center, half
+    // terrain visible / half empty (matches Leaflet exactly at zero tilt).
+    //
+    // Tilt note: at high tilts the visible ground extent grows by 1/cos(polar)
+    // in the tilt direction, so the "half-screen-past-terrain" feel stretches
+    // out — you can technically pan more terrain off-screen at high tilt
+    // before hitting the bound. An earlier tilt-correction attempt produced
+    // catastrophic camera jumps when bounds inverted at extreme zoom-out +
+    // tilt; that was reverted in favour of this stable simpler bound. A
+    // proper tilt-aware fix is a future improvement (see E5/E6 discussion).
+    controls.addEventListener('change', () => {
+      if (!_terrainBox) return;  // terrain not loaded yet — no bound to clamp against
+      const t = controls.target;
+      const f = NCZ.PIN_3D_PAN_EDGE_FRACTION;
+      const Vx = (camera.right - camera.left) / camera.zoom;
+      const Vz = (camera.top - camera.bottom) / camera.zoom;
+      const offsetX = (f - 0.5) * Vx;
+      const offsetZ = (f - 0.5) * Vz;
+      const xMin = _terrainBox.min.x - offsetX;
+      const xMax = _terrainBox.max.x + offsetX;
+      const zMin = _terrainBox.min.z - offsetZ;
+      const zMax = _terrainBox.max.z + offsetZ;
+      let dx = 0, dz = 0;
+      if (t.x < xMin) dx = xMin - t.x;
+      else if (t.x > xMax) dx = xMax - t.x;
+      if (t.z < zMin) dz = zMin - t.z;
+      else if (t.z > zMax) dz = zMax - t.z;
+      if (dx === 0 && dz === 0) return;
+      t.x += dx;
+      t.z += dz;
+      camera.position.x += dx;
+      camera.position.z += dz;
     });
 
     window.addEventListener('resize', onResize);
@@ -266,6 +316,10 @@ const ThreeScene = (() => {
     // even if GLBs haven't finished loading yet. controls is passed so the marker
     // layer can drive camera fly-to-pin tweens on focusMod().
     NCZ.ThreeMarkers?.attach?.(scene, camera, container, controls);
+
+    // Initial scale bar — controls 'change' won't fire until the user
+    // interacts, so paint the bar once at startup using the initial camera state.
+    updateScaleBar();
 
     loadTerrain();
   }
@@ -288,6 +342,7 @@ const ThreeScene = (() => {
       mat.resolution.set(w, h);
     }
     NCZ.ThreeMarkers?.onResize?.(w, h);
+    updateScaleBar();
   }
 
   // ── Layer registry ─────────────────────────────────────────────────────
@@ -323,6 +378,40 @@ const ThreeScene = (() => {
     const zoomedIn = camera.zoom > NCZ.SUBDISTRICT_ZOOM_3D;
     _districtOuter.visible = !zoomedIn;
     _districtSub.visible   =  zoomedIn;
+  }
+
+  // ── Scale bar ───────────────────────────────────────────────────────
+  // Mirrors Leaflet's L.control.scale: pick a "nice" round length (1, 2, or
+  // 5 × 10ⁿ metres) closest to PIN_3D_SCALE_TARGET_PX wide on screen, render
+  // a horizontal bar of that pixel width, label it. CET unit ≈ metre, so no
+  // unit conversion needed beyond CET_UNITS_PER_METER (default 1).
+  //
+  // Computed from camera frustum width: metres-per-pixel along the screen-X
+  // axis = (camera.right - camera.left) / camera.zoom / canvas_pixel_width.
+  // Screen-X is parallel to the ground regardless of tilt (camera right
+  // vector stays in the world XZ plane for our orthographic top-down + tilt
+  // setup), so the bar reads true even when the camera is tilted.
+  function updateScaleBar() {
+    if (!camera || !renderer) return;
+    const el = document.querySelector('#scene-scale .leaflet-control-scale-line');
+    if (!el) return;
+    const canvasWidth = renderer.domElement.clientWidth;
+    if (!canvasWidth) return;
+    const worldPerPixel = (camera.right - camera.left) / (camera.zoom * canvasWidth);
+    const metresPerPixel = worldPerPixel / NCZ.CET_UNITS_PER_METER;
+    const idealMetres = NCZ.PIN_3D_SCALE_TARGET_PX * metresPerPixel;
+    if (!isFinite(idealMetres) || idealMetres <= 0) return;
+    // Snap to 1 / 2 / 5 × 10ⁿ
+    const pow10 = Math.pow(10, Math.floor(Math.log10(idealMetres)));
+    const ratio = idealMetres / pow10;
+    const mantissa = ratio < 2 ? 1 : ratio < 5 ? 2 : 5;
+    const niceMetres = mantissa * pow10;
+    const barPx = Math.round(niceMetres / metresPerPixel);
+    const label = niceMetres < 1000
+      ? `${niceMetres} m`
+      : `${(niceMetres / 1000).toFixed(niceMetres % 1000 === 0 ? 0 : 1)} km`;
+    el.style.width = `${barPx}px`;
+    el.textContent = label;
   }
 
   // ── GLB loading (tiered) ───────────────────────────────────────────────
@@ -366,8 +455,12 @@ const ThreeScene = (() => {
       layers.cliffs  = cliffsScene;
       scene.add(terrainScene, waterScene, cliffsScene);
 
-      // Fit camera frustum to the terrain bounding box
+      // Fit camera frustum to the terrain bounding box. Stored at module
+      // scope so the pan-bound listener can clamp against terrain extent
+      // (the visible square) instead of the playable-CET-world extent
+      // (which is asymmetric north-south).
       const box = new THREE.Box3().setFromObject(terrainScene);
+      _terrainBox = box;
       fitCameraToBox(box);
 
       stepProgress(); // terrain done

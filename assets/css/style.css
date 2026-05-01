@@ -956,28 +956,48 @@ body.cluster-panel-resizing * {
         line-height: var(--lh-zoom-control) !important;
     }
 
-    /* Leaflet Scale Control Override */
+    /* Leaflet Scale Control — placement only. Visual styling lives below
+       so the 3D view's #scene-scale can wear the same skin. */
     .leaflet-control-scale {
         margin-bottom: var(--space-md);
         pointer-events: none;
-
-        .leaflet-control-scale-line {
-            border: var(--ui-border-thin) solid var(--secondary);
-            border-top: none;
-            border-width: 2px;
-            background: var(--primary-60);
-            color: var(--secondary);
-            font-family: var(--font-heading);
-            font-size: var(--text-xs);
-            letter-spacing: 0.5px;
-            text-shadow: none;
-            box-shadow: 0 0 var(--space-md) var(--secondary-20);
-
-            &:not(:first-child) {
-                border-top: var(--ui-border-thin) solid var(--secondary);
-            }
-        }
     }
+}
+
+/* Distance scale bar — shared by Leaflet (.leaflet-control-scale at
+   bottom-right of the SAT view) and ThreeMarkers (#scene-scale at bottom-
+   right of the SCHEMA view). Both wear the same .leaflet-control-scale-line
+   skin so 2D and 3D distance bars render identically. */
+.leaflet-control-scale-line {
+    border: var(--ui-border-thin) solid var(--secondary);
+    border-top: none;
+    border-width: 2px;
+    background: var(--primary-60);
+    color: var(--secondary);
+    font-family: var(--font-heading);
+    font-size: var(--text-xs);
+    letter-spacing: 0.5px;
+    text-shadow: none;
+    box-shadow: 0 0 var(--space-md) var(--secondary-20);
+
+    &:not(:first-child) {
+        border-top: var(--ui-border-thin) solid var(--secondary);
+    }
+}
+
+/* 3D-specific placement — floats above the bottom controls strip, below the
+   #map-view-toggle. Kept out of #scene-controls so the strip's flex row
+   doesn't shift width every time the bar relabels at a new zoom level.
+   Bottom value sits in the gap between scene-controls top (~44px) and
+   map-view-toggle bottom (80px). */
+#scene-scale {
+    position: absolute;
+    right: var(--space-sm);
+    bottom: 56px;
+    pointer-events: none;
+    z-index: 1000;
+    margin: 0;
+    line-height: 1;
 }
 
 .leaflet-popup-content-wrapper {

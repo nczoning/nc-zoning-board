@@ -45,6 +45,8 @@ These are live in the current PR. Nothing to action.
 | A18 | Popup chrome (background, arrows, category colours) shared between Leaflet and 3D — single CSS source of truth | `.ncz-dynamic-popup` chrome rules | ✅ |
 | A19 | Pin clustering (screen-space proximity grouping at low zoom, dissolves on zoom-in) | `L.markerClusterGroup` | ✅ (was C1) |
 | A20 | Cluster click → cluster panel; map-aware (track-and-update successor; close on view switch); active-bubble visual indicator | `clusterclick` event + populateClusterPanel | ✅ (was C2) |
+| A21 | Pannable bounds — clamp camera target inside terrain extent + viewport-relative padding | (no Leaflet API; manual `controls.change` clamp) | ✅ (was C3; tilt-aware fix deferred to E7) |
+| A22 | Distance scale bar (Leaflet-style nice-number rounding, shared `.leaflet-control-scale-line` skin) | `L.control.scale` | ✅ (was C4) |
 
 ---
 
@@ -62,10 +64,10 @@ Most of B is now in Section A. Only B4 remains, deferred to discussion (see Sect
 
 ## Section C · Pending — medium effort
 
-| ID | Item | Why it matters | Est. LOC | Notes (you fill in) |
-| --- | --- | --- | --- | --- |
-| C3 | **Pannable bounds** (constrain camera to world bounds + padding) | OrbitControls currently lets you pan to infinity; Leaflet has bounds | ~20 | ✓ |
-| C4 | **Distance scale bar** (moved from D2) | Orthographic projection means scale is uniform across screen along the camera's screen-X axis; works fine in 3D, just needs different math than Leaflet's | ~30 | ✓ |
+_All Section C items shipped — see A21, A22 above. Section retained for historical context of the original plan._
+
+~~| C3 | **Pannable bounds** (constrain camera to world bounds + padding) | OrbitControls currently lets you pan to infinity; Leaflet has bounds | ~20 | ✓ |~~
+~~| C4 | **Distance scale bar** (moved from D2) | Orthographic projection means scale is uniform across screen along the camera's screen-X axis; works fine in 3D, just needs different math than Leaflet's | ~30 | ✓ |~~
 
 **C3 details** — Set `controls.minPan` / `controls.maxPan` to the world bbox + 500m padding. May want soft bounds (rubber-banding) rather than hard stops.
 
@@ -101,6 +103,7 @@ shipped, per "leave our discussion points until after we have done everything el
 | E4 | Scaling pins with zoom | ✅ resolved — stay constant (fixed pixel size) |
 | E5 | **B4 — fitBounds on first load**: should the 3D camera frame all visible pins on initial load, or stay at default centred top-down? Tradeoff is between "show me the data immediately" vs "user controls their first view". | 🟥 deferred for discussion |
 | E6 | **D1 — Spiderfy in 3D**: original ruling was "won't translate" because the 2D radial fan looks wrong with a tilted camera. User believes a 3D-friendly version is possible — perhaps a vertical fan, depth-staggered offsets, or a hybrid where the cluster panel (C2) handles the same job. | 🟥 deferred for discussion |
+| E7 | **C3 tilt-aware pan bounds**: simple bound (terrain edge at viewport centre at max pan) ships in the C3 PR. At high tilt the visible ground extent grows by `1/cos(polar)` in the tilt direction, so terrain can pan slightly further off-screen than ideal. A tilt-correction attempt (`offset = V * (f - 0.5/cos(polar))`) caused catastrophic camera jumps when bounds inverted at extreme zoom-out + tilt — reverted. Proper fix likely requires disabling the clamp during active tilt input, or a separate constraint system that doesn't fight OrbitControls' spherical bookkeeping. | 🟥 deferred for discussion |
 
 ---
 
