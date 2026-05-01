@@ -600,6 +600,13 @@ const ThreeScene = (() => {
         source.traverse(child => {
           if (!child.isMesh) return;
           const mesh = new THREE.Mesh(child.geometry, mat);
+          // Preserve the source mesh's local transform — for meshopt-compressed
+          // GLBs this carries the KHR_mesh_quantization dequant translate/scale
+          // that maps int16 vertex positions back to mesh-local-space coords.
+          // Without this, vertices render at raw quantized scale (0–65535).
+          mesh.position.copy(child.position);
+          mesh.quaternion.copy(child.quaternion);
+          mesh.scale.copy(child.scale);
           mesh.castShadow    = true;
           mesh.receiveShadow = true;
           container.add(mesh);
