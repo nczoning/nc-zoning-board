@@ -166,8 +166,8 @@ NCZ.DISTRICT_LINE_OPACITY   = 0.85;
 // ── Three.js 3D scene ──────────────────────────────────────────────────────────
 
 // Camera — orthographic projection, positioned above world centre looking straight down
-NCZ.CAMERA_NEAR     = -50000;           // near plane behind the camera (orthographic — not a clip distance)
-NCZ.CAMERA_FAR      =  50000;           // far plane in front; large to ensure terrain/buildings never clip
+NCZ.CAMERA_NEAR     = -20000;           // near plane behind the camera (orthographic — not a clip distance)
+NCZ.CAMERA_FAR      =  20000;           // far plane in front; sized for max-tilt + max-pan worst case (~23k) with margin
 NCZ.CAMERA_HEIGHT   =  10000;           // Y position above world centre (CET units)
 
 // Camera controls (OrbitControls) — source: TweakDB WorldMap.FreeCameraSettingsDefault

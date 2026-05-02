@@ -98,6 +98,14 @@ const ThreeScene = (() => {
     });
   }
 
+  // Freeze world matrices on a fully-positioned static subtree so Three.js
+  // skips the per-frame matrix-update traversal beneath it. Computes once,
+  // then disables the auto-update flag the parent uses to recurse in.
+  function freezeStatic(obj) {
+    obj.updateMatrixWorld(true);
+    obj.matrixWorldAutoUpdate = false;
+  }
+
   // Hoisted singleton: MeshoptDecoder is attached so GLBs encoded with
   // EXT_meshopt_compression decode transparently. The decoder is a no-op for
   // uncompressed GLBs (the extension is only triggered when present). The
@@ -385,6 +393,9 @@ const ThreeScene = (() => {
       layers.water   = waterScene;
       layers.cliffs  = cliffsScene;
       scene.add(terrainScene, waterScene, cliffsScene);
+      freezeStatic(terrainScene);
+      freezeStatic(waterScene);
+      freezeStatic(cliffsScene);
 
       // Fit camera frustum to the terrain bounding box
       const box = new THREE.Box3().setFromObject(terrainScene);
@@ -512,6 +523,8 @@ const ThreeScene = (() => {
       layers.metro = metroGroup;
 
       scene.add(roadsGroup, metroGroup);
+      freezeStatic(roadsGroup);
+      freezeStatic(metroGroup);
       stepProgress(); // roads done
     } catch (err) {
       console.error('[NCZ] Roads/metro GLB load failed:', err);
@@ -556,6 +569,7 @@ const ThreeScene = (() => {
       _districtSub   = subGroup;
       layers.districts = parent;
       scene.add(parent);
+      freezeStatic(parent);
       stepProgress(); // districts done
     } catch (err) {
       console.error('[NCZ] District lines load failed:', err);
@@ -632,6 +646,7 @@ const ThreeScene = (() => {
 
       layers.landmarks = group;
       scene.add(group);
+      freezeStatic(group);
       console.log(`[NCZ] Landmarks: ${LANDMARK_META.length} placed`);
       stepProgress();
     } catch (err) {
@@ -713,6 +728,7 @@ const ThreeScene = (() => {
 
       layers.buildings = group;
       scene.add(group);
+      freezeStatic(group);
       console.log(`[NCZ] Buildings: ${DISTRICT_META.length} districts loaded`);
     } catch (err) {
       console.error('[NCZ] Buildings load failed:', err);
