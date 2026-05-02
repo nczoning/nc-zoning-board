@@ -768,7 +768,11 @@ const ThreeScene = (() => {
           'vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
           `vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;
           float _ed = min( min( vLocalUv.x, 1.0 - vLocalUv.x ), min( vLocalUv.y, 1.0 - vLocalUv.y ) );
-          float _ef = (1.0 - pow( clamp( _ed / uEdgeThickness, 0.0, 1.0 ), uEdgeSharpness )) * uEdgeIntensity;
+          // Scale thickness up to at least ~1.5px on screen — kills sub-pixel
+          // aliasing/shimmer when buildings are viewed at distance or oblique angles.
+          // fwidth(_ed) = |dFdx(_ed)| + |dFdy(_ed)|, the screen-space derivative.
+          float _eThick = max( uEdgeThickness, fwidth( _ed ) * 1.5 );
+          float _ef = (1.0 - pow( clamp( _ed / _eThick, 0.0, 1.0 ), uEdgeSharpness )) * uEdgeIntensity;
           outgoingLight = mix( outgoingLight, uEdgeColor, _ef );`
         );
     };
