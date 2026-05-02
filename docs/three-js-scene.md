@@ -155,29 +155,51 @@ CET and GLB share the same XZ coordinate space at 1:1 scale. The terrain GLB ext
 
 ## GLB Assets
 
-Stored in `assets/glb/`. Loaded in tiers so the scene is interactive as quickly as possible.
+The runtime loads from `assets/glb-meshopt/` (gltfpack-compressed). The repo only commits this folder. Source GLBs (uncompressed WolvenKit exports) live at `assets/glb-source/` which is **gitignored** — drop fresh exports there before running `npm run encode-meshopt`. The runtime path is the `NCZ.GLB_DIR` constant in [`assets/js/constants.js`](../assets/js/constants.js).
 
-| File | Size | Tier | Notes |
-|------|------|------|-------|
-| `3dmap_terrain.glb` | 3.4 MB | 1 (required) | Terrain surface, 247k verts |
-| `3dmap_water.glb` | ~1 KB | 1 (required) | Water plane with land cutouts; writes stencil=2 |
-| `3dmap_cliffs.glb` | 1.8 MB | 1 (with terrain) | Dogtown cliff faces |
-| `3dmap_roads.glb` | 1.3 MB | 2 (idle) | Road surfaces — loaded twice (see Roads section) |
-| `3dmap_roads_borders.glb` | 5.8 MB | 2 (idle) | Road border outlines — loaded twice |
-| `3dmap_metro.glb` | 0.5 MB | 2 (idle) | Metro tracks with vertex-color LOD |
-| `3dmap_obelisk.glb` | 0.1 MB | 3 (with buildings) | The Needle — Dogtown |
-| `monument_ave_pyramid.glb` | ~0 MB | 3 (with buildings) | Heavy Hearts Club — Dogtown |
-| `3dmap_statue_splash_a.glb` | 0.3 MB | 3 (with buildings) | De-votion statue — Dogtown |
-| `3dmap_ext_monument_av_building_b.glb` | 0.2 MB | 3 (with buildings) | Brainporium — Dogtown |
-| `northoak_sign_a.glb` | 0.1 MB | 3 (with buildings) | North Oak arch gate — Westbrook |
-| `cz_cz_building_h_icosphere.glb` | ~0 MB | 3 (with buildings) | Brave Atlas — Dogtown |
-| `rcr_park_ferris_wheel.glb` | ~0 MB | 3 (with buildings) | Used twice: upright (Pacifica) + collapsed (Santo Domingo border) |
+Loaded in tiers so the scene is interactive as quickly as possible.
+
+| File | Source (uncompressed) | Shipped (meshopt) | Tier | Notes |
+|------|----------------------:|------------------:|------|-------|
+| `3dmap_terrain.glb` | 6.4 MB | **423 KB** | 1 (required) | Terrain surface, 247k verts (sub-meshes merged by gltfpack) |
+| `3dmap_water.glb` | ~5 KB | ~2 KB | 1 (required) | Water plane with land cutouts; writes stencil=2 |
+| `3dmap_cliffs.glb` | 3.4 MB | 891 KB | 1 (with terrain) | Dogtown cliff faces |
+| `3dmap_roads.glb` | 1.4 MB | 223 KB | 2 (idle) | Road surfaces — loaded twice (see Roads section) |
+| `3dmap_roads_borders.glb` | 5.9 MB | **357 KB** | 2 (idle) | Road border outlines — loaded twice |
+| `3dmap_metro.glb` | 530 KB | 69 KB | 2 (idle) | Metro tracks with vertex-color LOD |
+| `3dmap_obelisk.glb` | 175 KB | 32 KB | 3 (with buildings) | The Needle — Dogtown |
+| `monument_ave_pyramid.glb` | 4 KB | 2 KB | 3 (with buildings) | Heavy Hearts Club — Dogtown |
+| `3dmap_statue_splash_a.glb` | 542 KB | 121 KB | 3 (with buildings) | De-votion statue — Dogtown |
+| `3dmap_ext_monument_av_building_b.glb` | 364 KB | 55 KB | 3 (with buildings) | Brainporium — Dogtown |
+| `northoak_sign_a.glb` | 124 KB | 20 KB | 3 (with buildings) | North Oak arch gate — Westbrook |
+| `cz_cz_building_h_icosphere.glb` | 70 KB | 16 KB | 3 (with buildings) | Brave Atlas — Dogtown |
+| `rcr_park_ferris_wheel.glb` | 86 KB | 22 KB | 3 (with buildings) | Used twice: upright (Pacifica) + collapsed (Santo Domingo border) |
+| **Total** | **18.5 MB** *(not in repo)* | **2.18 MB (-88%) committed** | | |
 
 Tier 1 loads in parallel on scene init. Tier 2 loads after Tier 1 resolves, during idle. Tier 3 loads after Tier 2.
 
-### GLB attribute stripping — required pipeline step
+### Compression pipeline — gltfpack/meshopt
 
-WolvenKit exports 6 vertex attributes per GLB: `POSITION`, `NORMAL`, `TANGENT`, `COLOR_0`, `TEXCOORD_0`, `TEXCOORD_1`. Most are unused by our materials. **Run `scripts/strip_glb_attributes.js` on every new GLB before committing.**
+GLBs are compressed with [`gltfpack`](https://github.com/zeux/meshoptimizer/tree/master/gltf) (from the meshoptimizer project). The runtime loads them via the `MeshoptDecoder` bundled with three.js examples — no extra dependency, ~30 KB WASM decoder fetched once. Decoded geometry preserves vertex/index ordering, so vertex cache + fetch optimisations remain effective on the GPU.
+
+```bash
+# Re-encode all GLBs from assets/glb/ → assets/glb-meshopt/
+npm run encode-meshopt
+```
+
+The encoder script ([`scripts/encode_glbs_meshopt.js`](../scripts/encode_glbs_meshopt.js)) replaces both the older Draco-compression flow (considered, see decisions wiki) AND the legacy `strip_glb_attributes.js` step in one tool — gltfpack drops unused vertex attributes, merges sub-meshes per material, runs vertex cache + fetch optimisation, applies quantization, then encodes via `EXT_meshopt_compression`.
+
+Key flags used:
+
+- `-cc` — aggressive `EXT_meshopt_compression`
+- `-vp 16` — 16-bit position quantization for world-coord meshes (CET 12 km extent → ~0.18 m precision)
+- `-vp 14` — for landmarks (local mesh space, smaller bounding box → sub-cm precision)
+- `-vn 10 -vt 12 -vc 8` — quantization bits for normals/UVs/colors
+- **No `-kn`** (deliberately) — preserving named nodes confuses Three.js's transform composition through the wrapper hierarchy and prevents gltfpack from merging sub-meshes
+
+### Legacy: GLB attribute stripping (no longer needed)
+
+`scripts/strip_glb_attributes.js` is retained for inspection but **not required** in the live pipeline — `gltfpack` does the same attribute pruning automatically. If you do need to inspect a stripped-but-uncompressed GLB:
 
 ```bash
 # POSITION only (default)

@@ -71,11 +71,12 @@ NCZ.NEXUS_BATCH_SIZE = 50;
 NCZ.DATA_MODS_PATH = "mods.json";
 NCZ.DATA_TAGS_PATH = "data/tags.json";
 
-// 3D scene GLB source folder. Flip to "assets/glb" to load the original
-// uncompressed meshes; "assets/glb-meshopt" loads the gltfpack-compressed copies
-// (~79% smaller, decoded via MeshoptDecoder — small ~30 KB WASM, fast decode,
-// preserves vertex/index ordering for GPU efficiency).
-// Both folders are committed, so toggling is a one-line revert with no asset redeploy.
+// 3D scene GLB source folder. The committed runtime path is "assets/glb-meshopt"
+// (gltfpack-compressed via EXT_meshopt_compression, decoded by MeshoptDecoder).
+// WolvenKit-exported source GLBs live at the gitignored "assets/glb-source/" —
+// drop fresh exports there and run `npm run encode-meshopt` to regenerate.
+// Flip this constant to "assets/glb-source" to test against uncompressed locally
+// (only works when the source folder is populated).
 NCZ.GLB_DIR = "assets/glb-meshopt";
 
 // Content limits
