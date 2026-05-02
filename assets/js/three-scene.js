@@ -178,7 +178,11 @@ const ThreeScene = (() => {
     // Renderer — pass updateStyle:false so Three.js never writes px dimensions
     // onto the canvas element. The canvas is kept at width/height:100% in CSS
     // so it always fills #map-3d without ever pushing surrounding layout elements.
-    renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
+    // logarithmicDepthBuffer: redistributes depth precision logarithmically
+    // across the [near, far] frustum. Mitigates Z-fighting on near-coplanar
+    // surfaces — block-style buildings sharing walls, water/terrain at the
+    // coastline, etc. Costs a cheap shader op per fragment; free on modern GPUs.
+    renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true, logarithmicDepthBuffer: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(container.clientWidth, container.clientHeight, false);
     renderer.shadowMap.enabled = true;
