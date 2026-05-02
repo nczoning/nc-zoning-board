@@ -18,6 +18,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import Stats from 'three/addons/libs/stats.module.js';
 
 window.NCZ = window.NCZ || {};
 
@@ -183,6 +184,8 @@ const ThreeScene = (() => {
     renderer.domElement.style.position = 'absolute';
     renderer.domElement.style.inset    = '0';
     container.appendChild(renderer.domElement);
+
+    initStats(container);
 
     // Scene background matches theme primary color
     scene = new THREE.Scene();
@@ -818,10 +821,97 @@ const ThreeScene = (() => {
 
   const tiltDisplay = document.getElementById('scene-tilt-display');
 
+  // Debug instrumentation — only active when URL has ?debug=1.
+  // stats.js panels (vertical stack, all visible): FPS / MS / MB / draw calls / triangles.
+  const DEBUG_MODE = new URLSearchParams(window.location.search).has('debug');
+  let stats = null, statsCallsPanel = null, statsTrisPanel = null;
+
+  // Rolling time-based buffer of frame intervals — feeds dumpDebugInfo() with
+  // avg/p50/p95. The window is *time*, not frame count: a count-based cap was
+  // 0.4s on a 280fps machine and 4s on a 15fps machine, defeating the point of
+  // a "wait a few seconds and click" workflow. 5s is enough to smooth jitter
+  // without hiding sustained changes, at any FPS.
+  const FRAME_SAMPLE_DURATION_MS = 5000;
+  const _frameTimes = [];
+  let _frameTimeSum = 0;        // running sum, for O(1) eviction-boundary check
+  let _lastFrameTime = 0;
+
+  function initStats(container) {
+    if (!DEBUG_MODE || stats) return;
+    stats = new Stats();
+    // Anchor inside #map-3d so the panel sits below the page header automatically,
+    // regardless of header height. top-right keeps it clear of the scene-tilt display.
+    // Flex-column stacks the visible panels vertically so the rightmost ones don't
+    // overflow into the viewport edge — Stats.addPanel()'d entries (Calls, Tris/k)
+    // bypass the built-in showPanel(0) cycling and stay permanently visible.
+    stats.dom.style.position      = 'absolute';
+    stats.dom.style.top           = '16px';
+    stats.dom.style.right         = '20px';
+    stats.dom.style.left          = 'auto';
+    stats.dom.style.zIndex        = '9999';
+    stats.dom.style.display       = 'flex';
+    stats.dom.style.flexDirection = 'column';
+    stats.dom.style.gap           = '4px';
+    // pointer-events:none disables stats.js's built-in click-to-cycle handler
+    // (so all panels stay visible always) AND lets mouse drags pass through
+    // to the canvas underneath — useful since the panel sits over the 3D map.
+    stats.dom.style.pointerEvents = 'none';
+    statsCallsPanel = stats.addPanel(new Stats.Panel('Calls',  '#ff8', '#221'));
+    statsTrisPanel  = stats.addPanel(new Stats.Panel('Tris/k', '#f8f', '#212'));
+    // Force every panel visible — the constructor calls showPanel(0) which
+    // hides MS and MB. We want all five (FPS / MS / MB / Calls / Tris/k) on
+    // screen at once so the user can read every metric without interaction.
+    for (const child of stats.dom.children) child.style.display = 'block';
+    container.appendChild(stats.dom);
+
+    // "Copy debug info" button — sits below the 5 stats panels.
+    // Stats height: 5 × 48px panels + 4 × 4px gaps = 256px → button starts at 16+256+8 = 280px.
+    const dumpBtn = document.createElement('button');
+    dumpBtn.textContent  = 'Copy debug info';
+    dumpBtn.style.cssText = [
+      'position:absolute', 'top:280px', 'right:20px', 'z-index:9999',
+      'padding:6px 10px', 'background:#221', 'color:#ff8',
+      'border:1px solid #ff8', 'border-radius:3px',
+      'font-family:monospace', 'font-size:11px', 'cursor:pointer',
+      'pointer-events:auto', 'opacity:0.9',
+    ].join(';');
+    dumpBtn.addEventListener('click', () => {
+      dumpDebugInfo();
+      const orig = dumpBtn.textContent;
+      dumpBtn.textContent = 'Copied ✓';
+      setTimeout(() => { dumpBtn.textContent = orig; }, 1500);
+    });
+    container.appendChild(dumpBtn);
+
+    console.log('[NCZ] Debug mode active. Try:');
+    console.log('  NCZ.ThreeScene.getRenderInfo()       → draw calls / tris / textures snapshot');
+    console.log('  NCZ.ThreeScene.setOverrideMaterial(true|false)  → flat-shade everything to test fragment cost');
+    console.log('  NCZ.ThreeScene.dumpDebugInfo()       → full diagnostic snapshot (also bound to the "Copy debug info" button)');
+  }
+
   function renderLoop() {
     animationId = requestAnimationFrame(renderLoop);
+    if (stats) stats.begin();
     controls.update();
     renderer.render(scene, camera);
+    if (stats) {
+      statsCallsPanel.update(renderer.info.render.calls,         200);
+      statsTrisPanel .update(renderer.info.render.triangles/1000, 2000);
+      stats.end();
+    }
+    // Frame-time sampling for dumpDebugInfo() — runs whether stats panel is on or not.
+    const _now = performance.now();
+    if (_lastFrameTime) {
+      const dt = _now - _lastFrameTime;
+      _frameTimes.push(dt);
+      _frameTimeSum += dt;
+      // Evict oldest while doing so still leaves ≥ FRAME_SAMPLE_DURATION_MS of data —
+      // keeps exactly the time-window we want, never under-shoots at the boundary.
+      while (_frameTimes.length > 1 && _frameTimeSum - _frameTimes[0] > FRAME_SAMPLE_DURATION_MS) {
+        _frameTimeSum -= _frameTimes.shift();
+      }
+    }
+    _lastFrameTime = _now;
     // Compute tilt: 0° = horizontal, 90° = straight down (top-down)
     // Convert OrbitControls polarAngle (distance from up vector) to camera tilt angle
     // tilt = 90° - polarAngle
@@ -841,6 +931,161 @@ const ThreeScene = (() => {
       cancelAnimationFrame(animationId);
       animationId = null;
     }
+  }
+
+  // ── Debug helpers (always exposed; useful from DevTools console) ───────
+
+  // Snapshot of renderer.info — counts that explain CPU vs GPU bottlenecks.
+  function getRenderInfo() {
+    if (!renderer) return null;
+    return {
+      drawCalls:  renderer.info.render.calls,
+      triangles:  renderer.info.render.triangles,
+      points:     renderer.info.render.points,
+      lines:      renderer.info.render.lines,
+      geometries: renderer.info.memory.geometries,
+      textures:   renderer.info.memory.textures,
+      programs:   renderer.info.programs ? renderer.info.programs.length : 0,
+    };
+  }
+
+  // Override-material diagnostic: replaces every material in the scene with a
+  // flat MeshBasicMaterial. If FPS jumps when enabled → fragment-bound (shader cost).
+  // If FPS stays the same → vertex/CPU-bound (geometry or draw calls).
+  let _debugOverrideMat = null;
+  function setOverrideMaterial(enabled) {
+    if (!scene) return;
+    if (enabled) {
+      if (!_debugOverrideMat) _debugOverrideMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+      scene.overrideMaterial = _debugOverrideMat;
+    } else {
+      scene.overrideMaterial = null;
+    }
+  }
+
+  // Comprehensive diagnostic snapshot — bound to the "Copy debug info" button
+  // and exposed for console use. Logs human-readable text, copies it to the
+  // clipboard, and returns the structured object for programmatic use.
+  function dumpDebugInfo() {
+    // FPS stats from the rolling frame-time buffer
+    let fps = { available: false };
+    if (_frameTimes.length > 10) {
+      const sorted = [..._frameTimes].sort((a, b) => a - b);
+      const avg    = _frameTimes.reduce((s, t) => s + t, 0) / _frameTimes.length;
+      const p50    = sorted[Math.floor(sorted.length * 0.5)];
+      const p95    = sorted[Math.floor(sorted.length * 0.95)];
+      fps = {
+        available:     true,
+        avgFps:        Math.round(1000 / avg),
+        p50Fps:        Math.round(1000 / p50),
+        worstP95Fps:   Math.round(1000 / p95),
+        sampleSeconds: (_frameTimes.reduce((s, t) => s + t, 0) / 1000).toFixed(1),
+      };
+    }
+
+    // GPU details via WEBGL_debug_renderer_info extension (where allowed)
+    let gpu = 'unknown', vendor = 'unknown', maxTexture = '?', maxRb = '?';
+    if (renderer) {
+      const gl = renderer.getContext();
+      try {
+        const ext = gl.getExtension('WEBGL_debug_renderer_info');
+        if (ext) {
+          gpu    = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
+          vendor = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL);
+        }
+        maxTexture = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+        maxRb      = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
+      } catch (_) { /* extension not available */ }
+    }
+
+    const shadowTypeNames = ['BasicShadowMap', 'PCFShadowMap', 'PCFSoftShadowMap', 'VSMShadowMap'];
+    const dump = {
+      timestamp: new Date().toISOString(),
+      fps,
+      render: renderer ? {
+        drawCalls:  renderer.info.render.calls,
+        triangles:  renderer.info.render.triangles,
+        lines:      renderer.info.render.lines,
+        geometries: renderer.info.memory.geometries,
+        textures:   renderer.info.memory.textures,
+        programs:   renderer.info.programs ? renderer.info.programs.length : 0,
+      } : null,
+      rendererSettings: renderer ? {
+        pixelRatio:     renderer.getPixelRatio(),
+        antialias:      !!(renderer.getContextAttributes() && renderer.getContextAttributes().antialias),
+        shadowsEnabled: renderer.shadowMap.enabled,
+        shadowMapType:  shadowTypeNames[renderer.shadowMap.type] || String(renderer.shadowMap.type),
+      } : null,
+      display: {
+        windowSize:       `${window.innerWidth}x${window.innerHeight}`,
+        screenSize:       `${screen.width}x${screen.height}`,
+        canvasSize:       renderer ? `${renderer.domElement.width}x${renderer.domElement.height}` : 'unknown',
+        devicePixelRatio: window.devicePixelRatio,
+        effectivePixels:  Math.round(window.innerWidth * window.innerHeight * window.devicePixelRatio),
+      },
+      hardware: {
+        gpu, vendor,
+        hardwareConcurrency: navigator.hardwareConcurrency || 'unknown',
+        deviceMemoryGB:      navigator.deviceMemory || 'unknown',
+        maxTextureSize:      maxTexture,
+        maxRenderbufferSize: maxRb,
+      },
+      browser: {
+        userAgent: navigator.userAgent,
+        language:  navigator.language,
+      },
+    };
+
+    // Build the human-readable text format
+    const lines = [
+      `NCZoning Debug Dump — ${dump.timestamp}`,
+      '─'.repeat(50),
+    ];
+    if (fps.available) {
+      lines.push(`FPS:           avg ${fps.avgFps} / p50 ${fps.p50Fps} / worst-5% ${fps.worstP95Fps}    (${fps.sampleSeconds}s sample)`);
+    } else {
+      lines.push('FPS:           (not enough samples — render loop not running?)');
+    }
+    if (dump.render) {
+      lines.push(`Draw calls:    ${dump.render.drawCalls}`);
+      lines.push(`Triangles:     ${dump.render.triangles.toLocaleString()}`);
+      lines.push(`Geometries:    ${dump.render.geometries}    Textures: ${dump.render.textures}    Programs: ${dump.render.programs}`);
+    }
+    if (dump.rendererSettings) {
+      const r = dump.rendererSettings;
+      lines.push('');
+      lines.push(`Renderer:      DPR ${r.pixelRatio} / AA ${r.antialias ? 'on' : 'off'} / Shadows ${r.shadowsEnabled ? r.shadowMapType : 'off'}`);
+    }
+    lines.push(`Display:       ${dump.display.windowSize} window, ${dump.display.screenSize} screen, ${dump.display.devicePixelRatio} DPR`);
+    lines.push(`Effective px:  ${dump.display.effectivePixels.toLocaleString()}`);
+    lines.push(`Canvas:        ${dump.display.canvasSize}`);
+    lines.push('');
+    lines.push(`GPU:           ${dump.hardware.gpu}`);
+    lines.push(`Vendor:        ${dump.hardware.vendor}`);
+    // navigator.hardwareConcurrency returns logical processors (threads), not physical cores.
+    // navigator.deviceMemory is power-of-2 floor-rounded and clamped (spec max 8 GB; Chrome
+    // returns higher values but still floor-rounded), so "≥X GB (approx)" reflects the API's
+    // lossiness rather than implying false precision.
+    const memText = typeof dump.hardware.deviceMemoryGB === 'number'
+      ? `≥${dump.hardware.deviceMemoryGB} GB (approx)`
+      : 'unknown';
+    lines.push(`CPU threads:   ${dump.hardware.hardwareConcurrency}    Memory: ${memText}`);
+    lines.push(`Max texture:   ${dump.hardware.maxTextureSize}`);
+    lines.push('');
+    lines.push(`User agent:    ${dump.browser.userAgent}`);
+
+    const text = lines.join('\n');
+    console.log('[NCZ] Debug dump:\n' + text);
+    console.log('[NCZ] Dump object:', dump);
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        () => console.log('[NCZ] Copied to clipboard ✓'),
+        err => console.warn('[NCZ] Could not copy to clipboard:', err)
+      );
+    }
+
+    return dump;
   }
 
   // ── Flyover API ────────────────────────────────────────────────────────
@@ -1155,7 +1400,7 @@ const ThreeScene = (() => {
     }
   }
 
-  return { init, startRenderLoop, stopRenderLoop, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getCameraState, setCameraState, getSceneColorVars };
+  return { init, startRenderLoop, stopRenderLoop, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, setOverrideMaterial, dumpDebugInfo };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;
