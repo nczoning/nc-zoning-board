@@ -141,6 +141,12 @@ const ThreeScene = (() => {
     tex.generateMipmaps = true;
     tex.minFilter = THREE.LinearMipmapLinearFilter;
     tex.magFilter = THREE.LinearFilter;
+    // Anisotropic filtering — fixes shimmer on surfaces viewed at oblique angles
+    // (terrain/buildings tilted toward the camera). Mips alone aren't enough because
+    // mip selection picks based on the smaller of the screen-space derivatives —
+    // an elongated texture footprint still aliases along the long axis. AF samples
+    // multiple texels along that axis. Free-ish on modern GPUs (fixed-function path).
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
     tex.needsUpdate = true;
     return tex;
   }
