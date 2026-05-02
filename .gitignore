@@ -39,3 +39,7 @@ raw maps/
 node_modules/
 .DS_Store
 Thumbs.db
+
+# Uncompressed source GLBs — drop WolvenKit exports here for `npm run encode-meshopt`.
+# Repo only commits the encoded output at assets/glb-meshopt/.
+assets/glb-source/

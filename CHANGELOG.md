@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### GLB compression via gltfpack/meshopt (PR #622)
+
+- **Total 3D scene payload: 18.5 MB → 2.18 MB (-88%)** — terrain alone went 6.4 MB → 423 KB; `roads_borders` went 5.9 MB → 357 KB
+- New folder `assets/glb-meshopt/` ships the compressed copies; uncompressed source GLBs live at the gitignored `assets/glb-source/` (drop WolvenKit exports there before running `npm run encode-meshopt`). Runtime path: `NCZ.GLB_DIR` in [`constants.js`](assets/js/constants.js)
+- Encoded via [`gltfpack`](https://github.com/zeux/meshoptimizer/tree/master/gltf) with `EXT_meshopt_compression` + `KHR_mesh_quantization` (vertex cache + fetch optimization, sub-mesh consolidation, 16-bit position quantization on world-coord meshes, 14-bit on local-space landmarks)
+- Decoded at runtime by `MeshoptDecoder` (bundled with three.js examples, ~30 KB WASM, single fetch). Decoded geometry preserves vertex/index ordering, so GPU vertex cache stays warm
+- New build command: `npm run encode-meshopt`
+- **Side benefit:** gltfpack also merges sub-meshes per material → halved draw calls (67 → 33) and geometries (46 → 23). Replaces the legacy `strip_glb_attributes.js` step entirely
+- **Measured perf on Radeon 840M iGPU (external 1440p, AA on, full shadows):** idle FPS 44 → 63 (+43%) vs uncompressed; +31% over the considered Draco alternative (#617, closed). Full three-way comparison in `wiki/decisions/meshopt-over-draco.md`
+- **Bug fixed during integration:** `loadLandmarks()` was creating new `THREE.Mesh` objects from only `geometry + material`, discarding the source mesh's `position`/`scale` — fine for uncompressed GLBs (identity transform) but broke `KHR_mesh_quantization` dequantization (vertices rendered at raw int16 scale, ~4× too large). Now copies position/quaternion/scale to mirror the existing `makeSeeThrough()` pattern
+- **Repo size reduction:** `assets/glb/` removed from version control (was 18.5 MB of dead weight; WolvenKit is the canonical source). Local re-encoding workflow: copy WKit exports to `assets/glb-source/`, run `npm run encode-meshopt`
+
+#### Performance instrumentation (PR #618, #619)
+
+- `?debug=1` URL flag activates a vertical stats.js panel in the top-right of the 3D view — FPS, MS/frame, MB heap, draw calls, triangles. All five always visible (no click-cycling), `pointer-events:none` so mouse drags pass through to the scene
+- `Copy debug info` button captures a comprehensive snapshot: rolling 5 s FPS buffer (avg / p50 / worst-5%), `renderer.info` counters, renderer settings (DPR / AA / shadow type), display dimensions, GPU/vendor identification, hardware concurrency, max texture size. Logs to console + clipboard
+- New `NCZ.ThreeScene` console exports: `getRenderInfo()`, `setOverrideMaterial(true|false)` (fragment-cost diagnostic), `dumpDebugInfo()` (programmatic equivalent of the button)
+- No behaviour change for normal users — fully gated on `?debug=1`
+
 #### Landmarks (Task 4)
 
 - **7 GLBs, 8 instances** — The Needle (obelisk), Heavy Hearts Club (pyramid), De-votion statue, Brainporium AV building, North Oak arch gate, Brave Atlas icosphere, Pacifica ferris wheel (upright), Rancho Coronado ferris wheel (collapsed on its side)
