@@ -138,10 +138,7 @@ Single persistent `CSS2DObject` created at attach time. On pin `mouseenter`, pos
 ## Clustering
 
 Detailed page on the wiki ([three-markers-clustering.md](../wiki/sources/three-markers-clustering.md), Obsidian-only).
-TL;DR: screen-space proximity grouping at `PIN_3D_CLUSTER_RADIUS_PX` (40px,
-matches Leaflet). Greedy O(N²) on filter-visible pins, recomputed on `controls.change`
-(rAF-debounced) and on filter change. Cluster bubbles use `.marker-cluster` class
-+ Leaflet's existing colour ramp. Pool of CSS2DObjects reused across recomputes.
+TL;DR: **world-space XZ proximity grouping** (not screen-space — switched 2026-05 after Aki's UX feedback). Cluster radius is `PIN_3D_CLUSTER_RADIUS_PX` (40) converted to world units at current zoom, so clusters dissolve as the user zooms in (matching Leaflet's behaviour) but stay invariant to camera tilt and rotation (unlike the original screen-space approach which mis-clustered visually-close-but-far-apart pins at high tilt). Greedy O(N²) on filter-visible pins, recomputed on **zoom change** or filter change only — pan and tilt leave clusters intact. Cluster bubbles use `.marker-cluster` class + Leaflet's existing colour ramp. Pool of CSS2DObjects reused across recomputes.
 
 ## Cluster panel integration
 
@@ -168,7 +165,7 @@ auto-syncs across recomputes via `setActiveClusterMods(modSet)` and
 | `PIN_3D_POPUP_FLIP_PADDING_PX` | 24 | Pixels of clearance above viewport top before popup flips below pin |
 | `PIN_3D_FLY_DURATION_MS` | 700 | Total tween time for sidebar click → camera fly-to-pin |
 | `PIN_3D_FLY_ZOOM` | 15 | Target `camera.zoom` at end of fly |
-| `PIN_3D_CLUSTER_RADIUS_PX` | 40 | Screen-pixel radius for cluster grouping (matches Leaflet's `maxClusterRadius`) |
+| `PIN_3D_CLUSTER_RADIUS_PX` | 40 | Equivalent pixel radius for cluster grouping. Converted to world units at recompute time — `PIN_3D_CLUSTER_RADIUS_PX × ((camera.right − camera.left) / (camera.zoom × canvasWidth))` — so clusters dissolve at the same rate as Leaflet's pixel-radius does. Stays in `_PX` for naming because the dev-intuition target is a Leaflet-equivalent pixel size. |
 
 All five are JS-side runtime tunables. Visual constants (popup margin, arrow
 size, tooltip padding) live in CSS — see [style.css](../assets/css/style.css)

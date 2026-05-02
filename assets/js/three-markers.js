@@ -257,11 +257,25 @@ const ThreeMarkers = (() => {
   }
 
   // ── Clustering ────────────────────────────────────────────────────────
-  // Project every filter-visible pin to screen pixels, group within
-  // PIN_3D_CLUSTER_RADIUS_PX via greedy O(N²) walk, render groups of size 2+
-  // as cluster bubbles + hide their pins. Singletons stay as visible pins.
+  // World-space proximity grouping. Cluster radius is computed in world units
+  // from the equivalent pixel radius at current zoom — so clusters dissolve
+  // as the user zooms in (matching Leaflet's behaviour) but stay invariant
+  // to camera tilt and rotation (unlike the original screen-space approach,
+  // which produced tilt-distorted "close on screen but far in world" pairs).
+  //
+  // Trigger: zoom changes or filter changes only. Pan and tilt don't shift
+  // world distances, so they don't recompute. This makes clusters stable
+  // while the user explores — no reshuffle on rotation. (Aki's UX call,
+  // applied 2026-05-02. Earlier screen-space approach in git history if
+  // you ever want to revisit.)
+  let _lastZoomForCluster = null;
 
   function scheduleRecomputeClusters() {
+    // Skip if zoom hasn't changed (pan/tilt only) — world clusters don't
+    // move. Filter changes call recomputeClusters() synchronously and
+    // bypass this guard.
+    if (_lastZoomForCluster === camera.zoom) return;
+    _lastZoomForCluster = camera.zoom;
     if (_recomputeFrame !== null) return;
     _recomputeFrame = requestAnimationFrame(() => {
       _recomputeFrame = null;
@@ -272,25 +286,26 @@ const ThreeMarkers = (() => {
   function recomputeClusters() {
     if (!_clusterLayer || !camera || !container) return;
     const w = container.clientWidth;
-    const h = container.clientHeight;
-    const halfW = w * 0.5;
-    const halfH = h * 0.5;
+    if (!w) return;
 
-    // Project filter-visible pins to viewport pixel space
+    // Convert "PIN_3D_CLUSTER_RADIUS_PX equivalent at current zoom" into world
+    // units. At zoom=2 this is roughly the same radius the screen-space
+    // version used at top-down view; as the user zooms in, the world radius
+    // shrinks proportionally so clusters dissolve at the same rate as Leaflet's.
+    const worldPerPixel = (camera.right - camera.left) / (camera.zoom * w);
+    const radiusWorld = NCZ.PIN_3D_CLUSTER_RADIUS_PX * worldPerPixel;
+    const radiusSq = radiusWorld * radiusWorld;
+
+    // Build the filter-visible pin list with world XZ coords (Y intentionally
+    // ignored — rooftop pins should still cluster with same-XZ ground pins).
     const points = [];
     for (const [id, pin] of pins) {
       if (!_filterVisibleIds.has(id)) continue;
-      _projectVec.copy(pin.position).project(camera);
-      // Skip pins behind camera or way off-screen — clustering them is wasted work
-      if (_projectVec.z > 1 || _projectVec.z < -1) continue;
-      const sx = (_projectVec.x + 1) * halfW;
-      const sy = (1 - _projectVec.y) * halfH;
-      points.push({ id, pin, sx, sy, used: false });
+      points.push({ id, pin, x: pin.position.x, z: pin.position.z, used: false });
     }
 
     // Greedy proximity grouping. For each unassigned pin, sweep all unassigned
     // pins and pull in any within radius. O(N²) — fine at our N (~207 max).
-    const radiusSq = NCZ.PIN_3D_CLUSTER_RADIUS_PX * NCZ.PIN_3D_CLUSTER_RADIUS_PX;
     const groups = [];
     for (const p of points) {
       if (p.used) continue;
@@ -298,9 +313,9 @@ const ThreeMarkers = (() => {
       const group = [p];
       for (const q of points) {
         if (q.used) continue;
-        const dx = q.sx - p.sx;
-        const dy = q.sy - p.sy;
-        if (dx * dx + dy * dy < radiusSq) {
+        const dx = q.x - p.x;
+        const dz = q.z - p.z;
+        if (dx * dx + dz * dz < radiusSq) {
           q.used = true;
           group.push(q);
         }

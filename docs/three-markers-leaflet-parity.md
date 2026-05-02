@@ -43,7 +43,7 @@ These are live in the current PR. Nothing to action.
 | A16 | Sidebar item click → camera fly-to-pin | `markerClusterGroup.zoomToShowLayer` | ✅ (was B3) |
 | A17 | Discover button works in 3D | `focusRandomVisibleMarker` | ✅ (was B5) |
 | A18 | Popup chrome (background, arrows, category colours) shared between Leaflet and 3D — single CSS source of truth | `.ncz-dynamic-popup` chrome rules | ✅ |
-| A19 | Pin clustering (screen-space proximity grouping at low zoom, dissolves on zoom-in) | `L.markerClusterGroup` | ✅ (was C1) |
+| A19 | Pin clustering (world-space XZ distance, zoom-scaled radius, recomputes only on zoom/filter — stable across pan/tilt) | `L.markerClusterGroup` | ✅ (was C1) — switched from screen-space to world-space after Aki's UX feedback |
 | A20 | Cluster click → cluster panel; map-aware (track-and-update successor; close on view switch); active-bubble visual indicator | `clusterclick` event + populateClusterPanel | ✅ (was C2) |
 | A21 | Pannable bounds — clamp camera target inside terrain extent + viewport-relative padding | (no Leaflet API; manual `controls.change` clamp) | ✅ (was C3; tilt-aware fix deferred to E7) |
 | A22 | Distance scale bar (Leaflet-style nice-number rounding, shared `.leaflet-control-scale-line` skin) | `L.control.scale` | ✅ (was C4) |
