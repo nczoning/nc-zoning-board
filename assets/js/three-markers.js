@@ -79,6 +79,26 @@ const ThreeMarkers = (() => {
     cssRenderer.domElement.style.pointerEvents = 'none';
     container.appendChild(cssRenderer.domElement);
 
+    // Suppress the browser context menu only when the right-click was a
+    // drag (i.e. a camera tilt that ended over a pin/cluster/popup), not
+    // when it's a standalone right-click. Drag detection mirrors the
+    // popup-close pattern: record right-pointerdown position, compare to
+    // contextmenu's reported position, suppress only if movement exceeds
+    // PIN_3D_DRAG_THRESHOLD_PX. Listeners live on the container so the
+    // pointerdown fires whether the drag starts on the canvas or on a
+    // CSS2D overlay element. OrbitControls handles canvas-only contextmenu
+    // independently, so this is purely for the overlay-bubbled case.
+    let _rightDownPos = null;
+    container.addEventListener('pointerdown', (e) => {
+      if (e.button === 2) _rightDownPos = { x: e.clientX, y: e.clientY };
+    });
+    container.addEventListener('contextmenu', (e) => {
+      if (!_rightDownPos) return;
+      const dist = Math.hypot(e.clientX - _rightDownPos.x, e.clientY - _rightDownPos.y);
+      _rightDownPos = null;
+      if (dist > NCZ.PIN_3D_DRAG_THRESHOLD_PX) e.preventDefault();
+    });
+
     pinsLayer = new THREE.Group();
     pinsLayer.name = 'three-markers';
     scene.add(pinsLayer);
