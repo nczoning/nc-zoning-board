@@ -182,7 +182,16 @@ const ThreeScene = (() => {
     // across the [near, far] frustum. Mitigates Z-fighting on near-coplanar
     // surfaces — block-style buildings sharing walls, water/terrain at the
     // coastline, etc. Costs a cheap shader op per fragment; free on modern GPUs.
-    renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true, logarithmicDepthBuffer: true });
+    // powerPreference hints the OS to pick the discrete GPU on hybrid-graphics
+    // laptops (Optimus / AMD Switchable / Apple). Not guaranteed — driver/OS
+    // policy can override — but it's a free one-flag improvement for users
+    // who'd otherwise get stuck on the integrated chip.
+    renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      stencil: true,
+      logarithmicDepthBuffer: true,
+      powerPreference: 'high-performance',
+    });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(container.clientWidth, container.clientHeight, false);
     renderer.shadowMap.enabled = true;
