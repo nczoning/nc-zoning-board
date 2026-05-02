@@ -41,6 +41,55 @@ New constants in [`constants.js`](assets/js/constants.js):
 
 New helper script: [`scripts/query_terrain_heights.py`](scripts/query_terrain_heights.py) — raycasts the terrain GLB at given CET (X, Y) coordinates, used to compute safe teleport heights for the coordinate-system experiment. Documents the axis-convention mismatch with `generate_terrain_contours.py` (corrected pattern in the new script's comments).
 
+#### Static-subtree matrix freeze + camera frustum tighten (PR #629)
+
+- `matrixWorldAutoUpdate = false` on terrain, water, cliffs, roads/borders, metro, districts, landmarks, and the buildings InstancedMesh group. Each subtree's world matrices are computed once after positioning and then frozen — Three.js's per-frame `updateMatrixWorld()` traversal skips the entire branch instead of walking thousands of nodes only to find no work
+- New `freezeStatic(obj)` helper in [`three-scene.js`](assets/js/three-scene.js) wraps the "compute once + disable auto-recurse" pattern
+- Dynamic objects (sun light, sun sphere, camera) keep default auto-update — visibility toggles, theme transitions, and shadow-camera updates don't depend on this change
+- Camera near/far tightened from `±50000` → `±20000`. Worst-case camera-local depth (max 70° tilt + max-pan to world edge) is ~23k, so 20k leaves comfortable margin while halving the orthographic depth budget. Linear precision benefit is muted by the `logarithmicDepthBuffer` change in #627 but no reason to keep the budget 2.5× oversized
+
+#### Renderer GPU hint: `powerPreference: 'high-performance'` (PR #628)
+
+- One-flag `WebGLRenderer` option that hints the OS to pick the discrete GPU on hybrid-graphics laptops (NVIDIA Optimus, AMD Switchable Graphics, Apple's automatic switching). Driver/OS policy can override, but free for users who'd otherwise get stuck on the integrated chip
+- An exploratory 0.2% building-instance scale shrink was bundled into the original PR and reverted before merge — the shrink didn't reduce residual pan-shimmer, ruling out building-vs-building coplanarity as the cause. Sub-pixel triangle aliasing during motion is the new leading suspect, addressable later via TAA / higher-MSAA / LOD work outside this PR's scope
+
+#### Z-fighting mitigation: `logarithmicDepthBuffer` (PR #627)
+
+- One-flag `WebGLRenderer` option that distributes depth precision logarithmically across the frustum rather than uniformly
+- Diagnosed root cause via systematic elimination: AF on `_m` texture (#624) didn't fix it; edge highlight at intensity 0 (#626) reduced but didn't eliminate; shadows off didn't fix; toggling terrain/cliffs/water layers didn't move the needle. Shimmer was visible **on vertical edges of buildings sharing walls** (block-style `BoxGeometry` instances at coplanar XY) and at the **water/terrain coastline** during flyover — both the canonical pattern for depth-buffer Z-fighting between near-coplanar surfaces
+- Cheap fragment-shader op, no per-asset changes needed. Also enabled the camera-frustum tighten in #629 (less wasteful budget once log-depth is on)
+
+#### Runtime setter: building edge highlight intensity (PR #626)
+
+- New `NCZ.ThreeScene.setBuildingEdgeIntensity(value)` console export — iterates `buildingMaterials[]` and updates each shader's `uEdgeIntensity` uniform live
+- Why a setter is needed: the uniform value is captured at material-compile time from `NCZ.BUILDING_EDGE_INTENSITY`; mutating the constant from the console alone doesn't propagate to existing materials
+- Used as a console diagnostic (isolating the edge highlight's contribution to pan-shimmer in #627), and earmarked as the runtime knob for a future `Low` quality preset to dim or disable the highlight
+
+#### Anisotropic filtering on `_m` texture (PR #624)
+
+- `tex.anisotropy = renderer.capabilities.getMaxAnisotropy()` in `loadMDds()` — addresses oblique-view surface shimmer that mips alone weren't catching
+- Mip + trilinear filtering handles aliasing perpendicular to the camera; AF handles the *along-view-axis* aliasing that elongated texture footprints produce when surfaces stretch into the distance. Mip selection is conservative (smaller of the two screen-space derivatives), so a fragment whose footprint stretches into the distance still samples a small mip and aliases along its long axis without AF
+- Effectively free on modern GPUs — dedicated fixed-function on AMD/NVIDIA/Intel, Radeon 840M supports up to 16x. Defense-in-depth: kept on even after #627 turned out to be the actual fix for most of the shimmer
+
+#### GLB compression via gltfpack/meshopt (PR #622)
+
+- **Total 3D scene payload: 18.5 MB → 2.18 MB (-88%)** — terrain alone went 6.4 MB → 423 KB; `roads_borders` went 5.9 MB → 357 KB
+- New folder `assets/glb-meshopt/` ships the compressed copies; uncompressed source GLBs live at the gitignored `assets/glb-source/` (drop WolvenKit exports there before running `npm run encode-meshopt`). Runtime path: `NCZ.GLB_DIR` in [`constants.js`](assets/js/constants.js)
+- Encoded via [`gltfpack`](https://github.com/zeux/meshoptimizer/tree/master/gltf) with `EXT_meshopt_compression` + `KHR_mesh_quantization` (vertex cache + fetch optimization, sub-mesh consolidation, 16-bit position quantization on world-coord meshes, 14-bit on local-space landmarks)
+- Decoded at runtime by `MeshoptDecoder` (bundled with three.js examples, ~30 KB WASM, single fetch). Decoded geometry preserves vertex/index ordering, so GPU vertex cache stays warm
+- New build command: `npm run encode-meshopt`
+- **Side benefit:** gltfpack also merges sub-meshes per material → halved draw calls (67 → 33) and geometries (46 → 23). Replaces the legacy `strip_glb_attributes.js` step entirely
+- **Measured perf on Radeon 840M iGPU (external 1440p, AA on, full shadows):** idle FPS 44 → 63 (+43%) vs uncompressed; +31% over the considered Draco alternative (#617, closed). Full three-way comparison in `wiki/decisions/meshopt-over-draco.md`
+- **Bug fixed during integration:** `loadLandmarks()` was creating new `THREE.Mesh` objects from only `geometry + material`, discarding the source mesh's `position`/`scale` — fine for uncompressed GLBs (identity transform) but broke `KHR_mesh_quantization` dequantization (vertices rendered at raw int16 scale, ~4× too large). Now copies position/quaternion/scale to mirror the existing `makeSeeThrough()` pattern
+- **Repo size reduction:** `assets/glb/` removed from version control (was 18.5 MB of dead weight; WolvenKit is the canonical source). Local re-encoding workflow: copy WKit exports to `assets/glb-source/`, run `npm run encode-meshopt`
+
+#### Performance instrumentation (PR #618, #619)
+
+- `?debug=1` URL flag activates a vertical stats.js panel in the top-right of the 3D view — FPS, MS/frame, MB heap, draw calls, triangles. All five always visible (no click-cycling), `pointer-events:none` so mouse drags pass through to the scene
+- `Copy debug info` button captures a comprehensive snapshot: rolling 5 s FPS buffer (avg / p50 / worst-5%), `renderer.info` counters, renderer settings (DPR / AA / shadow type), display dimensions, GPU/vendor identification, hardware concurrency, max texture size. Logs to console + clipboard
+- New `NCZ.ThreeScene` console exports: `getRenderInfo()`, `setOverrideMaterial(true|false)` (fragment-cost diagnostic), `dumpDebugInfo()` (programmatic equivalent of the button)
+- No behaviour change for normal users — fully gated on `?debug=1`
+
 #### Landmarks (Task 4)
 
 - **7 GLBs, 8 instances** — The Needle (obelisk), Heavy Hearts Club (pyramid), De-votion statue, Brainporium AV building, North Oak arch gate, Brave Atlas icosphere, Pacifica ferris wheel (upright), Rancho Coronado ferris wheel (collapsed on its side)

@@ -17,6 +17,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Line2 } from 'three/addons/lines/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import Stats from 'three/addons/libs/stats.module.js';
 
 window.NCZ = window.NCZ || {};
@@ -99,9 +100,24 @@ const ThreeScene = (() => {
     });
   }
 
-  function loadGLB(path) {
+  // Freeze world matrices on a fully-positioned static subtree so Three.js
+  // skips the per-frame matrix-update traversal beneath it. Computes once,
+  // then disables the auto-update flag the parent uses to recurse in.
+  function freezeStatic(obj) {
+    obj.updateMatrixWorld(true);
+    obj.matrixWorldAutoUpdate = false;
+  }
+
+  // Hoisted singleton: MeshoptDecoder is attached so GLBs encoded with
+  // EXT_meshopt_compression decode transparently. The decoder is a no-op for
+  // uncompressed GLBs (the extension is only triggered when present). The
+  // decoder ships with three.js examples — no extra dependency.
+  const gltfLoader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
+
+  function loadGLB(file) {
+    const path = `${NCZ.GLB_DIR}/${file}`;
     return new Promise((resolve, reject) => {
-      new GLTFLoader().load(path, gltf => resolve(gltf.scene), undefined, reject);
+      gltfLoader.load(path, gltf => resolve(gltf.scene), undefined, reject);
     });
   }
 
@@ -135,6 +151,12 @@ const ThreeScene = (() => {
     tex.generateMipmaps = true;
     tex.minFilter = THREE.LinearMipmapLinearFilter;
     tex.magFilter = THREE.LinearFilter;
+    // Anisotropic filtering — fixes shimmer on surfaces viewed at oblique angles
+    // (terrain/buildings tilted toward the camera). Mips alone aren't enough because
+    // mip selection picks based on the smaller of the screen-space derivatives —
+    // an elongated texture footprint still aliases along the long axis. AF samples
+    // multiple texels along that axis. Free-ish on modern GPUs (fixed-function path).
+    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
     tex.needsUpdate = true;
     return tex;
   }
@@ -166,7 +188,26 @@ const ThreeScene = (() => {
     // Renderer — pass updateStyle:false so Three.js never writes px dimensions
     // onto the canvas element. The canvas is kept at width/height:100% in CSS
     // so it always fills #map-3d without ever pushing surrounding layout elements.
-    renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true });
+    // logarithmicDepthBuffer: redistributes depth precision logarithmically
+    // across the [near, far] frustum. Mitigates Z-fighting on near-coplanar
+    // surfaces — block-style buildings sharing walls, water/terrain at the
+    // coastline, etc. Costs a cheap shader op per fragment; free on modern GPUs.
+    // powerPreference hints the OS to pick the discrete GPU on hybrid-graphics
+    // laptops (Optimus / AMD Switchable / Apple). Not guaranteed — driver/OS
+    // policy can override — but it's a free one-flag improvement for users
+    // who'd otherwise get stuck on the integrated chip.
+    renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      stencil: true,
+      logarithmicDepthBuffer: true,
+      powerPreference: 'high-performance',
+    });
+    // Make the sRGB-correct colour pipeline explicit. These match Three.js r170
+    // defaults (since r152 / r155 respectively) but stating them here protects
+    // the scene's appearance against future Three.js default changes — both flags
+    // have shifted in past major versions.
+    THREE.ColorManagement.enabled = true;
+    renderer.outputColorSpace     = THREE.SRGBColorSpace;
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(container.clientWidth, container.clientHeight, false);
     renderer.shadowMap.enabled = true;
@@ -422,9 +463,9 @@ const ThreeScene = (() => {
     try {
       // Tier 1: terrain + water + cliffs in parallel
       const [terrainScene, waterScene, cliffsScene] = await Promise.all([
-        loadGLB('assets/glb/3dmap_terrain.glb'),
-        loadGLB('assets/glb/3dmap_water.glb'),
-        loadGLB('assets/glb/3dmap_cliffs.glb'),
+        loadGLB('3dmap_terrain.glb'),
+        loadGLB('3dmap_water.glb'),
+        loadGLB('3dmap_cliffs.glb'),
       ]);
 
       terrainMat = makeHillshadeMaterial('--scene-terrain', '#566c88');
@@ -454,6 +495,9 @@ const ThreeScene = (() => {
       layers.water   = waterScene;
       layers.cliffs  = cliffsScene;
       scene.add(terrainScene, waterScene, cliffsScene);
+      freezeStatic(terrainScene);
+      freezeStatic(waterScene);
+      freezeStatic(cliffsScene);
 
       // Fit camera frustum to the terrain bounding box. Stored at module
       // scope so the pan-bound listener can clamp against terrain extent
@@ -487,9 +531,9 @@ const ThreeScene = (() => {
     registerLoadStep(); // roads + metro
     try {
       const [roadsScene, metroScene, bordersScene] = await Promise.all([
-        loadGLB('assets/glb/3dmap_roads.glb'),
-        loadGLB('assets/glb/3dmap_metro.glb'),
-        loadGLB('assets/glb/3dmap_roads_borders.glb'),
+        loadGLB('3dmap_roads.glb'),
+        loadGLB('3dmap_metro.glb'),
+        loadGLB('3dmap_roads_borders.glb'),
       ]);
 
       // All road GLBs have inverted X axis — rotate 180° around Y to correct
@@ -585,6 +629,8 @@ const ThreeScene = (() => {
       layers.metro = metroGroup;
 
       scene.add(roadsGroup, metroGroup);
+      freezeStatic(roadsGroup);
+      freezeStatic(metroGroup);
       stepProgress(); // roads done
     } catch (err) {
       console.error('[NCZ] Roads/metro GLB load failed:', err);
@@ -629,6 +675,7 @@ const ThreeScene = (() => {
       _districtSub   = subGroup;
       layers.districts = parent;
       scene.add(parent);
+      freezeStatic(parent);
       stepProgress(); // districts done
     } catch (err) {
       console.error('[NCZ] District lines load failed:', err);
@@ -673,7 +720,7 @@ const ThreeScene = (() => {
       // Unique GLB files (ferris wheel is shared)
       const uniqueFiles = [...new Set(LANDMARK_META.map(m => m.file))];
       const glbMap = Object.fromEntries(
-        await Promise.all(uniqueFiles.map(async f => [f, await loadGLB(`assets/glb/${f}`)]))
+        await Promise.all(uniqueFiles.map(async f => [f, await loadGLB(f)]))
       );
 
       const group = new THREE.Group();
@@ -689,6 +736,13 @@ const ThreeScene = (() => {
         source.traverse(child => {
           if (!child.isMesh) return;
           const mesh = new THREE.Mesh(child.geometry, mat);
+          // Preserve the source mesh's local transform — for meshopt-compressed
+          // GLBs this carries the KHR_mesh_quantization dequant translate/scale
+          // that maps int16 vertex positions back to mesh-local-space coords.
+          // Without this, vertices render at raw quantized scale (0–65535).
+          mesh.position.copy(child.position);
+          mesh.quaternion.copy(child.quaternion);
+          mesh.scale.copy(child.scale);
           mesh.castShadow    = true;
           mesh.receiveShadow = true;
           container.add(mesh);
@@ -698,6 +752,7 @@ const ThreeScene = (() => {
 
       layers.landmarks = group;
       scene.add(group);
+      freezeStatic(group);
       console.log(`[NCZ] Landmarks: ${LANDMARK_META.length} placed`);
       stepProgress();
     } catch (err) {
@@ -779,6 +834,7 @@ const ThreeScene = (() => {
 
       layers.buildings = group;
       scene.add(group);
+      freezeStatic(group);
       console.log(`[NCZ] Buildings: ${DISTRICT_META.length} districts loaded`);
     } catch (err) {
       console.error('[NCZ] Buildings load failed:', err);
@@ -1053,6 +1109,19 @@ const ThreeScene = (() => {
       scene.overrideMaterial = _debugOverrideMat;
     } else {
       scene.overrideMaterial = null;
+    }
+  }
+
+  // Runtime control of the building edge highlight intensity. The shader's
+  // uEdgeIntensity uniform is captured from NCZ.BUILDING_EDGE_INTENSITY at
+  // material-compile time, so changing the constant alone doesn't propagate
+  // to live materials — this iterates the existing shader refs and updates them.
+  // Diagnostic use: set to 0 to test whether shimmer disappears entirely;
+  // future Stage 2 quality preset use: dim/disable highlight on Low.
+  function setBuildingEdgeIntensity(value) {
+    for (const mat of buildingMaterials) {
+      const sh = mat.userData.shader;
+      if (sh && sh.uniforms.uEdgeIntensity) sh.uniforms.uEdgeIntensity.value = value;
     }
   }
 
@@ -1376,7 +1445,10 @@ const ThreeScene = (() => {
     // Only cast shadows if the user has enabled them AND the sun is above NCZ.SHADOW_MIN_ELEV°
     _dirLight.castShadow = _shadowsOn && (el * 180 / Math.PI) > NCZ.SHADOW_MIN_ELEV;
 
-    // Colour: warm orange at horizon → neutral white above ~NCZ.SUN_COLOR_ELEV°
+    // Colour: warm orange at horizon → neutral white above ~NCZ.SUN_COLOR_ELEV°.
+    // setRGB writes linear-light values directly (ColorManagement does NOT convert
+    // these from sRGB the way a hex string would be). Tuned by eye with sRGB output
+    // gamma-encode active — do not "convert" them.
     const elevDeg = el * 180 / Math.PI;
     const t = Math.min(1, Math.max(0, elevDeg / NCZ.SUN_COLOR_ELEV));
     _dirLight.color.setRGB(1, 0.45 + t * 0.55, 0.1 + t * 0.9);
@@ -1493,7 +1565,7 @@ const ThreeScene = (() => {
     }
   }
 
-  return { init, startRenderLoop, stopRenderLoop, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, setOverrideMaterial, dumpDebugInfo };
+  return { init, startRenderLoop, stopRenderLoop, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, setOverrideMaterial, setBuildingEdgeIntensity, dumpDebugInfo };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;

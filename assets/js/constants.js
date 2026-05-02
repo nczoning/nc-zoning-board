@@ -71,6 +71,14 @@ NCZ.NEXUS_BATCH_SIZE = 50;
 NCZ.DATA_MODS_PATH = "mods.json";
 NCZ.DATA_TAGS_PATH = "data/tags.json";
 
+// 3D scene GLB source folder. The committed runtime path is "assets/glb-meshopt"
+// (gltfpack-compressed via EXT_meshopt_compression, decoded by MeshoptDecoder).
+// WolvenKit-exported source GLBs live at the gitignored "assets/glb-source/" —
+// drop fresh exports there and run `npm run encode-meshopt` to regenerate.
+// Flip this constant to "assets/glb-source" to test against uncompressed locally
+// (only works when the source folder is populated).
+NCZ.GLB_DIR = "assets/glb-meshopt";
+
 // Content limits
 NCZ.DESCRIPTION_MAX_LENGTH = 500;
 NCZ.COPY_FEEDBACK_MS = 2000;
@@ -158,8 +166,8 @@ NCZ.DISTRICT_LINE_OPACITY   = 0.85;
 // ── Three.js 3D scene ──────────────────────────────────────────────────────────
 
 // Camera — orthographic projection, positioned above world centre looking straight down
-NCZ.CAMERA_NEAR     = -50000;           // near plane behind the camera (orthographic — not a clip distance)
-NCZ.CAMERA_FAR      =  50000;           // far plane in front; large to ensure terrain/buildings never clip
+NCZ.CAMERA_NEAR     = -20000;           // near plane behind the camera (orthographic — not a clip distance)
+NCZ.CAMERA_FAR      =  20000;           // far plane in front; sized for max-tilt + max-pan worst case (~23k) with margin
 NCZ.CAMERA_HEIGHT   =  10000;           // Y position above world centre (CET units)
 
 // Camera controls (OrbitControls) — source: TweakDB WorldMap.FreeCameraSettingsDefault
