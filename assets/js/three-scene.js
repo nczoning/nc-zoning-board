@@ -976,6 +976,19 @@ const ThreeScene = (() => {
     }
   }
 
+  // Runtime control of the building edge highlight intensity. The shader's
+  // uEdgeIntensity uniform is captured from NCZ.BUILDING_EDGE_INTENSITY at
+  // material-compile time, so changing the constant alone doesn't propagate
+  // to live materials — this iterates the existing shader refs and updates them.
+  // Diagnostic use: set to 0 to test whether shimmer disappears entirely;
+  // future Stage 2 quality preset use: dim/disable highlight on Low.
+  function setBuildingEdgeIntensity(value) {
+    for (const mat of buildingMaterials) {
+      const sh = mat.userData.shader;
+      if (sh && sh.uniforms.uEdgeIntensity) sh.uniforms.uEdgeIntensity.value = value;
+    }
+  }
+
   // Comprehensive diagnostic snapshot — bound to the "Copy debug info" button
   // and exposed for console use. Logs human-readable text, copies it to the
   // clipboard, and returns the structured object for programmatic use.
@@ -1413,7 +1426,7 @@ const ThreeScene = (() => {
     }
   }
 
-  return { init, startRenderLoop, stopRenderLoop, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, setOverrideMaterial, dumpDebugInfo };
+  return { init, startRenderLoop, stopRenderLoop, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, setOverrideMaterial, setBuildingEdgeIntensity, dumpDebugInfo };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;
