@@ -42,15 +42,30 @@ Terrain GLB XZ coordinates ARE CET coordinates at 1:1 scale. The "1.32× ratio" 
 - Known CET locations (Koi Fish, Pier, Nash Hideout) corresponding to correct terrain positions
 
 ### CET Z vs Terrain GLB Y (elevation)
-These are NOT in the same units. Measured at 3 ground-truth locations:
 
-| Location | Player CET Z | Building cetZ | Terrain GLB Y (raycast) | Gap |
-|----------|-------------|---------------|------------------------|-----|
-| Pier (Heywood) | 7.8 | 2.0 | -0.13 | ~8m |
-| Koi Fish (City Center) | 30.3 | 29.0 | 7.13 | ~23m |
-| Nash Hideout (Badlands) | 68.2 | 85.7 | 60.98 | ~7m |
+**CET Z and terrain GLB Y are in the same coordinate space.** Validated 2026-05-01 via in-game teleport experiment to five terrain-only locations across the map:
 
-The gap varies because the terrain mesh represents the **geological base** (rock, soil), while CET Z and building cetZ represent the **gameplay surface** (which includes elevated concrete platforms, bridges, pier structures). The 23m gap at City Center is the height of the Corpo Plaza elevated platform.
+| Location | CET (X, Y) | Recorded CET Z | Terrain GLB Y | Delta |
+| --- | --- | --- | --- | --- |
+| Eastern badlands | (3500, −1500) | 112.40 | 106.61 | +5.79 |
+| Northeast outskirts | (1500, 5000) | 181.49 | 186.17 | −4.68 |
+| South ranchland | (−1000, −6000) | 106.14 | 104.20 | +1.94 |
+| Charter Hill (oilfield) | (−3000, 3500) | 0.72 | 0.02 | +0.70 |
+| Coastal desert NW (clipped, est.) | (−500, 5500) | 243.41 | 247.01 | −3.60 |
+
+All five samples agree within ±6m. The delta is consistent with:
+
+- Player eye/hip height (~1.5m above the foot's contact point)
+- Terrain mesh LOD smoothing (small bumps and valleys averaged)
+- Slope-induced sliding before the position read
+
+**No systematic offset, no scaling factor.** Pin placement in 3D can use CET Z directly with a small visual lift; no terrain raycast needed.
+
+#### Earlier (incorrect) measurement
+
+A previous version of this doc listed an "elevation gap" of 7–23m between CET Z and terrain GLB Y, derived from samples at the Pier, Koi Fish, and Nash Hideout. Those readings were taken on top of buildings/platforms, not on bare terrain — they measured infrastructure height, not a coordinate-space mismatch. Findings retracted.
+
+See: `docs/cet-z-terrain-experiment.md` (the validation experiment), `docs/cet-z-terrain-experiment.csv` (raw data).
 
 ### Building Rotation
 Buildings have per-instance quaternion rotations (Block 2 of instance texture). All four components (qx, qy, qz, qw) are kept — pitch and roll are used by the game shader to form non-upright primitives (wedges, ramps, bridges, gap-fillers), not just upright buildings.

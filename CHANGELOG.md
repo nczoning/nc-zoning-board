@@ -9,6 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### ThreeMarkers — pin/popup layer for the 3D view
+
+The 3D scene now has interactive mod pins matching the Leaflet view's behaviour. Pins, popups, sidebar interactions, and the Discover button all work in SCHEMA mode.
+
+- **Pin rendering** — one `CSS2DObject` per mod, anchored at the player's CET (X, Y, Z) position with a small visual lift (`PIN_3D_GROUND_OFFSET`). Validated against in-game readings (see `docs/cet-z-terrain-experiment.md`): CET Z and terrain GLB Y are in the same coordinate space — no raycast or offset needed beyond the cosmetic lift.
+- **Popups** — click a pin to open a popup with the same HTML, border gradient, category colour, and arrow as the Leaflet view. Auto-flips above/below the pin based on viewport position. Closes on outside-click (drag-aware: dragging the camera does not close the popup).
+- **Click selected pin to deselect** — Leaflet-style toggle behaviour.
+- **Hover pin → tooltip** — single reusable `CSS2DObject` shows the mod name on pin hover; reuses the Leaflet `.pin-tooltip` skin so 2D and 3D tooltips look identical.
+- **Sidebar integration** — the same sidebar (filters, search, mod list) drives both views. Filter checkboxes affect 3D pin visibility via `applyFilters()`. Sidebar item hover pulses the corresponding pin in both views simultaneously. Sidebar item click flies the camera to the pin (smooth tween, configurable via `PIN_3D_FLY_DURATION_MS` / `PIN_3D_FLY_ZOOM`) and opens the popup.
+- **Camera fly-to** — tweens `controls.target` and `camera.position` by the same delta (preserving the spherical offset) plus `camera.zoom` over `PIN_3D_FLY_DURATION_MS` (default 700ms, ease-in-out cubic). Cancels immediately on user input. Targets the pin's full Y so rooftop pins (e.g. Crystal Palace Resort) land at screen centre regardless of camera tilt.
+- **Discover button works in 3D** — `focusRandomVisibleMarker` routes to ThreeMarkers in SCHEMA mode, picking a random pin whose CSS2DObject is visible (i.e. passed the active filters).
+- **Pin clustering in 3D — world-space distance** — groups pins by their actual XZ distance in CET world units, not by screen pixels. Cluster radius scales with zoom (PIN_3D_CLUSTER_RADIUS_PX × world-units-per-pixel at current zoom) so clusters dissolve as the user zooms in, matching Leaflet's behaviour. Recomputes only on zoom change or filter change — pan and tilt leave clusters intact, so rotating the camera no longer reshuffles cluster membership. Renders cluster bubbles at world centroid using the same `marker-cluster-step-N` colour ramp as Leaflet. (Earlier screen-space clustering produced semantically wrong groups at high tilt — pins far apart in the world but visually close on screen would cluster together. Aki's UX call to switch.)
+- **Right-click context menu suppression on the 3D overlay** — drag-aware. Releasing a right-click camera-tilt over a pin / cluster / popup / tooltip used to pop the OS context menu (OrbitControls only suppresses the canvas, not the CSS2D overlay siblings). New listener on `#map-3d` records right-pointerdown position and only `preventDefault`s the `contextmenu` if the cursor moved more than `PIN_3D_DRAG_THRESHOLD_PX` (= it was a tilt-drag). Standalone right-clicks still fire the menu so devs can use inspect-element / "open image" / etc.
+- **Cluster click → cluster panel (both views)** — refactored Leaflet's inline cluster handler into a shared `populateClusterPanel(modsList, opts)` helper that both views call. Clicking a cluster bubble in either view populates the same DOM panel with thumbnails, names, authors, tags, descriptions, and image-modal triggers.
+- **Map-aware cluster panel** — when 3D clusters recompute (camera moved/zoomed/tilted) or Leaflet clusters re-form (zoom/filter), the panel finds the *successor* cluster (the one with the most overlap with the panel's mod set) and updates its contents. Closes when the cluster fully dissolves into singletons or the view switches. Behaves identically in both views.
+- **Active-cluster visual indicator** — the cluster bubble whose contents are showing in the panel gets a `.marker-cluster-active` class (cyan ring + glow + raised z-index). Shared CSS rule across views; both layers track and re-apply the mark across their respective recompute lifecycles.
+- **Stays-open-on-zoom** — removed the `map.on("zoomstart", hideClusterPanel)` side-effect that was incidentally closing the panel when sidebar item clicks triggered Leaflet's `zoomToShowLayer`. Both views now leave the panel open during camera moves; closes only on outside-click, close button, view switch, or cluster going stale.
+- **Pannable bounds in 3D** — `controls.change` listener clamps `controls.target` to the terrain GLB extent (square `~[-8000, 8000]` in X and Z) plus viewport-relative padding (`PIN_3D_PAN_EDGE_FRACTION = 0.5` matches Leaflet's `panEdgeFraction` — at max pan, terrain edge sits at viewport centre). Camera position moves by the same delta as target so OrbitControls' spherical offset stays consistent. Tilt-aware refinement deferred (a first attempt produced catastrophic camera jumps when bounds inverted at extreme zoom-out + tilt; reverted in favour of the stable simpler bound).
+- **Distance scale bar in 3D** — bottom-right of the scene, between the view-toggle and controls strip. Picks "nice" 1/2/5 × 10ⁿ-metre rounded lengths closest to ~100 px wide, recomputed on every `controls.change` and on resize. Shares the `.leaflet-control-scale-line` skin with the SAT scale bar — single CSS source of truth, both views render identically.
+- **Cross-view popup state sync** — opening a popup in either view updates `?mod=` in the URL. Switching SAT ↔ SCHEMA re-opens the same pin in the new view.
+- **Popup chrome unified** — `.ncz-dynamic-popup` is now the single source of truth for popup background gradient, arrows, and category colours. Both `.leaflet-popup-content-wrapper` (2D) and `.three-popup` (3D) target the same shared rules; only Leaflet's structural reset and the 3D anchor positioning are view-specific. Removed ~100 lines of duplicated CSS in the process.
+- **Coordinate-system finding (retraction)** — the previous "elevation gap" claim between CET Z and terrain GLB Y (7–23m) was sampling bias from readings taken on top of platforms. In-game teleport experiment to five terrain-only locations confirmed the two are in the same coordinate space (±6m noise from player height + LOD smoothing). See `wiki/learnings/cet-z-equals-terrain-y.md`.
+
+New constants in [`constants.js`](assets/js/constants.js):
+
+- `PIN_3D_GROUND_OFFSET` (5) — visual lift above CET Z
+- `PIN_3D_DRAG_THRESHOLD_PX` (4) — drag-vs-click pixel detection
+- `PIN_3D_POPUP_FLIP_PADDING_PX` (24) — auto-flip viewport padding
+- `PIN_3D_FLY_DURATION_MS` (700) — fly-to-pin tween length
+- `PIN_3D_FLY_ZOOM` (15) — target camera zoom at end of fly
+
+New helper script: [`scripts/query_terrain_heights.py`](scripts/query_terrain_heights.py) — raycasts the terrain GLB at given CET (X, Y) coordinates, used to compute safe teleport heights for the coordinate-system experiment. Documents the axis-convention mismatch with `generate_terrain_contours.py` (corrected pattern in the new script's comments).
+
 #### Static-subtree matrix freeze + camera frustum tighten (PR #629)
 
 - `matrixWorldAutoUpdate = false` on terrain, water, cliffs, roads/borders, metro, districts, landmarks, and the buildings InstancedMesh group. Each subtree's world matrices are computed once after positioning and then frozen — Three.js's per-frame `updateMatrixWorld()` traversal skips the entire branch instead of walking thousands of nodes only to find no work

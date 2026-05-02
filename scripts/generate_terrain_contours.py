@@ -51,6 +51,15 @@ def load_terrain_heights():
 
     Axis mapping (terrain GLB — identity transform, no world yaw):
       CET_X = +GLB_X,  CET_Y = +GLB_Z,  height = +GLB_Y
+
+    NOTE — convention mismatch with the 3D scene:
+      The Three.js scene and docs/coordinate-system-3d.md use GLB_Z = -CET_Y
+      (negated). This script uses GLB_Z = +CET_Y (unflipped). The script
+      still produces correct Leaflet output because the error cancels through
+      cet_to_leaflet, but if you copy this code to query terrain heights for
+      the 3D pipeline you MUST flip the Y sign on lookup (see
+      scripts/query_terrain_heights.py for the corrected pattern).
+      Validated 2026-05-01 — see wiki/learnings/cet-z-equals-terrain-y.md.
     """
     try:
         import trimesh

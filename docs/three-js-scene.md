@@ -25,7 +25,7 @@ assets/js/
   utils.js          — Pure utility functions including shared popup/filter logic
   services.js       — Nexus API + data loading (unchanged)
   three-scene.js    — Three.js scene: renderer, camera, GLB loading, materials, render loop
-  three-markers.js  — Phase 0 stub (empty NCZ.ThreeMarkers = {}); full implementation is Phase 4
+  three-markers.js  — 3D pin/popup/tooltip/cluster layer (NCZ.ThreeMarkers). See three-markers.md.
   app.js            — Main app: Leaflet init, DOM events, view switching
 ```
 
@@ -55,7 +55,12 @@ Both files write to `window.NCZ` so `app.js` (a regular script) can access them:
 window.NCZ.ThreeScene = { init, loadTerrain, startRenderLoop, stopRenderLoop, ... };
 
 // three-markers.js
-window.NCZ.ThreeMarkers = { addPin, setVisibility, focusPin, ... };
+window.NCZ.ThreeMarkers = {
+  attach, setMods, applyFilters, focusMod,
+  setPulse, setClusterClickHandler, setClustersChangedHandler,
+  setActiveClusterMods, getVisibleModIds, closePopup, render, onResize,
+};
+// Full API + lifecycle: see three-markers.md
 ```
 
 ---
@@ -440,7 +445,7 @@ Screen-space proximity clustering, recalculated on camera change. Pins within 40
 
 `applyFilters()` in `app.js` calls `NCZ.computeVisibleMods(mods, filters)` to get a `Set<modId>`, then delegates:
 - Leaflet view: adds/removes markers from `markerClusterGroup`
-- Three.js view: calls `NCZ.ThreeMarkers.setVisibility(visibleIds)` which toggles `pin.visible`
+- Three.js view: calls `NCZ.ThreeMarkers.applyFilters(visibleIds)` which toggles `pin.visible` and re-runs cluster proximity grouping
 
 ---
 

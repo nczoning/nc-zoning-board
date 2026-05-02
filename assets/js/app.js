@@ -562,6 +562,9 @@ async function initMap() {
   // View switching (SAT ↔ SCHEMA)
   const mapEl   = document.getElementById("map");
   const map3dEl = document.getElementById("map-3d");
+  // Set inside the data-load try block once mods + markers are available.
+  // switchView calls it after toggling so the open popup persists across views.
+  let onViewSwitched = null;
   function switchView(viewName) {
     document.querySelectorAll(".map-view-btn").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.view === viewName);
@@ -583,6 +586,7 @@ async function initMap() {
       NCZ.ThreeScene.stopRenderLoop();
       map.invalidateSize();
     }
+    onViewSwitched?.(viewName);
   }
 
   document.querySelectorAll(".map-view-btn").forEach(btn => {
@@ -1058,11 +1062,50 @@ async function initMap() {
 
   initClusterPanelResize();
 
+  // Tracks which mod IDs the cluster panel is currently showing. Used by the
+  // 3D map-aware staleness check so the panel auto-closes when a recompute
+  // breaks up the cluster the panel was opened for.
+  let panelClusterModIds = null;
+
+  // Adds .marker-cluster-active to the SAT cluster bubble whose modIds best
+  // match panelClusterModIds. Called after each Leaflet cluster recompute
+  // (zoomend / animationend / filter) because Leaflet recreates DOM elements.
+  function refreshActiveSatClusterMark() {
+    document.querySelectorAll('.leaflet-marker-icon.marker-cluster-active').forEach((el) => {
+      el.classList.remove('marker-cluster-active');
+    });
+    if (!panelClusterModIds || panelClusterModIds.size === 0) return;
+    if (mapEl.style.display === "none") return;  // SCHEMA active, ThreeMarkers handles its own
+    // Find best parent by overlap count, same logic as recomputeSatClusterPanel
+    const parentBuckets = new Map();
+    for (const modId of panelClusterModIds) {
+      const marker = allMarkers.find((m) => m.modData.id === modId);
+      if (!marker || !markerClusterGroup.hasLayer(marker)) continue;
+      const parent = markerClusterGroup.getVisibleParent(marker);
+      if (!parent || typeof parent.getAllChildMarkers !== "function") continue;
+      const key = parent._leaflet_id;
+      if (!parentBuckets.has(key)) parentBuckets.set(key, { parent, count: 0 });
+      parentBuckets.get(key).count++;
+    }
+    let bestEntry = null;
+    for (const entry of parentBuckets.values()) {
+      if (!bestEntry || entry.count > bestEntry.count) bestEntry = entry;
+    }
+    if (bestEntry && bestEntry.parent.getElement) {
+      const el = bestEntry.parent.getElement();
+      if (el) el.classList.add('marker-cluster-active');
+    }
+  }
+
   // Hide and reset cluster menu state
   function hideClusterPanel() {
     clusterModList.innerHTML = "";
     clusterPanelCount.textContent = "";
     clusterPanel.classList.add("cluster-panel-closed");
+    panelClusterModIds = null;
+    // Clear the active mark on whichever bubble was highlighted.
+    refreshActiveSatClusterMark();
+    NCZ.ThreeMarkers?.setActiveClusterMods?.(null);
   }
 
   function focusMarker(marker) {
@@ -1071,15 +1114,28 @@ async function initMap() {
   }
 
   function focusRandomVisibleMarker() {
-    const visibleMarkers = allMarkers.filter((marker) => markerClusterGroup.hasLayer(marker));
-    if (visibleMarkers.length === 0) {
-      alert("No visible locations match the current filters.");
-      return;
-    }
+    // Route to whichever view is currently active. Each view holds its own
+    // pin layer; visibility (after filters) is queried per-layer rather than
+    // re-running the filter computation.
+    const isSchema = mapEl.style.display === "none";
 
-    const randomIndex = Math.floor(Math.random() * visibleMarkers.length);
-    const randomMarker = visibleMarkers[randomIndex];
-    focusMarker(randomMarker);
+    if (isSchema) {
+      const visibleIds = NCZ.ThreeMarkers?.getVisibleModIds?.() ?? [];
+      if (visibleIds.length === 0) {
+        alert("No visible locations match the current filters.");
+        return;
+      }
+      const randomId = visibleIds[Math.floor(Math.random() * visibleIds.length)];
+      NCZ.ThreeMarkers.focusMod(randomId);
+    } else {
+      const visibleMarkers = allMarkers.filter((marker) => markerClusterGroup.hasLayer(marker));
+      if (visibleMarkers.length === 0) {
+        alert("No visible locations match the current filters.");
+        return;
+      }
+      const randomMarker = visibleMarkers[Math.floor(Math.random() * visibleMarkers.length)];
+      focusMarker(randomMarker);
+    }
     hideClusterPanel();
 
     if (window.innerWidth < NCZ.MOBILE_BREAKPOINT) {
@@ -1094,36 +1150,37 @@ async function initMap() {
     discoverLocationBtn.addEventListener("click", focusRandomVisibleMarker);
   }
 
-  markerClusterGroup.on("clusterclick", (a) => {
-    if (a.originalEvent) L.DomEvent.stop(a.originalEvent);
+  // Populates the cluster panel with a sorted list of mods. View-agnostic —
+  // both the Leaflet clusterclick handler and ThreeMarkers cluster clicks
+  // call this. onItemClick receives the mod object; the active view decides
+  // how to focus it (focusMarker for SAT, NCZ.ThreeMarkers.focusMod for SCHEMA).
+  function populateClusterPanel(modsList, opts = {}) {
+    const { onItemClick, nexusThumbs = {} } = opts;
 
-    // Collect mods from clicked cluster and sort by last updated
-    const childMarkers = a.layer
-      .getAllChildMarkers()
-      .slice()
-      .sort((left, right) => NCZ.sortModsByUpdated(left.modData, right.modData));
-
-    // Rebuild cluster menu list for this cluster
     clusterModList.innerHTML = "";
-    clusterPanelCount.textContent = `(${childMarkers.length})`;
+    clusterPanelCount.textContent = `(${modsList.length})`;
 
-    if (childMarkers.length === 0) {
+    if (modsList.length === 0) {
       const empty = document.createElement("li");
       empty.className = "cluster-empty";
       empty.textContent = "No mods found in this cluster.";
       clusterModList.appendChild(empty);
     } else {
-      childMarkers.forEach((childMarker) => {
-        const mod = childMarker.modData;
+      modsList.forEach((mod) => {
         const catStyle = NCZ.CATEGORY_STYLES[mod.category] || NCZ.CATEGORY_STYLES.other;
-        // Build tag chips shown under author name
         const modTagsHtml = (mod.tags || [])
           .map((tag) => `<span class="tag-badge">${NCZ.escapeHtml(tag)}</span>`)
           .join("");
-        // Thumbnail becomes clickable only when full-size image exists
-        const isThumbClickable = Boolean(childMarker.modFull);
-        const thumbMarkup = childMarker.modThumb
-          ? `<img class="cluster-mod-thumb${isThumbClickable ? " cluster-mod-thumb-clickable" : ""}" src="${NCZ.escapeHtml(childMarker.modThumb)}" alt="${NCZ.escapeHtml(mod.name)} thumbnail" referrerpolicy="no-referrer"${isThumbClickable ? ` data-full-src="${NCZ.escapeHtml(childMarker.modFull)}"` : ""}>`
+
+        // Look up thumb/full URLs from the opts-passed nexusThumbs map.
+        // Kept as an explicit arg (not closure-captured) so this function
+        // can live outside the try block where nexusThumbs is declared.
+        const nexusThumb = nexusThumbs[String(mod.nexus_id)];
+        const thumbSrc = nexusThumb?.thumbnailUrl || null;
+        const fullSrc = nexusThumb?.pictureUrl || null;
+        const isThumbClickable = Boolean(fullSrc);
+        const thumbMarkup = thumbSrc
+          ? `<img class="cluster-mod-thumb${isThumbClickable ? " cluster-mod-thumb-clickable" : ""}" src="${NCZ.escapeHtml(thumbSrc)}" alt="${NCZ.escapeHtml(mod.name)} thumbnail" referrerpolicy="no-referrer"${isThumbClickable ? ` data-full-src="${NCZ.escapeHtml(fullSrc)}"` : ""}>`
           : `<span class="cluster-mod-thumb cluster-mod-thumb-placeholder" aria-hidden="true"></span>`;
 
         const item = document.createElement("li");
@@ -1158,9 +1215,8 @@ async function initMap() {
           });
         }
 
-        // Clicking row focuses corresponding marker/popup on the map
         button.addEventListener("click", () => {
-          focusMarker(childMarker);
+          onItemClick?.(mod);
           if (window.innerWidth < NCZ.MOBILE_BREAKPOINT) hideClusterPanel();
         });
 
@@ -1169,9 +1225,17 @@ async function initMap() {
       });
     }
 
-    // Slide menu in from the right
+    // Record which mods this panel is showing so 3D's stale-cluster check
+    // can compare current cluster contents against this set on each recompute.
+    panelClusterModIds = new Set(modsList.map((m) => m.id));
     clusterPanel.classList.remove("cluster-panel-closed");
-  });
+
+    // Update the active-cluster mark in both views. The SAT side runs a
+    // DOM scan; the 3D side hands the set to ThreeMarkers which finds and
+    // marks the matching bubble itself. Both are no-ops in the inactive view.
+    refreshActiveSatClusterMark();
+    NCZ.ThreeMarkers?.setActiveClusterMods?.(panelClusterModIds);
+  }
 
   clusterPanelClose.addEventListener("click", hideClusterPanel);
 
@@ -1201,7 +1265,9 @@ async function initMap() {
   map.on("click", hideClusterPanel);
   map.on("zoomstart", () => {
     isZoomTransitioning = true;
-    hideClusterPanel();
+    // Note: cluster panel intentionally stays open on zoom (matches SCHEMA).
+    // Closing only happens via outside-click (map.on("click") above), the
+    // close button, view switch, or 3D successor-cluster going stale.
   });
   map.on("zoomend", () => {
     isZoomTransitioning = false;
@@ -1252,7 +1318,173 @@ async function initMap() {
       }
     }
 
-    mods.sort(NCZ.sortModsByUpdated).forEach((mod) => {
+    const sortedMods = mods.sort(NCZ.sortModsByUpdated);
+    // Hand the same data set to the 3D pin layer — pins won't appear until ThreeScene
+    // is initialised (first switch to SCHEMA), but the call is safe before that and the
+    // data is held internally so the layer can build pins on attach.
+    NCZ.ThreeMarkers?.setMods?.(sortedMods, nexusThumbs, tagsDict);
+
+    // Cluster panel wiring — both views call the same populateClusterPanel
+    // helper. Registered here (inside the try block) so each handler's
+    // closure can pass `nexusThumbs` and reference the loaded `mods` array.
+
+    // 2D (Leaflet) cluster click → cluster panel
+    markerClusterGroup.on("clusterclick", (a) => {
+      if (a.originalEvent) L.DomEvent.stop(a.originalEvent);
+      const childMarkers = a.layer
+        .getAllChildMarkers()
+        .slice()
+        .sort((left, right) => NCZ.sortModsByUpdated(left.modData, right.modData));
+      const childMods = childMarkers.map((m) => m.modData);
+      populateClusterPanel(childMods, {
+        nexusThumbs,
+        onItemClick: (mod) => {
+          const marker = childMarkers.find((m) => m.modData.id === mod.id);
+          if (marker) focusMarker(marker);
+        },
+      });
+    });
+
+    // 3D (ThreeMarkers) cluster click → cluster panel
+    NCZ.ThreeMarkers?.setClusterClickHandler?.((modIds) => {
+      const idSet = new Set(modIds);
+      const childMods = mods
+        .filter((m) => idSet.has(m.id))
+        .sort(NCZ.sortModsByUpdated);
+      populateClusterPanel(childMods, {
+        nexusThumbs,
+        onItemClick: (mod) => NCZ.ThreeMarkers.focusMod(mod.id),
+      });
+    });
+
+    // 3D map-aware panel: when 3D clusters recompute (camera moved/zoomed/
+    // tilted), follow the cluster the panel was opened for. Find the
+    // "successor" — the current cluster with the most overlap with the
+    // panel's mod set — and update the panel's contents to match. Close
+    // only when no current cluster has any of the original mods, OR the
+    // best successor has fewer than 2 mods (no longer a real cluster).
+    NCZ.ThreeMarkers?.setClustersChangedHandler?.((clusterSets) => {
+      if (!panelClusterModIds || panelClusterModIds.size === 0) return;
+      // Skip while SAT is active — SAT panel state is independent.
+      if (mapEl.style.display !== "none") return;
+
+      let bestSet = null;
+      let bestOverlap = 0;
+      for (const ids of clusterSets) {
+        let overlap = 0;
+        for (const id of ids) if (panelClusterModIds.has(id)) overlap++;
+        if (overlap > bestOverlap) {
+          bestOverlap = overlap;
+          bestSet = ids;
+        }
+      }
+
+      // No surviving cluster contains any of the original mods → close.
+      // Or the successor has dissolved into a singleton → close.
+      if (bestOverlap === 0 || !bestSet || bestSet.length < 2) {
+        hideClusterPanel();
+        return;
+      }
+
+      // If the successor's membership matches the current panel exactly,
+      // skip the DOM rebuild (avoids flicker during continuous camera moves).
+      if (bestSet.length === panelClusterModIds.size) {
+        let identical = true;
+        for (const id of bestSet) {
+          if (!panelClusterModIds.has(id)) { identical = false; break; }
+        }
+        if (identical) return;
+      }
+
+      // Successor differs → re-populate the panel with its mods.
+      const newMods = bestSet
+        .map((id) => mods.find((m) => m.id === id))
+        .filter(Boolean)
+        .sort(NCZ.sortModsByUpdated);
+      populateClusterPanel(newMods, {
+        nexusThumbs,
+        onItemClick: (mod) => NCZ.ThreeMarkers.focusMod(mod.id),
+      });
+    });
+
+    // SAT map-aware panel: same successor-tracking logic as SCHEMA, but using
+    // Leaflet's markerClusterGroup.getVisibleParent to find each panel mod's
+    // current cluster. Used by zoomend and applyFilters to keep the panel in
+    // sync with Leaflet's automatic cluster recomputation.
+    function recomputeSatClusterPanel() {
+      if (!panelClusterModIds || panelClusterModIds.size === 0) return;
+      // Skip while SCHEMA is active — SCHEMA panel state is independent.
+      if (mapEl.style.display === "none") return;
+
+      // Group panel mods by their current visible parent (cluster or singleton).
+      const parentBuckets = new Map();
+      for (const modId of panelClusterModIds) {
+        const marker = allMarkers.find((m) => m.modData.id === modId);
+        if (!marker || !markerClusterGroup.hasLayer(marker)) continue;
+        const parent = markerClusterGroup.getVisibleParent(marker);
+        if (!parent) continue;
+        const key = parent._leaflet_id;
+        if (!parentBuckets.has(key)) parentBuckets.set(key, { parent, count: 0 });
+        parentBuckets.get(key).count++;
+      }
+
+      // Find the parent that absorbed the most panel mods.
+      let bestEntry = null;
+      for (const entry of parentBuckets.values()) {
+        if (!bestEntry || entry.count > bestEntry.count) bestEntry = entry;
+      }
+
+      // No surviving parent contains any panel mod → close.
+      if (!bestEntry || bestEntry.count === 0) {
+        hideClusterPanel();
+        return;
+      }
+
+      // Parent is a singleton marker (zoomed in past clustering) → close.
+      if (typeof bestEntry.parent.getAllChildMarkers !== "function") {
+        hideClusterPanel();
+        return;
+      }
+
+      const childMarkers = bestEntry.parent.getAllChildMarkers().slice()
+        .sort((l, r) => NCZ.sortModsByUpdated(l.modData, r.modData));
+      if (childMarkers.length < 2) {
+        hideClusterPanel();
+        return;
+      }
+
+      // Skip rebuild if membership identical (avoid flicker during continuous interaction).
+      // Still re-apply the active mark — Leaflet recreates cluster DOM elements
+      // on zoom, so the previously-marked element may no longer exist.
+      if (childMarkers.length === panelClusterModIds.size) {
+        let identical = true;
+        for (const m of childMarkers) {
+          if (!panelClusterModIds.has(m.modData.id)) { identical = false; break; }
+        }
+        if (identical) {
+          refreshActiveSatClusterMark();
+          return;
+        }
+      }
+
+      const childMods = childMarkers.map((m) => m.modData);
+      populateClusterPanel(childMods, {
+        nexusThumbs,
+        onItemClick: (mod) => {
+          const m = childMarkers.find((cm) => cm.modData.id === mod.id);
+          if (m) focusMarker(m);
+        },
+      });
+    }
+
+    // Re-evaluate SAT panel after Leaflet finishes its zoom transition (clusters
+    // recomputed at the new zoom level).
+    map.on("zoomend", recomputeSatClusterPanel);
+    // markercluster fires animationend after cluster animations settle —
+    // covers spiderfy/unspiderfy and zoom-driven cluster regrouping.
+    markerClusterGroup.on("animationend", recomputeSatClusterPanel);
+
+    sortedMods.forEach((mod) => {
         const [lat, lng] = NCZ.cetToLeaflet(mod.coordinates[0], mod.coordinates[1]);
         const { catStyle, popupHtml, thumbSrc, fullSrc } = NCZ.prepareModRenderData(mod, nexusThumbs, tagsDict);
 
@@ -1316,13 +1548,21 @@ async function initMap() {
             `;
         li.addEventListener("click", (e) => {
           if (e.target.tagName !== "A") {
-            focusMarker(marker);
+            // Route to whichever view is currently active. mapEl hidden = 3D mode.
+            if (mapEl.style.display === "none") {
+              NCZ.ThreeMarkers?.focusMod?.(mod.id);
+            } else {
+              focusMarker(marker);
+            }
             hideClusterPanel();
             if (window.innerWidth < NCZ.MOBILE_BREAKPOINT) sidebar.classList.add("hidden");
           }
         });
 
-        // Pulse marker (or parent cluster) on sidebar hover
+        // Pulse marker (or parent cluster) on sidebar hover. Both views share
+        // the `.pulsing` class + @keyframes markerPulse — calling both layers
+        // is idempotent and keeps SAT/SCHEMA in sync without checking which
+        // is active.
         li.addEventListener("mouseenter", () => {
           const element = marker.getElement();
           if (element) {
@@ -1335,6 +1575,7 @@ async function initMap() {
               if (clusterEl) clusterEl.classList.add("pulsing");
             }
           }
+          NCZ.ThreeMarkers?.setPulse?.(mod.id, true);
         });
         li.addEventListener("mouseleave", () => {
           const element = marker.getElement();
@@ -1348,6 +1589,7 @@ async function initMap() {
               if (clusterEl) clusterEl.classList.remove("pulsing");
             }
           }
+          NCZ.ThreeMarkers?.setPulse?.(mod.id, false);
         });
 
         modListEl.appendChild(li);
@@ -1370,6 +1612,30 @@ async function initMap() {
       );
       if (targetMarker) focusMarker(targetMarker);
     }
+
+    // Re-open the popup in the freshly-activated view. Both ThreeMarkers and
+    // the Leaflet popupopen handler keep ?mod= in sync, so this restore picks
+    // up whatever was open before the switch — popups stay coherent across modes.
+    onViewSwitched = (viewName) => {
+      // Cluster panel state is view-specific: SAT and SCHEMA cluster differently
+      // (Leaflet's stable IDs vs Three's screen-space recompute), so the panel's
+      // mod set isn't meaningful in the other view. Close on switch.
+      hideClusterPanel();
+
+      const param = new URLSearchParams(window.location.search).get(NCZ.URL_PARAM_MOD);
+      if (!param) return;
+      if (viewName === "schema") {
+        const mod = mods.find(
+          (m) => String(m.nexus_id) === param || m.id === param,
+        );
+        if (mod) NCZ.ThreeMarkers?.focusMod?.(mod.id);
+      } else {
+        const targetMarker = allMarkers.find(
+          (m) => String(m.modData.nexus_id) === param || m.modData.id === param,
+        );
+        if (targetMarker) focusMarker(targetMarker);
+      }
+    };
 
     // 5. Setup Category Filters
     const activeCategories = new Set(mods.map((m) => m.category));
@@ -1552,6 +1818,13 @@ async function initMap() {
           visibleMarkers.push(marker);
         }
       });
+
+      // Apply same filter set to 3D pin layer
+      NCZ.ThreeMarkers?.applyFilters?.(visibleIds);
+
+      // SAT cluster panel may need to update or close after filter change —
+      // some of its mods might no longer be in the visible cluster set.
+      recomputeSatClusterPanel();
 
       // Filter the sidebar list items
       const listItems = modListEl.querySelectorAll(".mod-item");
