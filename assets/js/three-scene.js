@@ -200,6 +200,12 @@ const ThreeScene = (() => {
       logarithmicDepthBuffer: true,
       powerPreference: 'high-performance',
     });
+    // Make the sRGB-correct colour pipeline explicit. These match Three.js r170
+    // defaults (since r152 / r155 respectively) but stating them here protects
+    // the scene's appearance against future Three.js default changes — both flags
+    // have shifted in past major versions.
+    THREE.ColorManagement.enabled = true;
+    renderer.outputColorSpace     = THREE.SRGBColorSpace;
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(container.clientWidth, container.clientHeight, false);
     renderer.shadowMap.enabled = true;
@@ -1338,7 +1344,10 @@ const ThreeScene = (() => {
     // Only cast shadows if the user has enabled them AND the sun is above NCZ.SHADOW_MIN_ELEV°
     _dirLight.castShadow = _shadowsOn && (el * 180 / Math.PI) > NCZ.SHADOW_MIN_ELEV;
 
-    // Colour: warm orange at horizon → neutral white above ~NCZ.SUN_COLOR_ELEV°
+    // Colour: warm orange at horizon → neutral white above ~NCZ.SUN_COLOR_ELEV°.
+    // setRGB writes linear-light values directly (ColorManagement does NOT convert
+    // these from sRGB the way a hex string would be). Tuned by eye with sRGB output
+    // gamma-encode active — do not "convert" them.
     const elevDeg = el * 180 / Math.PI;
     const t = Math.min(1, Math.max(0, elevDeg / NCZ.SUN_COLOR_ELEV));
     _dirLight.color.setRGB(1, 0.45 + t * 0.55, 0.1 + t * 0.9);
