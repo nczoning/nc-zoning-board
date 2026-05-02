@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Static-subtree matrix freeze + camera frustum tighten (PR #629)
+
+- `matrixWorldAutoUpdate = false` on terrain, water, cliffs, roads/borders, metro, districts, landmarks, and the buildings InstancedMesh group. Each subtree's world matrices are computed once after positioning and then frozen — Three.js's per-frame `updateMatrixWorld()` traversal skips the entire branch instead of walking thousands of nodes only to find no work
+- New `freezeStatic(obj)` helper in [`three-scene.js`](assets/js/three-scene.js) wraps the "compute once + disable auto-recurse" pattern
+- Dynamic objects (sun light, sun sphere, camera) keep default auto-update — visibility toggles, theme transitions, and shadow-camera updates don't depend on this change
+- Camera near/far tightened from `±50000` → `±20000`. Worst-case camera-local depth (max 70° tilt + max-pan to world edge) is ~23k, so 20k leaves comfortable margin while halving the orthographic depth budget. Linear precision benefit is muted by the `logarithmicDepthBuffer` change in #627 but no reason to keep the budget 2.5× oversized
+
+#### Renderer GPU hint: `powerPreference: 'high-performance'` (PR #628)
+
+- One-flag `WebGLRenderer` option that hints the OS to pick the discrete GPU on hybrid-graphics laptops (NVIDIA Optimus, AMD Switchable Graphics, Apple's automatic switching). Driver/OS policy can override, but free for users who'd otherwise get stuck on the integrated chip
+- An exploratory 0.2% building-instance scale shrink was bundled into the original PR and reverted before merge — the shrink didn't reduce residual pan-shimmer, ruling out building-vs-building coplanarity as the cause. Sub-pixel triangle aliasing during motion is the new leading suspect, addressable later via TAA / higher-MSAA / LOD work outside this PR's scope
+
+#### Z-fighting mitigation: `logarithmicDepthBuffer` (PR #627)
+
+- One-flag `WebGLRenderer` option that distributes depth precision logarithmically across the frustum rather than uniformly
+- Diagnosed root cause via systematic elimination: AF on `_m` texture (#624) didn't fix it; edge highlight at intensity 0 (#626) reduced but didn't eliminate; shadows off didn't fix; toggling terrain/cliffs/water layers didn't move the needle. Shimmer was visible **on vertical edges of buildings sharing walls** (block-style `BoxGeometry` instances at coplanar XY) and at the **water/terrain coastline** during flyover — both the canonical pattern for depth-buffer Z-fighting between near-coplanar surfaces
+- Cheap fragment-shader op, no per-asset changes needed. Also enabled the camera-frustum tighten in #629 (less wasteful budget once log-depth is on)
+
+#### Runtime setter: building edge highlight intensity (PR #626)
+
+- New `NCZ.ThreeScene.setBuildingEdgeIntensity(value)` console export — iterates `buildingMaterials[]` and updates each shader's `uEdgeIntensity` uniform live
+- Why a setter is needed: the uniform value is captured at material-compile time from `NCZ.BUILDING_EDGE_INTENSITY`; mutating the constant from the console alone doesn't propagate to existing materials
+- Used as a console diagnostic (isolating the edge highlight's contribution to pan-shimmer in #627), and earmarked as the runtime knob for a future `Low` quality preset to dim or disable the highlight
+
+#### Anisotropic filtering on `_m` texture (PR #624)
+
+- `tex.anisotropy = renderer.capabilities.getMaxAnisotropy()` in `loadMDds()` — addresses oblique-view surface shimmer that mips alone weren't catching
+- Mip + trilinear filtering handles aliasing perpendicular to the camera; AF handles the *along-view-axis* aliasing that elongated texture footprints produce when surfaces stretch into the distance. Mip selection is conservative (smaller of the two screen-space derivatives), so a fragment whose footprint stretches into the distance still samples a small mip and aliases along its long axis without AF
+- Effectively free on modern GPUs — dedicated fixed-function on AMD/NVIDIA/Intel, Radeon 840M supports up to 16x. Defense-in-depth: kept on even after #627 turned out to be the actual fix for most of the shimmer
+
 #### GLB compression via gltfpack/meshopt (PR #622)
 
 - **Total 3D scene payload: 18.5 MB → 2.18 MB (-88%)** — terrain alone went 6.4 MB → 423 KB; `roads_borders` went 5.9 MB → 357 KB
