@@ -23,7 +23,15 @@ window.NCZ = window.NCZ || {};
 
 const ThreeMarkers = (() => {
   let scene = null;
-  let camera = null;
+  // Two camera references: the schema OrthographicCamera captured at attach
+  // time, and an optional override active during the showcase flyover (the
+  // PerspectiveCamera owned by flyover.js). Cluster math + fly-to-pin tween
+  // assume orthographic fields and always use _schemaCamera; the popup
+  // projection and the render call use whichever is active so pins follow
+  // the cinematic camera during the showcase.
+  let _schemaCamera = null;
+  let _activeCamera = null;
+  const getCam = () => _activeCamera || _schemaCamera;
   let container = null;
   let controls = null;
   let cssRenderer = null;
@@ -63,7 +71,11 @@ const ThreeMarkers = (() => {
   function attach(_scene, _camera, _container, _controls) {
     if (cssRenderer) return; // idempotent
     scene = _scene;
-    camera = _camera;
+    _schemaCamera = _camera;
+    // Schema camera sees the static scene (layer 0) AND the marker overlay
+    // (layer 1) by default — the "Pins" entry in the overlay-controls panel
+    // toggles this membership.
+    _schemaCamera.layers.enable(NCZ.LAYER_PINS);
     container = _container;
     controls = _controls || null;
 
@@ -138,6 +150,7 @@ const ThreeMarkers = (() => {
     tooltipInner.append(tooltipText, tooltipArrow);
     tooltipAnchor.appendChild(tooltipInner);
     tooltipObj = new CSS2DObject(tooltipAnchor);
+    tooltipObj.layers.set(NCZ.LAYER_PINS);
     tooltipObj.visible = false;
     tooltipObj.renderOrder = 999;
     scene.add(tooltipObj);
@@ -221,6 +234,7 @@ const ThreeMarkers = (() => {
       el.addEventListener('mouseleave', () => hideTooltip());
 
       const css = new CSS2DObject(el);
+      css.layers.set(NCZ.LAYER_PINS);
       css.position.set(tx, ty, tz);
       css.userData.modData = mod;
       pinsLayer.add(css);
@@ -294,8 +308,13 @@ const ThreeMarkers = (() => {
     // Skip if zoom hasn't changed (pan/tilt only) — world clusters don't
     // move. Filter changes call recomputeClusters() synchronously and
     // bypass this guard.
-    if (_lastZoomForCluster === camera.zoom) return;
-    _lastZoomForCluster = camera.zoom;
+    // Cluster math reads orthographic-only fields (zoom, right, left) so it
+    // can only run against the schema camera. During the showcase the active
+    // camera is the perspective fly camera — bail out and let clusters keep
+    // their last-recomputed positions for the duration of the cinematic.
+    if (_activeCamera) return;
+    if (_lastZoomForCluster === _schemaCamera.zoom) return;
+    _lastZoomForCluster = _schemaCamera.zoom;
     if (_recomputeFrame !== null) return;
     _recomputeFrame = requestAnimationFrame(() => {
       _recomputeFrame = null;
@@ -304,7 +323,7 @@ const ThreeMarkers = (() => {
   }
 
   function recomputeClusters() {
-    if (!_clusterLayer || !camera || !container) return;
+    if (!_clusterLayer || !_schemaCamera || !container) return;
     const w = container.clientWidth;
     if (!w) return;
 
@@ -312,7 +331,7 @@ const ThreeMarkers = (() => {
     // units. At zoom=2 this is roughly the same radius the screen-space
     // version used at top-down view; as the user zooms in, the world radius
     // shrinks proportionally so clusters dissolve at the same rate as Leaflet's.
-    const worldPerPixel = (camera.right - camera.left) / (camera.zoom * w);
+    const worldPerPixel = (_schemaCamera.right - _schemaCamera.left) / (_schemaCamera.zoom * w);
     const radiusWorld = NCZ.PIN_3D_CLUSTER_RADIUS_PX * worldPerPixel;
     const radiusSq = radiusWorld * radiusWorld;
 
@@ -432,6 +451,7 @@ const ThreeMarkers = (() => {
     root.style.cursor = 'pointer';
     root.innerHTML = '<div><span>0</span></div>';
     const obj = new CSS2DObject(root);
+    obj.layers.set(NCZ.LAYER_PINS);
     root.addEventListener('click', (e) => {
       e.stopPropagation();
       // userData.modIds is set by recomputeClusters each time the bubble is
@@ -493,6 +513,7 @@ const ThreeMarkers = (() => {
     }
 
     popup = new CSS2DObject(anchor);
+    popup.layers.set(NCZ.LAYER_PINS);
     // High renderOrder so CSS2DRenderer's depth-based zIndex sorter ranks the
     // popup above all pins. Backed up by a CSS `!important` z-index on
     // .three-popup-anchor so pins can never paint over the popup even if a
@@ -556,14 +577,14 @@ const ThreeMarkers = (() => {
     // screen centre regardless of tilt or pin elevation.
     const endTarget = pin.position.clone();
 
-    const offset = camera.position.clone().sub(startTarget); // preserved
-    const startCameraPos = camera.position.clone();
+    const offset = _schemaCamera.position.clone().sub(startTarget); // preserved
+    const startCameraPos = _schemaCamera.position.clone();
     const endCameraPos   = endTarget.clone().add(offset);
 
     _flyTween = {
       startTarget, endTarget,
       startCameraPos, endCameraPos,
-      startZoom: camera.zoom,
+      startZoom: _schemaCamera.zoom,
       endZoom:   NCZ.PIN_3D_FLY_ZOOM,
       elapsed: 0,
       duration: NCZ.PIN_3D_FLY_DURATION_MS,
@@ -583,9 +604,9 @@ const ThreeMarkers = (() => {
     const e = easeInOutCubic(u);
 
     controls.target.lerpVectors(_flyTween.startTarget, _flyTween.endTarget, e);
-    camera.position.lerpVectors(_flyTween.startCameraPos, _flyTween.endCameraPos, e);
-    camera.zoom = _flyTween.startZoom + (_flyTween.endZoom - _flyTween.startZoom) * e;
-    camera.updateProjectionMatrix();
+    _schemaCamera.position.lerpVectors(_flyTween.startCameraPos, _flyTween.endCameraPos, e);
+    _schemaCamera.zoom = _flyTween.startZoom + (_flyTween.endZoom - _flyTween.startZoom) * e;
+    _schemaCamera.updateProjectionMatrix();
 
     if (u >= 1) {
       const cb = _flyTween.onComplete;
@@ -603,7 +624,7 @@ const ThreeMarkers = (() => {
     if (!popup || !container) return;
     const card = popup.element.querySelector('.three-popup');
     if (!card) return;
-    _projectV.copy(popup.position).project(camera);
+    _projectV.copy(popup.position).project(getCam());
     const halfH = container.clientHeight / 2;
     // Convert NDC y ∈ [-1,1] to pixel y where 0 = top of viewport.
     const screenY = (1 - _projectV.y) * halfH;
@@ -616,9 +637,9 @@ const ThreeMarkers = (() => {
   }
 
   function render() {
-    if (!cssRenderer || !scene || !camera) return;
+    if (!cssRenderer || !scene || !_schemaCamera) return;
     updateFlyTween();
-    cssRenderer.render(scene, camera);
+    cssRenderer.render(scene, getCam());
     if (popup) updatePopupPlacement();
   }
 
@@ -626,13 +647,55 @@ const ThreeMarkers = (() => {
     if (cssRenderer) cssRenderer.setSize(w, h);
   }
 
-  // Toggle the entire CSS2D overlay (pins + clusters + popup + tooltip) on or off.
-  // Used by the showcase flow to hide the marker layer during the cinematic; the
-  // CSS2DRenderer's domElement is the single root that hosts every projected pin,
-  // so flipping its display also halts per-frame layout work in the browser.
-  function setVisible(visible) {
-    if (!cssRenderer) return;
-    cssRenderer.domElement.style.display = visible ? '' : 'none';
+  // Swap the CSS2DRenderer's projection camera for the duration of the
+  // showcase. Passing a camera (typically the flyover PerspectiveCamera)
+  // makes pins, clusters, popup and tooltip track that camera's view; passing
+  // null reverts to the schema OrthographicCamera. On revert we trigger a
+  // cluster recompute so the orthographic-only math resyncs against the
+  // current zoom (which may have changed during the showcase).
+  function setActiveCamera(cam) {
+    _activeCamera = cam || null;
+    if (!cam) recomputeClusters();
+  }
+
+  // Toggle the marker overlay's membership of the schema camera's layer mask.
+  // Off → CSS2DRenderer's per-object layers test sets each pin/cluster/popup/
+  // tooltip DOM element's display to 'none' on the next render frame. On →
+  // they reappear. Backs the "Pins" entry in #overlay-controls; orthogonal
+  // to the showcase modal's "Show mod pins during showcase" option which
+  // toggles the FLYOVER camera's layer mask instead.
+  function setOverlayVisible(visible) {
+    if (!_schemaCamera) return;
+    if (visible) _schemaCamera.layers.enable(NCZ.LAYER_PINS);
+    else         _schemaCamera.layers.disable(NCZ.LAYER_PINS);
+  }
+  function getOverlayVisible() {
+    if (!_schemaCamera) return null;
+    return _schemaCamera.layers.isEnabled(NCZ.LAYER_PINS);
+  }
+
+  // Cinematic mode: hide every cluster bubble and unhide every filter-passing
+  // pin so the showcase shows individual mods instead of number-badges.
+  //
+  // CSS2DRenderer checks `object.visible` per-CSS2DObject (not on parent groups
+  // — the renderer walks all children regardless of group.visible), so we have
+  // to flip `visible` on each cluster bubble individually rather than on the
+  // parent _clusterLayer Group.
+  //
+  // active=false leaves cluster restoration to the next recomputeClusters call
+  // (typically issued by setActiveCamera(null) on showcase exit), which
+  // rebuilds the correct visible/clustered state from scratch.
+  function setUnclusteredMode(active) {
+    if (active) {
+      pins.forEach((pin, modId) => { pin.visible = _filterVisibleIds.has(modId); });
+      if (_clusterLayer) _clusterLayer.children.forEach(c => { c.visible = false; });
+    } else {
+      // Defensive: if the caller doesn't follow up with a recompute, at least
+      // make the active bubbles renderable again so users aren't left with a
+      // half-state. recomputeClusters (when it runs) will overwrite this with
+      // the authoritative grouped state.
+      if (_clusterLayer) _clusterLayer.children.forEach(c => { c.visible = true; });
+    }
   }
 
   return {
@@ -648,7 +711,10 @@ const ThreeMarkers = (() => {
     closePopup,
     render,
     onResize,
-    setVisible,
+    setActiveCamera,
+    setOverlayVisible,
+    getOverlayVisible,
+    setUnclusteredMode,
   };
 })();
 

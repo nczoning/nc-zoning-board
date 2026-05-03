@@ -1913,12 +1913,19 @@ body::before {
 .showcase-modal-actions {
     display: flex;
     gap: 8px;
+
+    & > .terminal-btn {
+        white-space: nowrap;
+        padding-left: var(--space-sm);
+        padding-right: var(--space-sm);
+    }
 }
 
 .showcase-modal-actions > #showcase-start-btn {
     flex: 3;
 }
 
+.showcase-modal-actions > #showcase-reset-btn,
 .showcase-modal-actions > #close-showcase-modal {
     flex: 1;
     border-color: var(--gray);

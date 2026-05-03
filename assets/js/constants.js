@@ -122,6 +122,15 @@ NCZ.THUMB_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 NCZ.AUTODISCOVERY_CACHE_KEY = "nc_nexus_autodiscovery";
 NCZ.AUTODISCOVERY_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
+// Three.js Object3D.layers — bitmask channels that cameras opt into via Camera.layers.
+// Layer 0 (default) carries the static scene (terrain, water, buildings, roads, metro,
+// districts, landmarks). The pins/clusters/popup/tooltip overlay lives on its own layer
+// so it can be toggled independently per camera: the schema camera has both layers
+// enabled by default; the showcase flyover camera enables LAYER_PINS only when the user
+// opts into "Show mod pins during showcase".
+NCZ.LAYER_DEFAULT = 0;
+NCZ.LAYER_PINS    = 1;
+
 // Pin tooltip positioning
 NCZ.PIN_TOOLTIP_MARGIN_PX = 10;
 NCZ.PIN_TOOLTIP_GAP_PX = 8;

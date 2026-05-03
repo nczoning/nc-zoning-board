@@ -25,6 +25,7 @@ const FLYOVER_BEAT_DISSOLVE = 938;      // theme cross-dissolve duration per bea
 const FLYOVER_REVEAL_ROADS  = 1500;     // ms after WP0 to stagger roads in (only used when run opts revealLayers = true)
 const FLYOVER_REVEAL_METRO  = 3000;     // ms after WP0 to stagger metro in
 const FLYOVER_REVEAL_BLDGS  = 4500;     // ms after WP0 to stagger buildings in
+const FLYOVER_REVEAL_PINS   = 6000;     // ms after WP0 to stagger pins in (only when revealLayers && showPins)
 const MORRO_BAY = { lat: 35.370781, lng: -120.851173 }; // Night City's real-world location
 
 const Flyover = (() => {
@@ -233,6 +234,14 @@ const Flyover = (() => {
       setTimeout(() => NCZ.ThreeScene.setLayerVisibility('buildings', true), FLYOVER_REVEAL_BLDGS),
       // Districts omitted — cleaner showcase without boundary lines
     ];
+    // Pins reveal happens after buildings so they don't pop up against an empty
+    // grey scene. Only scheduled when the user opted into both revealLayers and
+    // showPins; otherwise the layer is enabled (or not) at WP0 by startFlyover.
+    if (_runOpts?.showPins) {
+      _layerRevealTimers.push(
+        setTimeout(() => flyCamera?.layers.enable(NCZ.LAYER_PINS), FLYOVER_REVEAL_PINS)
+      );
+    }
   }
 
   function clearLayerReveal() {
@@ -331,6 +340,7 @@ const Flyover = (() => {
     // from any old caller is identical to the previous fixed configuration).
     _runOpts = {
       theme:        typeof opts.theme === 'string' ? opts.theme : 'cycle',
+      showPins:     !!opts.showPins,
       revealLayers: !!opts.revealLayers,
       districts:    !!opts.districts,
       audio:        opts.audio !== false, // default true
@@ -344,6 +354,28 @@ const Flyover = (() => {
       const canvas = NCZ.ThreeScene.getCanvasElement();
       flyCamera = new THREE.PerspectiveCamera(FLYOVER_FOV, canvas.clientWidth / canvas.clientHeight, FLYOVER_CAM_NEAR, FLYOVER_CAM_FAR);
     }
+
+    // Hand the marker overlay's CSS2DRenderer the flyover camera so pins,
+    // clusters, popup and tooltip project against the cinematic camera. The
+    // flyover camera's layer mask gates whether they're actually visible:
+    // LAYER_PINS enabled → pins ride along; disabled → CSS2DRenderer's
+    // per-object layer test sets each DOM element's display to 'none'.
+    //
+    // When revealLayers is also on, the layer is enabled later by
+    // scheduleLayerReveal (after buildings) so pins don't pop in against
+    // bare terrain. Otherwise enable immediately.
+    if (_runOpts.showPins && !_runOpts.revealLayers) {
+      flyCamera.layers.enable(NCZ.LAYER_PINS);
+    } else {
+      flyCamera.layers.disable(NCZ.LAYER_PINS);
+    }
+    NCZ.ThreeMarkers?.setActiveCamera?.(flyCamera);
+    // During the showcase we want individual mod pins, not cluster bubbles —
+    // big number badges sweeping past in a cinematic read as visual noise.
+    // setUnclusteredMode(true) hides the cluster layer and unhides every
+    // filter-passing pin; setUnclusteredMode(false) on stop triggers a
+    // recompute that restores the normal clustered state.
+    if (_runOpts.showPins) NCZ.ThreeMarkers?.setUnclusteredMode?.(true);
 
     // Save active theme + all overlay checkbox states + sun slider value
     _savedTheme = Array.from(document.documentElement.classList)
@@ -410,6 +442,15 @@ const Flyover = (() => {
     if (!flyActive) return;
     flyActive = false;
     if (flyFrameId !== null) { cancelAnimationFrame(flyFrameId); flyFrameId = null; }
+    // Restore clusters before swapping the camera back, so the recompute
+    // triggered by setActiveCamera(null) sees the cluster layer visible
+    // again and rebuilds the clustered state cleanly.
+    NCZ.ThreeMarkers?.setUnclusteredMode?.(false);
+    // Hand the marker overlay back to the schema camera so pins project against
+    // the orthographic view again. setActiveCamera(null) also re-runs cluster
+    // recompute so cluster math resyncs (the cluster recompute is suppressed
+    // while a non-schema camera is active).
+    NCZ.ThreeMarkers?.setActiveCamera?.(null);
     clearLayerReveal();
     if (_audio) {
       _audio.pause();
@@ -480,6 +521,10 @@ const Flyover = (() => {
     flyCamera.up.set(0, 1, 0);
     flyCamera.lookAt(_flyTar);
     NCZ.ThreeScene.renderFrame(flyCamera);
+    // Reproject the marker overlay every frame so pins (or their hidden
+    // placeholders, if showPins=false) track the cinematic camera. CSS2DRenderer's
+    // layer-test handles visibility based on the flyCamera's mask.
+    NCZ.ThreeMarkers?.render?.();
 
     if (rawT >= 1) {
       flySeg++;

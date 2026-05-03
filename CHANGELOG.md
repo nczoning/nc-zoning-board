@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### ThreeMarkers — pins on a Three.js layer + Pins overlay toggle + showcase camera follow
+
+Pins, clusters, popup and tooltip CSS2DObjects now sit on a dedicated Three.js scene-graph layer (`NCZ.LAYER_PINS = 1`) rather than living silently on the default layer. Cameras opt into the marker overlay through `Camera.layers`, which means visibility is now governed by the same primitive Three.js uses for everything else.
+
+- **Pins overlay toggle** — new `<input data-overlay="pins" checked>` entry in `#overlay-controls`, sitting alongside Districts/Roads/Metro/Buildings/Shadows. Routes through the existing `ThreeScene.setLayerVisibility('pins', bool)` / `getLayerVisibility('pins')` API, which forwards to `ThreeMarkers.setOverlayVisible` / `getOverlayVisible` — those flip the schema camera's `LAYER_PINS` membership. CSS2DRenderer's per-object layer test sets each pin/cluster/popup/tooltip DOM element's `display` to `'none'` on the next render frame, so toggling the checkbox immediately hides the marker overlay without disturbing the underlying scene.
+- **Showcase: pins follow the cinematic camera** — the showcase modal now has a "Show mod pins during showcase" checkbox (off by default). When on, `flyover.js` enables `LAYER_PINS` on the perspective `flyCamera` and calls `ThreeMarkers.setActiveCamera(flyCamera)` so the CSS2DRenderer projects pins against the cinematic camera. Every showcase rAF tick now also calls `ThreeMarkers.render()` after `NCZ.ThreeScene.renderFrame(flyCamera)`, so positions reproject each frame and the layer-test handles visibility transparently. When off, the same machinery runs but the flyCamera doesn't enable `LAYER_PINS`, so each pin DOM gets `display: 'none'` — no leftover frozen pin positions, no hammer-style `setVisible` needed.
+- **Cluster recompute guard for the perspective camera** — cluster math reads orthographic-only fields (`camera.zoom`, `camera.right`, `camera.left`). The recompute scheduler now early-returns when the active camera isn't the schema camera, so the math never sees a perspective camera. Clusters keep their last-recomputed positions for the duration of the showcase. On showcase exit, `setActiveCamera(null)` triggers a fresh recompute against the schema camera so post-showcase zoom changes work correctly.
+- **Removed `ThreeMarkers.setVisible`** — the PR #633 hammer that toggled `cssRenderer.domElement.style.display` is gone; visibility now flows through the layer system. `app.js`'s `enterShowcase` / `exitShowcase` no longer manage marker visibility — `flyover.js` owns the active-camera lifecycle entirely.
+- **Camera reference split inside ThreeMarkers** — the previous `let camera` is now `let _schemaCamera` (used by orthographic-only math: cluster recompute, fly-to-pin tween) and `let _activeCamera` (used by the popup projection and the render call). `getCam()` returns the active one, falling back to the schema camera. New public API: `setActiveCamera(cam)`, `setOverlayVisible(bool)`, `getOverlayVisible()`, `setUnclusteredMode(bool)`.
+- **Pins are unclustered during the showcase** — when `showPins` is on, individual mod pins fly past instead of cluster number-badges. ThreeMarkers' `setUnclusteredMode(true)` hides the `_clusterLayer` and unhides every filter-passing pin; on stop, `setUnclusteredMode(false)` followed by `setActiveCamera(null)` triggers the recompute that rebuilds the normal clustered state. Cluster bubbles in the SCHEMA view are unaffected.
+- **Pins join the staggered layer reveal** — when both `revealLayers` and `showPins` are on, pins reveal at `FLYOVER_REVEAL_PINS = 6000ms` after WP0 (1500ms after buildings, matching the existing roads/metro/buildings cadence). Without `revealLayers`, pins are visible from frame 1 of the showcase as before.
+
+The two visibility flags — overlay toggle and showcase "Show pins" — are intentionally orthogonal: toggling Pins off in the overlay panel doesn't affect what the showcase does, and ticking "Show mod pins during showcase" doesn't permanently enable pins after the cinematic ends. Two cameras, two independent layer masks, one shared scene graph.
+
+New constant in [`constants.js`](assets/js/constants.js):
+
+- `NCZ.LAYER_DEFAULT` (0) — scene geometry (terrain, water, buildings, roads, metro, districts, landmarks)
+- `NCZ.LAYER_PINS`    (1) — marker overlay (pins, clusters, popup, tooltip)
+
 #### Showcase Options modal — user-configurable flyover
 
 Clicking the Showcase button now opens an options modal instead of starting the cinematic immediately. Defaults match today's behaviour exactly, so the experience is unchanged unless you opt into something.
