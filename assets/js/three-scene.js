@@ -410,6 +410,11 @@ const ThreeScene = (() => {
       return;
     }
     if (name === 'shadows') { setShadowsEnabled(visible); return; }
+    // The marker overlay isn't a scene layer — it's a separate CSS2DRenderer
+    // pass owned by ThreeMarkers, gated by the schema camera's Three.js
+    // Object3D.layers mask. Routing it through here keeps the overlay-controls
+    // panel's [data-overlay] handler uniform across every toggle.
+    if (name === 'pins') { NCZ.ThreeMarkers?.setOverlayVisible?.(visible); return; }
     if (name === 'buildings' && layers.landmarks) layers.landmarks.visible = visible;
     if (layers[name]) layers[name].visible = visible;
   }
@@ -1538,6 +1543,7 @@ const ThreeScene = (() => {
 
   function getLayerVisibility(name) {
     if (name === 'shadows') return _shadowsOn;
+    if (name === 'pins')    return NCZ.ThreeMarkers?.getOverlayVisible?.() ?? null;
     return layers[name]?.visible ?? null;
   }
 

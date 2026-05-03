@@ -658,6 +658,7 @@ async function initMap() {
   const showcaseStartBtn        = document.getElementById("showcase-start-btn");
   const showcaseCancelBtn       = document.getElementById("close-showcase-modal");
   const showcaseThemeSelect     = document.getElementById("showcase-theme");
+  const showcaseShowPinsCb      = document.getElementById("showcase-show-pins");
   const showcaseRevealLayersCb  = document.getElementById("showcase-reveal-layers");
   const showcaseDistrictsCb     = document.getElementById("showcase-districts");
   const showcaseAudioCb         = document.getElementById("showcase-audio");
@@ -676,6 +677,7 @@ async function initMap() {
 
   const SHOWCASE_DEFAULTS = Object.freeze({
     theme: "cycle",
+    showPins: false,
     revealLayers: false,
     districts: false,
     audio: true,
@@ -690,6 +692,7 @@ async function initMap() {
       const validThemes = new Set(["cycle", ...(NCZ.THEMES || []).map(t => t.id)]);
       return {
         theme:        validThemes.has(parsed.theme) ? parsed.theme : SHOWCASE_DEFAULTS.theme,
+        showPins:     typeof parsed.showPins     === "boolean" ? parsed.showPins     : SHOWCASE_DEFAULTS.showPins,
         revealLayers: typeof parsed.revealLayers === "boolean" ? parsed.revealLayers : SHOWCASE_DEFAULTS.revealLayers,
         districts:    typeof parsed.districts    === "boolean" ? parsed.districts    : SHOWCASE_DEFAULTS.districts,
         audio:        typeof parsed.audio        === "boolean" ? parsed.audio        : SHOWCASE_DEFAULTS.audio,
@@ -703,6 +706,7 @@ async function initMap() {
   function openShowcaseModal() {
     const opts = readStoredShowcaseOptions();
     if (showcaseThemeSelect)    showcaseThemeSelect.value      = opts.theme;
+    if (showcaseShowPinsCb)     showcaseShowPinsCb.checked     = opts.showPins;
     if (showcaseRevealLayersCb) showcaseRevealLayersCb.checked = opts.revealLayers;
     if (showcaseDistrictsCb)    showcaseDistrictsCb.checked    = opts.districts;
     if (showcaseAudioCb)        showcaseAudioCb.checked        = opts.audio;
@@ -724,12 +728,9 @@ async function initMap() {
         el.style.display = 'none';
       });
 
-    // Hide the ThreeMarkers CSS2D overlay (pins + clusters + popup + tooltip).
-    // Until the active-camera follow-up lands, pins are anchored to the schema
-    // camera projection, so during a flyover they'd be stuck floating where
-    // the schema view last placed them — visual noise, not feature parity.
-    NCZ.ThreeMarkers?.setVisible?.(false);
-
+    // Marker-overlay visibility during the showcase is owned by flyover.js:
+    // it sets the flyCamera's layer mask based on opts.showPins and swaps
+    // ThreeMarkers' active camera reference so projection lands correctly.
     document.getElementById('map-3d').classList.add('showcase-fullscreen');
     NCZ.Flyover.startFlyover(opts); // creates and manages the fade overlay internally
     flyoverBtn.classList.add("active");
@@ -741,8 +742,6 @@ async function initMap() {
 
   function exitShowcase() {
     try { NCZ.Flyover.stopFlyover(); } catch (e) { console.error('[NCZ] stopFlyover error:', e); }
-
-    NCZ.ThreeMarkers?.setVisible?.(true);
 
     _showcaseEls.forEach(({ el }) => el.style.removeProperty('display'));
     _showcaseEls.length = 0;
@@ -762,6 +761,7 @@ async function initMap() {
   showcaseStartBtn?.addEventListener("click", () => {
     const opts = {
       theme:        showcaseThemeSelect?.value ?? SHOWCASE_DEFAULTS.theme,
+      showPins:     !!showcaseShowPinsCb?.checked,
       revealLayers: !!showcaseRevealLayersCb?.checked,
       districts:    !!showcaseDistrictsCb?.checked,
       audio:        !!showcaseAudioCb?.checked,
