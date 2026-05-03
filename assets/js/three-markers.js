@@ -150,6 +150,7 @@ const ThreeMarkers = (() => {
     tooltipInner.append(tooltipText, tooltipArrow);
     tooltipAnchor.appendChild(tooltipInner);
     tooltipObj = new CSS2DObject(tooltipAnchor);
+    tooltipObj.name = 'pin-tooltip';
     tooltipObj.layers.set(NCZ.LAYER_PINS);
     tooltipObj.visible = false;
     tooltipObj.renderOrder = 999;
@@ -234,6 +235,7 @@ const ThreeMarkers = (() => {
       el.addEventListener('mouseleave', () => hideTooltip());
 
       const css = new CSS2DObject(el);
+      css.name = `pin: ${mod.name}`;
       css.layers.set(NCZ.LAYER_PINS);
       css.position.set(tx, ty, tz);
       css.userData.modData = mod;
@@ -386,6 +388,7 @@ const ThreeMarkers = (() => {
       root.className = `marker-cluster marker-cluster-step marker-cluster-step-${colorStep}`;
       root.querySelector('span').textContent = String(count);
       cluster.userData.modIds = group.map(g => g.id);
+      cluster.name = `cluster (${count} mods)`;
       cluster.visible = true;
     }
     // Hide unused pool entries from a previous larger cluster set
@@ -451,6 +454,7 @@ const ThreeMarkers = (() => {
     root.style.cursor = 'pointer';
     root.innerHTML = '<div><span>0</span></div>';
     const obj = new CSS2DObject(root);
+    obj.name = `cluster-pool-${_clusterPool.length}`;
     obj.layers.set(NCZ.LAYER_PINS);
     root.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -513,6 +517,7 @@ const ThreeMarkers = (() => {
     }
 
     popup = new CSS2DObject(anchor);
+    popup.name = `popup: ${mod.name}`;
     popup.layers.set(NCZ.LAYER_PINS);
     // High renderOrder so CSS2DRenderer's depth-based zIndex sorter ranks the
     // popup above all pins. Backed up by a CSS `!important` z-index on
