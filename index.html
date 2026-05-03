@@ -486,6 +486,35 @@
         </div>
     </div>
 
+    <!-- Showcase Options Modal -->
+    <div id="showcase-modal" class="modal hidden">
+        <div class="modal-content nc-terminal showcase-modal-content">
+            <div class="terminal-header"><span class="terminal-header-theme-label" data-modal-title="SHOWCASE">NIGHT CORP // SHOWCASE</span>
+                <button class="terminal-close-btn ui-close-btn ui-close-btn-reverse" data-close-modal="showcase-modal" aria-label="Close modal">
+                    <span class="ui-close-btn-icon" aria-hidden="true"></span>
+                </button>
+            </div>
+            <div class="terminal-body parameters-modal-body">
+                <h3 class="parameters-section-title">Showcase Options</h3>
+                <div class="parameters-section">
+                    <label class="parameters-label" for="showcase-theme">Theme</label>
+                    <select id="showcase-theme" class="bbcode-select">
+                        <option value="cycle">Cycle (beat-driven)</option>
+                        <!-- Remaining options populated from NCZ.THEMES at runtime -->
+                    </select>
+                    <label class="bbcode-checkbox-label"><input type="checkbox" id="showcase-reveal-layers"> Stagger layer reveal at start</label>
+                    <label class="bbcode-checkbox-label"><input type="checkbox" id="showcase-districts"> Show district outlines</label>
+                    <label class="bbcode-checkbox-label"><input type="checkbox" id="showcase-audio" checked> Play music</label>
+                    <label class="bbcode-checkbox-label"><input type="checkbox" id="showcase-loop"> Loop showcase</label>
+                </div>
+                <div class="showcase-modal-actions">
+                    <button id="showcase-start-btn" class="terminal-btn">[ START SHOWCASE ]</button>
+                    <button id="close-showcase-modal" class="terminal-btn">[ CANCEL ]</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Image Modal -->
     <div id="image-modal" class="hidden">
         <div class="modal-overlay"></div>

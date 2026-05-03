@@ -114,6 +114,7 @@ NCZ.CET_UNITS_PER_METER = 1;
 
 // LocalStorage cache keys & TTLs
 NCZ.THEME_PREFERENCE_KEY = "nc_theme_id";
+NCZ.SHOWCASE_OPTIONS_KEY = "nc_showcase_options";
 NCZ.RECENTLY_UPDATED_DAYS = 7;
 NCZ.UPDATED_LABEL = "RECENTLY UPDATED";
 NCZ.THUMB_CACHE_KEY = "nc_nexus_thumbs";
