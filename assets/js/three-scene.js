@@ -100,6 +100,20 @@ const ThreeScene = (() => {
     });
   }
 
+  // Give every descendant of `root` a prefixed, type-tagged name so the Needle
+  // Inspector hierarchy reads as English instead of "mesh_0". WolvenKit/Blender
+  // bakes generic names like "mesh_0", "Object_3", "Cube.001" — those are
+  // overwritten. Any descriptive name (e.g. "Crystal_Palace_Tower") is kept.
+  const NAME_GENERIC = /^(mesh|object|node|cube|sphere|group|geometry|line|primitive)[\s._\d]*$/i;
+  function nameSubtree(root, prefix) {
+    let i = 0;
+    root.traverse(obj => {
+      if (obj === root) return;
+      if (obj.name && !NAME_GENERIC.test(obj.name)) return;
+      obj.name = `${prefix}-${obj.type.toLowerCase()}-${i++}`;
+    });
+  }
+
   // Freeze world matrices on a fully-positioned static subtree so Three.js
   // skips the per-frame matrix-update traversal beneath it. Computes once,
   // then disables the auto-update flag the parent uses to recurse in.
@@ -224,6 +238,7 @@ const ThreeScene = (() => {
 
     // Scene background matches theme primary color
     scene = new THREE.Scene();
+    scene.name = 'main-scene';
     scene.background = readThemeColor('--primary', '#0a192f');
 
     // Orthographic camera — frustum updated after terrain loads
@@ -234,6 +249,7 @@ const ThreeScene = (() => {
        frustumH, -frustumH,
       NCZ.CAMERA_NEAR, NCZ.CAMERA_FAR
     );
+    camera.name = 'schema-camera';
     // Positioned above world centre, looking straight down.
     // Z = -WORLD_CY because GLB_Z = -CET_Y.
     camera.position.set(NCZ.WORLD_CX, NCZ.CAMERA_HEIGHT, -NCZ.WORLD_CY);
@@ -244,6 +260,7 @@ const ThreeScene = (() => {
     // Lighting — direction set to current real sun position via SunCalc if available,
     // otherwise falls back to the default NW hillshade direction.
     _dirLight = new THREE.DirectionalLight(0xffffff, 1.0 - NCZ.AMBIENT_INTENSITY);
+    _dirLight.name = 'sun';
     _dirLight.position.copy(SUN_DIR).multiplyScalar(NCZ.SUN_DIST);
 
     // Shadow map: 4096² covers the ~14 000-unit world at ~3.4 units/texel.
@@ -261,10 +278,12 @@ const ThreeScene = (() => {
 
     // Centre the shadow frustum on Night City, not the world origin
     _dirLight.target.position.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
+    _dirLight.target.name = 'sun-target';
 
     scene.add(_dirLight);
     scene.add(_dirLight.target);
     _ambLight = new THREE.AmbientLight(0xffffff, NCZ.AMBIENT_INTENSITY);
+    _ambLight.name = 'ambient-light';
     scene.add(_ambLight);
     // Sun position is applied by app.js via the slider once terrain has loaded.
 
@@ -274,6 +293,7 @@ const ThreeScene = (() => {
       new THREE.SphereGeometry(NCZ.SUN_SPHERE_RADIUS, 16, 16),
       new THREE.MeshBasicMaterial({ color: 0xffcc44 })
     );
+    _sunSphere.name = 'sun-sphere';
     _sunSphere.visible = false;
     scene.add(_sunSphere);
 
@@ -496,6 +516,13 @@ const ThreeScene = (() => {
       // CET pos (-2255, -3050) → GLB offset X=-2255, Z=+3050
       cliffsScene.position.set(-2255, 0, 3050);
 
+      terrainScene.name = 'terrain';
+      waterScene.name   = 'water';
+      cliffsScene.name  = 'cliffs';
+      nameSubtree(terrainScene, 'terrain');
+      nameSubtree(waterScene,   'water');
+      nameSubtree(cliffsScene,  'cliffs');
+
       layers.terrain = terrainScene;
       layers.water   = waterScene;
       layers.cliffs  = cliffsScene;
@@ -545,6 +572,13 @@ const ThreeScene = (() => {
       roadsScene.rotation.y   = Math.PI;
       metroScene.rotation.y   = Math.PI;
       bordersScene.rotation.y = Math.PI;
+
+      roadsScene.name   = 'roads-loaded';
+      metroScene.name   = 'metro-loaded';
+      bordersScene.name = 'road-borders-loaded';
+      nameSubtree(roadsScene,   'road');
+      nameSubtree(metroScene,   'metro');
+      nameSubtree(bordersScene, 'road-border');
 
       const roadColor   = readThemeColor('--overlay-road-color',        '#504b41');
       const borderColor = readThemeColor('--overlay-road-border-color', '#1ec3c8');
@@ -620,14 +654,20 @@ const ThreeScene = (() => {
 
       const stRoads   = makeSeeThrough(roadsScene,  roadsMat);
       const stBorders = makeSeeThrough(bordersScene, bordersMat);
+      stRoads.name    = 'roads-seethrough';
+      stBorders.name  = 'road-borders-seethrough';
+      nameSubtree(stRoads,   'road-st');
+      nameSubtree(stBorders, 'road-border-st');
       stRoads.traverse(o => { if (o.isMesh) o.renderOrder = 1; });
       stBorders.traverse(o => { if (o.isMesh) o.renderOrder = 1; });
 
       const roadsGroup = new THREE.Group();
+      roadsGroup.name = 'roads';
       roadsGroup.add(roadsScene, bordersScene, stRoads, stBorders);
       metroScene.traverse(o => { if (o.isMesh) o.renderOrder = 2; });
 
       const metroGroup = new THREE.Group();
+      metroGroup.name = 'metro';
       metroGroup.add(metroScene);
 
       layers.roads = roadsGroup;
@@ -649,6 +689,9 @@ const ThreeScene = (() => {
       const outerGroup  = new THREE.Group(); // districts with subs — zoom-out only
       const alwaysGroup = new THREE.Group(); // no-sub districts + canonical:false subs — always visible
       const subGroup    = new THREE.Group(); // canonical subdistricts — zoom-in only
+      outerGroup.name  = 'districts-outer';
+      alwaysGroup.name = 'districts-always';
+      subGroup.name    = 'subdistricts';
 
       for (const dist of data.districts) {
         const color = new THREE.Color(window.NCZ.DISTRICT_COLORS[dist.id] || '#ffffff');
@@ -657,21 +700,26 @@ const ThreeScene = (() => {
 
         // District outline — always group if no canonical subs, outer group otherwise
         if (dist.polygon?.length) {
-          (hasSubs ? outerGroup : alwaysGroup).add(buildLine(dist.polygon, color, window.NCZ.DISTRICT_LINE_WIDTH));
+          const line = buildLine(dist.polygon, color, window.NCZ.DISTRICT_LINE_WIDTH);
+          line.name = `district-outline-${dist.id}`;
+          (hasSubs ? outerGroup : alwaysGroup).add(line);
         }
 
         for (const sub of dist.subdistricts || []) {
           if (!sub.polygon?.length) continue;
+          const line = buildLine(sub.polygon, color, window.NCZ.SUBDISTRICT_LINE_WIDTH);
+          line.name = `subdistrict-outline-${dist.id}/${sub.id}`;
           if (sub.canonical === false) {
-            alwaysGroup.add(buildLine(sub.polygon, color, window.NCZ.SUBDISTRICT_LINE_WIDTH)); // casino etc — always visible
+            alwaysGroup.add(line); // casino etc — always visible
           } else {
-            subGroup.add(buildLine(sub.polygon, color, window.NCZ.SUBDISTRICT_LINE_WIDTH));    // zoom-gated
+            subGroup.add(line);    // zoom-gated
           }
         }
       }
 
       // Wrap all three in a parent so districts toggle works as a unit
       const parent = new THREE.Group();
+      parent.name = 'districts';
       parent.add(alwaysGroup, outerGroup, subGroup);
       subGroup.visible  = false;
       outerGroup.visible = true;
@@ -729,9 +777,11 @@ const ThreeScene = (() => {
       );
 
       const group = new THREE.Group();
+      group.name = 'landmarks';
       for (const { file, cetX, cetY, cetZ, qi, qj, qk, qr } of LANDMARK_META) {
         const source = glbMap[file];
         const container = new THREE.Group();
+        container.name = `landmark-${file.replace(/\.glb$/, '')}`;
 
         // CET (Z-up) → Three.js (Y-up): x=qi, y=qk, z=-qj, w=qr
         const entityQ = new THREE.Quaternion(qi, qk, -qj, qr).normalize();
@@ -752,6 +802,7 @@ const ThreeScene = (() => {
           mesh.receiveShadow = true;
           container.add(mesh);
         });
+        nameSubtree(container, container.name);
         group.add(container);
       }
 
@@ -771,6 +822,7 @@ const ThreeScene = (() => {
     try {
       const baseGeo = new THREE.BoxGeometry(1, 1, 1);
       const group   = new THREE.Group();
+      group.name = 'buildings';
       const dummy   = new THREE.Object3D();
 
       for (const meta of DISTRICT_META) {
@@ -784,6 +836,7 @@ const ThreeScene = (() => {
         // Pre-allocate mesh for max possible instances; trim count after decode.
         const mat  = buildBuildingMaterial(meta, await loadMDds(meta.mDds));
         const mesh = new THREE.InstancedMesh(baseGeo, mat, blockW * blockH);
+        mesh.name = `buildings-${meta.name}`;
 
         let validCount = 0;
         for (let y = 0; y < blockH; y++) {

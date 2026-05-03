@@ -353,6 +353,7 @@ const Flyover = (() => {
     if (!flyCamera) {
       const canvas = NCZ.ThreeScene.getCanvasElement();
       flyCamera = new THREE.PerspectiveCamera(FLYOVER_FOV, canvas.clientWidth / canvas.clientHeight, FLYOVER_CAM_NEAR, FLYOVER_CAM_FAR);
+      flyCamera.name = 'flyover-camera';
     }
 
     // Hand the marker overlay's CSS2DRenderer the flyover camera so pins,

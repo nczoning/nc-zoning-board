@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Object3D naming for Needle Inspector hierarchy
+
+Every Object3D in the scene now has a `.name` so the Needle Inspector reads as English (`buildings-westbrook`, `landmark-3dmap_obelisk`, `pin: Crystal Palace Resort`) instead of Three.js's auto-generated `Group_335` / `mesh_0`. Pure metadata — no behaviour change.
+
+- **Top-level scene entities** in [`three-scene.js`](assets/js/three-scene.js): `main-scene`, `schema-camera`, `sun`, `sun-target`, `ambient-light`, `sun-sphere`, `terrain`, `water`, `cliffs`, `roads`, `metro`, `districts`, `landmarks`, `buildings`, plus `flyover-camera` from [`flyover.js`](assets/js/flyover.js) when the showcase runs.
+- **Per-instance names** so the Inspector filter is actually useful: `buildings-<district>` for each district's InstancedMesh, `landmark-<glb-filename>` for each landmark, `district-outline-<id>` and `subdistrict-outline-<dist>/<sub>` for boundary lines.
+- **Pin/cluster/popup/tooltip names** in [`three-markers.js`](assets/js/three-markers.js): each pin is `pin: <mod.name>`, each popup is `popup: <mod.name>`, the singleton tooltip is `pin-tooltip`, cluster bubbles update per recompute to `cluster (N mods)`. Typing `pin:` in the Inspector filter shows only pins; `cluster` shows only clusters.
+- **`nameSubtree(root, prefix)` helper** walks each loaded GLB and gives every descendant a prefixed, type-tagged name (`road-mesh-0`, `metro-line2-3`, etc.). A regex overrides WolvenKit/Blender-baked generic names like `mesh_0` while preserving any genuinely descriptive name an artist might have set.
+
+Driven by wiring up the Needle Inspector Chrome extension to the dev server. Pre-naming, every loaded GLB collapsed to `Group_NNN → mesh_0`; post-naming, every node identifies itself.
+
 #### ThreeMarkers — pins on a Three.js layer + Pins overlay toggle + showcase camera follow
 
 Pins, clusters, popup and tooltip CSS2DObjects now sit on a dedicated Three.js scene-graph layer (`NCZ.LAYER_PINS = 1`) rather than living silently on the default layer. Cameras opt into the marker overlay through `Camera.layers`, which means visibility is now governed by the same primitive Three.js uses for everything else.
