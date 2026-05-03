@@ -22,8 +22,7 @@ const FLYOVER_CAM_NEAR      = 1;        // perspective camera near clip (CET uni
 const FLYOVER_CAM_FAR       = 120000;   // perspective camera far clip
 const FLYOVER_FADE_MS       = 2000;     // fade in / fade to black duration (ms)
 const FLYOVER_BEAT_DISSOLVE = 938;      // theme cross-dissolve duration per beat (ms) — 70% of ~1340ms beat period
-const FLYOVER_REVEAL_LAYERS = false;    // true = hide all layers at WP0 then stagger back in; false = keep current layer state
-const FLYOVER_REVEAL_ROADS  = 1500;     // ms after WP0 to stagger roads in (only used when FLYOVER_REVEAL_LAYERS = true)
+const FLYOVER_REVEAL_ROADS  = 1500;     // ms after WP0 to stagger roads in (only used when run opts revealLayers = true)
 const FLYOVER_REVEAL_METRO  = 3000;     // ms after WP0 to stagger metro in
 const FLYOVER_REVEAL_BLDGS  = 4500;     // ms after WP0 to stagger buildings in
 const MORRO_BAY = { lat: 35.370781, lng: -120.851173 }; // Night City's real-world location
@@ -103,25 +102,30 @@ const Flyover = (() => {
   }
 
   const FLYOVER_EVENTS = {
-    // WP 0 — Ocean: snap to Night Corp; showcase always controls its own layer state.
-    // FLYOVER_REVEAL_LAYERS=true  → hide everything, stagger layers back in over 6.9s
-    // FLYOVER_REVEAL_LAYERS=false → all layers on from frame 1 (immediate shadows)
+    // WP 0 — Ocean: snap to opening theme; showcase always controls its own layer state.
+    // _runOpts.revealLayers=true  → hide everything, stagger layers back in over 6.9s
+    // _runOpts.revealLayers=false → all layers on from frame 1 (immediate shadows)
+    // Districts honour _runOpts.districts in both branches.
     // Either way, exit always restores the user's pre-showcase layer state.
     0: () => {
-      if (FLYOVER_REVEAL_LAYERS) {
+      const showDistricts = !!_runOpts?.districts;
+      if (_runOpts?.revealLayers) {
         NCZ.ThreeScene.setLayerVisibility('roads',     false);
         NCZ.ThreeScene.setLayerVisibility('metro',     false);
         NCZ.ThreeScene.setLayerVisibility('buildings', false);
-        NCZ.ThreeScene.setLayerVisibility('districts', false);
+        NCZ.ThreeScene.setLayerVisibility('districts', showDistricts);
       } else {
         NCZ.ThreeScene.setLayerVisibility('roads',     true);
         NCZ.ThreeScene.setLayerVisibility('metro',     true);
         NCZ.ThreeScene.setLayerVisibility('buildings', true);
-        NCZ.ThreeScene.setLayerVisibility('districts', false); // omitted — cleaner showcase
+        NCZ.ThreeScene.setLayerVisibility('districts', showDistricts);
       }
-      NCZ.applyTheme?.('night-corp');
+      const lockedTheme = _runOpts?.theme && _runOpts.theme !== 'cycle' ? _runOpts.theme : 'night-corp';
+      NCZ.applyTheme?.(lockedTheme);
     },
-    9: () => NCZ.ThreeScene.setLayerVisibility('districts', false),
+    // WP 9 — Badlands sweep: drop districts so the city behind camera reads cleaner.
+    // Skipped when the user opted to keep districts visible.
+    9: () => { if (!_runOpts?.districts) NCZ.ThreeScene.setLayerVisibility('districts', false); },
   };
 
   // ── Beat-cycle visualiser ─────────────────────────────────────────────────
@@ -168,6 +172,7 @@ const Flyover = (() => {
   let _beatColorIndex = 0; // which palette fires next (continues across loops)
   let _lastBeatIndex  = 0; // which timestamp we've last checked (resets each loop)
   let _audio          = null;
+  let _runOpts        = null; // per-run options captured at startFlyover (null when idle)
 
   // ── Flyover sun animation ─────────────────────────────────────────────────
   // Maps audio.currentTime to real sunrise→sunset at Morro Bay, CA —
@@ -318,9 +323,19 @@ const Flyover = (() => {
 
   // ── Public API ────────────────────────────────────────────────────────────
 
-  function startFlyover() {
+  function startFlyover(opts = {}) {
     if (flyActive) return;
     flyActive = true;
+
+    // Capture per-run options. Defaults preserve today's behaviour (zero-arg call
+    // from any old caller is identical to the previous fixed configuration).
+    _runOpts = {
+      theme:        typeof opts.theme === 'string' ? opts.theme : 'cycle',
+      revealLayers: !!opts.revealLayers,
+      districts:    !!opts.districts,
+      audio:        opts.audio !== false, // default true
+      loop:         !!opts.loop,
+    };
 
     NCZ.ThreeScene.stopRenderLoop();
     NCZ.ThreeScene.setControlsEnabled(false);
@@ -339,17 +354,30 @@ const Flyover = (() => {
                    .map(cb => ({ cb, checked: cb.checked })),
     };
 
-    // Start audio — beats and sun position are driven by audio.currentTime each frame
+    // Start audio — beats and sun position are driven by audio.currentTime each frame.
+    // When _runOpts.audio === false, mute the element rather than skip play(): the
+    // currentTime clock and 'ended' event still fire on muted media in Chromium and
+    // Firefox, so beats / sun / end-of-showcase fade stay locked to the same timeline.
     _audio = document.getElementById('flyover-audio');
     _lastBeatIndex  = 0;
     _beatColorIndex = 0;
     if (_audio) {
+      _audio.muted = !_runOpts.audio;
       _audio.currentTime = 0;
       _audio.play().catch(() => {});
-      // Drive the end-of-showcase from the audio clock, not the waypoint clock,
-      // so the fade always starts at the exact moment the track ends.
       _audio.addEventListener('ended', _onAudioEnded = () => {
         if (!flyActive) return;
+        if (_runOpts?.loop) {
+          // Restart the run. _beatColorIndex deliberately NOT reset — the colour
+          // cycle is meant to continue across loops (per CHANGELOG).
+          _audio.currentTime = 0;
+          _lastBeatIndex = 0;
+          flySeg = 0;
+          flySegStart = performance.now();
+          _audio.play().catch(() => {});
+          _audio.addEventListener('ended', _onAudioEnded, { once: true });
+          return;
+        }
         if (flyFrameId !== null) { cancelAnimationFrame(flyFrameId); flyFrameId = null; }
         fadeToBlack(() => {
           document.dispatchEvent(new CustomEvent('flyover:ended'));
@@ -362,7 +390,7 @@ const Flyover = (() => {
     NCZ.ThreeScene.setShadowsEnabled?.(true);    // always on during showcase
     NCZ.ThreeScene.setSunSphereVisible?.(true);  // show the sun in the sky
     FLYOVER_EVENTS[0]();
-    if (FLYOVER_REVEAL_LAYERS) scheduleLayerReveal();
+    if (_runOpts.revealLayers) scheduleLayerReveal();
     // Create fade overlay, show title card, then fade the scene in from black
     createFade();
     showStartScreen();
@@ -396,6 +424,8 @@ const Flyover = (() => {
 
     // Restore whichever theme the user had before showcase started
     if (_savedTheme) { applyThemeSmooth(_savedTheme); _savedTheme = null; }
+
+    _runOpts = null;
 
     // Restore all overlay checkboxes + sun slider to exactly what they were.
     // Dispatching the native events ensures the app.js handlers run —
@@ -443,7 +473,7 @@ const Flyover = (() => {
     _flyPos.set(ax + (bx - ax) * t, ay + (by - ay) * t, az + (bz - az) * t);
     _flyTar.set(atx + (btx - atx) * t, aty + (bty - aty) * t, atz + (btz - atz) * t);
 
-    checkBeats();
+    if (_runOpts?.theme === 'cycle') checkBeats();
     if (_audio) updateFlyoverSun(_audio.currentTime);
 
     flyCamera.position.copy(_flyPos);

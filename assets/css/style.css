@@ -1904,9 +1904,25 @@ body::before {
 }
 
 /* ── BBCode Header Button ─────────────────────────────────────────── */
-.parameters-modal-content {
+.parameters-modal-content,
+.showcase-modal-content {
     max-width: 420px;
     width: 95%;
+}
+
+.showcase-modal-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.showcase-modal-actions > #showcase-start-btn {
+    flex: 3;
+}
+
+.showcase-modal-actions > #close-showcase-modal {
+    flex: 1;
+    border-color: var(--gray);
+    color: var(--gray);
 }
 
 .parameters-modal-body {

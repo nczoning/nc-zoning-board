@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Showcase Options modal — user-configurable flyover
+
+Clicking the Showcase button now opens an options modal instead of starting the cinematic immediately. Defaults match today's behaviour exactly, so the experience is unchanged unless you opt into something.
+
+- **Theme** — drop-down with "Cycle (beat-driven)" as default plus each of the five themes. Selecting a specific theme suppresses the per-beat cross-dissolve and locks the scene to that palette for the whole showcase. The hard-coded `applyTheme('night-corp')` at WP0 also honours the lock, so a chosen Synthwave run never flashes Night Corp on the way in.
+- **Stagger layer reveal at start** — exposes the previously-hard-coded `FLYOVER_REVEAL_LAYERS` flag. Off by default (matching today). When on, roads → metro → buildings reveal across the 6.9s ocean approach.
+- **Show district outlines** — toggle for keeping district lines visible during showcase (today they're always off). The WP9 "drop districts before Badlands sweep" event is conditional on this flag, so user-enabled districts persist through the city-behind-camera waypoint.
+- **Play music** — mute the announcer track. Beats and sun position still drive off `audio.currentTime` and the `'ended'` event, both of which fire on muted media in Chromium and Firefox, so muting doesn't introduce timing drift.
+- **Loop showcase** — at `audio.ended`, rewind and restart instead of fading to black. `_beatColorIndex` deliberately persists across loops (per the existing comment) so the colour cycle continues seamlessly. Esc still exits cleanly.
+- **Persistence** — selections are stored in `localStorage[NCZ.SHOWCASE_OPTIONS_KEY]` and restored on next modal open. Validation falls back to defaults on parse error or junk values, mirroring the theme-preference pattern.
+- **API change** — `NCZ.Flyover.startFlyover()` now accepts an optional options object: `{ theme, revealLayers, districts, audio, loop }`. All fields default to today's behaviour, so the zero-arg call still works for any legacy caller.
+
+The showcase trigger preserves its current toggle UX: clicking the button while a showcase is running calls `exitShowcase()` directly, no modal. The modal only appears when starting from a stopped state. Fullscreen request stays inside the user-gesture task because Start-button click → `enterShowcase` is synchronous.
+
 #### ThreeMarkers — pin/popup layer for the 3D view
 
 The 3D scene now has interactive mod pins matching the Leaflet view's behaviour. Pins, popups, sidebar interactions, and the Discover button all work in SCHEMA mode.

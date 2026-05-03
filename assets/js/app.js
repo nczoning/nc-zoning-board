@@ -653,9 +653,70 @@ async function initMap() {
   // already toggled (e.g. sidebar-open uses a .visible class, not display).
   const _showcaseEls = [];
 
-  function enterShowcase() {
+  // ── Showcase Options modal ──────────────────────────────────────────────
+  const showcaseModal           = document.getElementById("showcase-modal");
+  const showcaseStartBtn        = document.getElementById("showcase-start-btn");
+  const showcaseCancelBtn       = document.getElementById("close-showcase-modal");
+  const showcaseThemeSelect     = document.getElementById("showcase-theme");
+  const showcaseRevealLayersCb  = document.getElementById("showcase-reveal-layers");
+  const showcaseDistrictsCb     = document.getElementById("showcase-districts");
+  const showcaseAudioCb         = document.getElementById("showcase-audio");
+  const showcaseLoopCb          = document.getElementById("showcase-loop");
+
+  // Populate the theme dropdown from NCZ.THEMES so it stays the single source
+  // of truth. "Cycle" is preserved as the first option from the markup.
+  if (showcaseThemeSelect && Array.isArray(NCZ.THEMES)) {
+    NCZ.THEMES.forEach(t => {
+      const opt = document.createElement("option");
+      opt.value = t.id;
+      opt.textContent = t.label;
+      showcaseThemeSelect.appendChild(opt);
+    });
+  }
+
+  const SHOWCASE_DEFAULTS = Object.freeze({
+    theme: "cycle",
+    revealLayers: false,
+    districts: false,
+    audio: true,
+    loop: false,
+  });
+
+  function readStoredShowcaseOptions() {
+    try {
+      const raw = localStorage.getItem(NCZ.SHOWCASE_OPTIONS_KEY);
+      if (!raw) return { ...SHOWCASE_DEFAULTS };
+      const parsed = JSON.parse(raw);
+      const validThemes = new Set(["cycle", ...(NCZ.THEMES || []).map(t => t.id)]);
+      return {
+        theme:        validThemes.has(parsed.theme) ? parsed.theme : SHOWCASE_DEFAULTS.theme,
+        revealLayers: typeof parsed.revealLayers === "boolean" ? parsed.revealLayers : SHOWCASE_DEFAULTS.revealLayers,
+        districts:    typeof parsed.districts    === "boolean" ? parsed.districts    : SHOWCASE_DEFAULTS.districts,
+        audio:        typeof parsed.audio        === "boolean" ? parsed.audio        : SHOWCASE_DEFAULTS.audio,
+        loop:         typeof parsed.loop         === "boolean" ? parsed.loop         : SHOWCASE_DEFAULTS.loop,
+      };
+    } catch (_) {
+      return { ...SHOWCASE_DEFAULTS };
+    }
+  }
+
+  function openShowcaseModal() {
+    const opts = readStoredShowcaseOptions();
+    if (showcaseThemeSelect)    showcaseThemeSelect.value      = opts.theme;
+    if (showcaseRevealLayersCb) showcaseRevealLayersCb.checked = opts.revealLayers;
+    if (showcaseDistrictsCb)    showcaseDistrictsCb.checked    = opts.districts;
+    if (showcaseAudioCb)        showcaseAudioCb.checked        = opts.audio;
+    if (showcaseLoopCb)         showcaseLoopCb.checked         = opts.loop;
+    showcaseModal?.classList.remove("hidden");
+  }
+
+  function closeShowcaseModal() {
+    showcaseModal?.classList.add("hidden");
+  }
+
+  function enterShowcase(opts) {
     ['header', '#sidebar-open', '#discover-location-btn',
-     '#overlay-controls', '#map-view-toggle', '#scene-controls']
+     '#overlay-controls', '#map-view-toggle', '#scene-controls', '#scene-scale']
       .forEach(sel => {
         const el = document.querySelector(sel);
         if (!el) return;
@@ -663,8 +724,14 @@ async function initMap() {
         el.style.display = 'none';
       });
 
+    // Hide the ThreeMarkers CSS2D overlay (pins + clusters + popup + tooltip).
+    // Until the active-camera follow-up lands, pins are anchored to the schema
+    // camera projection, so during a flyover they'd be stuck floating where
+    // the schema view last placed them — visual noise, not feature parity.
+    NCZ.ThreeMarkers?.setVisible?.(false);
+
     document.getElementById('map-3d').classList.add('showcase-fullscreen');
-    NCZ.Flyover.startFlyover(); // creates and manages the fade overlay internally
+    NCZ.Flyover.startFlyover(opts); // creates and manages the fade overlay internally
     flyoverBtn.classList.add("active");
     flyoverBtn.textContent = "Exit showcase";
     // Request native browser fullscreen — must be called from a user gesture (button click)
@@ -674,6 +741,8 @@ async function initMap() {
 
   function exitShowcase() {
     try { NCZ.Flyover.stopFlyover(); } catch (e) { console.error('[NCZ] stopFlyover error:', e); }
+
+    NCZ.ThreeMarkers?.setVisible?.(true);
 
     _showcaseEls.forEach(({ el }) => el.style.removeProperty('display'));
     _showcaseEls.length = 0;
@@ -686,8 +755,24 @@ async function initMap() {
   }
 
   flyoverBtn.addEventListener("click", () => {
-    flyoverBtn.classList.contains("active") ? exitShowcase() : enterShowcase();
+    if (flyoverBtn.classList.contains("active")) { exitShowcase(); return; }
+    openShowcaseModal();
   });
+
+  showcaseStartBtn?.addEventListener("click", () => {
+    const opts = {
+      theme:        showcaseThemeSelect?.value ?? SHOWCASE_DEFAULTS.theme,
+      revealLayers: !!showcaseRevealLayersCb?.checked,
+      districts:    !!showcaseDistrictsCb?.checked,
+      audio:        !!showcaseAudioCb?.checked,
+      loop:         !!showcaseLoopCb?.checked,
+    };
+    try { localStorage.setItem(NCZ.SHOWCASE_OPTIONS_KEY, JSON.stringify(opts)); } catch (_) {}
+    closeShowcaseModal();
+    enterShowcase(opts); // synchronous → fullscreen request stays inside the user-gesture task
+  });
+
+  showcaseCancelBtn?.addEventListener("click", closeShowcaseModal);
 
   document.addEventListener("keydown", e => {
     if (e.key === "Escape" && flyoverBtn.classList.contains("active")) exitShowcase();
