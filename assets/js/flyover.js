@@ -25,6 +25,7 @@ const FLYOVER_BEAT_DISSOLVE = 938;      // theme cross-dissolve duration per bea
 const FLYOVER_REVEAL_ROADS  = 1500;     // ms after WP0 to stagger roads in (only used when run opts revealLayers = true)
 const FLYOVER_REVEAL_METRO  = 3000;     // ms after WP0 to stagger metro in
 const FLYOVER_REVEAL_BLDGS  = 4500;     // ms after WP0 to stagger buildings in
+const FLYOVER_REVEAL_PINS   = 6000;     // ms after WP0 to stagger pins in (only when revealLayers && showPins)
 const MORRO_BAY = { lat: 35.370781, lng: -120.851173 }; // Night City's real-world location
 
 const Flyover = (() => {
@@ -233,6 +234,14 @@ const Flyover = (() => {
       setTimeout(() => NCZ.ThreeScene.setLayerVisibility('buildings', true), FLYOVER_REVEAL_BLDGS),
       // Districts omitted — cleaner showcase without boundary lines
     ];
+    // Pins reveal happens after buildings so they don't pop up against an empty
+    // grey scene. Only scheduled when the user opted into both revealLayers and
+    // showPins; otherwise the layer is enabled (or not) at WP0 by startFlyover.
+    if (_runOpts?.showPins) {
+      _layerRevealTimers.push(
+        setTimeout(() => flyCamera?.layers.enable(NCZ.LAYER_PINS), FLYOVER_REVEAL_PINS)
+      );
+    }
   }
 
   function clearLayerReveal() {
@@ -351,9 +360,22 @@ const Flyover = (() => {
     // flyover camera's layer mask gates whether they're actually visible:
     // LAYER_PINS enabled → pins ride along; disabled → CSS2DRenderer's
     // per-object layer test sets each DOM element's display to 'none'.
-    if (_runOpts.showPins) flyCamera.layers.enable(NCZ.LAYER_PINS);
-    else                   flyCamera.layers.disable(NCZ.LAYER_PINS);
+    //
+    // When revealLayers is also on, the layer is enabled later by
+    // scheduleLayerReveal (after buildings) so pins don't pop in against
+    // bare terrain. Otherwise enable immediately.
+    if (_runOpts.showPins && !_runOpts.revealLayers) {
+      flyCamera.layers.enable(NCZ.LAYER_PINS);
+    } else {
+      flyCamera.layers.disable(NCZ.LAYER_PINS);
+    }
     NCZ.ThreeMarkers?.setActiveCamera?.(flyCamera);
+    // During the showcase we want individual mod pins, not cluster bubbles —
+    // big number badges sweeping past in a cinematic read as visual noise.
+    // setUnclusteredMode(true) hides the cluster layer and unhides every
+    // filter-passing pin; setUnclusteredMode(false) on stop triggers a
+    // recompute that restores the normal clustered state.
+    if (_runOpts.showPins) NCZ.ThreeMarkers?.setUnclusteredMode?.(true);
 
     // Save active theme + all overlay checkbox states + sun slider value
     _savedTheme = Array.from(document.documentElement.classList)
@@ -420,6 +442,10 @@ const Flyover = (() => {
     if (!flyActive) return;
     flyActive = false;
     if (flyFrameId !== null) { cancelAnimationFrame(flyFrameId); flyFrameId = null; }
+    // Restore clusters before swapping the camera back, so the recompute
+    // triggered by setActiveCamera(null) sees the cluster layer visible
+    // again and rebuilds the clustered state cleanly.
+    NCZ.ThreeMarkers?.setUnclusteredMode?.(false);
     // Hand the marker overlay back to the schema camera so pins project against
     // the orthographic view again. setActiveCamera(null) also re-runs cluster
     // recompute so cluster math resyncs (the cluster recompute is suppressed

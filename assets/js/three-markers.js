@@ -674,6 +674,30 @@ const ThreeMarkers = (() => {
     return _schemaCamera.layers.isEnabled(NCZ.LAYER_PINS);
   }
 
+  // Cinematic mode: hide every cluster bubble and unhide every filter-passing
+  // pin so the showcase shows individual mods instead of number-badges.
+  //
+  // CSS2DRenderer checks `object.visible` per-CSS2DObject (not on parent groups
+  // — the renderer walks all children regardless of group.visible), so we have
+  // to flip `visible` on each cluster bubble individually rather than on the
+  // parent _clusterLayer Group.
+  //
+  // active=false leaves cluster restoration to the next recomputeClusters call
+  // (typically issued by setActiveCamera(null) on showcase exit), which
+  // rebuilds the correct visible/clustered state from scratch.
+  function setUnclusteredMode(active) {
+    if (active) {
+      pins.forEach((pin, modId) => { pin.visible = _filterVisibleIds.has(modId); });
+      if (_clusterLayer) _clusterLayer.children.forEach(c => { c.visible = false; });
+    } else {
+      // Defensive: if the caller doesn't follow up with a recompute, at least
+      // make the active bubbles renderable again so users aren't left with a
+      // half-state. recomputeClusters (when it runs) will overwrite this with
+      // the authoritative grouped state.
+      if (_clusterLayer) _clusterLayer.children.forEach(c => { c.visible = true; });
+    }
+  }
+
   return {
     attach,
     setMods,
@@ -690,6 +714,7 @@ const ThreeMarkers = (() => {
     setActiveCamera,
     setOverlayVisible,
     getOverlayVisible,
+    setUnclusteredMode,
   };
 })();
 
