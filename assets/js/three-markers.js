@@ -626,6 +626,15 @@ const ThreeMarkers = (() => {
     if (cssRenderer) cssRenderer.setSize(w, h);
   }
 
+  // Toggle the entire CSS2D overlay (pins + clusters + popup + tooltip) on or off.
+  // Used by the showcase flow to hide the marker layer during the cinematic; the
+  // CSS2DRenderer's domElement is the single root that hosts every projected pin,
+  // so flipping its display also halts per-frame layout work in the browser.
+  function setVisible(visible) {
+    if (!cssRenderer) return;
+    cssRenderer.domElement.style.display = visible ? '' : 'none';
+  }
+
   return {
     attach,
     setMods,
@@ -639,6 +648,7 @@ const ThreeMarkers = (() => {
     closePopup,
     render,
     onResize,
+    setVisible,
   };
 })();
 

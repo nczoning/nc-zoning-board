@@ -716,13 +716,19 @@ async function initMap() {
 
   function enterShowcase(opts) {
     ['header', '#sidebar-open', '#discover-location-btn',
-     '#overlay-controls', '#map-view-toggle', '#scene-controls']
+     '#overlay-controls', '#map-view-toggle', '#scene-controls', '#scene-scale']
       .forEach(sel => {
         const el = document.querySelector(sel);
         if (!el) return;
         _showcaseEls.push({ el, display: el.style.display });
         el.style.display = 'none';
       });
+
+    // Hide the ThreeMarkers CSS2D overlay (pins + clusters + popup + tooltip).
+    // Until the active-camera follow-up lands, pins are anchored to the schema
+    // camera projection, so during a flyover they'd be stuck floating where
+    // the schema view last placed them — visual noise, not feature parity.
+    NCZ.ThreeMarkers?.setVisible?.(false);
 
     document.getElementById('map-3d').classList.add('showcase-fullscreen');
     NCZ.Flyover.startFlyover(opts); // creates and manages the fade overlay internally
@@ -735,6 +741,8 @@ async function initMap() {
 
   function exitShowcase() {
     try { NCZ.Flyover.stopFlyover(); } catch (e) { console.error('[NCZ] stopFlyover error:', e); }
+
+    NCZ.ThreeMarkers?.setVisible?.(true);
 
     _showcaseEls.forEach(({ el }) => el.style.removeProperty('display'));
     _showcaseEls.length = 0;
