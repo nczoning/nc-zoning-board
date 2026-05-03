@@ -45,8 +45,8 @@ New helper script: [`scripts/query_terrain_heights.py`](scripts/query_terrain_he
 #### Debug dump — RAM as power-of-2 range, not floor
 
 - The hardware-info section of the debug dump previously showed `Memory: ≥X GB (approx)` from `navigator.deviceMemory`. The `≥` was correct in spirit but readers were silently parsing it as "approximately X" — a 64 GB system reported "≥32 GB" and a 16 GB system reported "≥8 GB", suggesting much smaller hardware tiers than the user actually had.
-- Root cause is the API itself: `navigator.deviceMemory` returns the largest power of 2 strictly less than the actual RAM (Chrome ignores the spec's 8 GB cap but still applies the rounding). The actual RAM therefore always falls in `(reported, 2 × reported]`. There is no better browser API for total system memory — `performance.memory.jsHeapSizeLimit` is the V8 heap cap (2–4 GB), unrelated to physical RAM.
-- Display now shows the half-open range explicitly: `Memory: 32–64 GB (Chrome reports power-of-2 floor)`. Same data, no room for misreading the floor as a precise figure. Trailing parenthetical signals the limitation is browser-side, not a bug in the dump.
+- Root cause is the API itself: `navigator.deviceMemory` is Chromium-only (Firefox and Safari return `undefined` and fall through to `Memory: unknown`). Where it IS supported, the value is the largest power of 2 strictly less than the actual RAM — Chromium ignores the spec's 8 GB cap but still applies the rounding. The actual RAM therefore always falls in `(reported, 2 × reported]`. There is no better browser API for total system memory — `performance.memory.jsHeapSizeLimit` is the V8 heap cap (2–4 GB), unrelated to physical RAM.
+- Display now shows the half-open range explicitly: `Memory: 32–64 GB (browser reports power-of-2 floor)`. Same data, no room for misreading the floor as a precise figure. Phrased as "browser" rather than "Chrome" since the rounding is observable in every Chromium variant (Edge, Brave, Vivaldi, etc.). Trailing parenthetical signals the limitation is browser-side, not a bug in the dump.
 
 #### Static-subtree matrix freeze + camera frustum tighten (PR #629)
 
