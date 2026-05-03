@@ -1225,11 +1225,16 @@ const ThreeScene = (() => {
     lines.push(`GPU:           ${dump.hardware.gpu}`);
     lines.push(`Vendor:        ${dump.hardware.vendor}`);
     // navigator.hardwareConcurrency returns logical processors (threads), not physical cores.
-    // navigator.deviceMemory is power-of-2 floor-rounded and clamped (spec max 8 GB; Chrome
-    // returns higher values but still floor-rounded), so "≥X GB (approx)" reflects the API's
-    // lossiness rather than implying false precision.
+    // navigator.deviceMemory is implemented only in Chromium-based browsers (Chrome, Edge,
+    // Brave, etc.); Firefox and Safari return undefined, which falls through to "unknown".
+    // Where it IS supported, the value is quantised to the largest power of 2 strictly less
+    // than the actual RAM (spec caps at 8 GB; Chromium ignores the cap but still applies the
+    // rounding — verified by user reports of 64 GB → 32 and 16 GB → 8). The actual RAM
+    // therefore lies in (reported, 2 × reported]; we display that half-open range so readers
+    // don't misread the floor as a precise figure. Phrased as "browser reports …" rather
+    // than naming Chrome, since the rounding is observable in every Chromium variant.
     const memText = typeof dump.hardware.deviceMemoryGB === 'number'
-      ? `≥${dump.hardware.deviceMemoryGB} GB (approx)`
+      ? `${dump.hardware.deviceMemoryGB}–${dump.hardware.deviceMemoryGB * 2} GB (browser reports power-of-2 floor)`
       : 'unknown';
     lines.push(`CPU threads:   ${dump.hardware.hardwareConcurrency}    Memory: ${memText}`);
     lines.push(`Max texture:   ${dump.hardware.maxTextureSize}`);
