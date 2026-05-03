@@ -283,10 +283,10 @@ html.theme-synthwave {
     --white-86: rgba(255, 228, 245, 0.86);
 
     /* Theme category colors */
-    --category-location-overhaul: var(--secondary);
-    --category-location-overhaul-glow: var(--secondary-40);
-    --category-new-location: var(--tertiary);
-    --category-new-location-glow: var(--tertiary-40);
+    --category-location-overhaul: var(--tertiary);
+    --category-location-overhaul-glow: var(--tertiary-40);
+    --category-new-location: var(--secondary);
+    --category-new-location-glow: var(--secondary-40);
     --category-other: var(--gray);
     --category-other-glow: var(--gray-40);
 
