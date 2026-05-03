@@ -656,6 +656,7 @@ async function initMap() {
   // ── Showcase Options modal ──────────────────────────────────────────────
   const showcaseModal           = document.getElementById("showcase-modal");
   const showcaseStartBtn        = document.getElementById("showcase-start-btn");
+  const showcaseResetBtn        = document.getElementById("showcase-reset-btn");
   const showcaseCancelBtn       = document.getElementById("close-showcase-modal");
   const showcaseThemeSelect     = document.getElementById("showcase-theme");
   const showcaseShowPinsCb      = document.getElementById("showcase-show-pins");
@@ -773,6 +774,20 @@ async function initMap() {
   });
 
   showcaseCancelBtn?.addEventListener("click", closeShowcaseModal);
+
+  // Reset rewinds the form inputs to SHOWCASE_DEFAULTS and persists them
+  // immediately. Closing the modal (or hitting Cancel) after a Reset still
+  // leaves defaults as the saved preference, so "Reset" reads as a complete
+  // "wipe to defaults" action rather than a Start-gated form reset.
+  showcaseResetBtn?.addEventListener("click", () => {
+    if (showcaseThemeSelect)    showcaseThemeSelect.value      = SHOWCASE_DEFAULTS.theme;
+    if (showcaseShowPinsCb)     showcaseShowPinsCb.checked     = SHOWCASE_DEFAULTS.showPins;
+    if (showcaseRevealLayersCb) showcaseRevealLayersCb.checked = SHOWCASE_DEFAULTS.revealLayers;
+    if (showcaseDistrictsCb)    showcaseDistrictsCb.checked    = SHOWCASE_DEFAULTS.districts;
+    if (showcaseAudioCb)        showcaseAudioCb.checked        = SHOWCASE_DEFAULTS.audio;
+    if (showcaseLoopCb)         showcaseLoopCb.checked         = SHOWCASE_DEFAULTS.loop;
+    try { localStorage.setItem(NCZ.SHOWCASE_OPTIONS_KEY, JSON.stringify(SHOWCASE_DEFAULTS)); } catch (_) {}
+  });
 
   document.addEventListener("keydown", e => {
     if (e.key === "Escape" && flyoverBtn.classList.contains("active")) exitShowcase();

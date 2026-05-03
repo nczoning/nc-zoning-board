@@ -1919,6 +1919,7 @@ body::before {
     flex: 3;
 }
 
+.showcase-modal-actions > #showcase-reset-btn,
 .showcase-modal-actions > #close-showcase-modal {
     flex: 1;
     border-color: var(--gray);
