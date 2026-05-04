@@ -66,7 +66,9 @@ Where `3333` is the game ID for Cyberpunk 2077.
 The Nexus API silently truncates `modsByUid` responses for large batches:
 
 - **Fixed 2026-03-13:** If the `count` variable is omitted, only the first 20 results are returned regardless of UID count. Mitigation: always pass `count: validIds.length`.
-- **Fixed 2026-05-04:** Even with `count` set correctly, batches of ~250 UIDs return only a partial subset of nodes — manifesting as missing pin thumbnails on first page load that "self-heal" on subsequent reloads (incremental cache fills the gaps as each retry sends a smaller batch). Mitigation: chunk into 50-UID batches before dispatch. A `Thumbnails: chunk returned X/Y nodes` warning is logged whenever any chunk still comes back short, so further regressions are visible.
+- **Fixed 2026-05-04:** Even with `count` set correctly, batches of ~250 UIDs return only a partial subset of nodes — manifesting as missing pin thumbnails on first page load that "self-heal" on subsequent reloads (incremental cache fills the gaps as each retry sends a smaller batch). Mitigation: chunk into 50-UID batches before dispatch. Live testing showed *residual* per-UID flakiness even at chunk sizes well below 50, so each chunk also gets a single in-flight retry of just the dropped UIDs before the result is returned. Two warnings are logged for visibility:
+  - `Thumbnails: chunk dropped X/Y UIDs (...); retrying` — first attempt dropped some UIDs; will be retried automatically.
+  - `Thumbnails: N UIDs still missing after retry (...); likely deleted or hidden on Nexus` — both attempts failed for these UIDs. Persistent appearance of the same UIDs across reloads indicates a stale `nexus_id` in `data/locations/*.json` (mod hidden or deleted).
 
 **Caching:**
 - Cache key: `nc_nexus_thumbs`

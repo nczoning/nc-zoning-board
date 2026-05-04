@@ -60,7 +60,7 @@ NCZ.fetchNexusThumbnailsFromApi = async function (validIds) {
         }
     }`;
 
-  const fetchChunk = async (chunkIds) => {
+  const postChunk = async (chunkIds) => {
     const uids = chunkIds.map((id) => NCZ.toNexusUid(id));
     try {
       const res = await fetch(NCZ.NEXUS_GQL_ENDPOINT, {
@@ -70,9 +70,6 @@ NCZ.fetchNexusThumbnailsFromApi = async function (validIds) {
       });
       const json = await res.json();
       const nodes = json?.data?.modsByUid?.nodes || [];
-      if (nodes.length < chunkIds.length) {
-        console.warn(`Thumbnails: chunk returned ${nodes.length}/${chunkIds.length} nodes`);
-      }
       const thumbMap = {};
       nodes.forEach((node) => {
         thumbMap[String(node.modId)] = {
@@ -86,6 +83,27 @@ NCZ.fetchNexusThumbnailsFromApi = async function (validIds) {
       console.warn("Failed to fetch Nexus thumbnails chunk:", err);
       return {};
     }
+  };
+
+  // Single in-flight retry for UIDs the API silently dropped — covers the
+  // residual per-UID flakiness that batching alone doesn't fix. UIDs still
+  // missing after the retry are likely deleted/hidden mods on Nexus.
+  const fetchChunk = async (chunkIds) => {
+    const firstResult = await postChunk(chunkIds);
+    const missingIds = chunkIds.filter((id) => !firstResult[id]);
+    if (missingIds.length === 0) return firstResult;
+
+    console.warn(
+      `Thumbnails: chunk dropped ${missingIds.length}/${chunkIds.length} UIDs (${missingIds.join(", ")}); retrying`
+    );
+    const retryResult = await postChunk(missingIds);
+    const stillMissing = missingIds.filter((id) => !retryResult[id]);
+    if (stillMissing.length > 0) {
+      console.warn(
+        `Thumbnails: ${stillMissing.length} UIDs still missing after retry (${stillMissing.join(", ")}); likely deleted or hidden on Nexus`
+      );
+    }
+    return { ...firstResult, ...retryResult };
   };
 
   const results = await Promise.all(chunks.map(fetchChunk));
