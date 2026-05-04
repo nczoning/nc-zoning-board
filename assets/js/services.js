@@ -38,7 +38,17 @@ NCZ.fetchNexusThumbnails = async function (nexusIds) {
 };
 
 NCZ.fetchNexusThumbnailsFromApi = async function (validIds) {
-  const uids = validIds.map((id) => NCZ.toNexusUid(id));
+  if (validIds.length === 0) return {};
+
+  // Chunk the request — large modsByUid calls silently return a partial subset
+  // of nodes, leaving some pins without thumbnails on first load. Mirrors the
+  // pagination already used in fetchNexusTaggedMods.
+  const CHUNK = NCZ.NEXUS_BATCH_SIZE;
+  const chunks = [];
+  for (let i = 0; i < validIds.length; i += CHUNK) {
+    chunks.push(validIds.slice(i, i + CHUNK));
+  }
+
   const query = `query modsByUid($uids: [ID!]!, $count: Int!) {
         modsByUid(uids: $uids, count: $count) {
             nodes {
@@ -50,27 +60,54 @@ NCZ.fetchNexusThumbnailsFromApi = async function (validIds) {
         }
     }`;
 
-  try {
-    const res = await fetch(NCZ.NEXUS_GQL_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, variables: { uids, count: validIds.length } }),
-    });
-    const json = await res.json();
-    const nodes = json?.data?.modsByUid?.nodes || [];
-    const thumbMap = {};
-    nodes.forEach((node) => {
-      thumbMap[String(node.modId)] = {
-        pictureUrl: node.pictureUrl,
-        thumbnailUrl: node.thumbnailUrl,
-        updatedAt: node.updatedAt || null,
-      };
-    });
-    return thumbMap;
-  } catch (err) {
-    console.warn("Failed to fetch Nexus thumbnails:", err);
-    return {};
-  }
+  const postChunk = async (chunkIds) => {
+    const uids = chunkIds.map((id) => NCZ.toNexusUid(id));
+    try {
+      const res = await fetch(NCZ.NEXUS_GQL_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, variables: { uids, count: chunkIds.length } }),
+      });
+      const json = await res.json();
+      const nodes = json?.data?.modsByUid?.nodes || [];
+      const thumbMap = {};
+      nodes.forEach((node) => {
+        thumbMap[String(node.modId)] = {
+          pictureUrl: node.pictureUrl,
+          thumbnailUrl: node.thumbnailUrl,
+          updatedAt: node.updatedAt || null,
+        };
+      });
+      return thumbMap;
+    } catch (err) {
+      console.warn("Failed to fetch Nexus thumbnails chunk:", err);
+      return {};
+    }
+  };
+
+  // Single in-flight retry for UIDs the API silently dropped — covers the
+  // residual per-UID flakiness that batching alone doesn't fix. UIDs still
+  // missing after the retry are likely deleted/hidden mods on Nexus.
+  const fetchChunk = async (chunkIds) => {
+    const firstResult = await postChunk(chunkIds);
+    const missingIds = chunkIds.filter((id) => !firstResult[id]);
+    if (missingIds.length === 0) return firstResult;
+
+    console.warn(
+      `Thumbnails: chunk dropped ${missingIds.length}/${chunkIds.length} UIDs (${missingIds.join(", ")}); retrying`
+    );
+    const retryResult = await postChunk(missingIds);
+    const stillMissing = missingIds.filter((id) => !retryResult[id]);
+    if (stillMissing.length > 0) {
+      console.warn(
+        `Thumbnails: ${stillMissing.length} UIDs still missing after retry (${stillMissing.join(", ")}); likely deleted or hidden on Nexus`
+      );
+    }
+    return { ...firstResult, ...retryResult };
+  };
+
+  const results = await Promise.all(chunks.map(fetchChunk));
+  return Object.assign({}, ...results);
 };
 
 // Fetch all mods tagged "NCZoning" from Nexus V2 GraphQL, parse their BBCode blocks,
