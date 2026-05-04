@@ -59,11 +59,14 @@ Where `3333` is the game ID for Cyberpunk 2077.
 - `thumbnailUrl` — URL to a thumbnail version of the featured image
 - `updatedAt` — ISO 8601 timestamp of the mod's last update on Nexus; used to drive the recently-updated badge
 
-**Pagination:** None. All UIDs are sent in a single request.
+**Pagination:** Chunked into batches of `NCZ.NEXUS_BATCH_SIZE` (50), dispatched in parallel via `Promise.all`. Single large requests are silently truncated by the API even when `count` is set correctly (see Silent Result Cap below).
 
-**⚠️ Silent Result Cap (Fixed 2026-03-13):**
+**⚠️ Silent Result Cap:**
 
-If the `count` variable is omitted or not explicitly passed, the Nexus API silently returns only the first 20 results regardless of how many UIDs you request. This caused a bug where only 20 mod thumbnails would load. **Always pass `count: validIds.length`** to ensure all requested images are returned.
+The Nexus API silently truncates `modsByUid` responses for large batches:
+
+- **Fixed 2026-03-13:** If the `count` variable is omitted, only the first 20 results are returned regardless of UID count. Mitigation: always pass `count: validIds.length`.
+- **Fixed 2026-05-04:** Even with `count` set correctly, batches of ~250 UIDs return only a partial subset of nodes — manifesting as missing pin thumbnails on first page load that "self-heal" on subsequent reloads (incremental cache fills the gaps as each retry sends a smaller batch). Mitigation: chunk into 50-UID batches before dispatch. A `Thumbnails: chunk returned X/Y nodes` warning is logged whenever any chunk still comes back short, so further regressions are visible.
 
 **Caching:**
 - Cache key: `nc_nexus_thumbs`

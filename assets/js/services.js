@@ -38,7 +38,17 @@ NCZ.fetchNexusThumbnails = async function (nexusIds) {
 };
 
 NCZ.fetchNexusThumbnailsFromApi = async function (validIds) {
-  const uids = validIds.map((id) => NCZ.toNexusUid(id));
+  if (validIds.length === 0) return {};
+
+  // Chunk the request — large modsByUid calls silently return a partial subset
+  // of nodes, leaving some pins without thumbnails on first load. Mirrors the
+  // pagination already used in fetchNexusTaggedMods.
+  const CHUNK = NCZ.NEXUS_BATCH_SIZE;
+  const chunks = [];
+  for (let i = 0; i < validIds.length; i += CHUNK) {
+    chunks.push(validIds.slice(i, i + CHUNK));
+  }
+
   const query = `query modsByUid($uids: [ID!]!, $count: Int!) {
         modsByUid(uids: $uids, count: $count) {
             nodes {
@@ -50,27 +60,36 @@ NCZ.fetchNexusThumbnailsFromApi = async function (validIds) {
         }
     }`;
 
-  try {
-    const res = await fetch(NCZ.NEXUS_GQL_ENDPOINT, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, variables: { uids, count: validIds.length } }),
-    });
-    const json = await res.json();
-    const nodes = json?.data?.modsByUid?.nodes || [];
-    const thumbMap = {};
-    nodes.forEach((node) => {
-      thumbMap[String(node.modId)] = {
-        pictureUrl: node.pictureUrl,
-        thumbnailUrl: node.thumbnailUrl,
-        updatedAt: node.updatedAt || null,
-      };
-    });
-    return thumbMap;
-  } catch (err) {
-    console.warn("Failed to fetch Nexus thumbnails:", err);
-    return {};
-  }
+  const fetchChunk = async (chunkIds) => {
+    const uids = chunkIds.map((id) => NCZ.toNexusUid(id));
+    try {
+      const res = await fetch(NCZ.NEXUS_GQL_ENDPOINT, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, variables: { uids, count: chunkIds.length } }),
+      });
+      const json = await res.json();
+      const nodes = json?.data?.modsByUid?.nodes || [];
+      if (nodes.length < chunkIds.length) {
+        console.warn(`Thumbnails: chunk returned ${nodes.length}/${chunkIds.length} nodes`);
+      }
+      const thumbMap = {};
+      nodes.forEach((node) => {
+        thumbMap[String(node.modId)] = {
+          pictureUrl: node.pictureUrl,
+          thumbnailUrl: node.thumbnailUrl,
+          updatedAt: node.updatedAt || null,
+        };
+      });
+      return thumbMap;
+    } catch (err) {
+      console.warn("Failed to fetch Nexus thumbnails chunk:", err);
+      return {};
+    }
+  };
+
+  const results = await Promise.all(chunks.map(fetchChunk));
+  return Object.assign({}, ...results);
 };
 
 // Fetch all mods tagged "NCZoning" from Nexus V2 GraphQL, parse their BBCode blocks,
