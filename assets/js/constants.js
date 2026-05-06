@@ -175,6 +175,14 @@ NCZ.DISTRICT_LINE_OPACITY   = 0.85;
 
 // ── Three.js 3D scene ──────────────────────────────────────────────────────────
 
+// WebGLRenderer pixel-ratio cap. GPU fragment cost scales as DPR², so on
+// high-DPI displays (Retina 2.0, 4K@200% 2.0, 1440p@200% 2.0, etc.) the
+// uncapped path costs 78%+ more shader work than 1.5 for a soft-edge difference
+// the user is unlikely to notice — pin/popup/tooltip text is unaffected because
+// CSS2DRenderer rasterises HTML at the real device DPR regardless. The cap is a
+// no-op for everyone at DPR ≤ 1.5, so most desktops see zero change.
+NCZ.MAX_DEVICE_PIXEL_RATIO = 1.5;
+
 // Camera — orthographic projection, positioned above world centre looking straight down
 NCZ.CAMERA_NEAR     = -20000;           // near plane behind the camera (orthographic — not a clip distance)
 NCZ.CAMERA_FAR      =  20000;           // far plane in front; sized for max-tilt + max-pan worst case (~23k) with margin

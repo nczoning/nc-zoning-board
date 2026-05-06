@@ -27,6 +27,18 @@
     position: relative;
 }
 
+/* Force the WebGLRenderer canvas to fill its container.
+   Three.js is initialised with `setSize(w, h, false)` (updateStyle:false), so
+   it never writes inline width/height onto <canvas>. Without this rule, the
+   canvas — a replaced element — falls back to its intrinsic dimensions (the
+   drawingBuffer pixel size, = clientSize × devicePixelRatio), which overflows
+   the container on any DPR > 1.0 and shifts the WebGL scene off the CSS2D pin
+   overlay. See three-scene.js:225 for the renderer setup. */
+#map-3d > canvas {
+    width: 100%;
+    height: 100%;
+}
+
 /* Overlay toggles — floats over the map, above the view toggle */
 #overlay-controls {
     position: absolute;
