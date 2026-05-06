@@ -9,18 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
-#### Fixed pin/canvas misalignment on fractional DPR + capped renderer pixel ratio at 1.5
+#### Pin/canvas alignment on fractional DPR + capped renderer DPR at 1.5
 
-Two related fixes for users on non-1.0 device-pixel-ratio displays — Windows scaling, Retina, 4K@200%, etc.
-
-- **Pins now line up with the WebGL scene on any DPR.** The `WebGLRenderer` is initialised with `setSize(w, h, false)` (`updateStyle:false`), which deliberately avoids inline `style.width` / `style.height` on the `<canvas>`. The intent — documented in [`three-scene.js`](assets/js/three-scene.js) — was for the canvas to inherit `width: 100% / height: 100%` from CSS, but that rule was missing from [`style.css`](assets/css/style.css). With no explicit dimensions, an absolutely-positioned **replaced element** like `<canvas>` falls back to its intrinsic size (the `width`/`height` HTML attributes, which Three.js sets to `floor(clientWidth × DPR) × floor(clientHeight × DPR)`) — overflowing the container by ~25% at DPR 1.25, ~50% at DPR 1.5, ~100% at DPR 2.0. The `CSS2DRenderer` overlay (a `<div>`, not replaced) correctly fills the container, so pins projected to CSS-pixel positions sat dozens to hundreds of pixels off the buildings/terrain underneath. New `#map-3d > canvas { width: 100%; height: 100% }` rule restores the intended sizing — the GPU still renders at the higher drawingBuffer resolution, the browser scales the output to the container, and the two layers align.
-- **Renderer pixel ratio capped at `NCZ.MAX_DEVICE_PIXEL_RATIO = 1.5`.** GPU fragment cost scales as DPR², so the uncapped path on Retina (DPR 2.0) costs 78% more shader work than capping at 1.5 for a soft-edge difference most users won't notice. CSS2DRenderer rasterises HTML at the real device DPR regardless, so pin labels, popup text, and tooltips remain pixel-perfect — only the WebGL scene (terrain, buildings, roads, metro, district lines) is downsampled. No-op for anyone at DPR ≤ 1.5, which is most desktops. The debug-info dump's "Renderer DPR" line now reports the capped value while "Display ... DPR" still reports the raw `window.devicePixelRatio`, so a single dump shows whether the cap is active.
-
-The first fix is purely a correctness bug (visible on the work-laptop dump at DPR 1.25 and 1.5); the second is a free perf win on top, since both touch the same renderer-init path.
-
-New constant in [`constants.js`](assets/js/constants.js):
-
-- `NCZ.MAX_DEVICE_PIXEL_RATIO` (1.5) — clamp passed to `renderer.setPixelRatio()`. Re-tunable without code changes if a quality preset wants to push it lower (Low) or higher (High).
+- Pins drifted off the WebGL scene on any DPR > 1.0 (~25% off at 1.25, ~50% at 1.5). The `<canvas>` was missing a `width:100%; height:100%` CSS rule, so it fell back to its intrinsic drawingBuffer size while the `CSS2DRenderer` overlay correctly filled the container. Added the missing rule in [`style.css`](assets/css/style.css).
+- Capped `renderer.setPixelRatio` at `NCZ.MAX_DEVICE_PIXEL_RATIO = 1.5`. Saves ~44% GPU pixel work on Retina / 4K@200% displays; no-op for anyone at DPR ≤ 1.5.
 
 #### Object3D naming for Needle Inspector hierarchy
 
