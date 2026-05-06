@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Pin/canvas alignment on fractional DPR + capped renderer DPR at 1.5
+
+- Pins drifted off the WebGL scene on any DPR > 1.0 (~25% off at 1.25, ~50% at 1.5). The `<canvas>` was missing a `width:100%; height:100%` CSS rule, so it fell back to its intrinsic drawingBuffer size while the `CSS2DRenderer` overlay correctly filled the container. Added the missing rule in [`style.css`](assets/css/style.css).
+- Capped `renderer.setPixelRatio` at `NCZ.MAX_DEVICE_PIXEL_RATIO = 1.5`. Saves ~44% GPU pixel work on Retina / 4K@200% displays; no-op for anyone at DPR ≤ 1.5.
+
 #### Object3D naming for Needle Inspector hierarchy
 
 Every Object3D in the scene now has a `.name` so the Needle Inspector reads as English (`buildings-westbrook`, `landmark-3dmap_obelisk`, `pin: Crystal Palace Resort`) instead of Three.js's auto-generated `Group_335` / `mesh_0`. Pure metadata — no behaviour change.

@@ -200,8 +200,11 @@ const ThreeScene = (() => {
     loadingFillEl = container.querySelector('.scene-loading__fill');
 
     // Renderer — pass updateStyle:false so Three.js never writes px dimensions
-    // onto the canvas element. The canvas is kept at width/height:100% in CSS
-    // so it always fills #map-3d without ever pushing surrounding layout elements.
+    // onto the canvas element. The canvas is kept at width/height:100% via the
+    // `#map-3d > canvas` rule in style.css so it always fills #map-3d without
+    // pushing surrounding layout elements (and without falling back to its
+    // intrinsic drawingBuffer size, which would misalign with the CSS2D pin
+    // overlay on any DPR > 1.0).
     // logarithmicDepthBuffer: redistributes depth precision logarithmically
     // across the [near, far] frustum. Mitigates Z-fighting on near-coplanar
     // surfaces — block-style buildings sharing walls, water/terrain at the
@@ -222,7 +225,10 @@ const ThreeScene = (() => {
     // have shifted in past major versions.
     THREE.ColorManagement.enabled = true;
     renderer.outputColorSpace     = THREE.SRGBColorSpace;
-    renderer.setPixelRatio(window.devicePixelRatio);
+    // Cap effective DPR — see NCZ.MAX_DEVICE_PIXEL_RATIO. The debug-dump
+    // "Renderer DPR" line shows the capped value; "Display ... DPR" still shows
+    // the raw window.devicePixelRatio, so the two diverge for capped users.
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, NCZ.MAX_DEVICE_PIXEL_RATIO));
     renderer.setSize(container.clientWidth, container.clientHeight, false);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
