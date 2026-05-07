@@ -26,7 +26,7 @@ Cloudflare Pages runs `node scripts/build_mods.js` on every push to `dev` and de
 
 ## Contributing to a phase
 
-The migration is structured as 7 phases with clear goals and verification criteria. See [`three-js-migration-plan.md`](three-js-migration-plan.md) for the phase breakdown.
+The migration is structured as discrete phases with clear goals and verification criteria. Current phase-by-phase work is tracked in the [GitHub Project](https://github.com/users/spuddeh/projects/1) under the **WebGPU Migration** stream.
 
 ### Starting a new phase
 
@@ -217,7 +217,7 @@ When all 7 phases are complete and verified on `dev.nczoning.net`:
 
 ## Related documentation
 
-- [`three-js-migration-plan.md`](three-js-migration-plan.md) — 7-phase plan with goals and checklists
+- [GitHub Project](https://github.com/users/spuddeh/projects/1) — current phase-by-phase work, organised by Stream (WebGPU Migration / Three.js Parity / Roadmap / Bugs) and Release (Schema map / Post schema map / Future / Ongoing)
 - [`three-js-scene.md`](three-js-scene.md) — Current implementation reference
 - [`coordinate-system-3d.md`](coordinate-system-3d.md) — CET/GLB/instance texture coordinate details
 - [`3dmap-asset-reference.md`](3dmap-asset-reference.md) — Game asset inventory and transform chains

@@ -9,10 +9,9 @@ Style for both views shared via [`assets/css/style.css`](../assets/css/style.css
 Cross-view glue (sidebar, filter, cluster panel, deep-link) lives in
 [`assets/js/app.js`](../assets/js/app.js).
 
-For the *plan* of what's done vs. pending vs. open for discussion, see
-[`three-markers-leaflet-parity.md`](three-markers-leaflet-parity.md). For 3D
-scene infrastructure (renderer, terrain, buildings, camera), see
-[`three-js-scene.md`](three-js-scene.md).
+For pending parity work and open questions, see the [GitHub Project](https://github.com/users/spuddeh/projects/1)
+under the **Three.js Parity** stream. For 3D scene infrastructure (renderer,
+terrain, buildings, camera), see [`three-js-scene.md`](three-js-scene.md).
 
 ## Public API
 
@@ -193,10 +192,6 @@ between the two containers in `switchView`).
 
 ## Why dual-canvas (and not single-canvas like AtlasForge)
 
-Discussed in detail in the [parity plan §B0 prelude](three-markers-leaflet-parity.md)
-and [`atlasforge-architecture-comparison.md`](../wiki/sources/atlasforge-architecture-comparison.md)
-(Obsidian-only).
-
 Short version: AtlasForge runs Three.js inside a MapLibre `CustomLayerInterface`
 (single GL context). That works when 2D and 3D fuse into one view. Our product
 treats SAT and SCHEMA as **distinct visual experiences** — the schematic 3D
@@ -217,6 +212,6 @@ from sharing the renderer.
 ## Related documents
 
 - [three-js-scene.md](three-js-scene.md) — 3D scene infrastructure (renderer, GLBs, camera, lighting, shadows). ThreeMarkers attaches to it.
-- [three-markers-leaflet-parity.md](three-markers-leaflet-parity.md) — living plan: what's done, pending, won't translate, open for discussion.
+- [GitHub Project](https://github.com/users/spuddeh/projects/1) — current pending parity work, tracked under the Three.js Parity stream.
 - [coordinate-system-3d.md](coordinate-system-3d.md) — CET ↔ Three.js coordinate spaces, including the validated CET-Z = terrain-GLB-Y finding that lets `pinYFor()` work without a raycast.
 - [architecture.md](architecture.md) — repo-wide file structure and module loading order.

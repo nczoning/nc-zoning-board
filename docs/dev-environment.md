@@ -127,6 +127,6 @@ npx serve .
 
 ## Relationship to the Three.js Migration
 
-The `dev` branch exists specifically to support the Three.js 3D map migration (documented in [`three-js-migration-plan.md`](three-js-migration-plan.md)). Each phase of the migration ships as a PR into `dev`. The full feature will not touch `main` until all phases are complete and verified.
+The `dev` branch exists specifically to support the Three.js 3D map migration. Each phase ships as a PR into `dev`. The full feature will not touch `main` until all phases are complete and verified.
 
-Current phase status is tracked in [`three-js-scene.md`](three-js-scene.md).
+Current phase-by-phase work is tracked in the [GitHub Project](https://github.com/users/spuddeh/projects/1) — see the **WebGPU Migration** and **Three.js Parity** streams. For the current implementation reference see [`three-js-scene.md`](three-js-scene.md).
