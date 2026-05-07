@@ -69,7 +69,7 @@ window.NCZ.ThreeMarkers = {
 
 ### Import map
 
-Three.js is loaded via an import map in `index.html`, matching the pattern used in `scripts/render_terrain_3d.html`:
+Three.js is loaded via an import map in `index.html`:
 
 ```html
 <script type="importmap">

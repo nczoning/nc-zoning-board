@@ -78,7 +78,6 @@ Create the phase branch off `dev`, not `main`. This picks up all completed prior
 Main receives regular updates that dev needs:
 
 - **New location JSONs** from the auto-PR submission workflow (mod authors adding locations)
-- **Coordinate backfills** from `apply-z-from-project.yml` daily
 - **Bugfixes** to the Leaflet satellite view
 - **Documentation updates**
 

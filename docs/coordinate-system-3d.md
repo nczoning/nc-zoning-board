@@ -65,7 +65,7 @@ All five samples agree within ±6m. The delta is consistent with:
 
 A previous version of this doc listed an "elevation gap" of 7–23m between CET Z and terrain GLB Y, derived from samples at the Pier, Koi Fish, and Nash Hideout. Those readings were taken on top of buildings/platforms, not on bare terrain — they measured infrastructure height, not a coordinate-space mismatch. Findings retracted.
 
-See: `docs/cet-z-terrain-experiment.md` (the validation experiment), `docs/cet-z-terrain-experiment.csv` (raw data).
+Validated 2026-05-01 by an in-game teleport experiment to six bare-terrain points across the map; all five usable samples landed within ±6m of terrain GLB Y, mean delta −0.17m. CET Z and terrain GLB Y are in the same coordinate space — `pinYFor(cetZ)` works without a raycast.
 
 ### Building Rotation
 Buildings have per-instance quaternion rotations (Block 2 of instance texture). All four components (qx, qy, qz, qw) are kept — pitch and roll are used by the game shader to form non-upright primitives (wedges, ramps, bridges, gap-fillers), not just upright buildings.

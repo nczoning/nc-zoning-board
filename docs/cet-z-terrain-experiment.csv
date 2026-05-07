@@ -1,7 +1,0 @@
-id,location_label,target_x,target_y,teleport_z,terrain_glb_y,recorded_x,recorded_y,recorded_z,recorded_yaw,landed_on,notes
-1,Eastern badlands,3500,-1500,150,145.40,3499.9968,-1500.0066,112.4001,0.0000,terrain,
-2,Northeast outskirts,1500,5000,244,239.11,1500.0000,5000.0239,181.4940,0.0000,terrain,
-3,South ranchland (possible mountain),-1000,-6000,513,508.14,-1000.0076,-5999.9839,106.1440,0.0000,terrain,Estimated teleport height was way off
-4,Charter Hill terrain,-3000,3500,69,63.76,-3000.0000,3500.0000,0.7233,0.0000,terrain,Near oil fields
-5,Coastal desert NW,-500,5500,88,83.14,,,,,clipped,Fell through the world. Actual Z is about 243.41
-6,Eastern oilfield flats,4000,0,123,117.87,,0.0023,92.9343,14.6001,clipped,"In some kind of structure, not sure. But not on the terrain which looks above me"
