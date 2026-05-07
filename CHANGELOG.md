@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Render-on-demand
+
+- The 3D scene's rAF loop now runs only when something has actually changed (camera moved, damping in progress, sun/theme/layer/material updated, pins added) instead of unconditionally re-rendering every frame. Idle map views cost zero GPU/CPU; saves battery on every machine and recovers headroom on weaker iGPUs (Intel UHD without Iris Xe was the worst case). Implemented in [`three-scene.js`](assets/js/three-scene.js) via a new `requestRender()` entrypoint hooked into every state-mutating helper, with a `_suppressed` flag that prevents in-flight color tweens from racing the flyover camera.
+- ThreeMarkers added a private `_redraw()` helper that forwards to `ThreeScene.requestRender()` and is called from every pin/popup/cluster state mutation, plus the camera fly-tween (which mutates camera position/zoom directly without firing OrbitControls 'change'). The fly-tween now self-extends the loop until completion.
+
 #### Pin/canvas alignment on fractional DPR + capped renderer DPR at 1.5
 
 - Pins drifted off the WebGL scene on any DPR > 1.0 (~25% off at 1.25, ~50% at 1.5). The `<canvas>` was missing a `width:100%; height:100%` CSS rule, so it fell back to its intrinsic drawingBuffer size while the `CSS2DRenderer` overlay correctly filled the container. Added the missing rule in [`style.css`](assets/css/style.css).

@@ -327,6 +327,7 @@ const ThreeScene = (() => {
       if (metroShader) metroShader.uniforms.uMetroZoom.value = camera.zoom;
       updateShadowFrustum();
       updateScaleBar();
+      requestRender();
     });
 
     // Pan bounds — clamp controls.target so the camera can't drift
@@ -374,6 +375,7 @@ const ThreeScene = (() => {
       t.z += dz;
       camera.position.x += dx;
       camera.position.z += dz;
+      requestRender();
     });
 
     window.addEventListener('resize', onResize);
@@ -410,6 +412,7 @@ const ThreeScene = (() => {
     }
     NCZ.ThreeMarkers?.onResize?.(w, h);
     updateScaleBar();
+    requestRender();
   }
 
   // ── Layer registry ─────────────────────────────────────────────────────
@@ -433,6 +436,7 @@ const ThreeScene = (() => {
     if (name === 'districts') {
       if (layers.districts) layers.districts.visible = visible;
       if (visible) updateDistrictZoom();
+      requestRender();
       return;
     }
     if (name === 'shadows') { setShadowsEnabled(visible); return; }
@@ -440,9 +444,10 @@ const ThreeScene = (() => {
     // pass owned by ThreeMarkers, gated by the schema camera's Three.js
     // Object3D.layers mask. Routing it through here keeps the overlay-controls
     // panel's [data-overlay] handler uniform across every toggle.
-    if (name === 'pins') { NCZ.ThreeMarkers?.setOverlayVisible?.(visible); return; }
+    if (name === 'pins') { NCZ.ThreeMarkers?.setOverlayVisible?.(visible); requestRender(); return; }
     if (name === 'buildings' && layers.landmarks) layers.landmarks.visible = visible;
     if (layers[name]) layers[name].visible = visible;
+    requestRender();
   }
 
   function updateDistrictZoom() {
@@ -536,6 +541,7 @@ const ThreeScene = (() => {
       freezeStatic(terrainScene);
       freezeStatic(waterScene);
       freezeStatic(cliffsScene);
+      requestRender();
 
       // Fit camera frustum to the terrain bounding box. Stored at module
       // scope so the pan-bound listener can clamp against terrain extent
@@ -680,6 +686,7 @@ const ThreeScene = (() => {
       layers.metro = metroGroup;
 
       scene.add(roadsGroup, metroGroup);
+      requestRender();
       freezeStatic(roadsGroup);
       freezeStatic(metroGroup);
       stepProgress(); // roads done
@@ -734,6 +741,7 @@ const ThreeScene = (() => {
       _districtSub   = subGroup;
       layers.districts = parent;
       scene.add(parent);
+      requestRender();
       freezeStatic(parent);
       stepProgress(); // districts done
     } catch (err) {
@@ -814,6 +822,7 @@ const ThreeScene = (() => {
 
       layers.landmarks = group;
       scene.add(group);
+      requestRender();
       freezeStatic(group);
       console.log(`[NCZ] Landmarks: ${LANDMARK_META.length} placed`);
       stepProgress();
@@ -898,6 +907,7 @@ const ThreeScene = (() => {
 
       layers.buildings = group;
       scene.add(group);
+      requestRender();
       freezeStatic(group);
       console.log(`[NCZ] Buildings: ${DISTRICT_META.length} districts loaded`);
     } catch (err) {
@@ -1101,10 +1111,27 @@ const ThreeScene = (() => {
     console.log('  NCZ.ThreeScene.dumpDebugInfo()       → full diagnostic snapshot (also bound to the "Copy debug info" button)');
   }
 
+  // Render-on-demand: rAF runs only when something has changed (camera moved,
+  // damping in progress, sun/theme/layer/material updated, pins added, or a
+  // module explicitly held the loop open via setContinuousRender). Idle map
+  // views cost zero GPU/CPU — the previous unconditional rAF chewed a full
+  // frame's worth of work even when the scene was identical to the last one.
+  // Triggered via requestRender(); any state mutation that affects pixels
+  // calls it. Damping continuation is detected from controls.update()'s
+  // return value (true = state still interpolating).
+  //
+  // _suppressed — flyover stops the schema loop and runs its own rAF that
+  // calls renderFrame(flyCamera) directly. Beat-driven transitionToColors
+  // still fires requestRender during the flyover, which would otherwise
+  // resurrect the schema renderLoop and race the flyover camera. The flag
+  // gates requestRender so the flyover's own loop stays the sole renderer.
+  let _continuousRenderRefs = 0;
+  let _suppressed = false;
+
   function renderLoop() {
-    animationId = requestAnimationFrame(renderLoop);
+    animationId = null;
     if (stats) stats.begin();
-    controls.update();
+    const dampingActive = controls.update();
     renderer.render(scene, camera);
     NCZ.ThreeMarkers?.render?.();
     if (stats) {
@@ -1112,16 +1139,18 @@ const ThreeScene = (() => {
       statsTrisPanel .update(renderer.info.render.triangles/1000, 2000);
       stats.end();
     }
-    // Frame-time sampling for dumpDebugInfo() — runs whether stats panel is on or not.
+    // Frame-time sampling for dumpDebugInfo(). Cap dt so a long idle gap
+    // between render-on-demand frames doesn't poison the rolling average —
+    // anything over 1s is treated as "loop was paused, ignore this delta".
     const _now = performance.now();
     if (_lastFrameTime) {
       const dt = _now - _lastFrameTime;
-      _frameTimes.push(dt);
-      _frameTimeSum += dt;
-      // Evict oldest while doing so still leaves ≥ FRAME_SAMPLE_DURATION_MS of data —
-      // keeps exactly the time-window we want, never under-shoots at the boundary.
-      while (_frameTimes.length > 1 && _frameTimeSum - _frameTimes[0] > FRAME_SAMPLE_DURATION_MS) {
-        _frameTimeSum -= _frameTimes.shift();
+      if (dt < 1000) {
+        _frameTimes.push(dt);
+        _frameTimeSum += dt;
+        while (_frameTimes.length > 1 && _frameTimeSum - _frameTimes[0] > FRAME_SAMPLE_DURATION_MS) {
+          _frameTimeSum -= _frameTimes.shift();
+        }
       }
     }
     _lastFrameTime = _now;
@@ -1133,17 +1162,45 @@ const ThreeScene = (() => {
       const tilt = Math.round(90 - polarDegrees);
       tiltDisplay.textContent = `Tilt: ${tilt}°`;
     }
+    if (dampingActive || _continuousRenderRefs > 0) requestRender();
   }
 
+  // Schedule one frame. Idempotent — multiple calls within the same tick
+  // collapse to a single rAF. Hook into any state change that affects pixels.
+  function requestRender() {
+    if (_suppressed) return;
+    if (animationId !== null) return;
+    if (!renderer || !scene || !camera) return;
+    animationId = requestAnimationFrame(renderLoop);
+  }
+
+  // Hold the loop open across an arbitrary number of frames. Counter-based so
+  // multiple animations (theme dissolve + sun arc + beat pulse) compose cleanly
+  // — each pairs a true/false call. Flyover doesn't use this; it bypasses the
+  // schema renderLoop entirely with its own rAF + renderFrame(flyCamera) path.
+  function setContinuousRender(active) {
+    _continuousRenderRefs = Math.max(0, _continuousRenderRefs + (active ? 1 : -1));
+    if (_continuousRenderRefs > 0) requestRender();
+  }
+
+  // Backward-compat shims — external callers (app.js view switch, flyover
+  // restart) still talk to start/stop. start = "ensure at least one frame
+  // renders soon" which on-demand satisfies via a single requestRender.
+  // start also clears the flyover suppression flag in case stopRenderLoop
+  // was the call that engaged it; stop sets it so any in-flight requestRender
+  // (e.g. from a still-running color tween) doesn't resurrect the loop.
   function startRenderLoop() {
-    if (animationId === null) renderLoop();
+    _suppressed = false;
+    requestRender();
   }
 
   function stopRenderLoop() {
+    _suppressed = true;
     if (animationId !== null) {
       cancelAnimationFrame(animationId);
       animationId = null;
     }
+    _lastFrameTime = 0; // Reset so the next frame after restart doesn't sample the gap
   }
 
   // ── Debug helpers (always exposed; useful from DevTools console) ───────
@@ -1174,6 +1231,7 @@ const ThreeScene = (() => {
     } else {
       scene.overrideMaterial = null;
     }
+    requestRender();
   }
 
   // Runtime control of the building edge highlight intensity. The shader's
@@ -1187,6 +1245,7 @@ const ThreeScene = (() => {
       const sh = mat.userData.shader;
       if (sh && sh.uniforms.uEdgeIntensity) sh.uniforms.uEdgeIntensity.value = value;
     }
+    requestRender();
   }
 
   // Comprehensive diagnostic snapshot — bound to the "Copy debug info" button
@@ -1357,6 +1416,7 @@ const ThreeScene = (() => {
     controls.autoRotate = false;
     controls.autoRotateSpeed = 0;
     controls.update();
+    requestRender();
   }
 
   function updateMaterials() {
@@ -1386,6 +1446,7 @@ const ThreeScene = (() => {
         if (sh) sh.uniforms.uEdgeColor.value.copy(edge);
       }
     }
+    requestRender();
   }
 
   // ── Color bindings registry ────────────────────────────────────────────────
@@ -1456,6 +1517,7 @@ const ThreeScene = (() => {
       const rawT = Math.min((performance.now() - start) / durationMs, 1);
       const t    = rawT * rawT * (3 - 2 * rawT);
       for (const b of bindings) if (from[b.key] && to[b.key]) b.lerp(from[b.key], to[b.key], t);
+      requestRender();
       if (rawT < 1) requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
@@ -1481,6 +1543,7 @@ const ThreeScene = (() => {
       const rawT = Math.min((performance.now() - start) / durationMs, 1);
       const t    = rawT * rawT * (3 - 2 * rawT);
       for (const b of bindings) if (from[b.key]) b.lerp(from[b.key], to[b.key], t);
+      requestRender();
       if (rawT < 1) requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
@@ -1548,10 +1611,12 @@ const ThreeScene = (() => {
         Math.min(1, _dirLight.color.b * 0.8),
       );
     }
+    requestRender();
   }
 
   function setSunSphereVisible(visible) {
     if (_sunSphere) _sunSphere.visible = visible;
+    requestRender();
   }
 
   function updateShadowFrustum() {
@@ -1595,6 +1660,7 @@ const ThreeScene = (() => {
       const elevDeg = Math.asin(Math.min(1, _dirLight.position.y / NCZ.SUN_DIST)) * 180 / Math.PI;
       _dirLight.castShadow = _shadowsOn && elevDeg > NCZ.SHADOW_MIN_ELEV;
     }
+    requestRender();
   }
 
   function getShadowsEnabled() { return _shadowsOn; }
@@ -1633,9 +1699,10 @@ const ThreeScene = (() => {
       const slider = document.getElementById('scene-sun-slider');
       if (slider) { slider.value = s.sunSlider; slider.dispatchEvent(new Event('input')); }
     }
+    requestRender();
   }
 
-  return { init, startRenderLoop, stopRenderLoop, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, setOverrideMaterial, setBuildingEdgeIntensity, dumpDebugInfo };
+  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, setOverrideMaterial, setBuildingEdgeIntensity, dumpDebugInfo };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;
