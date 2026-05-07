@@ -46,6 +46,10 @@
     //   2. Wait ~5s for FPS to stabilise; read avg from Stats panel
     //   3. Click "→ WEBGL" link in info bar; wait ~5s; compare
     //   4. Optional: ?count=50000 / 100000 / 500000 to test scaling
+    // `three` is mapped to three.webgpu.js (has WebGPURenderer + all base classes
+    // like Scene/Camera/BoxGeometry/MeshLambertMaterial). WebGLRenderer lives in
+    // the separate three.module.js build and gets dynamically imported below
+    // only when the user picks ?renderer=webgl.
     import * as THREE from 'three';
     import { WebGPURenderer } from 'three';
     import Stats from 'three/addons/libs/stats.module.js';
@@ -75,7 +79,11 @@
         gpuLabel = desc ? `WebGPU (${desc})` : 'WebGPU';
       } catch { gpuLabel = 'WebGPU'; }
     } else {
-      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      // WebGLRenderer lives in three.module.js (the WebGL-only build), not in
+      // three.webgpu.js. Dynamic-import only when needed so the WebGPU path
+      // doesn't pay the cost of loading two builds.
+      const webglMod = await import('https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js');
+      renderer = new webglMod.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
       try {
         const gl = renderer.getContext();
         const ext = gl.getExtension('WEBGL_debug_renderer_info');
