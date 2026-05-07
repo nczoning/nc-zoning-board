@@ -1,6 +1,6 @@
 # Three.js 3D Scene — Reference Documentation
 
-Full documentation for the Three.js schematic view. For the phase-by-phase implementation plan see [`three-js-migration-plan.md`](three-js-migration-plan.md). For the overall app architecture see [`architecture.md`](architecture.md).
+Full documentation for the Three.js schematic view. For pending phase-by-phase work see the [GitHub Project](https://github.com/users/spuddeh/projects/1) (WebGPU Migration stream). For the overall app architecture see [`architecture.md`](architecture.md).
 
 ---
 
@@ -69,7 +69,7 @@ window.NCZ.ThreeMarkers = {
 
 ### Import map
 
-Three.js is loaded via an import map in `index.html`, matching the pattern used in `scripts/render_terrain_3d.html`:
+Three.js is loaded via an import map in `index.html`:
 
 ```html
 <script type="importmap">

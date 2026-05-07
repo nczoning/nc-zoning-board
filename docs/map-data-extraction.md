@@ -245,7 +245,7 @@ Terrain and satellite base layers are delivered as WebP `L.imageOverlay` files (
 | `assets/img/terrain_8k.webp` | 290 KB | Schematic terrain, neutral dark grey |
 | `assets/img/satellite_8k.webp` | 9.6 MB | Satellite photograph, RGBA with transparency |
 
-Overlay data (roads, buildings, metro, landmarks) is rendered via a canvas-based `L.GridLayer` (`overlay.js`) with unified z-sorted drawing and grid-based spatial index. See `terrain-generation.md` for the full pipeline.
+Overlay data (roads, buildings, metro, landmarks) is rendered via a canvas-based `L.GridLayer` (`overlay.js`) with unified z-sorted drawing and grid-based spatial index. (Note: this section describes the legacy 2D overlay; the current schema view uses the live Three.js scene — see [`three-js-scene.md`](three-js-scene.md).)
 
 ## District Colours (from game Ink styles)
 
