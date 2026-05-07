@@ -59,6 +59,12 @@ const ThreeMarkers = (() => {
                                     // whose contents the cluster panel is showing
   const _projectVec = new THREE.Vector3();
 
+  // Render-on-demand bridge. ThreeScene's loop only re-renders (and re-runs
+  // our render() in turn) when explicitly asked. Anything that mutates pin
+  // visibility, position, popup state, or cluster layout without moving the
+  // camera must call this so the CSS2DRenderer pass picks the change up.
+  function _redraw() { NCZ.ThreeScene?.requestRender?.(); }
+
   // Tooltip — single reusable CSS2DObject created at attach time. Hidden by
   // default; show()/hide() toggle .visible and update text/position.
   let tooltipObj = null;
@@ -248,6 +254,7 @@ const ThreeMarkers = (() => {
     // SCHEMA load show clusters immediately rather than waiting for a click.
     _filterVisibleIds = new Set(_modsState.mods.map(m => m.id));
     recomputeClusters();
+    _redraw();
   }
 
   function setPulse(modId, on) {
@@ -267,10 +274,12 @@ const ThreeMarkers = (() => {
     tooltipText.textContent = mod.name;
     tooltipObj.position.copy(pin.position);
     tooltipObj.visible = true;
+    _redraw();
   }
 
   function hideTooltip() {
     if (tooltipObj) tooltipObj.visible = false;
+    _redraw();
   }
 
   function applyFilters(visibleIdSet) {
@@ -282,6 +291,7 @@ const ThreeMarkers = (() => {
     // Re-cluster synchronously: filter changes affect which pins exist for
     // the proximity grouper, and the user expects immediate visual feedback.
     recomputeClusters();
+    _redraw();
   }
 
   // Returns mod IDs of pins that pass the active filter (regardless of cluster
@@ -411,6 +421,7 @@ const ThreeMarkers = (() => {
       }
       _onClustersChanged(sets);
     }
+    _redraw();
   }
 
   // Mark the cluster bubble whose modIds best overlap _activeClusterMods.
@@ -441,6 +452,7 @@ const ThreeMarkers = (() => {
   function setActiveClusterMods(modSet) {
     _activeClusterMods = modSet || null;
     refreshActiveClusterMark();
+    _redraw();
   }
 
   function getOrCreateClusterObj(idx) {
@@ -529,6 +541,7 @@ const ThreeMarkers = (() => {
     pinsLayer.add(popup);
     popupModId = mod.id;
     syncUrlForMod(mod);
+    _redraw();
   }
 
   function closePopup({ silent = false } = {}) {
@@ -538,6 +551,7 @@ const ThreeMarkers = (() => {
     popup = null;
     popupModId = null;
     if (!silent) clearUrlMod();
+    _redraw();
   }
 
   // URL deep-link sync — matches the Leaflet popupopen/popupclose handlers
@@ -596,6 +610,8 @@ const ThreeMarkers = (() => {
       onComplete,
     };
     _flyLastTime = performance.now();
+    _redraw(); // Kickstart the loop — direct camera mutation in updateFlyTween
+               // doesn't fire OrbitControls 'change', so we need an explicit nudge.
   }
 
   function updateFlyTween() {
@@ -617,6 +633,8 @@ const ThreeMarkers = (() => {
       const cb = _flyTween.onComplete;
       _flyTween = null;
       cb?.();
+    } else {
+      _redraw(); // Keep the loop alive until the tween finishes.
     }
   }
 
@@ -661,6 +679,7 @@ const ThreeMarkers = (() => {
   function setActiveCamera(cam) {
     _activeCamera = cam || null;
     if (!cam) recomputeClusters();
+    _redraw();
   }
 
   // Toggle the marker overlay's membership of the schema camera's layer mask.
@@ -673,6 +692,7 @@ const ThreeMarkers = (() => {
     if (!_schemaCamera) return;
     if (visible) _schemaCamera.layers.enable(NCZ.LAYER_PINS);
     else         _schemaCamera.layers.disable(NCZ.LAYER_PINS);
+    _redraw();
   }
   function getOverlayVisible() {
     if (!_schemaCamera) return null;
@@ -701,6 +721,7 @@ const ThreeMarkers = (() => {
       // the authoritative grouped state.
       if (_clusterLayer) _clusterLayer.children.forEach(c => { c.visible = true; });
     }
+    _redraw();
   }
 
   return {
