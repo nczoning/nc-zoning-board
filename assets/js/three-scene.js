@@ -12,7 +12,7 @@
  */
 
 import * as THREE from 'three';
-import { attribute, uniform, texture, positionWorld, uv, vec2, float, materialColor } from 'three/tsl';
+import { attribute, uniform, texture, positionWorld, positionLocal, normalLocal, transformNormal, transformNormalToView, uv, vec2, vec4, float, materialColor, instancedArray, instanceIndex } from 'three/tsl';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // WebGPU fat-line addons live under lines/webgpu/. The legacy WebGL versions
@@ -240,6 +240,14 @@ const ThreeScene = (() => {
       antialias: true,
       stencil: true,
       reversedDepthBuffer: true,
+      // requiredLimits: tell the WebGPU adapter we need to read storage
+      // buffers from the vertex stage (default is 0). Buildings use an
+      // `instancedArray` storage buffer to fetch per-instance matrices
+      // directly in the vertex shader — without this, the first draw call
+      // throws a binding-visibility validation error.
+      requiredLimits: {
+        maxStorageBuffersInVertexStage: 1,
+      },
     };
     renderer = new THREE.WebGPURenderer(_rendererInitParams);
     await renderer.init();   // WebGPURenderer requires async init before any use
@@ -868,6 +876,10 @@ const ThreeScene = (() => {
   async function loadBuildings() {
     registerLoadStep(DISTRICT_META.length); // one step per district
     try {
+      // Source geometry — single unit cube reused by every district. Wrapped in
+      // an InstancedBufferGeometry per-district so Three.js draws `instanceCount`
+      // copies; the per-instance matrix lookup happens in our positionNode via
+      // the storage buffer (`instanceMatricesBuffer.element(instanceIndex)`).
       const baseGeo = new THREE.BoxGeometry(1, 1, 1);
       const group   = new THREE.Group();
       group.name = 'buildings';
@@ -876,15 +888,15 @@ const ThreeScene = (() => {
       for (const meta of DISTRICT_META) {
         setLoadingText(`Loading buildings [${meta.name}]…`);
 
-        // ── _data.dds → CPU decode → instance matrices ─────────────────
+        // ── _data.dds → CPU decode → packed Float32Array of mat4s ─────
         const { pixels, width: texW, height: texH } = await loadDataDds(meta.dataDds);
         const blockW = Math.floor(texW / 3);
         const blockH = Math.min(texH, blockW);
 
-        // Pre-allocate mesh for max possible instances; trim count after decode.
-        const mat  = buildBuildingMaterial(meta, await loadMDds(meta.mDds));
-        const mesh = new THREE.InstancedMesh(baseGeo, mat, blockW * blockH);
-        mesh.name = `buildings-${meta.name}`;
+        // 16 floats per mat4. Allocate worst-case; we'll create the storage
+        // buffer with the trimmed count and only upload that slice.
+        const maxInstances = blockW * blockH;
+        const matrixData   = new Float32Array(maxInstances * 16);
 
         let validCount = 0;
         for (let y = 0; y < blockH; y++) {
@@ -916,14 +928,39 @@ const ThreeScene = (() => {
             dummy.position.set(cetX, cetZ, -cetY);       // CET → Three.js
             dummy.scale.set(hx * 2, hz * 2, hy * 2);    // CET X→X, Z→Y, Y→Z
             dummy.updateMatrix();
-            mesh.setMatrixAt(validCount++, dummy.matrix);
+            // Pack the 16 floats of the matrix at offset (validCount * 16).
+            // Three.js stores Matrix4.elements in column-major order, which
+            // matches WGSL's mat4x4f memory layout — direct copy, no transpose.
+            matrixData.set(dummy.matrix.elements, validCount * 16);
+            validCount++;
           }
         }
 
-        mesh.count = validCount;
-        mesh.instanceMatrix.needsUpdate = true;
+        // Storage buffer for the instance matrices. Held in `mat.userData` so
+        // Phase 2B compute culling can reach it through the material reference.
+        const matricesBuffer = instancedArray(validCount, 'mat4');
+        matricesBuffer.value.set(matrixData.subarray(0, validCount * 16));
+
+        const mat  = buildBuildingMaterial(meta, await loadMDds(meta.mDds), matricesBuffer);
+        mat.userData.instanceMatricesBuffer = matricesBuffer;
+
+        // Per-district InstancedBufferGeometry — copies the unit cube and
+        // declares `instanceCount`. No per-instance attributes; the matrix
+        // lookup is in the shader graph.
+        const geo = new THREE.InstancedBufferGeometry();
+        geo.copy(baseGeo);
+        geo.instanceCount = validCount;
+
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.name = `buildings-${meta.name}`;
         mesh.castShadow    = true;
         mesh.receiveShadow = true;
+        // Three.js's default frustum cull was already broken for our cube-
+        // at-origin setup (recon: instWiki [[iigpu-perf-investigation]]). The
+        // storage-buffer pattern moves all positioning to the GPU, so the host
+        // bounding sphere is even more meaningless — disable cull explicitly
+        // until Phase 2B's compute pass owns visibility.
+        mesh.frustumCulled = false;
 
         group.add(mesh);
         buildingMeshes.push(mesh);
@@ -950,15 +987,27 @@ const ThreeScene = (() => {
 
   // Build the MeshLambertNodeMaterial for one district.
   //
-  // The TSL graph composes two effects on top of the standard Lambert pipeline:
+  // The TSL graph composes three effects on top of the standard Lambert pipeline:
+  //
+  //   0. Per-instance positioning + normals (vertex stage, via `geometryNode`)
+  //      The buildings group is rendered as a non-instanced `Mesh` backed by
+  //      an `InstancedBufferGeometry` whose instance matrices live in an
+  //      `instancedArray` storage buffer (see `loadBuildings()`).
+  //      `material.geometryNode` runs BEFORE the standard pipeline and
+  //      mutates `positionLocal`/`normalLocal` in place — the same pattern
+  //      `InstanceNode.setup()` uses for `InstancedMesh`. After it runs
+  //      every downstream computation (positionWorld, normalView, lighting,
+  //      shadow depth) sees the instance-transformed values automatically.
+  //      Phase 2B compute culling will slot a `visibleIndices` lookup
+  //      between `instanceIndex` and the matrix fetch with no other changes.
   //
   //   1. `_m.dds` surface modulation (pre-lighting, via `colorNode`)
   //      Original GLSL hook: `#include <color_fragment>`
   //      Samples the district's `_m` heightmap with a world-space planar UV
-  //      and multiplies the diffuse colour. World position is read directly
-  //      from the `positionWorld` TSL node — Three.js routes the instance
-  //      matrix into it for `InstancedMesh` automatically, no `USE_INSTANCING`
-  //      branch required.
+  //      and multiplies the diffuse colour. Because `geometryNode` already
+  //      put the instance-transformed position into `positionLocal`,
+  //      `positionWorld` (= modelWorldMatrix · positionLocal) gives the
+  //      correct world position automatically — same code path as Phase 1.
   //
   //   2. Edge highlight (post-lighting, via `emissiveNode`)
   //      Original GLSL hook: `outgoingLight = mix(outgoingLight, edgeColor, ef)`
@@ -971,7 +1020,7 @@ const ThreeScene = (() => {
   // Per-district `uniform()` node refs are stashed on `mat.userData.tslUniforms`
   // so the colour-binding registry (`getColorBindings.buildingsEdge`) can mutate
   // `.value` during theme switches and flyover beat-driven colour tweens.
-  function buildBuildingMaterial(meta, mTex) {
+  function buildBuildingMaterial(meta, mTex, instanceMatricesBuffer) {
     const mat = new THREE.MeshLambertNodeMaterial({
       color: readThemeColor('--scene-buildings', '#7a8fa0'),
     });
@@ -987,11 +1036,42 @@ const ThreeScene = (() => {
     // Surfaced for runtime mutation (theme rewire, debug intensity tweaks)
     mat.userData.tslUniforms = { uEdgeColor, uEdgeIntensity, uEdgeThickness, uEdgeSharpness };
 
+    // (0) Per-instance positioning + normals — explicit space transforms.
+    //
+    // `material.normalNode` is consumed by `NodeMaterial.setupNormal()` as:
+    //   `vec3(this.normalNode).normalize()` — used DIRECTLY for lighting
+    //   without any further matrix transforms. So whatever we provide must
+    //   already be in VIEW space.
+    //
+    // Composition:
+    //   1. `transformNormal(normalLocal, instMatrix)` — applies the instance
+    //      matrix to the local normal using the inverse-transpose form
+    //      (handles non-uniform building scale). Output is in WORLD space
+    //      because our matrices encode world transforms (group at origin).
+    //   2. `transformNormalToView(...)` — applies modelNormalMatrix
+    //      (identity for our group) and cameraViewMatrix.transformDirection
+    //      to take world → view. This is the same helper Three.js uses
+    //      internally for the default `normalLocal → normalView` path.
+    //
+    // Earlier attempts that set `normalNode` directly to a world-space
+    // value (via `transformNormal` alone or `mat3(M).mul(normalLocal)`)
+    // produced view-dependent lighting because lighting was computing
+    // dot(world_normal, view_lightDir) — values in different coordinate
+    // spaces.
+    const instMatrix = instanceMatricesBuffer.element(instanceIndex);
+    mat.positionNode = instMatrix.mul(vec4(positionLocal, 1)).xyz;
+    mat.normalNode   = transformNormalToView(transformNormal(normalLocal, instMatrix));
+
     // World-space planar UV — XZ plane, normalised against the district's CET
     // bounds. Original GLSL: vMUv = ((wx - off.x - min.x)/(max.x - min.x),
     //                                (-wz - off.y - min.y)/(max.y - min.y))
-    const wx = positionWorld.x;
-    const wzNeg = positionWorld.z.negate();
+    // We read the instance-transformed world position directly from the
+    // matrix multiplication chain rather than `positionWorld` — under WebGPU
+    // with a custom `positionNode`, `positionWorld` evaluates to
+    // `modelWorldMatrix · positionLocal` (without the instance transform).
+    const instWorldPos4 = instMatrix.mul(vec4(positionLocal, 1));
+    const wx    = instWorldPos4.x;
+    const wzNeg = instWorldPos4.z.negate();
     const planarUv = vec2(
       wx.sub(uOffset.x).sub(uTransMin.x).div(uTransMax.x.sub(uTransMin.x)),
       wzNeg.sub(uOffset.y).sub(uTransMin.y).div(uTransMax.y.sub(uTransMin.y))
@@ -1628,10 +1708,18 @@ const ThreeScene = (() => {
        Math.cos(el) * Math.cos(az)  * SHADOW_DIST,
     );
 
-    // Disable shadow casting when the sun is below NCZ.SHADOW_MIN_ELEV° — avoids infinitely long
-    // degenerate shadow projections at the very start/end of the flyover.
-    // Only cast shadows if the user has enabled them AND the sun is above NCZ.SHADOW_MIN_ELEV°
-    _dirLight.castShadow = _shadowsOn && (el * 180 / Math.PI) > NCZ.SHADOW_MIN_ELEV;
+    // (Phase 2A — 2026-05-10): the original WebGL build toggled `castShadow`
+    // off when the sun dropped below NCZ.SHADOW_MIN_ELEV° to avoid infinitely
+    // long degenerate shadows at sunrise/sunset. Under WebGPURenderer that
+    // toggle crashes the next frame with `Cannot read properties of null
+    // (reading 'depthTexture')` — the shadow map is torn down but the
+    // per-object update path still references it. Until Phase 3's CSM
+    // (which adapts the shadow frustum to camera/sun automatically), we
+    // keep `castShadow` static at the user's preference and accept the
+    // brief degenerate-shadow artefact at horizon transitions. Light
+    // intensity already drops near the horizon (line below) so the visual
+    // impact is muted.
+    _dirLight.castShadow = _shadowsOn;
 
     // Colour: warm orange at horizon → neutral white above ~NCZ.SUN_COLOR_ELEV°.
     // setRGB writes linear-light values directly (ColorManagement does NOT convert
@@ -1711,10 +1799,11 @@ const ThreeScene = (() => {
 
   function setShadowsEnabled(enabled) {
     _shadowsOn = enabled;
-    // Re-evaluate castShadow: respect both the user toggle and the elevation floor
+    // No elevation floor — see the comment in setSunPosition. Toggling
+    // `castShadow` mid-render under WebGPURenderer nulls the shadow's
+    // depthTexture and crashes the next object update.
     if (_dirLight) {
-      const elevDeg = Math.asin(Math.min(1, _dirLight.position.y / NCZ.SUN_DIST)) * 180 / Math.PI;
-      _dirLight.castShadow = _shadowsOn && elevDeg > NCZ.SHADOW_MIN_ELEV;
+      _dirLight.castShadow = _shadowsOn;
     }
     requestRender();
   }
