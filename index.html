@@ -532,12 +532,17 @@
         </div>
     </div>
 
-    <!-- Three.js import map (module scripts below resolve from here) -->
+    <!-- Three.js import map (module scripts below resolve from here)
+         WebGPU build: three.webgpu.min.js bundles WebGPURenderer + TSL +
+         WebGL2 fallback. Browsers without WebGPU silently get WebGL2.
+         TSL helpers (uniform, mix, texture, Fn, etc.) live on the 'three/tsl' subpath. -->
     <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+        "three":         "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.webgpu.min.js",
+        "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.webgpu.min.js",
+        "three/tsl":     "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.tsl.min.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/"
       }
     }
     </script>

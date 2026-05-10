@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phase 0 Spike #3 — DDS R8_UNORM via DataTexture under WebGPU</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #1a1a1a; color: #ddd;
+               font: 14px/1.4 system-ui, sans-serif; }
+  #info { position: fixed; top: 8px; left: 8px; right: 8px; padding: 10px 14px;
+          background: rgba(0, 0, 0, 0.78); border: 1px solid #444; border-radius: 6px;
+          z-index: 1; }
+  #info h1 { margin: 0 0 6px; font-size: 15px; color: #00f0ff; }
+  #info p  { margin: 4px 0; }
+  #info .pass    { color: #6f6; font-weight: bold; }
+  #info .fail    { color: #f66; font-weight: bold; }
+  #info .pending { color: #fc6; font-weight: bold; }
+  #info select { background: #222; border: 1px solid #555; color: #ddd; font: inherit;
+                 padding: 2px 6px; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="info">
+  <h1>Phase 0 Spike #3 — DDS texture (R8_UNORM, R16-RGBA) → DataTexture → WebGPU</h1>
+  <p><b>Setup:</b> mirrors <code>three-scene.js</code> <code>loadMDds()</code> (lines 157–176) —
+     reads DDS file, slices uint8 mip 0, builds <code>DataTexture(RedFormat, UnsignedByteType)</code>,
+     applies to a textured plane.</p>
+  <p><b>PASS criteria:</b> heightmap pattern visible on the plane, no console errors, anisotropy
+     applies cleanly, mips generate without warning.</p>
+  <p>District: <select id="district">
+    <option value="city_center">city_center</option>
+    <option value="watson">watson</option>
+    <option value="heywood">heywood</option>
+    <option value="westbrook">westbrook</option>
+    <option value="pacifica">pacifica</option>
+    <option value="santo_domingo">santo_domingo</option>
+    <option value="dogtown">dogtown</option>
+    <option value="spaceport">spaceport</option>
+  </select></p>
+  <p><b>Status:</b> <span id="status" class="pending">initializing renderer…</span></p>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.webgpu.min.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const status = document.getElementById('status');
+const setStatus = (text, cls = 'pending') => {
+  status.className = cls; status.textContent = text;
+};
+
+const DDS_PIXEL_OFFSET = 148;   // DDS header (128) + DX10 extension (20)
+
+// Direct port of three-scene.js loadMDds(), adapted for WebGPU device limits
+async function loadMDds(path, device) {
+  const buf    = await fetch(path).then(r => r.arrayBuffer());
+  const header = new Uint32Array(buf, 0, 32);
+  const width  = header[4];
+  const height = header[3];
+  const mip0   = new Uint8Array(buf, DDS_PIXEL_OFFSET, width * height);
+  const tex    = new THREE.DataTexture(mip0, width, height, THREE.RedFormat, THREE.UnsignedByteType);
+  tex.flipY = true;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  // WebGPU equivalent of WebGL's renderer.capabilities.getMaxAnisotropy()
+  const maxAniso = device?.limits?.maxSamplerAnisotropy ?? 16;
+  tex.anisotropy = Math.min(16, maxAniso);
+  tex.needsUpdate = true;
+  return { tex, width, height };
+}
+
+let renderer, scene, camera, controls, currentMesh = null;
+
+async function init() {
+  renderer = new THREE.WebGPURenderer({
+    antialias: true,
+    reversedDepthBuffer: true,
+  });
+  await renderer.init();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  scene  = new THREE.Scene();
+  scene.background = new THREE.Color(0x1a1a1a);
+  camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.set(0, 8, 8);
+  controls = new OrbitControls(camera, renderer.domElement);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 1));
+
+  await loadDistrict('city_center');
+
+  renderer.setAnimationLoop(() => {
+    controls.update();
+    renderer.render(scene, camera);
+  });
+}
+
+async function loadDistrict(name) {
+  setStatus(`loading ${name}_m.dds…`, 'pending');
+
+  if (currentMesh) {
+    scene.remove(currentMesh);
+    currentMesh.geometry.dispose();
+    currentMesh.material.dispose();
+  }
+
+  try {
+    const device = renderer.backend?.device;
+    const { tex, width, height } = await loadMDds(`../assets/dds/${name}_m.dds`, device);
+    const mat = new THREE.MeshBasicNodeMaterial({ map: tex });
+    const aspect = width / height;
+    currentMesh = new THREE.Mesh(new THREE.PlaneGeometry(8 * aspect, 8), mat);
+    currentMesh.rotation.x = -Math.PI / 2;
+    scene.add(currentMesh);
+
+    const adapterInfo = renderer.backend?.adapter
+      ? await renderer.backend.adapter.requestAdapterInfo?.().catch(() => null)
+      : null;
+    const gpuName = adapterInfo?.description || adapterInfo?.vendor || '(unknown GPU)';
+    setStatus(`PASS — ${name}_m.dds loaded (${width}×${height}, R8_UNORM) · backend=${renderer.isWebGPURenderer ? 'WebGPU' : 'WebGL2'} · GPU=${gpuName}`, 'pass');
+  } catch (err) {
+    console.error(err);
+    setStatus(`FAIL — ${err.message}`, 'fail');
+  }
+}
+
+document.getElementById('district').addEventListener('change', e => {
+  loadDistrict(e.target.value);
+});
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer?.setSize(window.innerWidth, window.innerHeight);
+});
+
+try {
+  await init();
+} catch (err) {
+  console.error(err);
+  setStatus(`FAIL — ${err.message}`, 'fail');
+}
+</script>
+</body>
+</html>
