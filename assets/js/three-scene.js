@@ -12,7 +12,13 @@
  */
 
 import * as THREE from 'three';
-import { attribute, uniform, texture, positionWorld, positionLocal, normalLocal, transformNormal, transformNormalToView, uv, vec2, vec4, float, materialColor, instancedArray, instanceIndex } from 'three/tsl';
+import {
+  attribute, uniform, texture, positionWorld, positionLocal, normalLocal,
+  transformNormal, transformNormalToView, uv, vec2, vec4, float, materialColor,
+  instancedArray, instanceIndex,
+  // Phase 2B compute culling
+  Fn, If, storage, struct, atomicStore, atomicAdd, uint,
+} from 'three/tsl';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // WebGPU fat-line addons live under lines/webgpu/. The legacy WebGL versions
@@ -61,6 +67,41 @@ const ThreeScene = (() => {
   // the antialias flag — WebGPURenderer has no getContextAttributes() to read it
   // back from, unlike WebGLRenderer.
   let _rendererInitParams = null;
+
+  // ── Phase 2B compute culling state ─────────────────────────────────────
+  // Six camera-frustum planes shared by every district's cull compute. We
+  // recompute them on every `controls.change` (CPU-side, via Three's
+  // existing `THREE.Frustum.setFromProjectionMatrix`) and push to the same
+  // 6 uniform nodes — much cheaper than packing/passing the projection×view
+  // matrix and re-deriving planes per-thread on the GPU. Each plane is a
+  // vec4 packing `(normal.xyz, constant)`; the visibility test is
+  //   `dot(plane.xyz, center) + plane.w >= -radius`.
+  const _frustumPlaneUniforms = [
+    uniform(new THREE.Vector4()), uniform(new THREE.Vector4()),
+    uniform(new THREE.Vector4()), uniform(new THREE.Vector4()),
+    uniform(new THREE.Vector4()), uniform(new THREE.Vector4()),
+  ];
+  const _frustumScratch = new THREE.Frustum();
+  const _frustumScratchMat = new THREE.Matrix4();
+  // Per-district compute nodes (reset + cull) registered during loadBuildings.
+  // Dispatched in pairs from `renderLoop` before `renderer.render`.
+  const _cullComputes = [];
+
+  function updateFrustumUniforms() {
+    if (!camera) return;
+    _frustumScratchMat.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    // Critical: pass WebGPUCoordinateSystem so the near/far plane extraction
+    // uses the WebGPU clip-space convention (depth range [0, 1]). The default
+    // is WebGL (depth range [-1, 1]), which extracts a wrong near plane for
+    // a WebGPU projection matrix and over-aggressively culls instances at
+    // intermediate depths. The lateral planes (left/right/top/bottom) are
+    // identical between conventions; only near/far differ.
+    _frustumScratch.setFromProjectionMatrix(_frustumScratchMat, THREE.WebGPUCoordinateSystem);
+    for (let i = 0; i < 6; i++) {
+      const p = _frustumScratch.planes[i];
+      _frustumPlaneUniforms[i].value.set(p.normal.x, p.normal.y, p.normal.z, p.constant);
+    }
+  }
   let buildingMeshes     = [];    // one InstancedMesh per district
   let buildingMaterials  = [];    // parallel ShaderMaterial array for theme updates
   let landmarkMat        = null;  // shared MeshLambertMaterial for all landmark GLBs
@@ -354,10 +395,12 @@ const ThreeScene = (() => {
     controls.screenSpacePanning = true;
     controls.target.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
     controls.update();
+    updateFrustumUniforms();   // seed frustum planes for the first cull dispatch
     controls.addEventListener('change', () => {
       updateDistrictZoom();
       if (metroZoomUniform) metroZoomUniform.value = camera.zoom;
       updateShadowFrustum();
+      updateFrustumUniforms();   // Phase 2B: refresh the 6 cull-frustum planes
       updateScaleBar();
       requestRender();
     });
@@ -937,19 +980,109 @@ const ThreeScene = (() => {
         }
 
         // Storage buffer for the instance matrices. Held in `mat.userData` so
-        // Phase 2B compute culling can reach it through the material reference.
+        // Phase 2B compute culling reaches it through the material reference.
         const matricesBuffer = instancedArray(validCount, 'mat4');
         matricesBuffer.value.set(matrixData.subarray(0, validCount * 16));
 
-        const mat  = buildBuildingMaterial(meta, await loadMDds(meta.mDds), matricesBuffer);
-        mat.userData.instanceMatricesBuffer = matricesBuffer;
+        // ── Phase 2B compute culling per-district setup ──────────────────
+        // visibleIndices: every cull pass appends survivors as a packed prefix.
+        // The vertex shader reads `visibleIndices.element(instanceIndex)` to
+        // get the original instance ID, then fetches the matrix at that index.
+        const visibleIndicesBuffer = instancedArray(validCount, 'uint');
 
-        // Per-district InstancedBufferGeometry — copies the unit cube and
-        // declares `instanceCount`. No per-instance attributes; the matrix
-        // lookup is in the shader graph.
-        const geo = new THREE.InstancedBufferGeometry();
-        geo.copy(baseGeo);
-        geo.instanceCount = validCount;
+        // Indirect draw struct — written by reset+cull computes, consumed by
+        // `drawIndexedIndirect`. Layout follows the WebGPU indexed-draw spec:
+        // [indexCount, instanceCount, firstIndex, baseVertex, firstInstance].
+        // `instanceCount` is atomic so concurrent threads can append safely.
+        const indirectAttribute = new THREE.IndirectStorageBufferAttribute(new Uint32Array(5), 5);
+        const indirectStruct = struct({
+          indexCount:    'uint',
+          instanceCount: { type: 'uint', atomic: true },
+          firstIndex:    'uint',
+          baseVertex:    'uint',
+          firstInstance: 'uint',
+        }, `IndirectDraw_${meta.name}`);
+        const drawStorage = storage(indirectAttribute, indirectStruct, 1);
+
+        // (init compute) Run once at scene setup — writes the static draw
+        // fields (everything except instanceCount, which the cull pass owns).
+        const baseGeoIndexCount = baseGeo.index ? baseGeo.index.count : baseGeo.attributes.position.count;
+        const initFn = Fn(() => {
+          drawStorage.get('indexCount').assign(uint(baseGeoIndexCount));
+          drawStorage.get('firstIndex').assign(uint(0));
+          drawStorage.get('baseVertex').assign(uint(0));
+          drawStorage.get('firstInstance').assign(uint(0));
+          atomicStore(drawStorage.get('instanceCount'), uint(0));
+        })().compute(1);
+
+        // (reset compute) Per frame, ONE thread, clears the running count
+        // before cull threads append. Separate dispatch from the cull so
+        // there's no cross-workgroup synchronisation needed.
+        const resetFn = Fn(() => {
+          atomicStore(drawStorage.get('instanceCount'), uint(0));
+        })().compute(1);
+
+        // (cull compute) Per frame, N threads (one per instance). Each thread
+        // tests its instance's bounding sphere against the 6 frustum planes;
+        // visible instances atomically append their original index to the
+        // visibleIndices buffer.
+        // Bounding sphere center  = matrix's translation column (4th column).
+        // Radius (conservative)   = max column length × √3/2 (cube → sphere).
+        const cullFn = Fn(() => {
+          const idx       = instanceIndex;
+          const matrix    = matricesBuffer.element(idx);
+          const center    = vec4(matrix[3]).xyz;       // translation column
+          const sx        = vec4(matrix[0]).xyz.length();
+          const sy        = vec4(matrix[1]).xyz.length();
+          const sz        = vec4(matrix[2]).xyz.length();
+          const radius    = sx.max(sy).max(sz).mul(0.866);  // sqrt(3)/2
+          const negRadius = radius.negate();
+          const c4        = vec4(center, 1.0);
+
+          // Visibility = inside (or straddling) every plane.
+          // dist = dot(plane.xyz, center) + plane.w
+          // visible plane test: dist >= -radius
+          const distP0 = _frustumPlaneUniforms[0].dot(c4);
+          const distP1 = _frustumPlaneUniforms[1].dot(c4);
+          const distP2 = _frustumPlaneUniforms[2].dot(c4);
+          const distP3 = _frustumPlaneUniforms[3].dot(c4);
+          const distP4 = _frustumPlaneUniforms[4].dot(c4);
+          const distP5 = _frustumPlaneUniforms[5].dot(c4);
+          const visible =
+            distP0.greaterThanEqual(negRadius)
+              .and(distP1.greaterThanEqual(negRadius))
+              .and(distP2.greaterThanEqual(negRadius))
+              .and(distP3.greaterThanEqual(negRadius))
+              .and(distP4.greaterThanEqual(negRadius))
+              .and(distP5.greaterThanEqual(negRadius));
+
+          If(visible, () => {
+            const slot = atomicAdd(drawStorage.get('instanceCount'), uint(1));
+            visibleIndicesBuffer.element(slot).assign(uint(idx));
+          });
+        })().compute(validCount);
+
+        // Run init once now (before first render); push reset+cull to be
+        // dispatched every frame.
+        renderer.compute(initFn);
+        _cullComputes.push({ reset: resetFn, cull: cullFn });
+
+        const mat  = buildBuildingMaterial(meta, await loadMDds(meta.mDds), matricesBuffer, visibleIndicesBuffer);
+        mat.userData.instanceMatricesBuffer = matricesBuffer;
+        mat.userData.visibleIndicesBuffer   = visibleIndicesBuffer;
+        mat.userData.indirectAttribute      = indirectAttribute;
+
+        // Per-district geometry — clone the unit cube (sharing would tie all
+        // districts to a single indirect buffer) and wire up the indirect-
+        // draw buffer. Critically NOT an `InstancedBufferGeometry`: when both
+        // `instanceCount` and `setIndirect()` are set, Three.js picks the
+        // former and silently ignores the indirect buffer. Regular
+        // `BufferGeometry.clone()` + `setIndirect()` matches the canonical
+        // `webgpu_struct_drawindirect` example — instance count comes solely
+        // from the indirect buffer's `instanceCount` field, which the cull
+        // compute writes each frame.
+        const geo = baseGeo.clone();
+        geo.setIndirect(indirectAttribute);
 
         const mesh = new THREE.Mesh(geo, mat);
         mesh.name = `buildings-${meta.name}`;
@@ -1020,7 +1153,7 @@ const ThreeScene = (() => {
   // Per-district `uniform()` node refs are stashed on `mat.userData.tslUniforms`
   // so the colour-binding registry (`getColorBindings.buildingsEdge`) can mutate
   // `.value` during theme switches and flyover beat-driven colour tweens.
-  function buildBuildingMaterial(meta, mTex, instanceMatricesBuffer) {
+  function buildBuildingMaterial(meta, mTex, instanceMatricesBuffer, visibleIndicesBuffer) {
     const mat = new THREE.MeshLambertNodeMaterial({
       color: readThemeColor('--scene-buildings', '#7a8fa0'),
     });
@@ -1058,7 +1191,12 @@ const ThreeScene = (() => {
     // produced view-dependent lighting because lighting was computing
     // dot(world_normal, view_lightDir) — values in different coordinate
     // spaces.
-    const instMatrix = instanceMatricesBuffer.element(instanceIndex);
+    // Phase 2B: `instanceIndex` is the COMPACTED draw index (0..visibleCount).
+    // We dereference through `visibleIndicesBuffer` to get the original
+    // instance index, then fetch that instance's matrix. Compute pass writes
+    // visibleIndices each frame; vertex shader reads through it transparently.
+    const realIndex  = visibleIndicesBuffer.element(instanceIndex);
+    const instMatrix = instanceMatricesBuffer.element(realIndex);
     mat.positionNode = instMatrix.mul(vec4(positionLocal, 1)).xyz;
     mat.normalNode   = transformNormalToView(transformNormal(normalLocal, instMatrix));
 
@@ -1235,6 +1373,19 @@ const ThreeScene = (() => {
     animationId = null;
     if (stats) stats.begin();
     const dampingActive = controls.update();
+    // Phase 2B: dispatch per-district reset+cull computes BEFORE render.
+    // Each district's `reset` clears its indirect.instanceCount to 0; `cull`
+    // tests every instance against the camera frustum and atomically appends
+    // visible IDs into `visibleIndicesBuffer`. The vertex shader then draws
+    // only `instanceCount` instances via the indirect-draw indirection.
+    // Sequential dispatches in the same encoder are guaranteed to run in
+    // order, so reset finishes before cull begins (no cross-workgroup sync
+    // needed). Gated by render-on-demand: if the camera hasn't moved, this
+    // whole block is skipped along with the render.
+    for (const c of _cullComputes) {
+      renderer.compute(c.reset);
+      renderer.compute(c.cull);
+    }
     renderer.render(scene, camera);
     NCZ.ThreeMarkers?.render?.();
     if (stats) {
@@ -1412,13 +1563,25 @@ const ThreeScene = (() => {
       timestamp: new Date().toISOString(),
       fps,
       render: renderer ? {
-        drawCalls:    renderer.info.render.calls,
+        // Per Three.js Info.js: `info.render.calls` = lifetime render() calls,
+        // `info.render.frameCalls` = current-frame render() calls (usually 1),
+        // `info.render.drawCalls` = current-frame DRAW count. Earlier Phase 1
+        // code mislabelled `calls` as "drawCalls" — it's the lifetime render
+        // counter, not the per-frame draw counter.
+        drawCallsThisFrame: renderer.info.render.drawCalls ?? 0,
+        rendersTotal:       renderer.info.render.calls,
         triangles:    renderer.info.render.triangles,
         lines:        renderer.info.render.lines,
-        // computeCalls is a WebGPU-only stat — undefined under WebGL2 fallback.
-        computeCalls: renderer.info.render.computeCalls ?? 0,
+        // Compute stats live at `info.compute.{calls, frameCalls}` on
+        // WebGPURenderer — NOT under `info.render`. WebGL2 fallback has
+        // neither, so we coalesce to 0.
+        computeTotal:      renderer.info.compute?.calls ?? 0,
+        computeFrameCalls: renderer.info.compute?.frameCalls ?? 0,
         geometries:   renderer.info.memory.geometries,
         textures:     renderer.info.memory.textures,
+        // Indirect-storage-buffer bytes — confirms Phase 2B's draw buffers
+        // (5 u32s × 8 districts = 160 bytes minimum) are allocated.
+        indirectBufferBytes: renderer.info.memory.indirectStorageAttributesSize ?? 0,
         // `info.programs` is a WebGL2-only array; WebGPU compiles pipelines
         // lazily and doesn't expose a comparable count.
         programs:     renderer.info.programs ? renderer.info.programs.length : null,
@@ -1466,11 +1629,22 @@ const ThreeScene = (() => {
       lines.push('FPS:           (not enough samples — render loop not running?)');
     }
     if (dump.render) {
-      lines.push(`Draw calls:    ${dump.render.drawCalls}${dump.render.computeCalls ? `    Compute: ${dump.render.computeCalls}` : ''}`);
+      lines.push(`Draw calls:    ${dump.render.drawCallsThisFrame} (this frame)`);
+      lines.push(`Renders total: ${dump.render.rendersTotal} (lifetime)`);
+      const compFrame = dump.render.computeFrameCalls;
+      const compTotal = dump.render.computeTotal;
+      if (compTotal > 0) {
+        lines.push(`Compute:       ${compFrame} this frame  /  ${compTotal} lifetime`);
+      } else {
+        lines.push(`Compute:       (none — running on WebGL2 fallback?)`);
+      }
       lines.push(`Triangles:     ${dump.render.triangles.toLocaleString()}`);
       // Programs is WebGL2-only — show "n/a" rather than "null" under WebGPU.
       const programsField = dump.render.programs == null ? 'n/a (WebGPU)' : dump.render.programs;
       lines.push(`Geometries:    ${dump.render.geometries}    Textures: ${dump.render.textures}    Programs: ${programsField}`);
+      if (dump.render.indirectBufferBytes > 0) {
+        lines.push(`Indirect bufs: ${dump.render.indirectBufferBytes} bytes`);
+      }
     }
     if (dump.rendererSettings) {
       const r = dump.rendererSettings;
