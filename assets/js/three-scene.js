@@ -12,11 +12,18 @@
  */
 
 import * as THREE from 'three';
+import { attribute, uniform, texture, positionWorld, uv, vec2, float, materialColor } from 'three/tsl';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { Line2 } from 'three/addons/lines/Line2.js';
+// WebGPU fat-line addons live under lines/webgpu/. The legacy WebGL versions
+// at lines/Line2.js + lines/LineMaterial.js import THREE.ShaderLib (a
+// WebGL-only registry) which the three.webgpu build does not expose, so
+// loading them at module-init time throws a SyntaxError before our code ever
+// runs. The webgpu wrapper extends LineSegments2 and pairs with the bundled
+// Line2NodeMaterial — same Line2 API, TSL-based shader, viewport size pulled
+// from the renderer automatically (no `resolution` field to keep in sync).
+import { Line2 } from 'three/addons/lines/webgpu/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
-import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import Stats from 'three/addons/libs/stats.module.js';
 
@@ -49,7 +56,11 @@ const ThreeScene = (() => {
   let normalRoadsMat  = null;  // Normal depth-tested pass
   let normalBordersMat= null;  // Normal depth-tested pass
   let metroMat        = null;
-  let metroShader     = null; // onBeforeCompile ref for LOD zoom uniform updates
+  let metroZoomUniform = null; // TSL uniform() node — mutated from controls 'change'
+  // Captured at WebGPURenderer construction so dumpDebugInfo can introspect
+  // the antialias flag — WebGPURenderer has no getContextAttributes() to read it
+  // back from, unlike WebGLRenderer.
+  let _rendererInitParams = null;
   let buildingMeshes     = [];    // one InstancedMesh per district
   let buildingMaterials  = [];    // parallel ShaderMaterial array for theme updates
   let landmarkMat        = null;  // shared MeshLambertMaterial for all landmark GLBs
@@ -85,7 +96,7 @@ const ThreeScene = (() => {
   // Derive edge highlight colour from the building base colour.
 
   function makeHillshadeMaterial(colorVar, fallback, extra = {}) {
-    return new THREE.MeshLambertMaterial({
+    return new THREE.MeshLambertNodeMaterial({
       color: readThemeColor(colorVar, fallback),
       flatShading: true,
       side: THREE.DoubleSide,
@@ -170,7 +181,13 @@ const ThreeScene = (() => {
     // mip selection picks based on the smaller of the screen-space derivatives —
     // an elongated texture footprint still aliases along the long axis. AF samples
     // multiple texels along that axis. Free-ish on modern GPUs (fixed-function path).
-    tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    // WebGPU exposes the limit via `renderer.backend.device.limits.maxSamplerAnisotropy`
+    // (post-init); WebGL2 fallback uses the legacy `renderer.capabilities.getMaxAnisotropy()`.
+    // Cap at 16 — the hardware ceiling on every consumer GPU since ~2009.
+    const maxAniso = renderer.backend?.device?.limits?.maxSamplerAnisotropy
+                  ?? renderer.capabilities?.getMaxAnisotropy?.()
+                  ?? 16;
+    tex.anisotropy = Math.min(16, maxAniso);
     tex.needsUpdate = true;
     return tex;
   }
@@ -191,7 +208,7 @@ const ThreeScene = (() => {
 
   // ── Scene init ─────────────────────────────────────────────────────────
 
-  function init(containerId) {
+  async function init(containerId) {
     if (initialized) return;
     initialized = true;
 
@@ -199,26 +216,33 @@ const ThreeScene = (() => {
     loadingEl     = container.querySelector('.scene-loading');
     loadingFillEl = container.querySelector('.scene-loading__fill');
 
-    // Renderer — pass updateStyle:false so Three.js never writes px dimensions
-    // onto the canvas element. The canvas is kept at width/height:100% via the
-    // `#map-3d > canvas` rule in style.css so it always fills #map-3d without
-    // pushing surrounding layout elements (and without falling back to its
-    // intrinsic drawingBuffer size, which would misalign with the CSS2D pin
-    // overlay on any DPR > 1.0).
-    // logarithmicDepthBuffer: redistributes depth precision logarithmically
-    // across the [near, far] frustum. Mitigates Z-fighting on near-coplanar
-    // surfaces — block-style buildings sharing walls, water/terrain at the
-    // coastline, etc. Costs a cheap shader op per fragment; free on modern GPUs.
-    // powerPreference hints the OS to pick the discrete GPU on hybrid-graphics
-    // laptops (Optimus / AMD Switchable / Apple). Not guaranteed — driver/OS
-    // policy can override — but it's a free one-flag improvement for users
-    // who'd otherwise get stuck on the integrated chip.
-    renderer = new THREE.WebGLRenderer({
+    // Renderer — WebGPU build with WebGL2 auto-fallback. The canvas is kept at
+    // width/height:100% via the `#map-3d > canvas` rule in style.css so it
+    // always fills #map-3d without pushing surrounding layout elements (and
+    // without falling back to its intrinsic drawingBuffer size, which would
+    // misalign with the CSS2D pin overlay on any DPR > 1.0).
+    //
+    // reversedDepthBuffer: stores depth as 1=near→0=far instead of 0=near→1=far,
+    // and uses depthCompare:'greater' instead of 'less'. Combined with WebGPU's
+    // native float depth, this redistributes precision so far-frustum surfaces
+    // keep enough resolution to avoid Z-fighting at our 3-15km zoom range.
+    // Strictly better than the old `logarithmicDepthBuffer` workaround — log-depth
+    // writes frag_depth from the fragment shader, killing the GPU's early-Z
+    // optimization. Reverse-Z achieves precision purely through projection-matrix
+    // tricks; early-Z stays on. Available on `WebGPURenderer` since Three.js r183
+    // (PR #32967, Feb 2026). Camera.reversedDepth is auto-corrected per PR #31410.
+    //
+    // (No `powerPreference` here — Chrome confirmed it's currently ignored on
+    // Windows for navigator.gpu.requestAdapter() per https://crbug.com/369219127.
+    // Hybrid-graphics laptops fall back to OS adapter selection. Watch list
+    // item: revisit if dGPU isn't getting selected.)
+    _rendererInitParams = {
       antialias: true,
       stencil: true,
-      logarithmicDepthBuffer: true,
-      powerPreference: 'high-performance',
-    });
+      reversedDepthBuffer: true,
+    };
+    renderer = new THREE.WebGPURenderer(_rendererInitParams);
+    await renderer.init();   // WebGPURenderer requires async init before any use
     // Make the sRGB-correct colour pipeline explicit. These match Three.js r170
     // defaults (since r152 / r155 respectively) but stating them here protects
     // the scene's appearance against future Three.js default changes — both flags
@@ -297,7 +321,7 @@ const ThreeScene = (() => {
     // Radius NCZ.SUN_SPHERE_RADIUS units at NCZ.SUN_SPHERE_DIST distance ≈ 1.7° apparent diameter (≈3× real sun).
     _sunSphere = new THREE.Mesh(
       new THREE.SphereGeometry(NCZ.SUN_SPHERE_RADIUS, 16, 16),
-      new THREE.MeshBasicMaterial({ color: 0xffcc44 })
+      new THREE.MeshBasicNodeMaterial({ color: 0xffcc44 })
     );
     _sunSphere.name = 'sun-sphere';
     _sunSphere.visible = false;
@@ -324,7 +348,7 @@ const ThreeScene = (() => {
     controls.update();
     controls.addEventListener('change', () => {
       updateDistrictZoom();
-      if (metroShader) metroShader.uniforms.uMetroZoom.value = camera.zoom;
+      if (metroZoomUniform) metroZoomUniform.value = camera.zoom;
       updateShadowFrustum();
       updateScaleBar();
       requestRender();
@@ -406,10 +430,10 @@ const ThreeScene = (() => {
     camera.right  =  frustumH * aspect;
     camera.updateProjectionMatrix();
     // flyCamera resize is handled in flyover.js
-    // LineMaterial needs the viewport resolution to compute pixel-width lines correctly
-    for (const mat of districtLineMaterials) {
-      mat.resolution.set(w, h);
-    }
+    // Line2NodeMaterial pulls viewport size from a TSL screen node at
+    // shader-execution time, so the legacy resolution-set loop is no longer
+    // needed here — left as a single retained `districtLineMaterials` ref so
+    // the registry still exists for any future per-material resize work.
     NCZ.ThreeMarkers?.onResize?.(w, h);
     updateScaleBar();
     requestRender();
@@ -597,43 +621,51 @@ const ThreeScene = (() => {
       const metroColor  = readThemeColor('--overlay-metro-color',       '#dcaa28');
 
       // Normal depth-tested pass — surface roads/borders sit correctly in scene
-      normalRoadsMat   = new THREE.MeshBasicMaterial({ color: roadColor,   transparent: true, opacity: 0.8 });
-      normalBordersMat = new THREE.MeshBasicMaterial({ color: borderColor, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
+      normalRoadsMat   = new THREE.MeshBasicNodeMaterial({ color: roadColor,   transparent: true, opacity: 0.8 });
+      normalBordersMat = new THREE.MeshBasicNodeMaterial({ color: borderColor, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
 
       applyMaterial(roadsScene,   normalRoadsMat);
       applyMaterial(bordersScene, normalBordersMat);
 
-      // Metro: normal depth-tested, renderOrder=1 so it renders above roads
-      metroMat = new THREE.MeshBasicMaterial({ color: metroColor, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
-      metroMat.onBeforeCompile = shader => {
-        metroShader = shader;
-        shader.uniforms.uMetroZoom    = { value: camera.zoom };
-        shader.uniforms.uMetroLODMed  = { value: NCZ.METRO_LOD_ZOOM_MED };
-        shader.uniforms.uMetroLODNear = { value: NCZ.METRO_LOD_ZOOM_NEAR };
-        shader.vertexShader = `
-          attribute vec3 color;
-          varying vec3 vLODColor;
-        ` + shader.vertexShader.replace(
-          '#include <color_vertex>',
-          '#include <color_vertex>\nvLODColor = color;'
-        );
-        shader.fragmentShader = `
-          uniform float uMetroZoom;
-          uniform float uMetroLODMed;
-          uniform float uMetroLODNear;
-          varying vec3 vLODColor;
-        ` + shader.fragmentShader.replace(
-          'void main() {',
-          `void main() {
-          // B=bold base line (always visible), G=regular (medium zoom), R=dashed detail (close only)
-          // B=wide solid: far zoom only (zoom < LOD_MED)
-          // G=thin solid: medium zoom only (LOD_MED < zoom < LOD_NEAR)
-          // R=dotted:     close zoom only (zoom > LOD_NEAR)
-          if (vLODColor.b > 0.5 && uMetroZoom > uMetroLODMed) discard;
-          if (vLODColor.g > 0.5 && (uMetroZoom < uMetroLODMed || uMetroZoom > uMetroLODNear)) discard;
-          if (vLODColor.r > 0.5 && uMetroZoom < uMetroLODNear) discard;`
-        );
-      };
+      // Metro: normal depth-tested, renderOrder=1 so it renders above roads.
+      //
+      // LOD discard: COLOR_0 vertex attribute carries the LOD tier as one
+      // mutually-exclusive channel per vertex (per the building/metro extraction
+      // pipeline — see `[[phase3-building-rendering]]` and the metro LOD-channel
+      // mapping note in CLAUDE.md). Discard rules:
+      //   B=wide solid:  show only at far zoom    (zoom <= LOD_MED)
+      //   G=thin solid:  show only at medium zoom (LOD_MED <= zoom <= LOD_NEAR)
+      //   R=dotted:      show only at close zoom  (zoom >= LOD_NEAR)
+      //
+      // TSL port (was `onBeforeCompile` GLSL injection on r170):
+      //   - vertex color attribute pulled via `attribute('color')`
+      //   - per-frame zoom uniform via `uniform()` node — mutate `.value` from
+      //     the controls 'change' handler (lookup at top of init())
+      //   - boolean expression composed with TSL methods (.greaterThan/.and/.or)
+      //   - `material.maskNode` is a KEEP mask (true=keep, false=discard);
+      //     we compose the discard condition for clarity then `.not()` it
+      metroMat = new THREE.MeshBasicNodeMaterial({
+        color: metroColor,
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+      metroZoomUniform        = uniform(camera.zoom);
+      const uMetroLODMed_node  = uniform(NCZ.METRO_LOD_ZOOM_MED);
+      const uMetroLODNear_node = uniform(NCZ.METRO_LOD_ZOOM_NEAR);
+      const lodColor = attribute('color');
+      const discardCondition =
+        lodColor.b.greaterThan(0.5).and(metroZoomUniform.greaterThan(uMetroLODMed_node))
+          .or(
+            lodColor.g.greaterThan(0.5).and(
+              metroZoomUniform.lessThan(uMetroLODMed_node).or(metroZoomUniform.greaterThan(uMetroLODNear_node))
+            )
+          )
+          .or(
+            lodColor.r.greaterThan(0.5).and(metroZoomUniform.lessThan(uMetroLODNear_node))
+          );
+      metroMat.maskNode = discardCondition.not();
 
       function makeSeeThrough(source, mat) {
         const group = new THREE.Group();
@@ -659,8 +691,8 @@ const ThreeScene = (() => {
         stencilFunc: THREE.EqualStencilFunc, stencilRef: 2, stencilFuncMask: 0xff,
         stencilFail: THREE.KeepStencilOp, stencilZFail: THREE.KeepStencilOp, stencilZPass: THREE.KeepStencilOp,
       };
-      roadsMat   = new THREE.MeshBasicMaterial({ ...stBase, color: roadColor,   opacity: 0.8 });
-      bordersMat = new THREE.MeshBasicMaterial({ ...stBase, color: borderColor, opacity: 0.6, blending: THREE.AdditiveBlending });
+      roadsMat   = new THREE.MeshBasicNodeMaterial({ ...stBase, color: roadColor,   opacity: 0.8 });
+      bordersMat = new THREE.MeshBasicNodeMaterial({ ...stBase, color: borderColor, opacity: 0.6, blending: THREE.AdditiveBlending });
 
       applyMaterial(metroScene, metroMat);
 
@@ -751,7 +783,8 @@ const ThreeScene = (() => {
 
   // ── Buildings ──────────────────────────────────────────────────────────
   // CPU decodes _data.dds (16-bit RGBA) → InstancedMesh matrices.
-  // MeshLambertMaterial + onBeforeCompile adds _m.dds planar UV and edge highlight.
+  // MeshLambertNodeMaterial with TSL `colorNode` (_m.dds planar UV modulation)
+  // and `emissiveNode` (silhouette edge highlight). See buildBuildingMaterial.
   // Shadow casting/receiving handled automatically by Three.js.
 
   // ── Landmarks ─────────────────────────────────────────────────────────
@@ -778,7 +811,7 @@ const ThreeScene = (() => {
   async function loadLandmarks() {
     registerLoadStep(1);
     try {
-      landmarkMat = new THREE.MeshLambertMaterial({
+      landmarkMat = new THREE.MeshLambertNodeMaterial({
         color: readThemeColor('--scene-buildings', '#8aacbf'),
         flatShading: true,
       });
@@ -915,78 +948,67 @@ const ThreeScene = (() => {
     }
   }
 
-  // Build the MeshLambertMaterial for one district.
-  // onBeforeCompile patches the standard Lambert shader to add:
-  //   - world-space planar UV sampling of the _m.dds surface texture
-  //   - edge highlight matching 3d_map_cubes.mt EdgeColor/Thickness/Sharpness
+  // Build the MeshLambertNodeMaterial for one district.
+  //
+  // The TSL graph composes two effects on top of the standard Lambert pipeline:
+  //
+  //   1. `_m.dds` surface modulation (pre-lighting, via `colorNode`)
+  //      Original GLSL hook: `#include <color_fragment>`
+  //      Samples the district's `_m` heightmap with a world-space planar UV
+  //      and multiplies the diffuse colour. World position is read directly
+  //      from the `positionWorld` TSL node — Three.js routes the instance
+  //      matrix into it for `InstancedMesh` automatically, no `USE_INSTANCING`
+  //      branch required.
+  //
+  //   2. Edge highlight (post-lighting, via `emissiveNode`)
+  //      Original GLSL hook: `outgoingLight = mix(outgoingLight, edgeColor, ef)`
+  //      WebGPU has no user-facing post-lighting hook (NodeMaterial's
+  //      `outgoingLightNode` is a builder-local). `emissiveNode` is the closest
+  //      idiomatic fit — emissive is added to the lit colour at exactly the
+  //      same point in the pipeline. At our default 0.15 intensity the additive
+  //      vs mix difference is visually indistinguishable, and we keep tonemap.
+  //
+  // Per-district `uniform()` node refs are stashed on `mat.userData.tslUniforms`
+  // so the colour-binding registry (`getColorBindings.buildingsEdge`) can mutate
+  // `.value` during theme switches and flyover beat-driven colour tweens.
   function buildBuildingMaterial(meta, mTex) {
-    const mat = new THREE.MeshLambertMaterial({
+    const mat = new THREE.MeshLambertNodeMaterial({
       color: readThemeColor('--scene-buildings', '#7a8fa0'),
     });
-    mat.defines = { USE_UV: '' };  // ensure 'uv' attribute is declared in shader
 
-    mat.onBeforeCompile = (shader) => {
-      mat.userData.shader = shader;  // save for later uniform updates
+    // Per-district uniforms (the equivalents of the WebGL onBeforeCompile uniforms)
+    const uTransMin      = uniform(new THREE.Vector2(meta.transMin[0], meta.transMin[1]));
+    const uTransMax      = uniform(new THREE.Vector2(meta.transMax[0], meta.transMax[1]));
+    const uOffset        = uniform(new THREE.Vector2(meta.offset[0], meta.offset[1]));
+    const uEdgeColor     = uniform(readThemeColor('--scene-buildings-edge', '#ffffff'));
+    const uEdgeThickness = uniform(NCZ.BUILDING_EDGE_THICKNESS);
+    const uEdgeSharpness = uniform(NCZ.BUILDING_EDGE_SHARPNESS);
+    const uEdgeIntensity = uniform(NCZ.BUILDING_EDGE_INTENSITY);
+    // Surfaced for runtime mutation (theme rewire, debug intensity tweaks)
+    mat.userData.tslUniforms = { uEdgeColor, uEdgeIntensity, uEdgeThickness, uEdgeSharpness };
 
-      shader.uniforms.uTransMin      = { value: new THREE.Vector2(meta.transMin[0], meta.transMin[1]) };
-      shader.uniforms.uTransMax      = { value: new THREE.Vector2(meta.transMax[0], meta.transMax[1]) };
-      shader.uniforms.uOffset        = { value: new THREE.Vector2(...meta.offset) };
-      shader.uniforms.uMTex          = { value: mTex };
-      shader.uniforms.uEdgeColor     = { value: readThemeColor('--scene-buildings-edge', '#ffffff') };
-      shader.uniforms.uEdgeThickness = { value: NCZ.BUILDING_EDGE_THICKNESS };
-      shader.uniforms.uEdgeSharpness = { value: NCZ.BUILDING_EDGE_SHARPNESS };
-      shader.uniforms.uEdgeIntensity = { value: NCZ.BUILDING_EDGE_INTENSITY };
+    // World-space planar UV — XZ plane, normalised against the district's CET
+    // bounds. Original GLSL: vMUv = ((wx - off.x - min.x)/(max.x - min.x),
+    //                                (-wz - off.y - min.y)/(max.y - min.y))
+    const wx = positionWorld.x;
+    const wzNeg = positionWorld.z.negate();
+    const planarUv = vec2(
+      wx.sub(uOffset.x).sub(uTransMin.x).div(uTransMax.x.sub(uTransMin.x)),
+      wzNeg.sub(uOffset.y).sub(uTransMin.y).div(uTransMax.y.sub(uTransMin.y))
+    );
 
-      // ── Vertex shader — inject varyings + world-space UV ──────────────
-      shader.vertexShader = `
-        uniform vec2 uTransMin;
-        uniform vec2 uTransMax;
-        uniform vec2 uOffset;
-        varying vec2 vMUv;
-        varying vec2 vLocalUv;
-      ` + shader.vertexShader;
+    // (1) Diffuse modulation — sample _m, scale base colour
+    const mVal = texture(mTex, planarUv.clamp(0, 1)).r;
+    const modulation = float(NCZ.BUILDING_TEX_FLOOR).add(mVal.mul(NCZ.BUILDING_TEX_RANGE));
+    mat.colorNode = materialColor.mul(modulation);
 
-      // Replace project_vertex to also capture world position for planar UV.
-      // instanceMatrix * transformed gives world pos (model matrix is identity).
-      shader.vertexShader = shader.vertexShader.replace(
-        '#include <project_vertex>',
-        `vec4 mvPosition = vec4( transformed, 1.0 );
-        #ifdef USE_INSTANCING
-          mvPosition = instanceMatrix * mvPosition;
-        #endif
-        vMUv = vec2(
-          ( mvPosition.x - uOffset.x - uTransMin.x ) / ( uTransMax.x - uTransMin.x ),
-          ( -mvPosition.z - uOffset.y - uTransMin.y ) / ( uTransMax.y - uTransMin.y )
-        );
-        vLocalUv = uv;
-        mvPosition = modelViewMatrix * mvPosition;
-        gl_Position = projectionMatrix * mvPosition;`
-      );
-
-      // ── Fragment shader — _m texture modulation + edge highlight ───────
-      shader.fragmentShader = `
-        uniform sampler2D uMTex;
-        uniform vec3  uEdgeColor;
-        uniform float uEdgeThickness;
-        uniform float uEdgeSharpness;
-        uniform float uEdgeIntensity;
-        varying vec2 vMUv;
-        varying vec2 vLocalUv;
-      ` + shader.fragmentShader
-        .replace(
-          '#include <color_fragment>',
-          `#include <color_fragment>
-          float mVal = texture( uMTex, clamp( vMUv, 0.0, 1.0 ) ).r;
-          diffuseColor.rgb *= ${NCZ.BUILDING_TEX_FLOOR} + mVal * ${NCZ.BUILDING_TEX_RANGE};`
-        )
-        .replace(
-          'vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;',
-          `vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + totalEmissiveRadiance;
-          float _ed = min( min( vLocalUv.x, 1.0 - vLocalUv.x ), min( vLocalUv.y, 1.0 - vLocalUv.y ) );
-          float _ef = (1.0 - pow( clamp( _ed / uEdgeThickness, 0.0, 1.0 ), uEdgeSharpness )) * uEdgeIntensity;
-          outgoingLight = mix( outgoingLight, uEdgeColor, _ef );`
-        );
-    };
+    // (2) Edge highlight — distance-from-edge in local UV → emissive add
+    // ed = min(min(u, 1-u), min(v, 1-v)) — minimum of all 4 face-edge distances
+    // ef = (1 - pow(clamp(ed/thick, 0, 1), sharp)) * intens — sharp ramp near edge
+    const luv = uv();
+    const ed = luv.x.min(float(1).sub(luv.x)).min(luv.y).min(float(1).sub(luv.y));
+    const ef = float(1).sub(ed.div(uEdgeThickness).clamp(0, 1).pow(uEdgeSharpness)).mul(uEdgeIntensity);
+    mat.emissiveNode = uEdgeColor.mul(ef);
 
     return mat;
   }
@@ -1005,11 +1027,12 @@ const ThreeScene = (() => {
     const geometry = new LineGeometry();
     geometry.setPositions(positions);
 
-    const { clientWidth: w, clientHeight: h } = renderer.domElement;
-    const material = new LineMaterial({
+    // Line2NodeMaterial reads the viewport size from a TSL screen node at
+    // shader-execution time — no `resolution` field to keep in sync on resize
+    // like the WebGL LineMaterial required.
+    const material = new THREE.Line2NodeMaterial({
       color,
       linewidth: lineWidth,
-      resolution: new THREE.Vector2(w, h),
       depthTest: false,
       transparent: true,
       opacity: NCZ.DISTRICT_LINE_OPACITY,
@@ -1226,7 +1249,7 @@ const ThreeScene = (() => {
   function setOverrideMaterial(enabled) {
     if (!scene) return;
     if (enabled) {
-      if (!_debugOverrideMat) _debugOverrideMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+      if (!_debugOverrideMat) _debugOverrideMat = new THREE.MeshBasicNodeMaterial({ color: 0x00ff00 });
       scene.overrideMaterial = _debugOverrideMat;
     } else {
       scene.overrideMaterial = null;
@@ -1234,16 +1257,16 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  // Runtime control of the building edge highlight intensity. The shader's
+  // Runtime control of the building edge highlight intensity. The TSL
   // uEdgeIntensity uniform is captured from NCZ.BUILDING_EDGE_INTENSITY at
   // material-compile time, so changing the constant alone doesn't propagate
-  // to live materials — this iterates the existing shader refs and updates them.
+  // to live materials — this iterates the cached uniform refs and updates them.
   // Diagnostic use: set to 0 to test whether shimmer disappears entirely;
   // future Stage 2 quality preset use: dim/disable highlight on Low.
   function setBuildingEdgeIntensity(value) {
     for (const mat of buildingMaterials) {
-      const sh = mat.userData.shader;
-      if (sh && sh.uniforms.uEdgeIntensity) sh.uniforms.uEdgeIntensity.value = value;
+      const u = mat.userData.tslUniforms;
+      if (u?.uEdgeIntensity) u.uEdgeIntensity.value = value;
     }
     requestRender();
   }
@@ -1268,19 +1291,40 @@ const ThreeScene = (() => {
       };
     }
 
-    // GPU details via WEBGL_debug_renderer_info extension (where allowed)
+    // GPU details — two paths:
+    //   WebGPU: pull from the cached GPUAdapterInfo on the backend adapter.
+    //           WGSL spec exposes `vendor` and `architecture`/`description`;
+    //           Three.js caches whatever the browser surfaces at adapter request.
+    //   WebGL2: legacy WEBGL_debug_renderer_info extension, gated by browser
+    //           anti-fingerprinting policy (some browsers return null UNMASKED_*).
     let gpu = 'unknown', vendor = 'unknown', maxTexture = '?', maxRb = '?';
     if (renderer) {
-      const gl = renderer.getContext();
       try {
-        const ext = gl.getExtension('WEBGL_debug_renderer_info');
-        if (ext) {
-          gpu    = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
-          vendor = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL);
+        if (renderer.isWebGPURenderer) {
+          const adapterInfo = renderer.backend?.adapterInfo;
+          if (adapterInfo) {
+            gpu    = adapterInfo.description || adapterInfo.architecture || 'unknown';
+            vendor = adapterInfo.vendor || 'unknown';
+          }
+          const limits = renderer.backend?.device?.limits;
+          if (limits) {
+            maxTexture = limits.maxTextureDimension2D ?? '?';
+            // No direct renderbuffer limit in WebGPU — use storage-buffer binding size
+            // as the closest analogue; surfaces under the same "how big can a single
+            // GPU resource be" question as the WebGL value.
+            maxRb      = limits.maxStorageBufferBindingSize ?? '?';
+          }
+        } else if (renderer.getContext) {
+          const gl  = renderer.getContext();
+          const ext = gl.getExtension('WEBGL_debug_renderer_info');
+          if (ext) {
+            gpu    = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
+            vendor = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL);
+          }
+          maxTexture = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+          maxRb      = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
         }
-        maxTexture = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-        maxRb      = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
-      } catch (_) { /* extension not available */ }
+      } catch (_) { /* introspection unavailable — leave defaults */ }
     }
 
     const shadowTypeNames = ['BasicShadowMap', 'PCFShadowMap', 'PCFSoftShadowMap', 'VSMShadowMap'];
@@ -1288,16 +1332,26 @@ const ThreeScene = (() => {
       timestamp: new Date().toISOString(),
       fps,
       render: renderer ? {
-        drawCalls:  renderer.info.render.calls,
-        triangles:  renderer.info.render.triangles,
-        lines:      renderer.info.render.lines,
-        geometries: renderer.info.memory.geometries,
-        textures:   renderer.info.memory.textures,
-        programs:   renderer.info.programs ? renderer.info.programs.length : 0,
+        drawCalls:    renderer.info.render.calls,
+        triangles:    renderer.info.render.triangles,
+        lines:        renderer.info.render.lines,
+        // computeCalls is a WebGPU-only stat — undefined under WebGL2 fallback.
+        computeCalls: renderer.info.render.computeCalls ?? 0,
+        geometries:   renderer.info.memory.geometries,
+        textures:     renderer.info.memory.textures,
+        // `info.programs` is a WebGL2-only array; WebGPU compiles pipelines
+        // lazily and doesn't expose a comparable count.
+        programs:     renderer.info.programs ? renderer.info.programs.length : null,
       } : null,
       rendererSettings: renderer ? {
         pixelRatio:     renderer.getPixelRatio(),
-        antialias:      !!(renderer.getContextAttributes() && renderer.getContextAttributes().antialias),
+        // No `getContextAttributes()` on WebGPURenderer — track from constructor
+        // params via a sentinel set at init time. Falls back to the legacy path
+        // for WebGL2 where the WebGL context exposes these directly.
+        antialias:      renderer.isWebGPURenderer
+                          ? !!_rendererInitParams?.antialias
+                          : !!(renderer.getContextAttributes?.() && renderer.getContextAttributes().antialias),
+        backend:        renderer.isWebGPURenderer ? 'WebGPU' : 'WebGL2',
         shadowsEnabled: renderer.shadowMap.enabled,
         shadowMapType:  shadowTypeNames[renderer.shadowMap.type] || String(renderer.shadowMap.type),
       } : null,
@@ -1332,14 +1386,16 @@ const ThreeScene = (() => {
       lines.push('FPS:           (not enough samples — render loop not running?)');
     }
     if (dump.render) {
-      lines.push(`Draw calls:    ${dump.render.drawCalls}`);
+      lines.push(`Draw calls:    ${dump.render.drawCalls}${dump.render.computeCalls ? `    Compute: ${dump.render.computeCalls}` : ''}`);
       lines.push(`Triangles:     ${dump.render.triangles.toLocaleString()}`);
-      lines.push(`Geometries:    ${dump.render.geometries}    Textures: ${dump.render.textures}    Programs: ${dump.render.programs}`);
+      // Programs is WebGL2-only — show "n/a" rather than "null" under WebGPU.
+      const programsField = dump.render.programs == null ? 'n/a (WebGPU)' : dump.render.programs;
+      lines.push(`Geometries:    ${dump.render.geometries}    Textures: ${dump.render.textures}    Programs: ${programsField}`);
     }
     if (dump.rendererSettings) {
       const r = dump.rendererSettings;
       lines.push('');
-      lines.push(`Renderer:      DPR ${r.pixelRatio} / AA ${r.antialias ? 'on' : 'off'} / Shadows ${r.shadowsEnabled ? r.shadowMapType : 'off'}`);
+      lines.push(`Renderer:      ${r.backend} / DPR ${r.pixelRatio} / AA ${r.antialias ? 'on' : 'off'} / Shadows ${r.shadowsEnabled ? r.shadowMapType : 'off'}`);
     }
     lines.push(`Display:       ${dump.display.windowSize} window, ${dump.display.screenSize} screen, ${dump.display.devicePixelRatio} DPR`);
     lines.push(`Effective px:  ${dump.display.effectivePixels.toLocaleString()}`);
@@ -1436,14 +1492,14 @@ const ThreeScene = (() => {
     // Update landmark material — shares --scene-buildings colour
     if (landmarkMat) landmarkMat.color.copy(readThemeColor('--scene-buildings', '#7a8fa0'));
 
-    // Update building materials — MeshLambertMaterial.color + onBeforeCompile edge uniform
+    // Update building materials — MeshLambertNodeMaterial.color + TSL edge-colour uniform
     if (buildingMaterials.length) {
       const base = readThemeColor('--scene-buildings', '#7a8fa0');
       const edge = readThemeColor('--scene-buildings-edge', '#ffffff');
       for (const mat of buildingMaterials) {
         mat.color.copy(base);
-        const sh = mat.userData.shader;
-        if (sh) sh.uniforms.uEdgeColor.value.copy(edge);
+        const u = mat.userData.tslUniforms;
+        if (u?.uEdgeColor) u.uEdgeColor.value.copy(edge);
       }
     }
     requestRender();
@@ -1487,9 +1543,9 @@ const ThreeScene = (() => {
         lerp:  (f, t, a) => { buildingMaterials.forEach(m => m.color.lerpColors(f, t, a)); landmarkMat?.color.lerpColors(f, t, a); },
       },
       { key: 'buildingsEdge', cssVar: '--scene-buildings-edge', fallback: '#ffffff',
-        get:   () => buildingMaterials[0]?.userData.shader?.uniforms.uEdgeColor.value.clone() ?? null,
-        reset: c  => buildingMaterials.forEach(m => { const sh = m.userData.shader; if (sh) sh.uniforms.uEdgeColor.value.copy(c); }),
-        lerp:  (f, t, a) => buildingMaterials.forEach(m => { const sh = m.userData.shader; if (sh) sh.uniforms.uEdgeColor.value.lerpColors(f, t, a); }),
+        get:   () => buildingMaterials[0]?.userData.tslUniforms?.uEdgeColor.value.clone() ?? null,
+        reset: c  => buildingMaterials.forEach(m => { const u = m.userData.tslUniforms; if (u) u.uEdgeColor.value.copy(c); }),
+        lerp:  (f, t, a) => buildingMaterials.forEach(m => { const u = m.userData.tslUniforms; if (u) u.uEdgeColor.value.lerpColors(f, t, a); }),
       },
     ];
   }

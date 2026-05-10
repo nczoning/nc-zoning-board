@@ -578,8 +578,12 @@ async function initMap() {
     if (viewName === "schema") {
       mapEl.style.display   = "none";
       map3dEl.style.display = "block";
-      NCZ.ThreeScene.init("map-3d");
-      NCZ.ThreeScene.startRenderLoop();
+      // ThreeScene.init() is async under WebGPURenderer (await renderer.init()).
+      // Chain startRenderLoop so the loop only ticks once the renderer is ready.
+      // First-call goes through full async init; subsequent calls early-out
+      // synchronously (initialized guard) and the chain still resolves immediately.
+      Promise.resolve(NCZ.ThreeScene.init("map-3d"))
+        .then(() => NCZ.ThreeScene.startRenderLoop());
     } else {
       map3dEl.style.display = "none";
       mapEl.style.display   = "block";

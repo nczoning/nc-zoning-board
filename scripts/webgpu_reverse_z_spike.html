@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phase 0 Spike #2 — Reverse-Z Smoke Check</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #0a0a0a; color: #ddd;
+               font: 14px/1.4 system-ui, sans-serif; }
+  #info { position: fixed; top: 8px; left: 8px; right: 8px; padding: 10px 14px;
+          background: rgba(0, 0, 0, 0.78); border: 1px solid #444; border-radius: 6px;
+          z-index: 1; }
+  #info h1 { margin: 0 0 6px; font-size: 15px; color: #00f0ff; }
+  #info p  { margin: 4px 0; }
+  #info .pass    { color: #6f6; font-weight: bold; }
+  #info .fail    { color: #f66; font-weight: bold; }
+  #info .pending { color: #fc6; font-weight: bold; }
+  #info button { background: #222; border: 1px solid #555; color: #ddd; padding: 4px 10px;
+                 font-family: inherit; font-size: 12px; cursor: pointer; margin-right: 6px; }
+  #info button:hover { background: #333; }
+  #info button.active { background: #00f0ff; color: #000; border-color: #00f0ff; }
+  canvas { display: block; }
+</style>
+</head>
+<body>
+<div id="info">
+  <h1>Phase 0 Spike #2 — Reverse-Z + WebGPU + production-scale frustum</h1>
+  <p><b>Setup:</b> 200 building-cubes scattered with near-coplanar Z (0–10) plus a far landmark
+     at Z=20000. Camera frustum near=10, far=25000 (matches production).</p>
+  <p><b>PASS criteria:</b> no Z-fighting on near-coplanar cubes AND the far landmark renders
+     without depth-precision artefacts under <code>reversedDepthBuffer: true</code>.</p>
+  <p>Compare modes: <button id="btn-reverse" class="active">reverse-Z (target)</button>
+     <button id="btn-log">log-depth (current)</button>
+     <button id="btn-default">default depth (no workaround)</button></p>
+  <p><b>Status:</b> <span id="status" class="pending">initializing renderer…</span></p>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.webgpu.min.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const status = document.getElementById('status');
+const setStatus = (text, cls = 'pending') => {
+  status.className = cls; status.textContent = text;
+};
+
+const params = new URLSearchParams(location.search);
+const initialMode = params.get('depth') || 'reverse';
+
+let renderer = null;
+let controls = null;
+let activeMode = null;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0a0a);
+const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 10, 25000);
+camera.position.set(0, 80, 80);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+sun.position.set(20, 50, 30);
+scene.add(sun);
+
+// 200 near-coplanar cubes — depth-precision stress
+const cubeGeo = new THREE.BoxGeometry(2, 0.3, 2);
+const cubeMat = new THREE.MeshLambertNodeMaterial({ color: 0x556677 });
+for (let i = 0; i < 200; i++) {
+  const c = new THREE.Mesh(cubeGeo, cubeMat);
+  c.position.set(
+    (Math.random() - 0.5) * 80,
+    Math.random() * 10,            // 0–10: tight Z range, will fight without help
+    (Math.random() - 0.5) * 80,
+  );
+  scene.add(c);
+}
+
+// Far landmark — far-frustum precision check
+const farMat = new THREE.MeshLambertNodeMaterial({ color: 0xffb300 });
+const far = new THREE.Mesh(new THREE.BoxGeometry(200, 200, 200), farMat);
+far.position.set(0, 100, -20000);
+scene.add(far);
+
+async function buildRenderer(mode) {
+  if (renderer) {
+    document.body.removeChild(renderer.domElement);
+    renderer.dispose?.();
+    controls?.dispose();
+  }
+
+  const opts = { antialias: true };
+  if (mode === 'reverse') opts.reversedDepthBuffer  = true;
+  if (mode === 'log')     opts.logarithmicDepthBuffer = true;
+
+  renderer = new THREE.WebGPURenderer(opts);
+  await renderer.init();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 5, 0);
+
+  activeMode = mode;
+  document.querySelectorAll('#info button').forEach(b => b.classList.remove('active'));
+  document.getElementById(`btn-${mode}`)?.classList.add('active');
+
+  const adapterInfo = renderer.backend?.adapter
+    ? await renderer.backend.adapter.requestAdapterInfo?.().catch(() => null)
+    : null;
+  const gpuName = adapterInfo?.description || adapterInfo?.vendor || '(unknown GPU)';
+  setStatus(`mode=${mode} · backend=${renderer.isWebGPURenderer ? 'WebGPU' : 'WebGL2 fallback'} · GPU=${gpuName} · zoom out to inspect far landmark`, 'pass');
+
+  renderer.setAnimationLoop(() => {
+    controls.update();
+    renderer.render(scene, camera);
+  });
+}
+
+document.getElementById('btn-reverse').addEventListener('click', () => buildRenderer('reverse'));
+document.getElementById('btn-log').addEventListener('click', () => buildRenderer('log'));
+document.getElementById('btn-default').addEventListener('click', () => buildRenderer('default'));
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer?.setSize(window.innerWidth, window.innerHeight);
+});
+
+try {
+  await buildRenderer(initialMode);
+} catch (err) {
+  console.error(err);
+  setStatus(`FAIL — ${err.message}`, 'fail');
+}
+</script>
+</body>
+</html>
