@@ -367,8 +367,8 @@ const ThreeScene = (() => {
     _dirLight.shadow.camera.near = NCZ.SHADOW_CAM_NEAR;
     _dirLight.shadow.camera.far  = NCZ.SHADOW_CAM_FAR; // orthographic ⇒ a wide range costs no precision
     _dirLight.shadow.camera.name = 'sun-shadow-cam';
-    _dirLight.shadow.bias        = NCZ.SHADOW_BIAS;       // 0 — native depth32float + reverse-Z + a tight map need no cushion
-    _dirLight.shadow.normalBias  = NCZ.SHADOW_NORMAL_BIAS; // 0 — ditto
+    _dirLight.shadow.bias        = NCZ.SHADOW_BIAS;        // 0 — native depth32float + reverse-Z need no depth cushion
+    // normalBias is set per-frame by updateShadowCamera (scaled with the footprint).
     _dirLight.shadow.intensity   = _shadowsOn ? 1 : 0;
     _dirLight.target.name = 'sun-target';
     // Position the light + target are set by updateShadowCamera (it centres the
@@ -1988,7 +1988,10 @@ const ThreeScene = (() => {
       const tilt = controls.getPolarAngle?.() ?? 0;
       const D = (2 * camera.top / camera.zoom) / Math.max(0.25, Math.cos(tilt)); // 0.25 ≈ cos 76°, past CAMERA_MAX_TILT
       half = Math.min(0.5 * Math.hypot(W, D), NCZ.SHADOW_MAX_DISTANCE) + NCZ.SHADOW_GROUND_MARGIN;
-      center = controls.target;
+      // Pin the centre to the ground plane (Y = 0): controls.target can drift
+      // off Y=0 with screen-space panning at a tilt, which would slide the
+      // footprint off the terrain. The terrain is at Y≈0 — centre on it.
+      center = _shadowScratchV.set(controls.target.x, 0, controls.target.z);
     } else {
       // External camera (showcase fly cam) — square at the shadow draw distance,
       // centred where the camera's forward ray meets the ground (Y = 0).
@@ -2004,6 +2007,11 @@ const ThreeScene = (() => {
     shadowCam.near = NCZ.SHADOW_CAM_NEAR;
     shadowCam.far  = NCZ.SHADOW_CAM_FAR;
     shadowCam.updateProjectionMatrix();
+    // Normal-bias the receiver samples by a few shadow texels' worth of world
+    // units — scaled with the footprint so it's the same texel offset at every
+    // zoom (a constant world bias is too small zoomed out → grazing-sun acne
+    // ["the wave" on flat terrain/water], too large zoomed in → shadows detach).
+    _dirLight.shadow.normalBias = NCZ.SHADOW_NORMAL_BIAS_TEXELS * (2 * half / NCZ.SHADOW_MAP_SIZE);
 
     // Keep the sun light SUN_DIST up the sun ray from the footprint centre.
     // Orthographic ⇒ only the direction matters for shading; the distance just

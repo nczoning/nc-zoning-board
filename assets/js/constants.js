@@ -209,11 +209,8 @@ NCZ.SHADOW_MAX_DISTANCE  = 12000; // CET units — cap on the footprint half-sid
 NCZ.SHADOW_GROUND_MARGIN =   600; // CET units the footprint extends past the visible ground — covers building heights / terrain relief + a sliver of just-off-screen casters. Wider off-screen-caster coverage waits on the union-frustum cull (a follow-up).
 NCZ.SHADOW_CAM_NEAR      =     1; // shadow camera near clip
 NCZ.SHADOW_CAM_FAR       = 40000; // shadow camera far clip — the camera sits SUN_DIST up the sun ray, so this must still reach the far edge of the footprint even at a low sun (orthographic ⇒ a wide range costs no precision)
-// Bias: 0 is clean — native depth32float shadow textures + reverse-Z + a tight
-// map have ample precision (the old -0.0005 / 0.01 were for the WebGL
-// RGBA8-packed path). Left as knobs: re-arm if acne ever surfaces.
-NCZ.SHADOW_BIAS          = 0;
-NCZ.SHADOW_NORMAL_BIAS   = 0;
+NCZ.SHADOW_BIAS          =     0; // NDC depth bias — 0; native depth32float + reverse-Z have ample depth precision (the old -0.0005 was for the WebGL RGBA8-packed path). The geometric self-shadow ("texel patch covers a depth range") is handled by the normal bias instead:
+NCZ.SHADOW_NORMAL_BIAS_TEXELS = 2.5; // receiver-sample offset along the surface normal, in shadow-texel widths — converted to world units per-frame by updateShadowCamera (scaling with the footprint keeps it the same texel offset at every zoom). Raise to kill residual grazing-sun acne ("the wave" on flat terrain/water); lower if shadows visibly detach from their casters at high zoom.
 
 // Lighting — directional sun + hemisphere fill
 NCZ.AMBIENT_INTENSITY  = 0.35;   // hemisphere-fill share; the sun gets (1 - this) at full elevation
