@@ -209,14 +209,20 @@ NCZ.SHADOW_MAP_SIZE      = 2048;  // px² per cascade — 2×2048² ≈ half the
 NCZ.SHADOW_CAM_NEAR      = 1;     // per-cascade shadow camera near clip (template — CSM clones light.shadow per cascade)
 NCZ.SHADOW_CAM_FAR       = 30000; // per-cascade shadow camera far clip — must span the cascade frustum's depth in light space + the light margin (orthographic ⇒ a large range costs no precision)
 NCZ.SHADOW_LIGHT_MARGIN  = 1000;  // CET units the cascade's shadow camera sits behind its frustum bbox — headroom so tall casters' tops aren't clipped
-NCZ.SHADOW_BIAS          = -0.0005; // base depth bias — CSM scales it ×(cascade+1) so the looser far cascades get proportionally more
-NCZ.SHADOW_NORMAL_BIAS   =  0.01;  // offset along the surface normal — prevents acne on sloped faces
+// Bias: 0 is clean — native depth32float shadow textures + reverse-Z + the
+// tight per-cascade depth ranges have plenty of precision, so neither the depth
+// bias (was -0.0005 for the WebGL RGBA8-packed path) nor the normal-offset bias
+// (was 0.01) is needed. Left as knobs: CSM still scales SHADOW_BIAS ×(cascade+1),
+// so re-arm here if acne ever surfaces at extreme zoom/tilt.
+NCZ.SHADOW_BIAS          = 0;
+NCZ.SHADOW_NORMAL_BIAS   = 0;
 // Orthographic-proxy depth window. Our schema camera's native near is negative
 // (geometry can sit behind it during low showcase flyovers — see CAMERA_NEAR),
 // which would collapse CSM's view-Z-based cascade selection into one bucket. We
 // feed CSM a proxy ortho camera whose near/far hug the visible ground:
 //   near = camDist − groundHalfDepth ,  far = camDist + groundHalfDepth
-// camDist ≈ orbit radius; groundHalfDepth ≈ visibleHalf·sin(tilt) + slack.
+// where groundHalfDepth = (camera.top / zoom)·tan(tilt) + slack — the visible
+// ground's view-depth half-spread (it grows as tan(tilt), zero at top-down).
 NCZ.SHADOW_PROXY_DEPTH_SLACK = 1500; // CET units of headroom around the visible-ground depth band (covers building heights / terrain relief; keeps every caster's depth inside linearDepth ∈ [0,1])
 
 // Lighting — directional sun + ambient

@@ -2027,13 +2027,16 @@ const ThreeScene = (() => {
     // orthographic camera, OrbitControls keeps this ≈ the orbit radius
     // regardless of zoom or tilt — a stable ~CAMERA_HEIGHT value.
     const camDist     = camera.position.distanceTo(controls.target);
-    // How far the visible ground strip spreads along the view axis: at tilt θ a
-    // strip of half-width `visibleHalf` reaches ≈ visibleHalf·sinθ deeper. Slack
-    // covers building heights / terrain relief so no caster's depth lands
-    // outside the proxy's near/far window (which would drop it from cascade 0).
-    const tilt        = controls.getPolarAngle?.() ?? 0;   // 0 = top-down, grows toward CAMERA_MAX_TILT
-    const visibleHalf = Math.max(camera.right, camera.top) / camera.zoom;
-    const groundHalfDepth = visibleHalf * Math.sin(tilt) + NCZ.SHADOW_PROXY_DEPTH_SLACK;
+    // How far the visible ground spreads along the view axis. The screen-vertical
+    // half-extent (camera.top/zoom, in world units) maps to ±(that)·tan(tilt) of
+    // view-depth on the ground: at top-down (tilt 0) the whole visible ground is
+    // a single depth (only the slack matters); at our ~70° max tilt it spreads
+    // ~2.75× the screen-vertical extent. Clamp tan well above CAMERA_MAX_TILT so
+    // it can't blow up. Slack covers building heights / terrain relief so no
+    // caster's depth lands outside the proxy window (→ dropped from all cascades).
+    const tilt       = controls.getPolarAngle?.() ?? 0;   // 0 = top-down, grows toward CAMERA_MAX_TILT
+    const screenHalf = camera.top / camera.zoom;           // world units, screen-vertical half-extent at the current zoom
+    const groundHalfDepth = screenHalf * Math.tan(Math.min(tilt, Math.PI * 0.45)) + NCZ.SHADOW_PROXY_DEPTH_SLACK;
     // Proxy: schema camera's view + XY frustum, but a sane positive near/far band.
     _csmCamera.left   = camera.left;
     _csmCamera.right  = camera.right;
