@@ -604,10 +604,18 @@ const ThreeScene = (() => {
       ]);
 
       terrainMat = makeHillshadeMaterial('--scene-terrain', '#566c88');
-      // Water writes stencil=2 — SeeThrough roads only render where stencil==2 (Pacifica tunnel)
+      // Water writes stencil=2 — SeeThrough roads only render where stencil==2 (Pacifica tunnel).
+      // stencilZFail: Replace fixes a WebGPU reverse-Z regression where water's depth-test
+      // result flipped at certain camera rotations (suspected coplanar-fragment edge: WebGL
+      // `lessEqual` accepted coplanar terrain/water meshes; reverse-Z `greater` rejects them),
+      // dropping stencil=2 in patches of the tunnel surface. Writing stencil regardless of the
+      // depth result keeps the mask intact — buildings' Replace→1 still overwrites it where
+      // they sit, so SeeThrough roads still respect building occlusion.
       waterMat   = makeHillshadeMaterial('--scene-water', '#2a3f57', {
         stencilWrite: true, stencilRef: 2,
-        stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp,
+        stencilFunc: THREE.AlwaysStencilFunc,
+        stencilZPass: THREE.ReplaceStencilOp,
+        stencilZFail: THREE.ReplaceStencilOp,
       });
       cliffsMat  = makeHillshadeMaterial('--scene-cliffs',   '#566c88');
       applyMaterial(terrainScene, terrainMat);
