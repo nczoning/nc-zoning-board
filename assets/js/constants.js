@@ -198,17 +198,26 @@ NCZ.CAMERA_ZOOM_SPEED   = 2.0;            // zoomSpeed       (Three.js default: 
 NCZ.CAMERA_PAN_SPEED    = 1.0;            // panSpeed        (Three.js default: 1.0)         — left-drag pan rate
 NCZ.CAMERA_ROTATE_SPEED = 0.6;            // rotateSpeed     (Three.js default: 1.0)         — right-drag tilt rate; lower = more precise
 
-// Shadow map — PCFSoftShadowMap, orthographic frustum centred on Night City
-// The shadow camera sits at the sun position (NCZ.SUN_DIST away) and looks down.
-NCZ.SHADOW_MAP_SIZE    = 4096;  // px² — dynamically concentrated by zoom; ~0.07 CET units/texel at zoom=50
-NCZ.SHADOW_FRUSTUM     = 7000;  // ±7000 units at full zoom-out; scaled down by camera.zoom for sharper shadows when zoomed in
-NCZ.SHADOW_FRUSTUM_MIN =  400;  // minimum frustum radius — prevents over-concentration at extreme zoom+tilt
-NCZ.SHADOW_CAM_NEAR    =   10;  // near clip — 10 units from the light; avoids near-plane artefacts
-NCZ.SHADOW_CAM_FAR     = 25000; // far clip — must reach the terrain from the sun's position (~8000 units away) with headroom
-NCZ.SHADOW_BIAS        = -0.0005; // depth bias — small negative value reduces shadow acne (self-shadowing artefacts)
-NCZ.SHADOW_NORMAL_BIAS =  0.01;  // offset along surface normal — prevents acne on sloped faces
-NCZ.SHADOW_MIN_ELEV    =    5;   // degrees — shadow casting disabled below this sun elevation
-                                  // (avoids infinitely long degenerate projections near sunrise/sunset)
+// Shadow map — Cascaded Shadow Maps (CSMShadowNode, WebGPU). The directional
+// sun's shadow is split into N depth cascades, each rendered into its own
+// depth32float texture and auto-fit to the slice of the camera frustum it
+// covers, so near geometry gets a tight high-res cascade and far geometry a
+// looser one. CSM positions/sizes the per-cascade shadow cameras itself —
+// see updateShadowCascades() in three-scene.js for the proxy-camera plumbing.
+NCZ.SHADOW_CASCADES      = 2;     // cascade count (2–3 sane; each cascade re-renders the shadow-casting geometry, so >3 multiplies the shadow-pass cost)
+NCZ.SHADOW_MAP_SIZE      = 2048;  // px² per cascade — 2×2048² ≈ half the texels of the old single 4096² map
+NCZ.SHADOW_CAM_NEAR      = 1;     // per-cascade shadow camera near clip (template — CSM clones light.shadow per cascade)
+NCZ.SHADOW_CAM_FAR       = 30000; // per-cascade shadow camera far clip — must span the cascade frustum's depth in light space + the light margin (orthographic ⇒ a large range costs no precision)
+NCZ.SHADOW_LIGHT_MARGIN  = 1000;  // CET units the cascade's shadow camera sits behind its frustum bbox — headroom so tall casters' tops aren't clipped
+NCZ.SHADOW_BIAS          = -0.0005; // base depth bias — CSM scales it ×(cascade+1) so the looser far cascades get proportionally more
+NCZ.SHADOW_NORMAL_BIAS   =  0.01;  // offset along the surface normal — prevents acne on sloped faces
+// Orthographic-proxy depth window. Our schema camera's native near is negative
+// (geometry can sit behind it during low showcase flyovers — see CAMERA_NEAR),
+// which would collapse CSM's view-Z-based cascade selection into one bucket. We
+// feed CSM a proxy ortho camera whose near/far hug the visible ground:
+//   near = camDist − groundHalfDepth ,  far = camDist + groundHalfDepth
+// camDist ≈ orbit radius; groundHalfDepth ≈ visibleHalf·sin(tilt) + slack.
+NCZ.SHADOW_PROXY_DEPTH_SLACK = 1500; // CET units of headroom around the visible-ground depth band (covers building heights / terrain relief; keeps every caster's depth inside linearDepth ∈ [0,1])
 
 // Lighting — directional sun + ambient
 NCZ.AMBIENT_INTENSITY  = 0.35;   // ambient light share; sun gets (1 - ambient) when at full elevation

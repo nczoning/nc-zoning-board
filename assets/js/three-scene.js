@@ -31,11 +31,40 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Line2 } from 'three/addons/lines/webgpu/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js';
 import Stats from 'three/addons/libs/stats.module.js';
 
 window.NCZ = window.NCZ || {};
 
 const SUN_DIR = new THREE.Vector3(-1, 1.5, -1).normalize();
+
+/**
+ * CSMShadowNode that drives its cascade splits from a caller-supplied proxy
+ * camera instead of the camera the scene is rendered with.
+ *
+ * Why a proxy: our schema OrthographicCamera uses a *negative* near plane —
+ * geometry can sit behind it during low showcase flyovers (see NCZ.CAMERA_NEAR).
+ * CSM picks a fragment's cascade from its view-space depth mapped to [0,1] via
+ * `camera.near`/`camera.far`; a negative near makes that mapping collapse so
+ * every fragment lands in the same cascade. The proxy camera (set up in
+ * three-scene.js) shares the schema camera's view and XY frustum but carries a
+ * sane positive near/far window that hugs the visible ground, so the split is
+ * meaningful at all tilts.
+ *
+ * `_init` is the one hook CSMShadowNode runs lazily on the first render to bind
+ * its camera; overriding it to bind the proxy is the only change needed —
+ * everything downstream (updateFrustums, updateBefore, the TSL
+ * `reference('camera.near', …)`) reads `this.camera`, which is now the proxy.
+ */
+class ProxyCSMShadowNode extends CSMShadowNode {
+  constructor(light, proxyCamera, data) {
+    super(light, data);
+    this._proxyCamera = proxyCamera;
+  }
+  _init(builder) {
+    super._init({ camera: this._proxyCamera, renderer: builder.renderer });
+  }
+}
 
 const ThreeScene = (() => {
   let renderer, camera, scene, controls;
@@ -47,6 +76,8 @@ const ThreeScene = (() => {
   let loadStepsDone  = 0;
   let _dirLight      = null; // stored so setSunPosition can update it live
   let _ambLight      = null;
+  let _csm           = null; // ProxyCSMShadowNode — owns the per-cascade shadow cameras
+  let _csmCamera     = null; // orthographic proxy fed to CSM (see updateShadowCascades)
   let _shadowsOn     = true;  // shadows on by default; checkbox reflects this via poll
   let _sunSphere     = null; // visible sun disc — shown during showcase only
   let _sunAz = Math.PI * 0.25, _sunEl = Math.PI * 0.35; // last setSunPosition args
@@ -305,6 +336,11 @@ const ThreeScene = (() => {
     renderer.setSize(container.clientWidth, container.clientHeight, false);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+    // Render-on-demand already decides *whether* a frame renders; this decides
+    // whether the shadow cascades re-render within a frame. updateShadowCascades()
+    // (camera moved) and setSunPosition() (sun moved) raise needsUpdate; renders
+    // that change nothing geometric (theme tweens, pin hover) skip the shadow pass.
+    renderer.shadowMap.autoUpdate = false;
     // Take the canvas out of document flow so its pixel-buffer dimensions
     // can never push or displace surrounding layout elements.
     // inset:0 stretches it to fill #map-3d on all four sides — no explicit
@@ -342,25 +378,47 @@ const ThreeScene = (() => {
     _dirLight.name = 'sun';
     _dirLight.position.copy(SUN_DIR).multiplyScalar(NCZ.SUN_DIST);
 
-    // Shadow map: 4096² covers the ~14 000-unit world at ~3.4 units/texel.
-    // Frustum centred on Night City (NCZ.WORLD_CX, 0, -NCZ.WORLD_CY).
-    _dirLight.castShadow                    = _shadowsOn;
+    // Cascaded shadow maps. _dirLight.shadow holds the *template* CSM clones
+    // per cascade (mapSize, near/far, bias); CSM sizes/positions each cascade's
+    // shadow camera itself from the proxy camera's frustum (see
+    // updateShadowCascades). castShadow stays on permanently — the "shadows"
+    // layer toggle flips shadow *intensity* via setShadowsEnabled rather than
+    // this flag, because toggling castShadow on a live light tears its depth
+    // texture down mid-frame and crashes WebGPURenderer.
+    _dirLight.castShadow            = true;
     _dirLight.shadow.mapSize.set(NCZ.SHADOW_MAP_SIZE, NCZ.SHADOW_MAP_SIZE);
-    _dirLight.shadow.camera.left            = -NCZ.SHADOW_FRUSTUM;
-    _dirLight.shadow.camera.right           =  NCZ.SHADOW_FRUSTUM;
-    _dirLight.shadow.camera.top             =  NCZ.SHADOW_FRUSTUM;
-    _dirLight.shadow.camera.bottom          = -NCZ.SHADOW_FRUSTUM;
-    _dirLight.shadow.camera.near            = NCZ.SHADOW_CAM_NEAR;
-    _dirLight.shadow.camera.far             = NCZ.SHADOW_CAM_FAR;
-    _dirLight.shadow.bias                   = NCZ.SHADOW_BIAS;
-    _dirLight.shadow.normalBias             = NCZ.SHADOW_NORMAL_BIAS;
+    _dirLight.shadow.camera.near    = NCZ.SHADOW_CAM_NEAR;
+    _dirLight.shadow.camera.far     = NCZ.SHADOW_CAM_FAR;
+    _dirLight.shadow.bias           = NCZ.SHADOW_BIAS;
+    _dirLight.shadow.normalBias     = NCZ.SHADOW_NORMAL_BIAS;
+    _dirLight.shadow.intensity      = _shadowsOn ? 1 : 0;
 
-    // Centre the shadow frustum on Night City, not the world origin
+    // Centre the (placeholder) light target on Night City; CSM repositions the
+    // per-cascade lights each render, but the template's direction comes from here.
     _dirLight.target.position.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
     _dirLight.target.name = 'sun-target';
 
     scene.add(_dirLight);
     scene.add(_dirLight.target);
+
+    // Orthographic proxy that drives CSM's cascade splits (see ProxyCSMShadowNode).
+    // Its left/right/top/bottom/zoom/transform mirror the schema camera; its
+    // near/far are recomputed by updateShadowCascades to hug the visible ground.
+    // Synced for real once OrbitControls exists (just below) and on every change.
+    _csmCamera = new THREE.OrthographicCamera();
+    _csmCamera.name = 'csm-proxy-camera';
+    _csm = new ProxyCSMShadowNode(_dirLight, _csmCamera, {
+      cascades:    NCZ.SHADOW_CASCADES,
+      mode:        'practical',          // logarithmic-ish near split, uniform-ish far
+      lightMargin: NCZ.SHADOW_LIGHT_MARGIN,
+      // Cap the shadowed depth at the city's scale. Matters for the showcase
+      // flyCamera (FLYOVER_CAM_FAR is 120 km — without this the cascades would
+      // span 120 km and dissolve into nothing); the ortho proxy's far is already
+      // well under this so it's unaffected.
+      maxFar:      NCZ.SHADOW_CAM_FAR,
+    });
+    _dirLight.shadow.shadowNode = _csm;
+
     _ambLight = new THREE.AmbientLight(0xffffff, NCZ.AMBIENT_INTENSITY);
     _ambLight.name = 'ambient-light';
     scene.add(_ambLight);
@@ -396,10 +454,11 @@ const ThreeScene = (() => {
     controls.target.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
     controls.update();
     updateFrustumUniforms();   // seed frustum planes for the first cull dispatch
+    updateShadowCascades();    // seed the CSM proxy camera from the initial pose
     controls.addEventListener('change', () => {
       updateDistrictZoom();
       if (metroZoomUniform) metroZoomUniform.value = camera.zoom;
-      updateShadowFrustum();
+      updateShadowCascades();
       updateFrustumUniforms();   // Phase 2B: refresh the 6 cull-frustum planes
       updateScaleBar();
       requestRender();
@@ -480,6 +539,7 @@ const ThreeScene = (() => {
     camera.left   = -frustumH * aspect;
     camera.right  =  frustumH * aspect;
     camera.updateProjectionMatrix();
+    updateShadowCascades();   // CSM proxy frustum follows the schema camera's aspect
     // flyCamera resize is handled in flyover.js
     // Line2NodeMaterial pulls viewport size from a TSL screen node at
     // shader-execution time, so the legacy resolution-set loop is no longer
@@ -627,7 +687,7 @@ const ThreeScene = (() => {
       fitCameraToBox(box);
 
       stepProgress(); // terrain done
-      updateShadowFrustum(); // set initial frustum for current zoom
+      updateShadowCascades(); // re-fit the CSM cascades now the camera is sized to terrain
       setLoadingText('Loading roads & buildings...');
 
       // Trigger the sun slider so app.js applies the correct initial sun position.
@@ -1445,6 +1505,13 @@ const ThreeScene = (() => {
   // (e.g. from a still-running color tween) doesn't resurrect the loop.
   function startRenderLoop() {
     _suppressed = false;
+    // The showcase flyover points CSM at its own PerspectiveCamera (renderFrame
+    // below); when it hands control back, return CSM to the schema camera's
+    // ortho proxy and re-fit the cascades before the next schema frame.
+    if (_csm && _csm.camera && _csm.camera !== _csmCamera) {
+      _csm.camera = _csmCamera;
+      updateShadowCascades();
+    }
     requestRender();
   }
 
@@ -1595,8 +1662,12 @@ const ThreeScene = (() => {
                           ? !!_rendererInitParams?.antialias
                           : !!(renderer.getContextAttributes?.() && renderer.getContextAttributes().antialias),
         backend:        renderer.isWebGPURenderer ? 'WebGPU' : 'WebGL2',
-        shadowsEnabled: renderer.shadowMap.enabled,
+        // _shadowsOn is the user-facing state; renderer.shadowMap.enabled stays
+        // true permanently (the toggle flips shadow intensity, not the pass).
+        shadowsEnabled: _shadowsOn,
         shadowMapType:  shadowTypeNames[renderer.shadowMap.type] || String(renderer.shadowMap.type),
+        shadowCascades: NCZ.SHADOW_CASCADES,
+        shadowMapSize:  NCZ.SHADOW_MAP_SIZE,
       } : null,
       display: {
         windowSize:       `${window.innerWidth}x${window.innerHeight}`,
@@ -1649,7 +1720,10 @@ const ThreeScene = (() => {
     if (dump.rendererSettings) {
       const r = dump.rendererSettings;
       lines.push('');
-      lines.push(`Renderer:      ${r.backend} / DPR ${r.pixelRatio} / AA ${r.antialias ? 'on' : 'off'} / Shadows ${r.shadowsEnabled ? r.shadowMapType : 'off'}`);
+      const shadowText = r.shadowsEnabled
+        ? `${r.shadowMapType} / CSM ${r.shadowCascades}×${r.shadowMapSize}²`
+        : 'off';
+      lines.push(`Renderer:      ${r.backend} / DPR ${r.pixelRatio} / AA ${r.antialias ? 'on' : 'off'} / Shadows ${shadowText}`);
     }
     lines.push(`Display:       ${dump.display.windowSize} window, ${dump.display.screenSize} screen, ${dump.display.devicePixelRatio} DPR`);
     lines.push(`Effective px:  ${dump.display.effectivePixels.toLocaleString()}`);
@@ -1692,7 +1766,18 @@ const ThreeScene = (() => {
   // Called by flyover.js — kept minimal to avoid exposing internals.
 
   function renderFrame(cam) {
-    if (renderer && scene) renderer.render(scene, cam);
+    if (!renderer || !scene) return;
+    // The showcase flyover renders through its own PerspectiveCamera (sane
+    // positive near/far ⇒ CSM can track it directly, no proxy). Point CSM at it
+    // and re-fit the cascades each frame it moves; startRenderLoop restores the
+    // schema camera's ortho proxy when the flyover ends. Guarded on _csm.camera
+    // so we don't run before CSM's lazy _init has bound a camera.
+    if (_csm && _csm.camera && cam !== camera) {
+      if (_csm.camera !== cam) _csm.camera = cam;
+      _csm.updateFrustums();
+      renderer.shadowMap.needsUpdate = true;
+    }
+    renderer.render(scene, cam);
   }
 
   function setControlsEnabled(enabled) {
@@ -1872,28 +1957,20 @@ const ThreeScene = (() => {
     const el = altitudeRad;
     const az = azimuthRad;
 
-    // Scale position so the shadow camera sits well above the scene.
-    // At sunrise/sunset el is small — we floor the Y component so the
-    // shadow camera never dips below the terrain.
+    // Only the *direction* of _dirLight matters now — CSM reads it from
+    // (target − position) and positions the per-cascade shadow cameras itself
+    // (no more degenerate "infinitely long shadow at sunrise" frustum to dodge).
+    // The Math.max(0.1, …) floor keeps the direction from going perfectly
+    // horizontal at the horizon, which would make CSM's lookAt() degenerate;
+    // sun *intensity* already fades near the horizon so the artefact is muted.
     const SHADOW_DIST = NCZ.SUN_DIST;
     _dirLight.position.set(
       -Math.cos(el) * Math.sin(az)  * SHADOW_DIST,
        Math.max(0.1, Math.sin(el))  * SHADOW_DIST,
        Math.cos(el) * Math.cos(az)  * SHADOW_DIST,
     );
-
-    // (Phase 2A — 2026-05-10): the original WebGL build toggled `castShadow`
-    // off when the sun dropped below NCZ.SHADOW_MIN_ELEV° to avoid infinitely
-    // long degenerate shadows at sunrise/sunset. Under WebGPURenderer that
-    // toggle crashes the next frame with `Cannot read properties of null
-    // (reading 'depthTexture')` — the shadow map is torn down but the
-    // per-object update path still references it. Until Phase 3's CSM
-    // (which adapts the shadow frustum to camera/sun automatically), we
-    // keep `castShadow` static at the user's preference and accept the
-    // brief degenerate-shadow artefact at horizon transitions. Light
-    // intensity already drops near the horizon (line below) so the visual
-    // impact is muted.
-    _dirLight.castShadow = _shadowsOn;
+    // Sun moved ⇒ the shadow cascades must re-render (shadowMap.autoUpdate is off).
+    if (renderer) renderer.shadowMap.needsUpdate = true;
 
     // Colour: warm orange at horizon → neutral white above ~NCZ.SUN_COLOR_ELEV°.
     // setRGB writes linear-light values directly (ColorManagement does NOT convert
@@ -1937,48 +2014,70 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  function updateShadowFrustum() {
-    if (!_dirLight || !controls) return;
-    // Scale frustum to cover the visible ground area plus margin.
-    // At high tilt angles the visible ground extends further back — account for this
-    // by scaling with 1/cos(tilt), which grows from 1 (top-down) to ~3 (70° tilt).
+  // Re-fit the CSM cascades to the current schema-camera pose. CSM positions
+  // and sizes each cascade's shadow camera itself; this just keeps its proxy
+  // camera (see ProxyCSMShadowNode) mirroring the schema camera's view and XY
+  // frustum, with a near/far window that hugs the visible ground so the
+  // view-Z-based cascade split actually subdivides the geometry instead of
+  // bucketing it all into one cascade. Called on every camera change, on resize,
+  // once after terrain loads, and from startRenderLoop (after a flyover).
+  function updateShadowCascades() {
+    if (!_csm || !_csmCamera || !camera || !controls) return;
+    // Distance from the camera plane to the orbit target on the ground. With an
+    // orthographic camera, OrbitControls keeps this ≈ the orbit radius
+    // regardless of zoom or tilt — a stable ~CAMERA_HEIGHT value.
+    const camDist     = camera.position.distanceTo(controls.target);
+    // How far the visible ground strip spreads along the view axis: at tilt θ a
+    // strip of half-width `visibleHalf` reaches ≈ visibleHalf·sinθ deeper. Slack
+    // covers building heights / terrain relief so no caster's depth lands
+    // outside the proxy's near/far window (which would drop it from cascade 0).
+    const tilt        = controls.getPolarAngle?.() ?? 0;   // 0 = top-down, grows toward CAMERA_MAX_TILT
     const visibleHalf = Math.max(camera.right, camera.top) / camera.zoom;
-    const tilt = controls.getPolarAngle?.() ?? 0;
-    // 1/cos(tilt) accounts for ground depth at angle; extra 2× margin for the asymmetric
-    // forward/back distribution around controls.target when tilted
-    const tiltFactor = Math.max(1, 1 / Math.max(0.2, Math.cos(tilt)));
-    const frustum = Math.max(NCZ.SHADOW_FRUSTUM_MIN, visibleHalf * 3.0 * tiltFactor);
-    _dirLight.shadow.camera.left   = -frustum;
-    _dirLight.shadow.camera.right  =  frustum;
-    _dirLight.shadow.camera.top    =  frustum;
-    _dirLight.shadow.camera.bottom = -frustum;
-    _dirLight.shadow.camera.updateProjectionMatrix();
-
-    // Scale bias with frustum — smaller frustum = higher resolution = less bias needed.
-    // Prevents peter panning (shadow detached from base) at high zoom.
-    const biasScale = Math.min(1, frustum / NCZ.SHADOW_FRUSTUM);
-    _dirLight.shadow.bias       = NCZ.SHADOW_BIAS       * biasScale;
-    _dirLight.shadow.normalBias = NCZ.SHADOW_NORMAL_BIAS * biasScale;
-
-    // Track camera target so shadow stays centred on the visible area when panning.
-    // Move both light position and target by the same delta to preserve sun direction.
-    const ct = controls.target;
-    const delta = new THREE.Vector3().subVectors(ct, _dirLight.target.position);
-    if (delta.lengthSq() > 0.01) {
-      _dirLight.position.add(delta);
-      _dirLight.target.position.copy(ct);
-      _dirLight.target.updateMatrixWorld();
+    const groundHalfDepth = visibleHalf * Math.sin(tilt) + NCZ.SHADOW_PROXY_DEPTH_SLACK;
+    // Proxy: schema camera's view + XY frustum, but a sane positive near/far band.
+    _csmCamera.left   = camera.left;
+    _csmCamera.right  = camera.right;
+    _csmCamera.top    = camera.top;
+    _csmCamera.bottom = camera.bottom;
+    _csmCamera.zoom   = camera.zoom;
+    _csmCamera.near   = Math.max(1, camDist - groundHalfDepth);
+    _csmCamera.far    = camDist + groundHalfDepth;
+    _csmCamera.updateProjectionMatrix();
+    _csmCamera.position.copy(camera.position);
+    _csmCamera.quaternion.copy(camera.quaternion);   // controls.update() refreshed this; matrixWorld below
+    _csmCamera.updateMatrixWorld();
+    // updateFrustums recomputes the cascade splits + per-cascade shadow-camera
+    // bounds from the proxy. Skip until CSM's lazy _init has bound a camera and
+    // created the cascade lights — the first render does that via
+    // ProxyCSMShadowNode._init (which calls updateFrustums itself).
+    if (_csm.camera) {
+      if (_csm.lights.length && !_csm.lights[0].name) {
+        _csm.lights.forEach((l, i) => {
+          l.name        = `csm-cascade-${i}`;
+          l.target.name = `csm-cascade-${i}-target`;
+        });
+      }
+      _csm.updateFrustums();
     }
+    // Always flag a shadow re-render — shadowMap.autoUpdate is off, so any
+    // camera move (or this seeding call) needs to be reflected in the cascades.
+    if (renderer) renderer.shadowMap.needsUpdate = true;
   }
 
   function setShadowsEnabled(enabled) {
     _shadowsOn = enabled;
-    // No elevation floor — see the comment in setSunPosition. Toggling
-    // `castShadow` mid-render under WebGPURenderer nulls the shadow's
-    // depthTexture and crashes the next object update.
-    if (_dirLight) {
-      _dirLight.castShadow = _shadowsOn;
-    }
+    const intensity = enabled ? 1 : 0;
+    // Toggle shadow *intensity* rather than the light's castShadow flag or
+    // renderer.shadowMap.enabled — both tear shadow depth textures down
+    // mid-frame and crash WebGPURenderer ("Cannot read properties of null
+    // (reading 'depthTexture')"). intensity 0 keeps the textures alive but
+    // contributes no darkening; ShadowNode reads it via a live `reference` node,
+    // so the change applies on the next render with no recompile. Set both the
+    // template (so a not-yet-_init'd CSM clones the right value) and any live
+    // cascade lights. NB: the shadow pass still runs at intensity 0 — this is a
+    // visual switch, not a perf one (the deferred mobile-perf pass owns that).
+    if (_dirLight) _dirLight.shadow.intensity = intensity;
+    if (_csm) for (const l of _csm.lights) l.shadow.intensity = intensity;
     requestRender();
   }
 
