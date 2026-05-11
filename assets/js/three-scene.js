@@ -31,40 +31,18 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Line2 } from 'three/addons/lines/webgpu/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
-import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js';
 import Stats from 'three/addons/libs/stats.module.js';
 
 window.NCZ = window.NCZ || {};
 
+// Default sun direction (unit, points from the ground toward the sun) until the
+// real SunCalc-driven position arrives via setSunPosition.
 const SUN_DIR = new THREE.Vector3(-1, 1.5, -1).normalize();
-
-/**
- * CSMShadowNode that drives its cascade splits from a caller-supplied proxy
- * camera instead of the camera the scene is rendered with.
- *
- * Why a proxy: our schema OrthographicCamera uses a *negative* near plane —
- * geometry can sit behind it during low showcase flyovers (see NCZ.CAMERA_NEAR).
- * CSM picks a fragment's cascade from its view-space depth mapped to [0,1] via
- * `camera.near`/`camera.far`; a negative near makes that mapping collapse so
- * every fragment lands in the same cascade. The proxy camera (set up in
- * three-scene.js) shares the schema camera's view and XY frustum but carries a
- * sane positive near/far window that hugs the visible ground, so the split is
- * meaningful at all tilts.
- *
- * `_init` is the one hook CSMShadowNode runs lazily on the first render to bind
- * its camera; overriding it to bind the proxy is the only change needed —
- * everything downstream (updateFrustums, updateBefore, the TSL
- * `reference('camera.near', …)`) reads `this.camera`, which is now the proxy.
- */
-class ProxyCSMShadowNode extends CSMShadowNode {
-  constructor(light, proxyCamera, data) {
-    super(light, data);
-    this._proxyCamera = proxyCamera;
-  }
-  _init(builder) {
-    super._init({ camera: this._proxyCamera, renderer: builder.renderer });
-  }
-}
+const _GROUND_NORMAL = new THREE.Vector3(0, 1, 0);
+// Hemisphere-fill sky colour, lerped by sun elevation: hazy cool daylight when
+// high, warm hazy when low (the real sky scatters orange at golden hour too).
+const SKY_NOON    = new THREE.Color(0x8a96a6);
+const SKY_HORIZON = new THREE.Color(0xc9a878);
 
 const ThreeScene = (() => {
   let renderer, camera, scene, controls;
@@ -74,10 +52,11 @@ const ThreeScene = (() => {
   let loadingFillEl  = null;
   let loadStepsTotal = 0;
   let loadStepsDone  = 0;
-  let _dirLight      = null; // stored so setSunPosition can update it live
-  let _ambLight      = null;
-  let _csm           = null; // ProxyCSMShadowNode — owns the per-cascade shadow cameras
-  let _csmCamera     = null; // orthographic proxy fed to CSM (see updateShadowCascades)
+  let _dirLight      = null; // the sun (DirectionalLight + single fitted shadow camera)
+  let _hemiLight     = null; // sky/ground fill (replaces a flat AmbientLight)
+  let _sunDir        = SUN_DIR.clone(); // unit, ground→sun; updated by setSunPosition, consumed by updateShadowCamera
+  let _shadowGroundCenter = new THREE.Vector3(); // world point the shadow camera is centred on (the visible-ground centre)
+  let _shadowScratchV = new THREE.Vector3();     // reused by updateShadowCamera so it doesn't allocate per camera move
   let _shadowsOn     = true;  // shadows on by default; checkbox reflects this via poll
   let _sunSphere     = null; // visible sun disc — shown during showcase only
   let _sunAz = Math.PI * 0.25, _sunEl = Math.PI * 0.35; // last setSunPosition args
@@ -337,7 +316,7 @@ const ThreeScene = (() => {
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
     // Render-on-demand already decides *whether* a frame renders; this decides
-    // whether the shadow cascades re-render within a frame. updateShadowCascades()
+    // whether the shadow map re-renders within a frame. updateShadowCamera()
     // (camera moved) and setSunPosition() (sun moved) raise needsUpdate; renders
     // that change nothing geometric (theme tweens, pin hover) skip the shadow pass.
     renderer.shadowMap.autoUpdate = false;
@@ -372,57 +351,41 @@ const ThreeScene = (() => {
     camera.up.set(0, 1, 0);  // Standard Three.js up vector
     camera.updateProjectionMatrix();
 
-    // Lighting — direction set to current real sun position via SunCalc if available,
-    // otherwise falls back to the default NW hillshade direction.
+    // ── Lighting: outdoor model — directional sun + hemisphere fill ──
+    // The sun: a DirectionalLight whose direction tracks the real Morro Bay sun
+    // (SunCalc, via setSunPosition; default NW hillshade until then). One shadow
+    // map, an OrthographicCamera fitted each move to exactly the visible-ground
+    // footprint (updateShadowCamera) — no cascades: for a top-down ortho camera
+    // there's no perspective near/far disparity to split, so a single tight map
+    // beats CSM and is far simpler. castShadow stays on permanently; the
+    // "shadows" layer toggle flips shadow *intensity* (toggling castShadow on a
+    // live light tears its depth texture down mid-frame and crashes WebGPURenderer).
     _dirLight = new THREE.DirectionalLight(0xffffff, 1.0 - NCZ.AMBIENT_INTENSITY);
     _dirLight.name = 'sun';
-    _dirLight.position.copy(SUN_DIR).multiplyScalar(NCZ.SUN_DIST);
-
-    // Cascaded shadow maps. _dirLight.shadow holds the *template* CSM clones
-    // per cascade (mapSize, near/far, bias); CSM sizes/positions each cascade's
-    // shadow camera itself from the proxy camera's frustum (see
-    // updateShadowCascades). castShadow stays on permanently — the "shadows"
-    // layer toggle flips shadow *intensity* via setShadowsEnabled rather than
-    // this flag, because toggling castShadow on a live light tears its depth
-    // texture down mid-frame and crashes WebGPURenderer.
-    _dirLight.castShadow            = true;
+    _dirLight.castShadow         = true;
     _dirLight.shadow.mapSize.set(NCZ.SHADOW_MAP_SIZE, NCZ.SHADOW_MAP_SIZE);
-    _dirLight.shadow.camera.near    = NCZ.SHADOW_CAM_NEAR;
-    _dirLight.shadow.camera.far     = NCZ.SHADOW_CAM_FAR;
-    _dirLight.shadow.camera.name    = 'sun-shadow-cam-template'; // CSM clones this per cascade; not rendered directly
-    _dirLight.shadow.bias           = NCZ.SHADOW_BIAS;
-    _dirLight.shadow.normalBias     = NCZ.SHADOW_NORMAL_BIAS;
-    _dirLight.shadow.intensity      = _shadowsOn ? 1 : 0;
-
-    // Centre the (placeholder) light target on Night City; CSM repositions the
-    // per-cascade lights each render, but the template's direction comes from here.
-    _dirLight.target.position.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
+    _dirLight.shadow.camera.near = NCZ.SHADOW_CAM_NEAR;
+    _dirLight.shadow.camera.far  = NCZ.SHADOW_CAM_FAR; // orthographic ⇒ a wide range costs no precision
+    _dirLight.shadow.camera.name = 'sun-shadow-cam';
+    _dirLight.shadow.bias        = NCZ.SHADOW_BIAS;       // 0 — native depth32float + reverse-Z + a tight map need no cushion
+    _dirLight.shadow.normalBias  = NCZ.SHADOW_NORMAL_BIAS; // 0 — ditto
+    _dirLight.shadow.intensity   = _shadowsOn ? 1 : 0;
     _dirLight.target.name = 'sun-target';
-
+    // Position the light + target are set by updateShadowCamera (it centres the
+    // shadow on the visible ground); seed them at the world centre so the first
+    // frame before that runs isn't degenerate.
+    _dirLight.target.position.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
+    _dirLight.position.copy(_dirLight.target.position).addScaledVector(_sunDir, NCZ.SUN_DIST);
     scene.add(_dirLight);
     scene.add(_dirLight.target);
 
-    // Orthographic proxy that drives CSM's cascade splits (see ProxyCSMShadowNode).
-    // Its left/right/top/bottom/zoom/transform mirror the schema camera; its
-    // near/far are recomputed by updateShadowCascades to hug the visible ground.
-    // Synced for real once OrbitControls exists (just below) and on every change.
-    _csmCamera = new THREE.OrthographicCamera();
-    _csmCamera.name = 'csm-proxy-camera';
-    _csm = new ProxyCSMShadowNode(_dirLight, _csmCamera, {
-      cascades:    NCZ.SHADOW_CASCADES,
-      mode:        'practical',          // logarithmic-ish near split, uniform-ish far
-      lightMargin: NCZ.SHADOW_LIGHT_MARGIN,
-      // Cap the shadowed depth at the city's scale. Matters for the showcase
-      // flyCamera (FLYOVER_CAM_FAR is 120 km — without this the cascades would
-      // span 120 km and dissolve into nothing); the ortho proxy's far is already
-      // well under this so it's unaffected.
-      maxFar:      NCZ.SHADOW_CAM_FAR,
-    });
-    _dirLight.shadow.shadowNode = _csm;
-
-    _ambLight = new THREE.AmbientLight(0xffffff, NCZ.AMBIENT_INTENSITY);
-    _ambLight.name = 'ambient-light';
-    scene.add(_ambLight);
+    // Hemisphere fill — sky-colour from above (hazy cool daylight), darker
+    // ground-colour bounce from below. Reads more like an outdoor scene than a
+    // flat AmbientLight: building tops catch the sky, sides get a 50/50 mix →
+    // subtle face-to-face contrast for free. Intensity tracks the day in setSunPosition.
+    _hemiLight = new THREE.HemisphereLight(0x8a96a6, 0x1c2128, NCZ.AMBIENT_INTENSITY);
+    _hemiLight.name = 'sky-fill';
+    scene.add(_hemiLight);
     // Sun position is applied by app.js via the slider once terrain has loaded.
 
     // Visible sun sphere — hidden by default, shown during showcase only.
@@ -455,11 +418,11 @@ const ThreeScene = (() => {
     controls.target.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
     controls.update();
     updateFrustumUniforms();   // seed frustum planes for the first cull dispatch
-    updateShadowCascades();    // seed the CSM proxy camera from the initial pose
+    updateShadowCamera();      // seed the shadow camera from the initial pose
     controls.addEventListener('change', () => {
       updateDistrictZoom();
       if (metroZoomUniform) metroZoomUniform.value = camera.zoom;
-      updateShadowCascades();
+      updateShadowCamera();
       updateFrustumUniforms();   // Phase 2B: refresh the 6 cull-frustum planes
       updateScaleBar();
       requestRender();
@@ -540,7 +503,7 @@ const ThreeScene = (() => {
     camera.left   = -frustumH * aspect;
     camera.right  =  frustumH * aspect;
     camera.updateProjectionMatrix();
-    updateShadowCascades();   // CSM proxy frustum follows the schema camera's aspect
+    updateShadowCamera();   // shadow camera follows the schema camera's aspect
     // flyCamera resize is handled in flyover.js
     // Line2NodeMaterial pulls viewport size from a TSL screen node at
     // shader-execution time, so the legacy resolution-set loop is no longer
@@ -688,7 +651,7 @@ const ThreeScene = (() => {
       fitCameraToBox(box);
 
       stepProgress(); // terrain done
-      updateShadowCascades(); // re-fit the CSM cascades now the camera is sized to terrain
+      updateShadowCamera(); // re-fit the shadow camera now the schema camera is sized to terrain
       setLoadingText('Loading roads & buildings...');
 
       // Trigger the sun slider so app.js applies the correct initial sun position.
@@ -1506,13 +1469,10 @@ const ThreeScene = (() => {
   // (e.g. from a still-running color tween) doesn't resurrect the loop.
   function startRenderLoop() {
     _suppressed = false;
-    // The showcase flyover points CSM at its own PerspectiveCamera (renderFrame
-    // below); when it hands control back, return CSM to the schema camera's
-    // ortho proxy and re-fit the cascades before the next schema frame.
-    if (_csm && _csm.camera && _csm.camera !== _csmCamera) {
-      _csm.camera = _csmCamera;
-      updateShadowCascades();
-    }
+    // The showcase flyover fits the shadow camera to its own PerspectiveCamera
+    // (renderFrame below); when it hands control back, re-fit to the schema
+    // camera's view before the next schema frame.
+    updateShadowCamera();
     requestRender();
   }
 
@@ -1667,7 +1627,6 @@ const ThreeScene = (() => {
         // true permanently (the toggle flips shadow intensity, not the pass).
         shadowsEnabled: _shadowsOn,
         shadowMapType:  shadowTypeNames[renderer.shadowMap.type] || String(renderer.shadowMap.type),
-        shadowCascades: NCZ.SHADOW_CASCADES,
         shadowMapSize:  NCZ.SHADOW_MAP_SIZE,
       } : null,
       display: {
@@ -1721,9 +1680,7 @@ const ThreeScene = (() => {
     if (dump.rendererSettings) {
       const r = dump.rendererSettings;
       lines.push('');
-      const shadowText = r.shadowsEnabled
-        ? `${r.shadowMapType} / CSM ${r.shadowCascades}×${r.shadowMapSize}²`
-        : 'off';
+      const shadowText = r.shadowsEnabled ? `${r.shadowMapType} / ${r.shadowMapSize}²` : 'off';
       lines.push(`Renderer:      ${r.backend} / DPR ${r.pixelRatio} / AA ${r.antialias ? 'on' : 'off'} / Shadows ${shadowText}`);
     }
     lines.push(`Display:       ${dump.display.windowSize} window, ${dump.display.screenSize} screen, ${dump.display.devicePixelRatio} DPR`);
@@ -1768,16 +1725,10 @@ const ThreeScene = (() => {
 
   function renderFrame(cam) {
     if (!renderer || !scene) return;
-    // The showcase flyover renders through its own PerspectiveCamera (sane
-    // positive near/far ⇒ CSM can track it directly, no proxy). Point CSM at it
-    // and re-fit the cascades each frame it moves; startRenderLoop restores the
-    // schema camera's ortho proxy when the flyover ends. Guarded on _csm.camera
-    // so we don't run before CSM's lazy _init has bound a camera.
-    if (_csm && _csm.camera && cam !== camera) {
-      if (_csm.camera !== cam) _csm.camera = cam;
-      _csm.updateFrustums();
-      renderer.shadowMap.needsUpdate = true;
-    }
+    // The showcase flyover renders through its own PerspectiveCamera — re-fit
+    // the shadow camera to *its* view each frame (it moves continuously).
+    // startRenderLoop re-fits to the schema camera when the flyover ends.
+    if (cam && cam !== camera) updateShadowCamera(cam);
     renderer.render(scene, cam);
   }
 
@@ -1952,26 +1903,21 @@ const ThreeScene = (() => {
   // GLB space axes: East = +X, South = +Z, West = -X, North = -Z, Up = +Y
   // So az=0 (south) → Z+; az=π/2 (west) → X-; az=-π/2 (east) → X+
   function setSunPosition(azimuthRad, altitudeRad) {
-    if (!_dirLight || !_ambLight) return;
+    if (!_dirLight || !_hemiLight) return;
     _sunAz = azimuthRad;
     _sunEl = altitudeRad;
     const el = altitudeRad;
     const az = azimuthRad;
 
-    // Only the *direction* of _dirLight matters now — CSM reads it from
-    // (target − position) and positions the per-cascade shadow cameras itself
-    // (no more degenerate "infinitely long shadow at sunrise" frustum to dodge).
-    // The Math.max(0.1, …) floor keeps the direction from going perfectly
-    // horizontal at the horizon, which would make CSM's lookAt() degenerate;
-    // sun *intensity* already fades near the horizon so the artefact is muted.
-    const SHADOW_DIST = NCZ.SUN_DIST;
-    _dirLight.position.set(
-      -Math.cos(el) * Math.sin(az)  * SHADOW_DIST,
-       Math.max(0.1, Math.sin(el))  * SHADOW_DIST,
-       Math.cos(el) * Math.cos(az)  * SHADOW_DIST,
-    );
-    // Sun moved ⇒ the shadow cascades must re-render (shadowMap.autoUpdate is off).
-    if (renderer) renderer.shadowMap.needsUpdate = true;
+    // Sun direction (unit, ground→sun). Floor the Y at ~6° elevation so the
+    // shadow camera's lookAt never goes degenerate-horizontal; the visible sun
+    // sphere below uses the *unclamped* elevation so it still sets at the horizon.
+    _sunDir.set(-Math.cos(el) * Math.sin(az), Math.max(0.1, Math.sin(el)), Math.cos(el) * Math.cos(az)).normalize();
+    // Re-orient the light around its current target (updateShadowCamera owns the
+    // target = visible-ground centre; here we just keep the light up the sun ray
+    // from it). Orthographic ⇒ only the direction matters for shading.
+    _dirLight.position.copy(_dirLight.target.position).addScaledVector(_sunDir, NCZ.SUN_DIST);
+    if (renderer) renderer.shadowMap.needsUpdate = true;   // sun moved ⇒ re-render the shadow map
 
     // Colour: warm orange at horizon → neutral white above ~NCZ.SUN_COLOR_ELEV°.
     // setRGB writes linear-light values directly (ColorManagement does NOT convert
@@ -1983,10 +1929,13 @@ const ThreeScene = (() => {
 
     // Intensity: dims near the horizon, full above ~NCZ.SUN_INTENSITY_ELEV°
     const intensity = NCZ.SUN_INTENSITY_MIN + (1 - NCZ.SUN_INTENSITY_MIN) * Math.min(1, Math.max(0, elevDeg / NCZ.SUN_INTENSITY_ELEV));
-    _dirLight.intensity = (1 - NCZ.AMBIENT_INTENSITY) * intensity;
-    _ambLight.intensity =      NCZ.AMBIENT_INTENSITY  * Math.max(NCZ.SUN_AMBIENT_MIN, intensity);
+    _dirLight.intensity   = (1 - NCZ.AMBIENT_INTENSITY) * intensity;
+    // Hemisphere fill: track the day's brightness, and warm the sky toward
+    // sunset so the whole scene shifts warm (the real sky scatters orange too).
+    _hemiLight.intensity  = NCZ.AMBIENT_INTENSITY * Math.max(NCZ.SUN_AMBIENT_MIN, intensity);
+    _hemiLight.color.lerpColors(SKY_HORIZON, SKY_NOON, t);
 
-    // Building materials use MeshLambertMaterial — scene lights update automatically.
+    // Building materials use MeshLambertNodeMaterial — scene lights update automatically.
 
     // Move and recolour the visible sun sphere.
     // Centred on Night City (WORLD_CX, 0, -WORLD_CY) so it hangs over the map.
@@ -2015,74 +1964,67 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  // Re-fit the CSM cascades to the current schema-camera pose. CSM positions
-  // and sizes each cascade's shadow camera itself; this just keeps its proxy
-  // camera (see ProxyCSMShadowNode) mirroring the schema camera's view and XY
-  // frustum, with a near/far window that hugs the visible ground so the
-  // view-Z-based cascade split actually subdivides the geometry instead of
-  // bucketing it all into one cascade. Called on every camera change, on resize,
-  // once after terrain loads, and from startRenderLoop (after a flyover).
-  function updateShadowCascades() {
-    if (!_csm || !_csmCamera || !camera || !controls) return;
-    // Distance from the camera plane to the orbit target on the ground. With an
-    // orthographic camera, OrbitControls keeps this ≈ the orbit radius
-    // regardless of zoom or tilt — a stable ~CAMERA_HEIGHT value.
-    const camDist     = camera.position.distanceTo(controls.target);
-    // How far the visible ground spreads along the view axis. The screen-vertical
-    // half-extent (camera.top/zoom, in world units) maps to ±(that)·tan(tilt) of
-    // view-depth on the ground: at top-down (tilt 0) the whole visible ground is
-    // a single depth (only the slack matters); at our ~70° max tilt it spreads
-    // ~2.75× the screen-vertical extent. Clamp tan well above CAMERA_MAX_TILT so
-    // it can't blow up. Slack covers building heights / terrain relief so no
-    // caster's depth lands outside the proxy window (→ dropped from all cascades).
-    const tilt       = controls.getPolarAngle?.() ?? 0;   // 0 = top-down, grows toward CAMERA_MAX_TILT
-    const screenHalf = camera.top / camera.zoom;           // world units, screen-vertical half-extent at the current zoom
-    const groundHalfDepth = screenHalf * Math.tan(Math.min(tilt, Math.PI * 0.45)) + NCZ.SHADOW_PROXY_DEPTH_SLACK;
-    // Proxy: schema camera's view + XY frustum, but a sane positive near/far band.
-    _csmCamera.left   = camera.left;
-    _csmCamera.right  = camera.right;
-    _csmCamera.top    = camera.top;
-    _csmCamera.bottom = camera.bottom;
-    _csmCamera.zoom   = camera.zoom;
-    _csmCamera.near   = Math.max(1, camDist - groundHalfDepth);
-    _csmCamera.far    = camDist + groundHalfDepth;
-    _csmCamera.updateProjectionMatrix();
-    _csmCamera.position.copy(camera.position);
-    _csmCamera.quaternion.copy(camera.quaternion);   // controls.update() refreshed this; matrixWorld below
-    _csmCamera.updateMatrixWorld();
-    // updateFrustums recomputes the cascade splits + per-cascade shadow-camera
-    // bounds from the proxy. Skip until CSM's lazy _init has bound a camera and
-    // created the cascade lights — the first render does that via
-    // ProxyCSMShadowNode._init (which calls updateFrustums itself).
-    if (_csm.camera) {
-      if (_csm.lights.length && !_csm.lights[0].name) {
-        _csm.lights.forEach((l, i) => {
-          l.name        = `csm-cascade-${i}-light`;       // placeholder DirectionalLight CSM repositions per cascade
-          l.target.name = `csm-cascade-${i}-target`;       // its lookAt target (sun direction)
-          if (l.shadow?.camera) l.shadow.camera.name = `csm-cascade-${i}-shadow-cam`; // ortho cam that renders this cascade's depth map
-        });
-      }
-      _csm.updateFrustums();
+  // Re-fit the single shadow camera (the OrthographicCamera that renders the
+  // sun's depth map) to exactly the visible-ground footprint of `renderCam`,
+  // capped at SHADOW_MAX_DISTANCE so it can't balloon at the zoomed-out + tilted
+  // extreme. Re-centres the sun light + its target on that footprint so the
+  // shadow tracks what you see. Called on every camera change, on resize, after
+  // terrain loads, on flyover frames (renderCam = the fly cam), and from
+  // startRenderLoop. No cascades — our schema camera is orthographic (uniform
+  // pixels-per-world-unit), so there's no perspective near/far disparity for
+  // cascades to exploit; one tight map is both simpler and sharper here.
+  function updateShadowCamera(renderCam = camera) {
+    if (!_dirLight || !renderCam) return;
+    const shadowCam = _dirLight.shadow.camera;
+
+    let half, center;
+    if (renderCam === camera && controls) {
+      // Schema orthographic camera — analytic fit. The visible ground is a W×D
+      // rectangle: W = the screen-horizontal world extent; D = the screen-vertical
+      // extent stretched by 1/cos(tilt) (a tilted view sees a longer strip of
+      // ground). A square of side = that rectangle's diagonal contains it from any
+      // sun azimuth. Cap so it can't reach the horizon at the zoomed-out extreme.
+      const W = 2 * camera.right / camera.zoom;
+      const tilt = controls.getPolarAngle?.() ?? 0;
+      const D = (2 * camera.top / camera.zoom) / Math.max(0.25, Math.cos(tilt)); // 0.25 ≈ cos 76°, past CAMERA_MAX_TILT
+      half = Math.min(0.5 * Math.hypot(W, D), NCZ.SHADOW_MAX_DISTANCE) + NCZ.SHADOW_GROUND_MARGIN;
+      center = controls.target;
+    } else {
+      // External camera (showcase fly cam) — square at the shadow draw distance,
+      // centred where the camera's forward ray meets the ground (Y = 0).
+      half = NCZ.SHADOW_MAX_DISTANCE + NCZ.SHADOW_GROUND_MARGIN;
+      const dir   = _shadowScratchV.set(0, 0, -1).applyQuaternion(renderCam.quaternion);
+      const denom = dir.dot(_GROUND_NORMAL);
+      const tHit  = Math.abs(denom) > 1e-4 ? Math.max(0, -renderCam.position.y / denom) : 0;
+      center = _shadowGroundCenter.copy(renderCam.position).addScaledVector(dir, tHit);
     }
-    // Always flag a shadow re-render — shadowMap.autoUpdate is off, so any
-    // camera move (or this seeding call) needs to be reflected in the cascades.
-    if (renderer) renderer.shadowMap.needsUpdate = true;
+
+    shadowCam.left = -half; shadowCam.right = half;
+    shadowCam.top  =  half; shadowCam.bottom = -half;
+    shadowCam.near = NCZ.SHADOW_CAM_NEAR;
+    shadowCam.far  = NCZ.SHADOW_CAM_FAR;
+    shadowCam.updateProjectionMatrix();
+
+    // Keep the sun light SUN_DIST up the sun ray from the footprint centre.
+    // Orthographic ⇒ only the direction matters for shading; the distance just
+    // places the shadow camera comfortably above the footprint so nothing clips.
+    // Three copies these into the shadow camera during the shadow pass.
+    _dirLight.target.position.copy(center);
+    _dirLight.position.copy(center).addScaledVector(_sunDir, NCZ.SUN_DIST);
+
+    if (renderer) renderer.shadowMap.needsUpdate = true;  // shadowMap.autoUpdate is off
   }
 
   function setShadowsEnabled(enabled) {
     _shadowsOn = enabled;
-    const intensity = enabled ? 1 : 0;
-    // Toggle shadow *intensity* rather than the light's castShadow flag or
-    // renderer.shadowMap.enabled — both tear shadow depth textures down
-    // mid-frame and crash WebGPURenderer ("Cannot read properties of null
-    // (reading 'depthTexture')"). intensity 0 keeps the textures alive but
-    // contributes no darkening; ShadowNode reads it via a live `reference` node,
-    // so the change applies on the next render with no recompile. Set both the
-    // template (so a not-yet-_init'd CSM clones the right value) and any live
-    // cascade lights. NB: the shadow pass still runs at intensity 0 — this is a
-    // visual switch, not a perf one (the deferred mobile-perf pass owns that).
-    if (_dirLight) _dirLight.shadow.intensity = intensity;
-    if (_csm) for (const l of _csm.lights) l.shadow.intensity = intensity;
+    // Toggle shadow *intensity*, not castShadow or renderer.shadowMap.enabled —
+    // either of those tears the shadow depth texture down mid-frame and crashes
+    // WebGPURenderer ("Cannot read properties of null (reading 'depthTexture')").
+    // intensity 0 keeps the texture alive but contributes no darkening; ShadowNode
+    // reads it via a live `reference` node, so it applies next render with no
+    // recompile. (The shadow pass still runs at intensity 0 — a visual switch,
+    // not a perf one; disabling the pass safely under WebGPU is deferred.)
+    if (_dirLight) _dirLight.shadow.intensity = enabled ? 1 : 0;
     requestRender();
   }
 

@@ -198,36 +198,26 @@ NCZ.CAMERA_ZOOM_SPEED   = 2.0;            // zoomSpeed       (Three.js default: 
 NCZ.CAMERA_PAN_SPEED    = 1.0;            // panSpeed        (Three.js default: 1.0)         — left-drag pan rate
 NCZ.CAMERA_ROTATE_SPEED = 0.6;            // rotateSpeed     (Three.js default: 1.0)         — right-drag tilt rate; lower = more precise
 
-// Shadow map — Cascaded Shadow Maps (CSMShadowNode, WebGPU). The directional
-// sun's shadow is split into N depth cascades, each rendered into its own
-// depth32float texture and auto-fit to the slice of the camera frustum it
-// covers, so near geometry gets a tight high-res cascade and far geometry a
-// looser one. CSM positions/sizes the per-cascade shadow cameras itself —
-// see updateShadowCascades() in three-scene.js for the proxy-camera plumbing.
-NCZ.SHADOW_CASCADES      = 2;     // cascade count (2–3 sane; each cascade re-renders the shadow-casting geometry, so >3 multiplies the shadow-pass cost)
-NCZ.SHADOW_MAP_SIZE      = 2048;  // px² per cascade — 2×2048² ≈ half the texels of the old single 4096² map
-NCZ.SHADOW_CAM_NEAR      = 1;     // per-cascade shadow camera near clip (template — CSM clones light.shadow per cascade)
-NCZ.SHADOW_CAM_FAR       = 30000; // per-cascade shadow camera far clip — must span the cascade frustum's depth in light space + the light margin (orthographic ⇒ a large range costs no precision)
-NCZ.SHADOW_LIGHT_MARGIN  = 1000;  // CET units the cascade's shadow camera sits behind its frustum bbox — headroom so tall casters' tops aren't clipped
-// Bias: 0 is clean — native depth32float shadow textures + reverse-Z + the
-// tight per-cascade depth ranges have plenty of precision, so neither the depth
-// bias (was -0.0005 for the WebGL RGBA8-packed path) nor the normal-offset bias
-// (was 0.01) is needed. Left as knobs: CSM still scales SHADOW_BIAS ×(cascade+1),
-// so re-arm here if acne ever surfaces at extreme zoom/tilt.
+// Shadow map — one OrthographicCamera fitted each frame to exactly the visible-
+// ground footprint (updateShadowCamera in three-scene.js), rendered into a
+// single depth32float texture (the WebGPU `shadowMapping` pattern). No cascades:
+// our schema camera is orthographic (uniform pixels-per-world-unit), so there's
+// no perspective near/far disparity for cascaded maps to exploit — one tight map
+// is simpler and, for this camera, sharper.
+NCZ.SHADOW_MAP_SIZE      = 4096;  // px² — ~3 u/texel at a whole-city zoom; razor-sharp zoomed in (the footprint shrinks with zoom)
+NCZ.SHADOW_MAX_DISTANCE  = 12000; // CET units — cap on the footprint half-side. Keeps the shadow reasonably sharp at the zoomed-out + max-tilt extreme (where the visible ground would otherwise run ~20 km wide); ground past the cap is a clean unshadowed falloff. Never bites at normal zooms.
+NCZ.SHADOW_GROUND_MARGIN =   600; // CET units the footprint extends past the visible ground — covers building heights / terrain relief + a sliver of just-off-screen casters. Wider off-screen-caster coverage waits on the union-frustum cull (a follow-up).
+NCZ.SHADOW_CAM_NEAR      =     1; // shadow camera near clip
+NCZ.SHADOW_CAM_FAR       = 40000; // shadow camera far clip — the camera sits SUN_DIST up the sun ray, so this must still reach the far edge of the footprint even at a low sun (orthographic ⇒ a wide range costs no precision)
+// Bias: 0 is clean — native depth32float shadow textures + reverse-Z + a tight
+// map have ample precision (the old -0.0005 / 0.01 were for the WebGL
+// RGBA8-packed path). Left as knobs: re-arm if acne ever surfaces.
 NCZ.SHADOW_BIAS          = 0;
 NCZ.SHADOW_NORMAL_BIAS   = 0;
-// Orthographic-proxy depth window. Our schema camera's native near is negative
-// (geometry can sit behind it during low showcase flyovers — see CAMERA_NEAR),
-// which would collapse CSM's view-Z-based cascade selection into one bucket. We
-// feed CSM a proxy ortho camera whose near/far hug the visible ground:
-//   near = camDist − groundHalfDepth ,  far = camDist + groundHalfDepth
-// where groundHalfDepth = (camera.top / zoom)·tan(tilt) + slack — the visible
-// ground's view-depth half-spread (it grows as tan(tilt), zero at top-down).
-NCZ.SHADOW_PROXY_DEPTH_SLACK = 1500; // CET units of headroom around the visible-ground depth band (covers building heights / terrain relief; keeps every caster's depth inside linearDepth ∈ [0,1])
 
-// Lighting — directional sun + ambient
-NCZ.AMBIENT_INTENSITY  = 0.35;   // ambient light share; sun gets (1 - ambient) when at full elevation
-NCZ.SUN_DIST           = 8000;   // distance from world centre to directional light position (CET units)
+// Lighting — directional sun + hemisphere fill
+NCZ.AMBIENT_INTENSITY  = 0.35;   // hemisphere-fill share; the sun gets (1 - this) at full elevation
+NCZ.SUN_DIST           = 22000;  // CET units the sun light (and its shadow camera) sits up the sun ray from the visible-ground centre — only the direction matters for shading; large enough that the whole footprint stays in front of the shadow camera even at a low sun
 NCZ.SUN_SPHERE_DIST    = 20000;  // visible sun disc distance from world centre
 NCZ.SUN_SPHERE_RADIUS  =   600;  // CET units — ≈1.7° apparent diameter at SUN_SPHERE_DIST (≈3× real sun)
 NCZ.SUN_COLOR_ELEV     =    20;  // degrees — light is warm orange below this, neutral white above
