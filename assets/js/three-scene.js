@@ -389,6 +389,7 @@ const ThreeScene = (() => {
     _dirLight.shadow.mapSize.set(NCZ.SHADOW_MAP_SIZE, NCZ.SHADOW_MAP_SIZE);
     _dirLight.shadow.camera.near    = NCZ.SHADOW_CAM_NEAR;
     _dirLight.shadow.camera.far     = NCZ.SHADOW_CAM_FAR;
+    _dirLight.shadow.camera.name    = 'sun-shadow-cam-template'; // CSM clones this per cascade; not rendered directly
     _dirLight.shadow.bias           = NCZ.SHADOW_BIAS;
     _dirLight.shadow.normalBias     = NCZ.SHADOW_NORMAL_BIAS;
     _dirLight.shadow.intensity      = _shadowsOn ? 1 : 0;
@@ -2056,8 +2057,9 @@ const ThreeScene = (() => {
     if (_csm.camera) {
       if (_csm.lights.length && !_csm.lights[0].name) {
         _csm.lights.forEach((l, i) => {
-          l.name        = `csm-cascade-${i}`;
-          l.target.name = `csm-cascade-${i}-target`;
+          l.name        = `csm-cascade-${i}-light`;       // placeholder DirectionalLight CSM repositions per cascade
+          l.target.name = `csm-cascade-${i}-target`;       // its lookAt target (sun direction)
+          if (l.shadow?.camera) l.shadow.camera.name = `csm-cascade-${i}-shadow-cam`; // ortho cam that renders this cascade's depth map
         });
       }
       _csm.updateFrustums();
