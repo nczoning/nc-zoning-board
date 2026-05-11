@@ -35,7 +35,14 @@ import Stats from 'three/addons/libs/stats.module.js';
 
 window.NCZ = window.NCZ || {};
 
+// Default sun direction (unit, points from the ground toward the sun) until the
+// real SunCalc-driven position arrives via setSunPosition.
 const SUN_DIR = new THREE.Vector3(-1, 1.5, -1).normalize();
+const _GROUND_NORMAL = new THREE.Vector3(0, 1, 0);
+// Hemisphere-fill sky colour, lerped by sun elevation: hazy cool daylight when
+// high, warm hazy when low (the real sky scatters orange at golden hour too).
+const SKY_NOON    = new THREE.Color(0x8a96a6);
+const SKY_HORIZON = new THREE.Color(0xc9a878);
 
 const ThreeScene = (() => {
   let renderer, camera, scene, controls;
@@ -45,8 +52,11 @@ const ThreeScene = (() => {
   let loadingFillEl  = null;
   let loadStepsTotal = 0;
   let loadStepsDone  = 0;
-  let _dirLight      = null; // stored so setSunPosition can update it live
-  let _ambLight      = null;
+  let _dirLight      = null; // the sun (DirectionalLight + single fitted shadow camera)
+  let _hemiLight     = null; // sky/ground fill (replaces a flat AmbientLight)
+  let _sunDir        = SUN_DIR.clone(); // unit, ground→sun; updated by setSunPosition, consumed by updateShadowCamera
+  let _shadowGroundCenter = new THREE.Vector3(); // world point the shadow camera is centred on (the visible-ground centre)
+  let _shadowScratchV = new THREE.Vector3();     // reused by updateShadowCamera so it doesn't allocate per camera move
   let _shadowsOn     = true;  // shadows on by default; checkbox reflects this via poll
   let _sunSphere     = null; // visible sun disc — shown during showcase only
   let _sunAz = Math.PI * 0.25, _sunEl = Math.PI * 0.35; // last setSunPosition args
@@ -305,6 +315,11 @@ const ThreeScene = (() => {
     renderer.setSize(container.clientWidth, container.clientHeight, false);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+    // Render-on-demand already decides *whether* a frame renders; this decides
+    // whether the shadow map re-renders within a frame. updateShadowCamera()
+    // (camera moved) and setSunPosition() (sun moved) raise needsUpdate; renders
+    // that change nothing geometric (theme tweens, pin hover) skip the shadow pass.
+    renderer.shadowMap.autoUpdate = false;
     // Take the canvas out of document flow so its pixel-buffer dimensions
     // can never push or displace surrounding layout elements.
     // inset:0 stretches it to fill #map-3d on all four sides — no explicit
@@ -336,34 +351,41 @@ const ThreeScene = (() => {
     camera.up.set(0, 1, 0);  // Standard Three.js up vector
     camera.updateProjectionMatrix();
 
-    // Lighting — direction set to current real sun position via SunCalc if available,
-    // otherwise falls back to the default NW hillshade direction.
+    // ── Lighting: outdoor model — directional sun + hemisphere fill ──
+    // The sun: a DirectionalLight whose direction tracks the real Morro Bay sun
+    // (SunCalc, via setSunPosition; default NW hillshade until then). One shadow
+    // map, an OrthographicCamera fitted each move to exactly the visible-ground
+    // footprint (updateShadowCamera) — no cascades: for a top-down ortho camera
+    // there's no perspective near/far disparity to split, so a single tight map
+    // beats CSM and is far simpler. castShadow stays on permanently; the
+    // "shadows" layer toggle flips shadow *intensity* (toggling castShadow on a
+    // live light tears its depth texture down mid-frame and crashes WebGPURenderer).
     _dirLight = new THREE.DirectionalLight(0xffffff, 1.0 - NCZ.AMBIENT_INTENSITY);
     _dirLight.name = 'sun';
-    _dirLight.position.copy(SUN_DIR).multiplyScalar(NCZ.SUN_DIST);
-
-    // Shadow map: 4096² covers the ~14 000-unit world at ~3.4 units/texel.
-    // Frustum centred on Night City (NCZ.WORLD_CX, 0, -NCZ.WORLD_CY).
-    _dirLight.castShadow                    = _shadowsOn;
+    _dirLight.castShadow         = true;
     _dirLight.shadow.mapSize.set(NCZ.SHADOW_MAP_SIZE, NCZ.SHADOW_MAP_SIZE);
-    _dirLight.shadow.camera.left            = -NCZ.SHADOW_FRUSTUM;
-    _dirLight.shadow.camera.right           =  NCZ.SHADOW_FRUSTUM;
-    _dirLight.shadow.camera.top             =  NCZ.SHADOW_FRUSTUM;
-    _dirLight.shadow.camera.bottom          = -NCZ.SHADOW_FRUSTUM;
-    _dirLight.shadow.camera.near            = NCZ.SHADOW_CAM_NEAR;
-    _dirLight.shadow.camera.far             = NCZ.SHADOW_CAM_FAR;
-    _dirLight.shadow.bias                   = NCZ.SHADOW_BIAS;
-    _dirLight.shadow.normalBias             = NCZ.SHADOW_NORMAL_BIAS;
-
-    // Centre the shadow frustum on Night City, not the world origin
-    _dirLight.target.position.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
+    _dirLight.shadow.camera.near = NCZ.SHADOW_CAM_NEAR;
+    _dirLight.shadow.camera.far  = NCZ.SHADOW_CAM_FAR; // orthographic ⇒ a wide range costs no precision
+    _dirLight.shadow.camera.name = 'sun-shadow-cam';
+    _dirLight.shadow.bias        = NCZ.SHADOW_BIAS;        // 0 — native depth32float + reverse-Z need no depth cushion
+    // normalBias is set per-frame by updateShadowCamera (scaled with the footprint).
+    _dirLight.shadow.intensity   = _shadowsOn ? 1 : 0;
     _dirLight.target.name = 'sun-target';
-
+    // Position the light + target are set by updateShadowCamera (it centres the
+    // shadow on the visible ground); seed them at the world centre so the first
+    // frame before that runs isn't degenerate.
+    _dirLight.target.position.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
+    _dirLight.position.copy(_dirLight.target.position).addScaledVector(_sunDir, NCZ.SUN_DIST);
     scene.add(_dirLight);
     scene.add(_dirLight.target);
-    _ambLight = new THREE.AmbientLight(0xffffff, NCZ.AMBIENT_INTENSITY);
-    _ambLight.name = 'ambient-light';
-    scene.add(_ambLight);
+
+    // Hemisphere fill — sky-colour from above (hazy cool daylight), darker
+    // ground-colour bounce from below. Reads more like an outdoor scene than a
+    // flat AmbientLight: building tops catch the sky, sides get a 50/50 mix →
+    // subtle face-to-face contrast for free. Intensity tracks the day in setSunPosition.
+    _hemiLight = new THREE.HemisphereLight(0x8a96a6, 0x1c2128, NCZ.AMBIENT_INTENSITY);
+    _hemiLight.name = 'sky-fill';
+    scene.add(_hemiLight);
     // Sun position is applied by app.js via the slider once terrain has loaded.
 
     // Visible sun sphere — hidden by default, shown during showcase only.
@@ -396,10 +418,11 @@ const ThreeScene = (() => {
     controls.target.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
     controls.update();
     updateFrustumUniforms();   // seed frustum planes for the first cull dispatch
+    updateShadowCamera();      // seed the shadow camera from the initial pose
     controls.addEventListener('change', () => {
       updateDistrictZoom();
       if (metroZoomUniform) metroZoomUniform.value = camera.zoom;
-      updateShadowFrustum();
+      updateShadowCamera();
       updateFrustumUniforms();   // Phase 2B: refresh the 6 cull-frustum planes
       updateScaleBar();
       requestRender();
@@ -480,6 +503,7 @@ const ThreeScene = (() => {
     camera.left   = -frustumH * aspect;
     camera.right  =  frustumH * aspect;
     camera.updateProjectionMatrix();
+    updateShadowCamera();   // shadow camera follows the schema camera's aspect
     // flyCamera resize is handled in flyover.js
     // Line2NodeMaterial pulls viewport size from a TSL screen node at
     // shader-execution time, so the legacy resolution-set loop is no longer
@@ -627,7 +651,7 @@ const ThreeScene = (() => {
       fitCameraToBox(box);
 
       stepProgress(); // terrain done
-      updateShadowFrustum(); // set initial frustum for current zoom
+      updateShadowCamera(); // re-fit the shadow camera now the schema camera is sized to terrain
       setLoadingText('Loading roads & buildings...');
 
       // Trigger the sun slider so app.js applies the correct initial sun position.
@@ -1445,6 +1469,10 @@ const ThreeScene = (() => {
   // (e.g. from a still-running color tween) doesn't resurrect the loop.
   function startRenderLoop() {
     _suppressed = false;
+    // The showcase flyover fits the shadow camera to its own PerspectiveCamera
+    // (renderFrame below); when it hands control back, re-fit to the schema
+    // camera's view before the next schema frame.
+    updateShadowCamera();
     requestRender();
   }
 
@@ -1595,8 +1623,11 @@ const ThreeScene = (() => {
                           ? !!_rendererInitParams?.antialias
                           : !!(renderer.getContextAttributes?.() && renderer.getContextAttributes().antialias),
         backend:        renderer.isWebGPURenderer ? 'WebGPU' : 'WebGL2',
-        shadowsEnabled: renderer.shadowMap.enabled,
+        // _shadowsOn is the user-facing state; renderer.shadowMap.enabled stays
+        // true permanently (the toggle flips shadow intensity, not the pass).
+        shadowsEnabled: _shadowsOn,
         shadowMapType:  shadowTypeNames[renderer.shadowMap.type] || String(renderer.shadowMap.type),
+        shadowMapSize:  NCZ.SHADOW_MAP_SIZE,
       } : null,
       display: {
         windowSize:       `${window.innerWidth}x${window.innerHeight}`,
@@ -1649,7 +1680,8 @@ const ThreeScene = (() => {
     if (dump.rendererSettings) {
       const r = dump.rendererSettings;
       lines.push('');
-      lines.push(`Renderer:      ${r.backend} / DPR ${r.pixelRatio} / AA ${r.antialias ? 'on' : 'off'} / Shadows ${r.shadowsEnabled ? r.shadowMapType : 'off'}`);
+      const shadowText = r.shadowsEnabled ? `${r.shadowMapType} / ${r.shadowMapSize}²` : 'off';
+      lines.push(`Renderer:      ${r.backend} / DPR ${r.pixelRatio} / AA ${r.antialias ? 'on' : 'off'} / Shadows ${shadowText}`);
     }
     lines.push(`Display:       ${dump.display.windowSize} window, ${dump.display.screenSize} screen, ${dump.display.devicePixelRatio} DPR`);
     lines.push(`Effective px:  ${dump.display.effectivePixels.toLocaleString()}`);
@@ -1692,7 +1724,12 @@ const ThreeScene = (() => {
   // Called by flyover.js — kept minimal to avoid exposing internals.
 
   function renderFrame(cam) {
-    if (renderer && scene) renderer.render(scene, cam);
+    if (!renderer || !scene) return;
+    // The showcase flyover renders through its own PerspectiveCamera — re-fit
+    // the shadow camera to *its* view each frame (it moves continuously).
+    // startRenderLoop re-fits to the schema camera when the flyover ends.
+    if (cam && cam !== camera) updateShadowCamera(cam);
+    renderer.render(scene, cam);
   }
 
   function setControlsEnabled(enabled) {
@@ -1866,34 +1903,21 @@ const ThreeScene = (() => {
   // GLB space axes: East = +X, South = +Z, West = -X, North = -Z, Up = +Y
   // So az=0 (south) → Z+; az=π/2 (west) → X-; az=-π/2 (east) → X+
   function setSunPosition(azimuthRad, altitudeRad) {
-    if (!_dirLight || !_ambLight) return;
+    if (!_dirLight || !_hemiLight) return;
     _sunAz = azimuthRad;
     _sunEl = altitudeRad;
     const el = altitudeRad;
     const az = azimuthRad;
 
-    // Scale position so the shadow camera sits well above the scene.
-    // At sunrise/sunset el is small — we floor the Y component so the
-    // shadow camera never dips below the terrain.
-    const SHADOW_DIST = NCZ.SUN_DIST;
-    _dirLight.position.set(
-      -Math.cos(el) * Math.sin(az)  * SHADOW_DIST,
-       Math.max(0.1, Math.sin(el))  * SHADOW_DIST,
-       Math.cos(el) * Math.cos(az)  * SHADOW_DIST,
-    );
-
-    // (Phase 2A — 2026-05-10): the original WebGL build toggled `castShadow`
-    // off when the sun dropped below NCZ.SHADOW_MIN_ELEV° to avoid infinitely
-    // long degenerate shadows at sunrise/sunset. Under WebGPURenderer that
-    // toggle crashes the next frame with `Cannot read properties of null
-    // (reading 'depthTexture')` — the shadow map is torn down but the
-    // per-object update path still references it. Until Phase 3's CSM
-    // (which adapts the shadow frustum to camera/sun automatically), we
-    // keep `castShadow` static at the user's preference and accept the
-    // brief degenerate-shadow artefact at horizon transitions. Light
-    // intensity already drops near the horizon (line below) so the visual
-    // impact is muted.
-    _dirLight.castShadow = _shadowsOn;
+    // Sun direction (unit, ground→sun). Floor the Y at ~6° elevation so the
+    // shadow camera's lookAt never goes degenerate-horizontal; the visible sun
+    // sphere below uses the *unclamped* elevation so it still sets at the horizon.
+    _sunDir.set(-Math.cos(el) * Math.sin(az), Math.max(0.1, Math.sin(el)), Math.cos(el) * Math.cos(az)).normalize();
+    // Re-orient the light around its current target (updateShadowCamera owns the
+    // target = visible-ground centre; here we just keep the light up the sun ray
+    // from it). Orthographic ⇒ only the direction matters for shading.
+    _dirLight.position.copy(_dirLight.target.position).addScaledVector(_sunDir, NCZ.SUN_DIST);
+    if (renderer) renderer.shadowMap.needsUpdate = true;   // sun moved ⇒ re-render the shadow map
 
     // Colour: warm orange at horizon → neutral white above ~NCZ.SUN_COLOR_ELEV°.
     // setRGB writes linear-light values directly (ColorManagement does NOT convert
@@ -1905,10 +1929,13 @@ const ThreeScene = (() => {
 
     // Intensity: dims near the horizon, full above ~NCZ.SUN_INTENSITY_ELEV°
     const intensity = NCZ.SUN_INTENSITY_MIN + (1 - NCZ.SUN_INTENSITY_MIN) * Math.min(1, Math.max(0, elevDeg / NCZ.SUN_INTENSITY_ELEV));
-    _dirLight.intensity = (1 - NCZ.AMBIENT_INTENSITY) * intensity;
-    _ambLight.intensity =      NCZ.AMBIENT_INTENSITY  * Math.max(NCZ.SUN_AMBIENT_MIN, intensity);
+    _dirLight.intensity   = (1 - NCZ.AMBIENT_INTENSITY) * intensity;
+    // Hemisphere fill: track the day's brightness, and warm the sky toward
+    // sunset so the whole scene shifts warm (the real sky scatters orange too).
+    _hemiLight.intensity  = NCZ.AMBIENT_INTENSITY * Math.max(NCZ.SUN_AMBIENT_MIN, intensity);
+    _hemiLight.color.lerpColors(SKY_HORIZON, SKY_NOON, t);
 
-    // Building materials use MeshLambertMaterial — scene lights update automatically.
+    // Building materials use MeshLambertNodeMaterial — scene lights update automatically.
 
     // Move and recolour the visible sun sphere.
     // Centred on Night City (WORLD_CX, 0, -WORLD_CY) so it hangs over the map.
@@ -1937,48 +1964,75 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  function updateShadowFrustum() {
-    if (!_dirLight || !controls) return;
-    // Scale frustum to cover the visible ground area plus margin.
-    // At high tilt angles the visible ground extends further back — account for this
-    // by scaling with 1/cos(tilt), which grows from 1 (top-down) to ~3 (70° tilt).
-    const visibleHalf = Math.max(camera.right, camera.top) / camera.zoom;
-    const tilt = controls.getPolarAngle?.() ?? 0;
-    // 1/cos(tilt) accounts for ground depth at angle; extra 2× margin for the asymmetric
-    // forward/back distribution around controls.target when tilted
-    const tiltFactor = Math.max(1, 1 / Math.max(0.2, Math.cos(tilt)));
-    const frustum = Math.max(NCZ.SHADOW_FRUSTUM_MIN, visibleHalf * 3.0 * tiltFactor);
-    _dirLight.shadow.camera.left   = -frustum;
-    _dirLight.shadow.camera.right  =  frustum;
-    _dirLight.shadow.camera.top    =  frustum;
-    _dirLight.shadow.camera.bottom = -frustum;
-    _dirLight.shadow.camera.updateProjectionMatrix();
+  // Re-fit the single shadow camera (the OrthographicCamera that renders the
+  // sun's depth map) to exactly the visible-ground footprint of `renderCam`,
+  // capped at SHADOW_MAX_DISTANCE so it can't balloon at the zoomed-out + tilted
+  // extreme. Re-centres the sun light + its target on that footprint so the
+  // shadow tracks what you see. Called on every camera change, on resize, after
+  // terrain loads, on flyover frames (renderCam = the fly cam), and from
+  // startRenderLoop. No cascades — our schema camera is orthographic (uniform
+  // pixels-per-world-unit), so there's no perspective near/far disparity for
+  // cascades to exploit; one tight map is both simpler and sharper here.
+  function updateShadowCamera(renderCam = camera) {
+    if (!_dirLight || !renderCam) return;
+    const shadowCam = _dirLight.shadow.camera;
 
-    // Scale bias with frustum — smaller frustum = higher resolution = less bias needed.
-    // Prevents peter panning (shadow detached from base) at high zoom.
-    const biasScale = Math.min(1, frustum / NCZ.SHADOW_FRUSTUM);
-    _dirLight.shadow.bias       = NCZ.SHADOW_BIAS       * biasScale;
-    _dirLight.shadow.normalBias = NCZ.SHADOW_NORMAL_BIAS * biasScale;
-
-    // Track camera target so shadow stays centred on the visible area when panning.
-    // Move both light position and target by the same delta to preserve sun direction.
-    const ct = controls.target;
-    const delta = new THREE.Vector3().subVectors(ct, _dirLight.target.position);
-    if (delta.lengthSq() > 0.01) {
-      _dirLight.position.add(delta);
-      _dirLight.target.position.copy(ct);
-      _dirLight.target.updateMatrixWorld();
+    let half, center;
+    if (renderCam === camera && controls) {
+      // Schema orthographic camera — analytic fit. The visible ground is a W×D
+      // rectangle: W = the screen-horizontal world extent; D = the screen-vertical
+      // extent stretched by 1/cos(tilt) (a tilted view sees a longer strip of
+      // ground). A square of side = that rectangle's diagonal contains it from any
+      // sun azimuth. Cap so it can't reach the horizon at the zoomed-out extreme.
+      const W = 2 * camera.right / camera.zoom;
+      const tilt = controls.getPolarAngle?.() ?? 0;
+      const D = (2 * camera.top / camera.zoom) / Math.max(0.25, Math.cos(tilt)); // 0.25 ≈ cos 76°, past CAMERA_MAX_TILT
+      half = Math.min(0.5 * Math.hypot(W, D), NCZ.SHADOW_MAX_DISTANCE) + NCZ.SHADOW_GROUND_MARGIN;
+      // Pin the centre to the ground plane (Y = 0): controls.target can drift
+      // off Y=0 with screen-space panning at a tilt, which would slide the
+      // footprint off the terrain. The terrain is at Y≈0 — centre on it.
+      center = _shadowScratchV.set(controls.target.x, 0, controls.target.z);
+    } else {
+      // External camera (showcase fly cam) — square at the shadow draw distance,
+      // centred where the camera's forward ray meets the ground (Y = 0).
+      half = NCZ.SHADOW_MAX_DISTANCE + NCZ.SHADOW_GROUND_MARGIN;
+      const dir   = _shadowScratchV.set(0, 0, -1).applyQuaternion(renderCam.quaternion);
+      const denom = dir.dot(_GROUND_NORMAL);
+      const tHit  = Math.abs(denom) > 1e-4 ? Math.max(0, -renderCam.position.y / denom) : 0;
+      center = _shadowGroundCenter.copy(renderCam.position).addScaledVector(dir, tHit);
     }
+
+    shadowCam.left = -half; shadowCam.right = half;
+    shadowCam.top  =  half; shadowCam.bottom = -half;
+    shadowCam.near = NCZ.SHADOW_CAM_NEAR;
+    shadowCam.far  = NCZ.SHADOW_CAM_FAR;
+    shadowCam.updateProjectionMatrix();
+    // Normal-bias the receiver samples by a few shadow texels' worth of world
+    // units — scaled with the footprint so it's the same texel offset at every
+    // zoom (a constant world bias is too small zoomed out → grazing-sun acne
+    // ["the wave" on flat terrain/water], too large zoomed in → shadows detach).
+    _dirLight.shadow.normalBias = NCZ.SHADOW_NORMAL_BIAS_TEXELS * (2 * half / NCZ.SHADOW_MAP_SIZE);
+
+    // Keep the sun light SUN_DIST up the sun ray from the footprint centre.
+    // Orthographic ⇒ only the direction matters for shading; the distance just
+    // places the shadow camera comfortably above the footprint so nothing clips.
+    // Three copies these into the shadow camera during the shadow pass.
+    _dirLight.target.position.copy(center);
+    _dirLight.position.copy(center).addScaledVector(_sunDir, NCZ.SUN_DIST);
+
+    if (renderer) renderer.shadowMap.needsUpdate = true;  // shadowMap.autoUpdate is off
   }
 
   function setShadowsEnabled(enabled) {
     _shadowsOn = enabled;
-    // No elevation floor — see the comment in setSunPosition. Toggling
-    // `castShadow` mid-render under WebGPURenderer nulls the shadow's
-    // depthTexture and crashes the next object update.
-    if (_dirLight) {
-      _dirLight.castShadow = _shadowsOn;
-    }
+    // Toggle shadow *intensity*, not castShadow or renderer.shadowMap.enabled —
+    // either of those tears the shadow depth texture down mid-frame and crashes
+    // WebGPURenderer ("Cannot read properties of null (reading 'depthTexture')").
+    // intensity 0 keeps the texture alive but contributes no darkening; ShadowNode
+    // reads it via a live `reference` node, so it applies next render with no
+    // recompile. (The shadow pass still runs at intensity 0 — a visual switch,
+    // not a perf one; disabling the pass safely under WebGPU is deferred.)
+    if (_dirLight) _dirLight.shadow.intensity = enabled ? 1 : 0;
     requestRender();
   }
 

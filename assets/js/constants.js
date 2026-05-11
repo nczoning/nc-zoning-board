@@ -198,21 +198,23 @@ NCZ.CAMERA_ZOOM_SPEED   = 2.0;            // zoomSpeed       (Three.js default: 
 NCZ.CAMERA_PAN_SPEED    = 1.0;            // panSpeed        (Three.js default: 1.0)         — left-drag pan rate
 NCZ.CAMERA_ROTATE_SPEED = 0.6;            // rotateSpeed     (Three.js default: 1.0)         — right-drag tilt rate; lower = more precise
 
-// Shadow map — PCFSoftShadowMap, orthographic frustum centred on Night City
-// The shadow camera sits at the sun position (NCZ.SUN_DIST away) and looks down.
-NCZ.SHADOW_MAP_SIZE    = 4096;  // px² — dynamically concentrated by zoom; ~0.07 CET units/texel at zoom=50
-NCZ.SHADOW_FRUSTUM     = 7000;  // ±7000 units at full zoom-out; scaled down by camera.zoom for sharper shadows when zoomed in
-NCZ.SHADOW_FRUSTUM_MIN =  400;  // minimum frustum radius — prevents over-concentration at extreme zoom+tilt
-NCZ.SHADOW_CAM_NEAR    =   10;  // near clip — 10 units from the light; avoids near-plane artefacts
-NCZ.SHADOW_CAM_FAR     = 25000; // far clip — must reach the terrain from the sun's position (~8000 units away) with headroom
-NCZ.SHADOW_BIAS        = -0.0005; // depth bias — small negative value reduces shadow acne (self-shadowing artefacts)
-NCZ.SHADOW_NORMAL_BIAS =  0.01;  // offset along surface normal — prevents acne on sloped faces
-NCZ.SHADOW_MIN_ELEV    =    5;   // degrees — shadow casting disabled below this sun elevation
-                                  // (avoids infinitely long degenerate projections near sunrise/sunset)
+// Shadow map — one OrthographicCamera fitted each frame to exactly the visible-
+// ground footprint (updateShadowCamera in three-scene.js), rendered into a
+// single depth32float texture (the WebGPU `shadowMapping` pattern). No cascades:
+// our schema camera is orthographic (uniform pixels-per-world-unit), so there's
+// no perspective near/far disparity for cascaded maps to exploit — one tight map
+// is simpler and, for this camera, sharper.
+NCZ.SHADOW_MAP_SIZE      = 4096;  // px² — ~3 u/texel at a whole-city zoom; razor-sharp zoomed in (the footprint shrinks with zoom)
+NCZ.SHADOW_MAX_DISTANCE  = 12000; // CET units — cap on the footprint half-side. Keeps the shadow reasonably sharp at the zoomed-out + max-tilt extreme (where the visible ground would otherwise run ~20 km wide); ground past the cap is a clean unshadowed falloff. Never bites at normal zooms.
+NCZ.SHADOW_GROUND_MARGIN =   600; // CET units the footprint extends past the visible ground — covers building heights / terrain relief + a sliver of just-off-screen casters. Wider off-screen-caster coverage waits on the union-frustum cull (a follow-up).
+NCZ.SHADOW_CAM_NEAR      =     1; // shadow camera near clip
+NCZ.SHADOW_CAM_FAR       = 40000; // shadow camera far clip — the camera sits SUN_DIST up the sun ray, so this must still reach the far edge of the footprint even at a low sun (orthographic ⇒ a wide range costs no precision)
+NCZ.SHADOW_BIAS          =     0; // NDC depth bias — 0; native depth32float + reverse-Z have ample depth precision (the old -0.0005 was for the WebGL RGBA8-packed path). The geometric self-shadow ("texel patch covers a depth range") is handled by the normal bias instead:
+NCZ.SHADOW_NORMAL_BIAS_TEXELS = 2.5; // receiver-sample offset along the surface normal, in shadow-texel widths — converted to world units per-frame by updateShadowCamera (scaling with the footprint keeps it the same texel offset at every zoom). Raise to kill residual grazing-sun acne ("the wave" on flat terrain/water); lower if shadows visibly detach from their casters at high zoom.
 
-// Lighting — directional sun + ambient
-NCZ.AMBIENT_INTENSITY  = 0.35;   // ambient light share; sun gets (1 - ambient) when at full elevation
-NCZ.SUN_DIST           = 8000;   // distance from world centre to directional light position (CET units)
+// Lighting — directional sun + hemisphere fill
+NCZ.AMBIENT_INTENSITY  = 0.35;   // hemisphere-fill share; the sun gets (1 - this) at full elevation
+NCZ.SUN_DIST           = 22000;  // CET units the sun light (and its shadow camera) sits up the sun ray from the visible-ground centre — only the direction matters for shading; large enough that the whole footprint stays in front of the shadow camera even at a low sun
 NCZ.SUN_SPHERE_DIST    = 20000;  // visible sun disc distance from world centre
 NCZ.SUN_SPHERE_RADIUS  =   600;  // CET units — ≈1.7° apparent diameter at SUN_SPHERE_DIST (≈3× real sun)
 NCZ.SUN_COLOR_ELEV     =    20;  // degrees — light is warm orange below this, neutral white above
