@@ -603,21 +603,31 @@ const ThreeScene = (() => {
         loadGLB('3dmap_cliffs.glb'),
       ]);
 
-      terrainMat = makeHillshadeMaterial('--scene-terrain', '#566c88');
-      // Water writes stencil=2 — SeeThrough roads only render where stencil==2 (Pacifica tunnel).
-      // stencilZFail: Replace fixes a WebGPU reverse-Z regression where water's depth-test
-      // result flipped at certain camera rotations (suspected coplanar-fragment edge: WebGL
-      // `lessEqual` accepted coplanar terrain/water meshes; reverse-Z `greater` rejects them),
-      // dropping stencil=2 in patches of the tunnel surface. Writing stencil regardless of the
-      // depth result keeps the mask intact — buildings' Replace→1 still overwrites it where
-      // they sit, so SeeThrough roads still respect building occlusion.
-      waterMat   = makeHillshadeMaterial('--scene-water', '#2a3f57', {
-        stencilWrite: true, stencilRef: 2,
-        stencilFunc: THREE.AlwaysStencilFunc,
-        stencilZPass: THREE.ReplaceStencilOp,
-        stencilZFail: THREE.ReplaceStencilOp,
-      });
-      cliffsMat  = makeHillshadeMaterial('--scene-cliffs',   '#566c88');
+      // SeeThrough-roads stencil chain (Pacifica tunnel). Three writers feed it:
+      //  • the water silhouette mask (created below) stamps stencil=2 onto every
+      //    pixel the water mesh covers on screen — depth-test DISABLED, so it's a
+      //    pure 2D coverage mark, not an "is water the frontmost surface here?"
+      //    test. That distinction matters: under WebGPU's reverse-Z `greater`
+      //    depth compare, water's color-pass depth-test result at coplanar
+      //    terrain/cliff seams flips with the opaque draw order (= camera angle),
+      //    which is what made the old WebGL-style "water writes stencil as a side
+      //    effect of its color pass" intermittent (tunnel visible from some
+      //    rotations only).
+      //  • terrain and cliffs over-stamp stencil=1 where their *visible* fragments
+      //    sit (depth-tested, ZPass only — so only the frontmost surface counts),
+      //    re-introducing occlusion-awareness: a hill in front of distant water
+      //    carves the mask back to 1 so SeeThrough roads don't punch through it.
+      //  • buildings do the same stencil=1 over-stamp (see buildBuildingMaterial).
+      // SeeThrough roads (depthTest:false, stencilFunc:Equal, ref:2 — set in
+      // loadRoadsMetro) then draw only where stencil is still 2 == water visible,
+      // nothing opaque in front == the underwater tunnel.
+      const stencilOverstamp = {
+        stencilWrite: true, stencilRef: 1,
+        stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp,
+      };
+      terrainMat = makeHillshadeMaterial('--scene-terrain', '#566c88', stencilOverstamp);
+      waterMat   = makeHillshadeMaterial('--scene-water',   '#2a3f57');  // color pass only — the mask owns the stencil
+      cliffsMat  = makeHillshadeMaterial('--scene-cliffs',  '#566c88', stencilOverstamp);
       applyMaterial(terrainScene, terrainMat);
       applyMaterial(waterScene,   waterMat);
       applyMaterial(cliffsScene,  cliffsMat);
@@ -640,6 +650,28 @@ const ThreeScene = (() => {
       nameSubtree(terrainScene, 'terrain');
       nameSubtree(waterScene,   'water');
       nameSubtree(cliffsScene,  'cliffs');
+
+      // Water silhouette → stencil=2 (see the stencil-chain comment above).
+      // A colorless, depth-test-disabled clone of the water mesh; renderOrder
+      // -1000 runs it before the depth-tested over-stampers (terrain/cliffs/
+      // buildings at renderOrder 0) so they get the last word on occluded
+      // pixels. Parented under waterScene so it inherits the "water" layer
+      // toggle and is frozen by freezeStatic(waterScene) below. Added after
+      // nameSubtree(waterScene) so its own descriptive names aren't clobbered;
+      // shares geometry with the original water meshes (Mesh.clone() doesn't
+      // deep-copy geometry).
+      const waterMaskMat = new THREE.MeshBasicNodeMaterial({
+        colorWrite: false, depthTest: false, depthWrite: false,
+        stencilWrite: true, stencilRef: 2,
+        stencilFunc: THREE.AlwaysStencilFunc,
+        stencilZPass: THREE.ReplaceStencilOp, stencilZFail: THREE.ReplaceStencilOp,
+      });
+      const waterMask = waterScene.clone();
+      applyMaterial(waterMask, waterMaskMat);
+      waterMask.name = 'water-stencil-mask';
+      nameSubtree(waterMask, 'water-mask');
+      waterMask.traverse(c => { if (c.isMesh) { c.renderOrder = -1000; c.castShadow = false; c.receiveShadow = false; c.frustumCulled = false; } });
+      waterScene.add(waterMask);
 
       layers.terrain = terrainScene;
       layers.water   = waterScene;
@@ -1129,12 +1161,6 @@ const ThreeScene = (() => {
 
         group.add(mesh);
         buildingMeshes.push(mesh);
-        // Write stencil=1 so SeeThrough roads are blocked where buildings are
-        mat.stencilWrite = true;
-        mat.stencilRef   = 1;
-        mat.stencilFunc  = THREE.AlwaysStencilFunc;
-        mat.stencilZPass = THREE.ReplaceStencilOp;
-        mat.needsUpdate  = true;
         buildingMaterials.push(mat);
         stepProgress(); // one building district done
         console.log(`[NCZ] Buildings [${meta.name}]: ${validCount.toLocaleString()} instances`);
@@ -1188,6 +1214,14 @@ const ThreeScene = (() => {
   function buildBuildingMaterial(meta, mTex, instanceMatricesBuffer, visibleIndicesBuffer) {
     const mat = new THREE.MeshLambertNodeMaterial({
       color: readThemeColor('--scene-buildings', '#7a8fa0'),
+      // Over-stamp the water silhouette mask (stencil=2) with stencil=1 where a
+      // building's *visible* fragments sit, so SeeThrough roads (test stencil==2)
+      // don't render through buildings. Depth-tested write (ZPass only) ⇒ only the
+      // camera-facing surface counts. Set at construction (WebGPU NodeMaterial
+      // wants pipeline-affecting flags before first render — post-construction
+      // mutation isn't reliably picked up the way WebGL's onBeforeCompile path was).
+      stencilWrite: true, stencilRef: 1,
+      stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp,
     });
 
     // Per-district uniforms (the equivalents of the WebGL onBeforeCompile uniforms)
