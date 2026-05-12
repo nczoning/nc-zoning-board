@@ -664,6 +664,19 @@ const ThreeScene = (() => {
       freezeStatic(cliffsScene);
       requestRender();
 
+      // Phase 4 diagnostic — map mesh world-space extents. Tells us whether the
+      // water sheet sits above / below / coplanar with the terrain, which decides
+      // whether the SeeThrough-stencil bug is geometry alignment or render order.
+      // (Remove once Phase 4 lands.)
+      {
+        const bbT = new THREE.Box3().setFromObject(terrainScene);
+        const bbW = new THREE.Box3().setFromObject(waterScene);
+        const bbC = new THREE.Box3().setFromObject(cliffsScene);
+        const f = v => v.toFixed(0);
+        console.log(`[NCZ Phase4] world Y — terrain ${f(bbT.min.y)}..${f(bbT.max.y)} | water ${f(bbW.min.y)}..${f(bbW.max.y)} | cliffs ${f(bbC.min.y)}..${f(bbC.max.y)}`);
+        console.log(`[NCZ Phase4] world XZ — terrain x[${f(bbT.min.x)}..${f(bbT.max.x)}] z[${f(bbT.min.z)}..${f(bbT.max.z)}] | water x[${f(bbW.min.x)}..${f(bbW.max.x)}] z[${f(bbW.min.z)}..${f(bbW.max.z)}]`);
+      }
+
       // Fit camera frustum to the terrain bounding box. Stored at module
       // scope so the pan-bound listener can clamp against terrain extent
       // (the visible square) instead of the playable-CET-world extent
