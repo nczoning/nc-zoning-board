@@ -604,7 +604,18 @@ const ThreeScene = (() => {
       ]);
 
       terrainMat = makeHillshadeMaterial('--scene-terrain', '#566c88');
-      // Water writes stencil=2 — SeeThrough roads only render where stencil==2 (Pacifica tunnel)
+      // Water writes stencil=2 from its color pass; SeeThrough roads only render
+      // where stencil==2 — the Pacifica tunnel (a road under visible open water).
+      // The mask MUST be depth-limited to "pixels where water is the visible
+      // surface": the water GLB is a flat sea-level plane that the terrain pokes
+      // up through, so if water draws BEFORE the terrain/buildings that occlude
+      // it, its stencilZPass writes 2 over the whole screen (land included) and
+      // every SeeThrough road shows through everything. WebGL got this for free
+      // because the front-to-back opaque sort happened to put terrain first;
+      // under WebGPU it doesn't, so water's meshes get an explicit renderOrder
+      // (below) that forces them to draw LAST among opaques — then water's depth
+      // test sees the land/buildings in front of it, depth-fails over them, and
+      // only the genuinely-visible bay (incl. the tunnel inlet) keeps stencil=2.
       waterMat   = makeHillshadeMaterial('--scene-water', '#2a3f57', {
         stencilWrite: true, stencilRef: 2,
         stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp,
@@ -616,8 +627,10 @@ const ThreeScene = (() => {
 
       // Shadow flags — terrain and cliffs cast and receive (hills shadow valleys);
       // water receives only (no hard shadow edges on flat ocean); buildings skipped.
+      // Water also gets renderOrder=2 so it draws after every renderOrder-0 opaque
+      // (terrain, cliffs, buildings, landmarks) — see the stencil note above.
       terrainScene.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; c.frustumCulled = false; } });
-      waterScene.traverse(c =>   { if (c.isMesh) { c.receiveShadow = true; c.frustumCulled = false; } });
+      waterScene.traverse(c =>   { if (c.isMesh) { c.receiveShadow = true; c.frustumCulled = false; c.renderOrder = 2; } });
       cliffsScene.traverse(c =>  { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; c.frustumCulled = false; } });
 
 
