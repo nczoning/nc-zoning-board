@@ -797,6 +797,18 @@ const ThreeScene = (() => {
       stRoads.traverse(o => { if (o.isMesh) o.renderOrder = 1; });
       stBorders.traverse(o => { if (o.isMesh) o.renderOrder = 1; });
 
+      // Phase 4 follow-up diagnostic — per-mesh world-Y extents of the road geometry,
+      // to choose the "this fragment is underwater" threshold for a maskNode that
+      // confines the SeeThrough effect to the actual tunnel (vs bridges over the bay).
+      // (Remove once the threshold is picked.)
+      {
+        const _b = new THREE.Box3();
+        let _i = 0;
+        roadsScene.traverse(c => { if (c.isMesh) { _b.setFromObject(c); console.log(`[NCZ Phase4f] road mesh ${_i++} "${c.name}" Y ${_b.min.y.toFixed(1)}..${_b.max.y.toFixed(1)}`); } });
+        _b.setFromObject(roadsScene);   console.log(`[NCZ Phase4f] ALL roads Y   ${_b.min.y.toFixed(1)}..${_b.max.y.toFixed(1)}`);
+        _b.setFromObject(bordersScene); console.log(`[NCZ Phase4f] ALL borders Y ${_b.min.y.toFixed(1)}..${_b.max.y.toFixed(1)}`);
+      }
+
       const roadsGroup = new THREE.Group();
       roadsGroup.name = 'roads';
       roadsGroup.add(roadsScene, bordersScene, stRoads, stBorders);
