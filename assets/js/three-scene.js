@@ -605,13 +605,26 @@ const ThreeScene = (() => {
 
       terrainMat = makeHillshadeMaterial('--scene-terrain', '#566c88');
       // Water writes stencil=2 — SeeThrough roads only render where stencil==2 (Pacifica tunnel).
+      // The water GLB is a sea-level sheet the whole terrain pokes through, so its
+      // stencilZPass write is only correct if it's confined to "pixels where water is
+      // the visible surface" = the open bay. Two things to make that true:
+      //   1. renderOrder so water draws LAST among opaques (terrain/cliffs/buildings/
+      //      landmarks are all at renderOrder 0) — otherwise water writes stencil=2
+      //      before the terrain that should occlude it has even drawn.
+      //   2. depthFunc:LessDepth → under reverse-Z that maps to a STRICT `greater`
+      //      compare (vs the default `greater-equal`). So where the flat city terrain
+      //      is roughly coplanar with the sea-level sheet, water fails the depth test
+      //      and writes nothing; it only passes (and writes stencil=2 + its colour)
+      //      where it's *strictly* in front of everything = the bay floor / open water.
+      //      Cost: the ocean colour stops a sub-pixel sliver short of the shoreline
+      //      (coplanar there too) — invisible at map zoom.
       // ?debug=stencil → instead, render water bright magenta on top of everything
-      // (depthTest off, huge renderOrder) so we can see the water mesh's screen
-      // footprint = the pixels its stencil-2 write would reach. No stencil in that mode.
+      // (depthTest off, huge renderOrder) to see the water mesh's full screen footprint.
       const _debugStencil = new URLSearchParams(window.location.search).get('debug') === 'stencil';
       waterMat   = makeHillshadeMaterial('--scene-water', '#2a3f57', _debugStencil
         ? { color: 0xff00ff, transparent: true, opacity: 0.55, depthTest: false, depthWrite: false }
-        : { stencilWrite: true, stencilRef: 2, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp });
+        : { stencilWrite: true, stencilRef: 2, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp,
+            depthFunc: THREE.LessDepth });
       cliffsMat  = makeHillshadeMaterial('--scene-cliffs',   '#566c88');
       applyMaterial(terrainScene, terrainMat);
       applyMaterial(waterScene,   waterMat);
@@ -619,6 +632,8 @@ const ThreeScene = (() => {
       if (_debugStencil) {
         waterScene.traverse(c => { if (c.isMesh) c.renderOrder = 99999; });
         console.warn('[NCZ] ?debug=stencil active — magenta tint = water mesh screen coverage (stencil disabled in this mode)');
+      } else {
+        waterScene.traverse(c => { if (c.isMesh) c.renderOrder = 2; }); // draw water after every renderOrder-0 opaque (see above)
       }
 
       // Shadow flags — terrain and cliffs cast and receive (hills shadow valleys);
