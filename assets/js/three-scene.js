@@ -603,13 +603,30 @@ const ThreeScene = (() => {
         loadGLB('3dmap_cliffs.glb'),
       ]);
 
-      terrainMat = makeHillshadeMaterial('--scene-terrain', '#566c88');
-      // Water writes stencil=2 — SeeThrough roads only render where stencil==2 (Pacifica tunnel)
-      waterMat   = makeHillshadeMaterial('--scene-water', '#2a3f57', {
+      // SeeThrough-roads stencil chain (Pacifica tunnel — a road under visible open water).
+      //   • Water writes stencil=2 where it's the visible surface. The water GLB is a flat
+      //     sea-level sheet (world Y ≈ -1) the whole terrain (Y -99..+879) pokes through, so
+      //     for stencilZPass to land only on "pixels where you see water" (the open bay = where
+      //     the terrain dips below -1), water must be depth-tested against the FULLY-rendered
+      //     opaque scene. `transparent: true` (opacity stays 1.0 — still visually opaque) moves
+      //     water out of the opaque list into the transparent pass, which is unconditionally
+      //     drawn after every opaque object — so its depth test sees terrain/cliffs/buildings
+      //     already in the depth buffer and fails over all of them, confining stencil=2 to the
+      //     bay. (Plain renderOrder doesn't push water past the terrain in the opaque sort under
+      //     WebGPURenderer — cause unclear; the transparent pass sidesteps the sort entirely.)
+      //     renderOrder stays 0, so water still draws before the SeeThrough roads (renderOrder 1).
+      //   • Terrain, cliffs and buildings over-stamp stencil=1 where THEY are the visible surface
+      //     (depth-tested, ZPass:Replace) — so SeeThrough roads (stencilFunc:Equal,2) don't draw
+      //     through them. This is safe vs the tunnel because water (transparent pass) re-writes
+      //     stencil=2 over the bay AFTER the terrain seabed wrote stencil=1 there in the opaque pass.
+      const stencilOverstamp = { stencilWrite: true, stencilRef: 1, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp };
+      terrainMat = makeHillshadeMaterial('--scene-terrain', '#566c88', stencilOverstamp);
+      waterMat   = makeHillshadeMaterial('--scene-water',   '#2a3f57', {
+        transparent: true,
         stencilWrite: true, stencilRef: 2,
         stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp,
       });
-      cliffsMat  = makeHillshadeMaterial('--scene-cliffs',   '#566c88');
+      cliffsMat  = makeHillshadeMaterial('--scene-cliffs',  '#566c88', stencilOverstamp);
       applyMaterial(terrainScene, terrainMat);
       applyMaterial(waterScene,   waterMat);
       applyMaterial(cliffsScene,  cliffsMat);
