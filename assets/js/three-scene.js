@@ -1395,6 +1395,7 @@ const ThreeScene = (() => {
 
     console.log('[NCZ] Debug mode active. Try:');
     console.log('  NCZ.ThreeScene.getRenderInfo()       → draw calls / tris / textures snapshot');
+    console.log('  NCZ.ThreeScene.getCullCounts()       → await: visible vs total building instances after the compute cull');
     console.log('  NCZ.ThreeScene.setOverrideMaterial(true|false)  → flat-shade everything to test fragment cost');
     console.log('  NCZ.ThreeScene.dumpDebugInfo()       → full diagnostic snapshot (also bound to the "Copy debug info" button)');
   }
@@ -1524,6 +1525,30 @@ const ThreeScene = (() => {
     };
   }
 
+  // Phase 2B cull-effectiveness probe. `renderer.info.render.triangles` is
+  // CPU-computed and never round-trips the indirect buffer's atomic
+  // instanceCount, so it reads 0 under indirect draws — the only way to know
+  // how many building instances actually survive the compute frustum cull is
+  // to read the GPU copy back. `getArrayBufferAsync` maps the storage buffer
+  // to the CPU; index [1] of the 5-uint IndirectDraw struct is instanceCount.
+  // Returns { total, visible, byDistrict: [{ name, instanceCount }] } or null.
+  async function getCullCounts() {
+    if (!renderer || !buildingMaterials.length) return null;
+    const byDistrict = [];
+    let total = 0, visible = 0;
+    for (const mat of buildingMaterials) {
+      const attr = mat.userData.indirectAttribute;
+      if (!attr) continue;
+      const cap  = mat.userData.instanceMatricesBuffer?.value?.count ?? null;
+      const buf  = await renderer.getArrayBufferAsync(attr);
+      const instanceCount = new Uint32Array(buf)[1];
+      byDistrict.push({ name: mat.name || '?', instanceCount, capacity: cap });
+      if (cap != null) total += cap;
+      visible += instanceCount;
+    }
+    return { total: total || null, visible, fraction: total ? visible / total : null, byDistrict };
+  }
+
   // Override-material diagnostic: replaces every material in the scene with a
   // flat MeshBasicMaterial. If FPS jumps when enabled → fragment-bound (shader cost).
   // If FPS stays the same → vertex/CPU-bound (geometry or draw calls).
@@ -1583,7 +1608,13 @@ const ThreeScene = (() => {
     if (renderer) {
       try {
         if (renderer.isWebGPURenderer) {
-          const adapterInfo = renderer.backend?.adapterInfo;
+          // r184's WebGPUBackend keeps the GPUAdapter local to init() — it's not
+          // on `renderer.backend`. The device, however, exposes `adapterInfo`
+          // (spec-stable GPUDevice.adapterInfo). Chrome's anti-fingerprinting
+          // policy blanks `device`/`description` for non-allowlisted origins, but
+          // `vendor` ("nvidia", "amd"…) and `architecture` ("blackwell", "rdna3"…)
+          // still come through — same caveat the WebGL2 path's UNMASKED_* had.
+          const adapterInfo = renderer.backend?.device?.adapterInfo;
           if (adapterInfo) {
             gpu    = adapterInfo.description || adapterInfo.architecture || 'unknown';
             vendor = adapterInfo.vendor || 'unknown';
@@ -2098,7 +2129,7 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, setOverrideMaterial, setBuildingEdgeIntensity, dumpDebugInfo };
+  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, setBuildingEdgeIntensity, dumpDebugInfo };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;
