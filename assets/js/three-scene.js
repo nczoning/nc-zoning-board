@@ -116,9 +116,13 @@ const ThreeScene = (() => {
   // Dispatched in pairs from `renderLoop` before `renderer.render`.
   const _cullComputes = [];
 
-  function updateFrustumUniforms() {
-    if (!camera) return;
-    _frustumScratchMat.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  function updateFrustumUniforms(renderCam = camera) {
+    if (!renderCam) return;
+    // `renderCam` defaults to the schema ortho camera; pass the perspective
+    // `flyCamera` during showcase so the cull tests against what's actually
+    // being rendered. `Frustum.setFromProjectionMatrix` handles both
+    // ortho + perspective projections — the algebra is the same.
+    _frustumScratchMat.multiplyMatrices(renderCam.projectionMatrix, renderCam.matrixWorldInverse);
     // Critical: pass WebGPUCoordinateSystem so the near/far plane extraction
     // uses the WebGPU clip-space convention (depth range [0, 1]). The default
     // is WebGL (depth range [-1, 1]), which extracts a wrong near plane for
@@ -1562,10 +1566,16 @@ const ThreeScene = (() => {
   // (e.g. from a still-running color tween) doesn't resurrect the loop.
   function startRenderLoop() {
     _suppressed = false;
-    // The showcase flyover fits the shadow camera to its own PerspectiveCamera
-    // (renderFrame below); when it hands control back, re-fit to the schema
-    // camera's view before the next schema frame.
+    // The showcase flyover fits the shadow camera, the cull-frustum uniforms,
+    // and the metro LOD pseudo-zoom to its own PerspectiveCamera (renderFrame
+    // below). When it hands control back, snap all three back to the schema
+    // camera's view before the next schema frame — otherwise the cull's first
+    // post-showcase dispatch would test against the flyCamera's last frustum
+    // and the metro LOD would be stuck on the synthetic perspective zoom
+    // until the user moved the camera (firing the controls 'change' reset).
     updateShadowCamera();
+    updateFrustumUniforms();
+    if (metroZoomUniform && camera) metroZoomUniform.value = camera.zoom;
     requestRender();
   }
 
@@ -1851,10 +1861,33 @@ const ThreeScene = (() => {
 
   function renderFrame(cam) {
     if (!renderer || !scene) return;
-    // The showcase flyover renders through its own PerspectiveCamera — re-fit
-    // the shadow camera to *its* view each frame (it moves continuously).
-    // startRenderLoop re-fits to the schema camera when the flyover ends.
-    if (cam && cam !== camera) updateShadowCamera(cam);
+    // The showcase flyover renders through its own PerspectiveCamera —
+    // re-fit the shadow camera AND the cull-frustum uniforms to *its* view
+    // each frame (the schema renderLoop is suppressed during showcase, so
+    // nothing else is keeping these in sync). Then dispatch the per-frame
+    // Phase 2B cull computes the same way renderLoop does — without this,
+    // the indirect buffer's instanceCount is frozen at whatever the schema
+    // cam last culled, so both the shadow pass and the main pass draw a
+    // stale building set (the original symptom: shadows missing under
+    // showcase, and buildings popping as the cinematic moves).
+    if (cam && cam !== camera) {
+      updateShadowCamera(cam);   // also refreshes the union-cull's shadow frustum
+      updateFrustumUniforms(cam); // and the camera-frustum half
+      // Metro LOD: pin to the R-tier (dashed close-zoom variant) for the
+      // whole showcase. Calibrating a perspective-altitude → ortho-zoom
+      // mapping that hits the existing METRO_LOD_ZOOM_MED / _NEAR thresholds
+      // cleanly across every waypoint isn't worth the tuning effort —
+      // dashed reads well from any cinematic angle and avoids tier
+      // transitions mid-flight. Any value > METRO_LOD_ZOOM_NEAR makes the
+      // discard expression keep only R; +1 stays well clear of float wobble.
+      if (metroZoomUniform && cam.isPerspectiveCamera) {
+        metroZoomUniform.value = NCZ.METRO_LOD_ZOOM_NEAR + 1;
+      }
+      for (const c of _cullComputes) {
+        renderer.compute(c.reset);
+        renderer.compute(c.cull);
+      }
+    }
     renderer.render(scene, cam);
   }
 
