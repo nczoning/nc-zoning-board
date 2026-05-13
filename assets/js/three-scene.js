@@ -2,8 +2,9 @@
  * NC Zoning Board — Three.js Scene
  * Namespace: NCZ.ThreeScene
  *
- * Manages the WebGL renderer, orthographic camera, OrbitControls,
- * GLB loading (tiered), lighting, and render loop for the schematic 3D view.
+ * Manages the WebGPU renderer, perspective schema camera (FOV 25°, TweakDB-
+ * aligned to the game's TopDown view), OrbitControls, GLB loading (tiered),
+ * lighting, and render loop for the schematic 3D view.
  *
  * Camera/coordinate notes (derived from render_terrain_3d.html):
  *   GLB space: X = CET_X, Y = height, Z = -CET_Y
@@ -57,6 +58,37 @@ const ThreeScene = (() => {
   let _sunDir        = SUN_DIR.clone(); // unit, ground→sun; updated by setSunPosition, consumed by updateShadowCamera
   let _shadowGroundCenter = new THREE.Vector3(); // world point the shadow camera is centred on (the visible-ground centre)
   let _shadowScratchV = new THREE.Vector3();     // reused by updateShadowCamera so it doesn't allocate per camera move
+  // Reusable scratch state for visible-ground-rect ray casts (perspective camera)
+  const _groundRectCorner = new THREE.Vector3();
+  const _groundRectMin    = new THREE.Vector3();
+  const _groundRectMax    = new THREE.Vector3();
+  const _GROUND_RECT_NDC  = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+
+  // Cast rays from the camera through the four NDC corners and intersect with
+  // the ground plane (Y=0). The XZ AABB of those four hits is the bounding rect
+  // of what the camera sees on the ground — used by pan bounds, scale bar, and
+  // the shadow camera footprint. Works for any camera type (orthographic via
+  // unproject's projection-matrix inversion, perspective likewise).
+  // Mutates and returns _groundRectMin / _groundRectMax.
+  function _computeVisibleGroundRect(cam) {
+    _groundRectMin.set( Infinity, 0,  Infinity);
+    _groundRectMax.set(-Infinity, 0, -Infinity);
+    for (const [nx, ny] of _GROUND_RECT_NDC) {
+      _groundRectCorner.set(nx, ny, 0.5).unproject(cam);
+      const dx = _groundRectCorner.x - cam.position.x;
+      const dy = _groundRectCorner.y - cam.position.y;
+      const dz = _groundRectCorner.z - cam.position.z;
+      if (Math.abs(dy) < 1e-6) continue;           // ray parallel to ground
+      const t = -cam.position.y / dy;
+      if (t <= 0) continue;                         // ground is behind camera
+      const gx = cam.position.x + t * dx;
+      const gz = cam.position.z + t * dz;
+      if (gx < _groundRectMin.x) _groundRectMin.x = gx;
+      if (gx > _groundRectMax.x) _groundRectMax.x = gx;
+      if (gz < _groundRectMin.z) _groundRectMin.z = gz;
+      if (gz > _groundRectMax.z) _groundRectMax.z = gz;
+    }
+  }
   let _shadowsOn     = true;  // shadows on by default; checkbox reflects this via poll
   let _sunSphere     = null; // visible sun disc — shown during showcase only
   let _sunAz = Math.PI * 0.25, _sunEl = Math.PI * 0.35; // last setSunPosition args
@@ -72,7 +104,7 @@ const ThreeScene = (() => {
   let normalRoadsMat  = null;  // Normal depth-tested pass
   let normalBordersMat= null;  // Normal depth-tested pass
   let metroMat        = null;
-  let metroZoomUniform = null; // TSL uniform() node — mutated from controls 'change'
+  let metroDistanceUniform = null; // TSL uniform() — schema camera-to-target distance; drives metro LOD tier discard (mutex)
   // Captured at WebGPURenderer construction so dumpDebugInfo can introspect
   // the antialias flag — WebGPURenderer has no getContextAttributes() to read it
   // back from, unlike WebGLRenderer.
@@ -383,31 +415,30 @@ const ThreeScene = (() => {
     scene.name = 'main-scene';
     scene.background = readThemeColor('--primary', '#0a192f');
 
-    // Orthographic camera — frustum updated after terrain loads
+    // Perspective camera matching the game's TopDown view — FOV 25°, distance in
+    // CET / world units (see SCHEMA_CAMERA_* in constants.js; values mirror
+    // WorldMap.TopDownCameraSettingsDefault in TweakDB). Z = -WORLD_CY because
+    // GLB_Z = -CET_Y.
     const aspect = container.clientWidth / container.clientHeight;
-    const frustumH = NCZ.WORLD_H / 2;
-    camera = new THREE.OrthographicCamera(
-      -frustumH * aspect, frustumH * aspect,
-       frustumH, -frustumH,
-      NCZ.CAMERA_NEAR, NCZ.CAMERA_FAR
+    camera = new THREE.PerspectiveCamera(
+      NCZ.SCHEMA_CAMERA_FOV, aspect, NCZ.SCHEMA_CAMERA_NEAR, NCZ.SCHEMA_CAMERA_FAR,
     );
     camera.name = 'schema-camera';
-    // Positioned above world centre, looking straight down.
-    // Z = -WORLD_CY because GLB_Z = -CET_Y.
-    camera.position.set(NCZ.WORLD_CX, NCZ.CAMERA_HEIGHT, -NCZ.WORLD_CY);
+    camera.position.set(NCZ.WORLD_CX, NCZ.SCHEMA_CAMERA_DEFAULT_DISTANCE, -NCZ.WORLD_CY);
     camera.lookAt(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
-    camera.up.set(0, 1, 0);  // Standard Three.js up vector
+    camera.up.set(0, 1, 0);
     camera.updateProjectionMatrix();
 
     // ── Lighting: outdoor model — directional sun + hemisphere fill ──
     // The sun: a DirectionalLight whose direction tracks the real Morro Bay sun
     // (SunCalc, via setSunPosition; default NW hillshade until then). One shadow
     // map, an OrthographicCamera fitted each move to exactly the visible-ground
-    // footprint (updateShadowCamera) — no cascades: for a top-down ortho camera
-    // there's no perspective near/far disparity to split, so a single tight map
-    // beats CSM and is far simpler. castShadow stays on permanently; the
-    // "shadows" layer toggle flips shadow *intensity* (toggling castShadow on a
-    // live light tears its depth texture down mid-frame and crashes WebGPURenderer).
+    // footprint (updateShadowCamera) — single map for now; a CSM revisit is
+    // queued (see [[align-schematic-camera-to-game]] — the original "no cascades
+    // because schema is ortho" rationale dissolved when the schema camera moved
+    // to perspective). castShadow stays on permanently; the "shadows" layer
+    // toggle flips shadow *intensity* (toggling castShadow on a live light
+    // tears its depth texture down mid-frame and crashes WebGPURenderer).
     _dirLight = new THREE.DirectionalLight(0xffffff, 1.0 - NCZ.AMBIENT_INTENSITY);
     _dirLight.name = 'sun';
     _dirLight.castShadow         = true;
@@ -456,8 +487,8 @@ const ThreeScene = (() => {
     controls.minPolarAngle  = NCZ.CAMERA_MIN_TILT;
     controls.maxPolarAngle  = NCZ.CAMERA_MAX_TILT;
     controls.dampingFactor  = NCZ.CAMERA_DAMPING;
-    controls.minZoom        = NCZ.CAMERA_ZOOM_MIN;
-    controls.maxZoom        = NCZ.CAMERA_ZOOM_MAX;
+    controls.minDistance    = NCZ.SCHEMA_CAMERA_MIN_DISTANCE;
+    controls.maxDistance    = NCZ.SCHEMA_CAMERA_MAX_DISTANCE;
     controls.zoomSpeed      = NCZ.CAMERA_ZOOM_SPEED;
     controls.panSpeed       = NCZ.CAMERA_PAN_SPEED;
     controls.rotateSpeed    = NCZ.CAMERA_ROTATE_SPEED;
@@ -469,7 +500,7 @@ const ThreeScene = (() => {
     updateShadowCamera();      // seed the shadow camera from the initial pose
     controls.addEventListener('change', () => {
       updateDistrictZoom();
-      if (metroZoomUniform) metroZoomUniform.value = camera.zoom;
+      if (metroDistanceUniform) metroDistanceUniform.value = camera.position.distanceTo(controls.target);
       updateShadowCamera();
       updateFrustumUniforms();   // Phase 2B: refresh the 6 cull-frustum planes
       updateScaleBar();
@@ -500,17 +531,22 @@ const ThreeScene = (() => {
     // tilt; that was reverted in favour of this stable simpler bound. A
     // proper tilt-aware fix is a future improvement (see E5/E6 discussion).
     controls.addEventListener('change', () => {
-      if (!_terrainBox) return;  // terrain not loaded yet — no bound to clamp against
       const t = controls.target;
       const f = NCZ.PIN_3D_PAN_EDGE_FRACTION;
-      const Vx = (camera.right - camera.left) / camera.zoom;
-      const Vz = (camera.top - camera.bottom) / camera.zoom;
+      // Pan envelope = TweakDB WorldMap.DefaultSettings.cursorBoundary (the
+      // game's own pan limits — tighter than the terrain GLB extent because
+      // the playable area sits in the northern half of the world). Allow the
+      // target to drift toward an edge by (f - 0.5) × visible-rect-size so
+      // edge content can still be centred.
+      _computeVisibleGroundRect(camera);
+      const Vx = _groundRectMax.x - _groundRectMin.x;
+      const Vz = _groundRectMax.z - _groundRectMin.z;
       const offsetX = (f - 0.5) * Vx;
       const offsetZ = (f - 0.5) * Vz;
-      const xMin = _terrainBox.min.x - offsetX;
-      const xMax = _terrainBox.max.x + offsetX;
-      const zMin = _terrainBox.min.z - offsetZ;
-      const zMax = _terrainBox.max.z + offsetZ;
+      const xMin = NCZ.PAN_BOUND_MIN_X - offsetX;
+      const xMax = NCZ.PAN_BOUND_MAX_X + offsetX;
+      const zMin = NCZ.PAN_BOUND_MIN_Z - offsetZ;
+      const zMax = NCZ.PAN_BOUND_MAX_Z + offsetZ;
       let dx = 0, dz = 0;
       if (t.x < xMin) dx = xMin - t.x;
       else if (t.x > xMax) dx = xMax - t.x;
@@ -546,10 +582,7 @@ const ThreeScene = (() => {
     const w = container.clientWidth;
     const h = container.clientHeight;
     renderer.setSize(w, h, false); // updateStyle:false — CSS width/height stay at 100%
-    const aspect = w / h;
-    const frustumH = (camera.top - camera.bottom) / 2;
-    camera.left   = -frustumH * aspect;
-    camera.right  =  frustumH * aspect;
+    camera.aspect = w / h;
     camera.updateProjectionMatrix();
     updateShadowCamera();   // shadow camera follows the schema camera's aspect
     // flyCamera resize is handled in flyover.js
@@ -598,8 +631,11 @@ const ThreeScene = (() => {
   }
 
   function updateDistrictZoom() {
-    if (!_districtOuter || !_districtSub) return;
-    const zoomedIn = camera.zoom > NCZ.SUBDISTRICT_ZOOM_3D;
+    if (!_districtOuter || !_districtSub || !controls) return;
+    // Distance from camera to target = distance-to-ground (target sits on Y=0).
+    // Smaller distance = more zoomed in; subdistricts replace districts under the threshold.
+    const distance = camera.position.distanceTo(controls.target);
+    const zoomedIn = distance < NCZ.SUBDISTRICT_DISTANCE_3D;
     _districtOuter.visible = !zoomedIn;
     _districtSub.visible   =  zoomedIn;
   }
@@ -610,18 +646,21 @@ const ThreeScene = (() => {
   // a horizontal bar of that pixel width, label it. CET unit ≈ metre, so no
   // unit conversion needed beyond CET_UNITS_PER_METER (default 1).
   //
-  // Computed from camera frustum width: metres-per-pixel along the screen-X
-  // axis = (camera.right - camera.left) / camera.zoom / canvas_pixel_width.
-  // Screen-X is parallel to the ground regardless of tilt (camera right
-  // vector stays in the world XZ plane for our orthographic top-down + tilt
-  // setup), so the bar reads true even when the camera is tilted.
+  // Perspective worldPerPixel along screen-X at the *centre of screen* (where
+  // the OrbitControls target sits on Y=0): visible width = 2 × distance ×
+  // tan(FOV/2) × aspect; worldPerPixel = that / canvasWidth. Screen-X is
+  // parallel to the ground regardless of tilt, so the bar still reads true
+  // when tilted (camera right vector stays in the world XZ plane).
   function updateScaleBar() {
-    if (!camera || !renderer) return;
+    if (!camera || !renderer || !controls) return;
     const el = document.querySelector('#scene-scale .leaflet-control-scale-line');
     if (!el) return;
     const canvasWidth = renderer.domElement.clientWidth;
     if (!canvasWidth) return;
-    const worldPerPixel = (camera.right - camera.left) / (camera.zoom * canvasWidth);
+    const distance = camera.position.distanceTo(controls.target);
+    const halfFovY = (camera.fov * Math.PI) / 360;
+    const visibleWidth = 2 * distance * Math.tan(halfFovY) * camera.aspect;
+    const worldPerPixel = visibleWidth / canvasWidth;
     const metresPerPixel = worldPerPixel / NCZ.CET_UNITS_PER_METER;
     const idealMetres = NCZ.PIN_3D_SCALE_TARGET_PX * metresPerPixel;
     if (!isFinite(idealMetres) || idealMetres <= 0) return;
@@ -805,19 +844,26 @@ const ThreeScene = (() => {
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       });
-      metroZoomUniform        = uniform(camera.zoom);
-      const uMetroLODMed_node  = uniform(NCZ.METRO_LOD_ZOOM_MED);
-      const uMetroLODNear_node = uniform(NCZ.METRO_LOD_ZOOM_NEAR);
+      // Mutually-exclusive LOD tiers driven by a single CPU uniform (schema
+      // camera-to-target distance). One tier renders at a time across the whole
+      // metro mesh, replacing rather than overlaying as the user zooms. Matches
+      // the in-game "wide → thin → dashed" transition.
+      //   B (wide solid) when distance > MED
+      //   G (thin solid) when NEAR < distance < MED
+      //   R (dotted)     when distance < NEAR
+      metroDistanceUniform     = uniform(NCZ.SCHEMA_CAMERA_DEFAULT_DISTANCE);
+      const uMetroLODMed_node  = uniform(NCZ.METRO_LOD_DISTANCE_MED);
+      const uMetroLODNear_node = uniform(NCZ.METRO_LOD_DISTANCE_NEAR);
       const lodColor = attribute('color');
       const discardCondition =
-        lodColor.b.greaterThan(0.5).and(metroZoomUniform.greaterThan(uMetroLODMed_node))
+        lodColor.b.greaterThan(0.5).and(metroDistanceUniform.lessThan(uMetroLODMed_node))
           .or(
             lodColor.g.greaterThan(0.5).and(
-              metroZoomUniform.lessThan(uMetroLODMed_node).or(metroZoomUniform.greaterThan(uMetroLODNear_node))
+              metroDistanceUniform.greaterThan(uMetroLODMed_node).or(metroDistanceUniform.lessThan(uMetroLODNear_node))
             )
           )
           .or(
-            lodColor.r.greaterThan(0.5).and(metroZoomUniform.lessThan(uMetroLODNear_node))
+            lodColor.r.greaterThan(0.5).and(metroDistanceUniform.greaterThan(uMetroLODNear_node))
           );
       metroMat.maskNode = discardCondition.not();
 
@@ -1385,17 +1431,17 @@ const ThreeScene = (() => {
   function fitCameraToBox(box) {
     const size   = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.z);
     const aspect = renderer.domElement.clientWidth / renderer.domElement.clientHeight;
-
-    camera.left   = -maxDim * aspect / 2;
-    camera.right  =  maxDim * aspect / 2;
-    camera.top    =  maxDim / 2;
-    camera.bottom = -maxDim / 2;
-    camera.updateProjectionMatrix();
+    // Distance needed to fit the larger of width / height into the perspective
+    // frustum, accounting for aspect on the horizontal axis. tan(FOV/2) × distance
+    // = halfHeight; horizontal frustum half-width = halfHeight × aspect.
+    const halfFovY = (NCZ.SCHEMA_CAMERA_FOV * Math.PI) / 360;
+    const distForHeight = (size.z / 2) / Math.tan(halfFovY);
+    const distForWidth  = (size.x / 2) / (Math.tan(halfFovY) * aspect);
+    const distance = Math.max(distForHeight, distForWidth);
 
     controls.target.set(center.x, 0, center.z);
-    camera.position.set(center.x, NCZ.CAMERA_HEIGHT, center.z);
+    camera.position.set(center.x, distance, center.z);
     camera.lookAt(center.x, 0, center.z);
     controls.update();
   }
@@ -1575,7 +1621,9 @@ const ThreeScene = (() => {
     // until the user moved the camera (firing the controls 'change' reset).
     updateShadowCamera();
     updateFrustumUniforms();
-    if (metroZoomUniform && camera) metroZoomUniform.value = camera.zoom;
+    if (metroDistanceUniform && camera && controls) {
+      metroDistanceUniform.value = camera.position.distanceTo(controls.target);
+    }
     requestRender();
   }
 
@@ -1873,15 +1921,12 @@ const ThreeScene = (() => {
     if (cam && cam !== camera) {
       updateShadowCamera(cam);   // also refreshes the union-cull's shadow frustum
       updateFrustumUniforms(cam); // and the camera-frustum half
-      // Metro LOD: pin to the R-tier (dashed close-zoom variant) for the
-      // whole showcase. Calibrating a perspective-altitude → ortho-zoom
-      // mapping that hits the existing METRO_LOD_ZOOM_MED / _NEAR thresholds
-      // cleanly across every waypoint isn't worth the tuning effort —
-      // dashed reads well from any cinematic angle and avoids tier
-      // transitions mid-flight. Any value > METRO_LOD_ZOOM_NEAR makes the
-      // discard expression keep only R; +1 stays well clear of float wobble.
-      if (metroZoomUniform && cam.isPerspectiveCamera) {
-        metroZoomUniform.value = NCZ.METRO_LOD_ZOOM_NEAR + 1;
+      // Metro LOD: pin to the R-tier (dotted close-zoom variant) for the whole
+      // showcase. Dashed reads well from any cinematic angle and avoids tier
+      // transitions mid-flight. Any distance < METRO_LOD_DISTANCE_NEAR forces
+      // the discard expression to keep only R; 0 is the unambiguous floor.
+      if (metroDistanceUniform && cam.isPerspectiveCamera) {
+        metroDistanceUniform.value = 0;
       }
       for (const c of _cullComputes) {
         renderer.compute(c.reset);
@@ -1904,21 +1949,20 @@ const ThreeScene = (() => {
 
   function resetCamera() {
     if (!controls) return;
-    const aspect = renderer.domElement.clientWidth / renderer.domElement.clientHeight;
-    const frustumH = NCZ.WORLD_H / 2;
-    camera.left   = -frustumH * aspect;
-    camera.right  =  frustumH * aspect;
-    camera.top    =  frustumH;
-    camera.bottom = -frustumH;
-    camera.updateProjectionMatrix();
 
-    // Reset to top-down view: target at sea level, camera directly above
-    controls.target.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
-    camera.position.set(NCZ.WORLD_CX, NCZ.CAMERA_HEIGHT, -NCZ.WORLD_CY);
-    camera.lookAt(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
+    // Match the first-load view: fit the camera to the terrain box (same code
+    // path init runs after terrain loads), capped at maxDistance by OrbitControls
+    // on the controls.update() below. Falls back to the default distance pose if
+    // terrain hasn't loaded yet (early reset before assets ready).
+    if (_terrainBox) {
+      fitCameraToBox(_terrainBox);
+    } else {
+      controls.target.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
+      camera.position.set(NCZ.WORLD_CX, NCZ.SCHEMA_CAMERA_DEFAULT_DISTANCE, -NCZ.WORLD_CY);
+      camera.lookAt(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
+    }
     camera.up.set(0, 1, 0);
 
-    // Reset OrbitControls state (polar angle = π/2 for top-down)
     controls.autoRotate = false;
     controls.autoRotateSpeed = 0;
     controls.update();
@@ -2129,23 +2173,23 @@ const ThreeScene = (() => {
   // extreme. Re-centres the sun light + its target on that footprint so the
   // shadow tracks what you see. Called on every camera change, on resize, after
   // terrain loads, on flyover frames (renderCam = the fly cam), and from
-  // startRenderLoop. No cascades — our schema camera is orthographic (uniform
-  // pixels-per-world-unit), so there's no perspective near/far disparity for
-  // cascades to exploit; one tight map is both simpler and sharper here.
+  // startRenderLoop. Single map for now; CSM is a queued follow-up
+  // (see [[align-schematic-camera-to-game]] for the rationale shift).
   function updateShadowCamera(renderCam = camera) {
     if (!_dirLight || !renderCam) return;
     const shadowCam = _dirLight.shadow.camera;
 
     let half, center;
     if (renderCam === camera && controls) {
-      // Schema orthographic camera — analytic fit. The visible ground is a W×D
-      // rectangle: W = the screen-horizontal world extent; D = the screen-vertical
-      // extent stretched by 1/cos(tilt) (a tilted view sees a longer strip of
-      // ground). A square of side = that rectangle's diagonal contains it from any
-      // sun azimuth. Cap so it can't reach the horizon at the zoomed-out extreme.
-      const W = 2 * camera.right / camera.zoom;
-      const tilt = controls.getPolarAngle?.() ?? 0;
-      const D = (2 * camera.top / camera.zoom) / Math.max(0.25, Math.cos(tilt)); // 0.25 ≈ cos 76°, past CAMERA_MAX_TILT
+      // Schema perspective camera — fit a square to the visible ground rect
+      // (computed by ray-casting from camera through the four NDC corners and
+      // intersecting Y=0). The rect handles tilt and aspect naturally — no
+      // analytic 1/cos(tilt) stretch needed. A square of side = rect diagonal
+      // contains it from any sun azimuth; cap so it can't reach the horizon at
+      // the zoomed-out extreme.
+      _computeVisibleGroundRect(camera);
+      const W = _groundRectMax.x - _groundRectMin.x;
+      const D = _groundRectMax.z - _groundRectMin.z;
       half = Math.min(0.5 * Math.hypot(W, D), NCZ.SHADOW_MAX_DISTANCE) + NCZ.SHADOW_GROUND_MARGIN;
       // Pin the centre to the ground plane (Y = 0): controls.target can drift
       // off Y=0 with screen-space panning at a tilt, which would slide the
@@ -2214,7 +2258,6 @@ const ThreeScene = (() => {
     return {
       target:    controls.target.toArray(),
       position:  camera.position.toArray(),
-      zoom:      camera.zoom,
       polar:     controls.getPolarAngle(),
       azimuth:   controls.getAzimuthalAngle(),
       sunAz:     _sunAz,
@@ -2227,7 +2270,6 @@ const ThreeScene = (() => {
     if (!controls || !camera) return;
     controls.target.fromArray(s.target);
     camera.position.fromArray(s.position);
-    camera.zoom = s.zoom;
     controls.update();
     camera.updateProjectionMatrix();
     if (s.sunAz !== undefined) setSunPosition(s.sunAz, s.sunEl);

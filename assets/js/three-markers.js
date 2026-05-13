@@ -23,12 +23,12 @@ window.NCZ = window.NCZ || {};
 
 const ThreeMarkers = (() => {
   let scene = null;
-  // Two camera references: the schema OrthographicCamera captured at attach
-  // time, and an optional override active during the showcase flyover (the
-  // PerspectiveCamera owned by flyover.js). Cluster math + fly-to-pin tween
-  // assume orthographic fields and always use _schemaCamera; the popup
-  // projection and the render call use whichever is active so pins follow
-  // the cinematic camera during the showcase.
+  // Two camera references: the schema PerspectiveCamera captured at attach
+  // time, and an optional override active during the showcase flyover (a
+  // separate PerspectiveCamera with a wider FOV owned by flyover.js). Cluster
+  // math + fly-to-pin tween are distance-based and always run against
+  // _schemaCamera; the popup projection and the render call use whichever
+  // camera is active so pins follow the cinematic camera during the showcase.
   let _schemaCamera = null;
   let _activeCamera = null;
   const getCam = () => _activeCamera || _schemaCamera;
@@ -314,19 +314,20 @@ const ThreeMarkers = (() => {
   // while the user explores — no reshuffle on rotation. (Aki's UX call,
   // applied 2026-05-02. Earlier screen-space approach in git history if
   // you ever want to revisit.)
-  let _lastZoomForCluster = null;
+  let _lastDistanceForCluster = null;
 
   function scheduleRecomputeClusters() {
-    // Skip if zoom hasn't changed (pan/tilt only) — world clusters don't
-    // move. Filter changes call recomputeClusters() synchronously and
-    // bypass this guard.
-    // Cluster math reads orthographic-only fields (zoom, right, left) so it
-    // can only run against the schema camera. During the showcase the active
-    // camera is the perspective fly camera — bail out and let clusters keep
-    // their last-recomputed positions for the duration of the cinematic.
+    // Skip if camera-to-target distance hasn't changed (pan/tilt only) —
+    // world clusters don't move. Filter changes call recomputeClusters()
+    // synchronously and bypass this guard.
+    // During the showcase the active camera is the perspective fly camera —
+    // bail out and let clusters keep their last-recomputed positions for the
+    // duration of the cinematic.
     if (_activeCamera) return;
-    if (_lastZoomForCluster === _schemaCamera.zoom) return;
-    _lastZoomForCluster = _schemaCamera.zoom;
+    if (!controls) return;
+    const distance = _schemaCamera.position.distanceTo(controls.target);
+    if (_lastDistanceForCluster === distance) return;
+    _lastDistanceForCluster = distance;
     if (_recomputeFrame !== null) return;
     _recomputeFrame = requestAnimationFrame(() => {
       _recomputeFrame = null;
@@ -335,15 +336,20 @@ const ThreeMarkers = (() => {
   }
 
   function recomputeClusters() {
-    if (!_clusterLayer || !_schemaCamera || !container) return;
+    if (!_clusterLayer || !_schemaCamera || !container || !controls) return;
     const w = container.clientWidth;
     if (!w) return;
 
-    // Convert "PIN_3D_CLUSTER_RADIUS_PX equivalent at current zoom" into world
-    // units. At zoom=2 this is roughly the same radius the screen-space
-    // version used at top-down view; as the user zooms in, the world radius
-    // shrinks proportionally so clusters dissolve at the same rate as Leaflet's.
-    const worldPerPixel = (_schemaCamera.right - _schemaCamera.left) / (_schemaCamera.zoom * w);
+    // Convert "PIN_3D_CLUSTER_RADIUS_PX equivalent at current camera distance"
+    // into world units. Perspective worldPerPixel at the *centre of screen*
+    // (the OrbitControls target, on Y=0): visible width = 2 × distance ×
+    // tan(FOV/2) × aspect; worldPerPixel = that / canvasWidth. As the user
+    // zooms in (smaller distance), the world radius shrinks proportionally,
+    // so clusters dissolve at the same rate as Leaflet's screen-space ones.
+    const distance = _schemaCamera.position.distanceTo(controls.target);
+    const halfFovY = (_schemaCamera.fov * Math.PI) / 360;
+    const visibleWidth = 2 * distance * Math.tan(halfFovY) * _schemaCamera.aspect;
+    const worldPerPixel = visibleWidth / w;
     const radiusWorld = NCZ.PIN_3D_CLUSTER_RADIUS_PX * worldPerPixel;
     const radiusSq = radiusWorld * radiusWorld;
 
@@ -585,9 +591,12 @@ const ThreeMarkers = (() => {
     return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
   }
 
-  // Tween OrbitControls' target (XZ only — keep camera height) + camera.position
-  // by the same delta (preserving the spherical offset) + camera.zoom. Runs in
-  // the render loop via updateFlyTween().
+  // Tween OrbitControls' target + camera.position toward the pin. For a
+  // perspective camera the "zoom level" at the end of the fly is a fixed
+  // *distance* (SCHEMA_FLY_TO_DISTANCE — the game's TweakDB zoomToZoomValue):
+  // end position = endTarget + currentDirection × that distance, so the camera
+  // approach angle is preserved but always lands at the same close zoom.
+  // Runs in the render loop via updateFlyTween().
   function flyTo(pin, onComplete) {
     const startTarget = controls.target.clone();
     // Target the pin's full world position INCLUDING height. With a tilted
@@ -596,15 +605,13 @@ const ThreeMarkers = (() => {
     // screen centre regardless of tilt or pin elevation.
     const endTarget = pin.position.clone();
 
-    const offset = _schemaCamera.position.clone().sub(startTarget); // preserved
     const startCameraPos = _schemaCamera.position.clone();
-    const endCameraPos   = endTarget.clone().add(offset);
+    const offsetDir = startCameraPos.clone().sub(startTarget).normalize();
+    const endCameraPos = endTarget.clone().addScaledVector(offsetDir, NCZ.SCHEMA_FLY_TO_DISTANCE);
 
     _flyTween = {
       startTarget, endTarget,
       startCameraPos, endCameraPos,
-      startZoom: _schemaCamera.zoom,
-      endZoom:   NCZ.PIN_3D_FLY_ZOOM,
       elapsed: 0,
       duration: NCZ.PIN_3D_FLY_DURATION_MS,
       onComplete,
@@ -626,7 +633,6 @@ const ThreeMarkers = (() => {
 
     controls.target.lerpVectors(_flyTween.startTarget, _flyTween.endTarget, e);
     _schemaCamera.position.lerpVectors(_flyTween.startCameraPos, _flyTween.endCameraPos, e);
-    _schemaCamera.zoom = _flyTween.startZoom + (_flyTween.endZoom - _flyTween.startZoom) * e;
     _schemaCamera.updateProjectionMatrix();
 
     if (u >= 1) {
@@ -673,9 +679,9 @@ const ThreeMarkers = (() => {
   // Swap the CSS2DRenderer's projection camera for the duration of the
   // showcase. Passing a camera (typically the flyover PerspectiveCamera)
   // makes pins, clusters, popup and tooltip track that camera's view; passing
-  // null reverts to the schema OrthographicCamera. On revert we trigger a
-  // cluster recompute so the orthographic-only math resyncs against the
-  // current zoom (which may have changed during the showcase).
+  // null reverts to the schema PerspectiveCamera. On revert we trigger a
+  // cluster recompute so the distance-based math resyncs against the current
+  // camera distance (which may have changed during the showcase).
   function setActiveCamera(cam) {
     _activeCamera = cam || null;
     if (!cam) recomputeClusters();

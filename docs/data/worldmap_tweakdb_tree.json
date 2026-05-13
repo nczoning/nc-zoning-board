@@ -1,0 +1,2610 @@
+{
+  "_prefix": "WorldMap.",
+  "_seedCount": 64,
+  "_recordCount": 110,
+  "_byNamespace": {
+    "WorldMap": 64,
+    "Mappins": 46
+  },
+  "_refsBroken": [],
+  "_recordIds": [
+    "Mappins.ApartmentToPurchaseVariant",
+    "Mappins.CarForPurchaseVariant",
+    "Mappins.CustomPositionVariant",
+    "Mappins.DefaultQuestVariant",
+    "Mappins.DelamainTaxiDestinationVariant",
+    "Mappins.DelamainTaxiVariant",
+    "Mappins.DogtownGateVariant",
+    "Mappins.MotorcycleForPurchaseVariant",
+    "Mappins.MotorcycleVariant",
+    "Mappins.NCPDGigVariant",
+    "Mappins.PointOfInterest_ApartmentVariant",
+    "Mappins.PointOfInterest_BountyHuntVariant",
+    "Mappins.PointOfInterest_ClientInDistressVariant",
+    "Mappins.PointOfInterest_ConvoyVariant",
+    "Mappins.PointOfInterest_ExclamationMarkVariant",
+    "Mappins.PointOfInterest_FastTravelVariant",
+    "Mappins.PointOfInterest_FixerVariant",
+    "Mappins.PointOfInterest_GangWatchVariant",
+    "Mappins.PointOfInterest_HiddenStashVariant",
+    "Mappins.PointOfInterest_HuntForPsychoVariant",
+    "Mappins.PointOfInterest_MinorActivityVariant",
+    "Mappins.PointOfInterest_NCARTVariant",
+    "Mappins.PointOfInterest_OutpostVariant",
+    "Mappins.PointOfInterest_RacingVariant",
+    "Mappins.PointOfInterest_RetrievingVariant",
+    "Mappins.PointOfInterest_SabotageVariant",
+    "Mappins.PointOfInterest_ServicePointBarVariant",
+    "Mappins.PointOfInterest_ServicePointClothesVariant",
+    "Mappins.PointOfInterest_ServicePointDropPoint",
+    "Mappins.PointOfInterest_ServicePointFoodVariant",
+    "Mappins.PointOfInterest_ServicePointGunsVariant",
+    "Mappins.PointOfInterest_ServicePointJunkVariant",
+    "Mappins.PointOfInterest_ServicePointMedsVariant",
+    "Mappins.PointOfInterest_ServicePointMeleeTrainerVariant",
+    "Mappins.PointOfInterest_ServicePointNetTrainerVariant",
+    "Mappins.PointOfInterest_ServicePointProstituteVariant",
+    "Mappins.PointOfInterest_ServicePointRipperdocVariant",
+    "Mappins.PointOfInterest_TarotVariant",
+    "Mappins.PointOfInterest_ThieveryVariant",
+    "Mappins.QuestGiverVariant",
+    "Mappins.RelicDeviceBasicVariant",
+    "Mappins.RelicDeviceSpecialVariant",
+    "Mappins.ServicePointBlackMarketVariant",
+    "Mappins.VehicleVariant",
+    "Mappins.WorldEncounterVariant",
+    "Mappins.Zzz09_CourierSandboxActivityVariant",
+    "WorldMap.AllServicePointsFilterGroup",
+    "WorldMap.ApartmentToPurchaseFilter",
+    "WorldMap.ApartmentToPurchaseFilterGroup",
+    "WorldMap.ApartmentToPurchaseMappinsGroup",
+    "WorldMap.AutofixerFilter",
+    "WorldMap.AutofixerFilterGroup",
+    "WorldMap.BaseZoomLevel",
+    "WorldMap.CommonFilter",
+    "WorldMap.CommonFilterGroup",
+    "WorldMap.CourierFilter",
+    "WorldMap.CourierFilterGroup",
+    "WorldMap.CustomFilter",
+    "WorldMap.CustomFilterGroup",
+    "WorldMap.CyberPsychoFilterGroup",
+    "WorldMap.DefaultSettings",
+    "WorldMap.DogtownGateFilter",
+    "WorldMap.DogtownGateFilterGroup",
+    "WorldMap.DropPointFilter",
+    "WorldMap.DropPointFilterGroup",
+    "WorldMap.ExplorationFilter",
+    "WorldMap.ExplorationFilterGroup",
+    "WorldMap.FastTravelFilter",
+    "WorldMap.FastTravelFilterGroup",
+    "WorldMap.FastTravelMappinsGroup",
+    "WorldMap.FreeCameraSettingsDefault",
+    "WorldMap.GigsFilter",
+    "WorldMap.JobsFilterGroup",
+    "WorldMap.MainQuestFilterGroup",
+    "WorldMap.NoFilter",
+    "WorldMap.NoFilterGroup",
+    "WorldMap.PlayerMappinsGroup",
+    "WorldMap.PsychoFilter",
+    "WorldMap.QuestFilter",
+    "WorldMap.QuestFilterGroup",
+    "WorldMap.QuestMappinsGroup",
+    "WorldMap.RelicDeviceFilter",
+    "WorldMap.RelicDeviceFilterGroup",
+    "WorldMap.RipperdocFilter",
+    "WorldMap.RipperdocFilterGroup",
+    "WorldMap.SandboxActivitesMappinsGroup",
+    "WorldMap.SecondaryQuestMappinsGroup",
+    "WorldMap.ServicePointFilter",
+    "WorldMap.ServicePointFilterGroup",
+    "WorldMap.ServicePointMappinsGroup",
+    "WorldMap.StoryFilter",
+    "WorldMap.StoryFilterGroup",
+    "WorldMap.StoryMappinsGroup",
+    "WorldMap.TarotFilter",
+    "WorldMap.TarotFilterGroup",
+    "WorldMap.TopDownCameraSettingsDefault",
+    "WorldMap.VehicleForPurchaseMappinsGroup",
+    "WorldMap.VehicleForSaleFilter",
+    "WorldMap.VendorFilter",
+    "WorldMap.VendorFilterGroup",
+    "WorldMap.WorldEncounterFilter",
+    "WorldMap.WorldEncounterFilterGroup",
+    "WorldMap.WorldMapCustomFiltersList",
+    "WorldMap.WorldMapQuickFiltersList",
+    "WorldMap.ZoomLevelAllMappins",
+    "WorldMap.ZoomLevelDistricts",
+    "WorldMap.ZoomLevelExtraMappins",
+    "WorldMap.ZoomLevelImportant",
+    "WorldMap.ZoomLevelSubDistricts",
+    "WorldMap.ZoomLevelVendors"
+  ],
+  "records": {
+    "WorldMap.WorldMapCustomFiltersList": {
+      "$type": "gamedataWorldMapFiltersList_Record",
+      "list": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.MainQuestFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.QuestFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CyberPsychoFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.StoryFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.FastTravelFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.RipperdocFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.VendorFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.AutofixerFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.DropPointFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.ApartmentToPurchaseFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.TarotFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CommonFilterGroup"
+        }
+      ]
+    },
+    "WorldMap.FastTravelFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "FastTravel"
+      }
+    },
+    "WorldMap.ZoomLevelAllMappins": {
+      "$type": "gamedataWorldMapZoomLevel_Record",
+      "canChangeFilters": 1,
+      "fov": 25,
+      "iconScale": 1,
+      "mappinFilterGroups": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.MainQuestFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CommonFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.QuestFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CyberPsychoFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CourierFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.WorldEncounterFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.RipperdocFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.FastTravelFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.DropPointFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.ApartmentToPurchaseFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.TarotFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.DogtownGateFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.RelicDeviceFilterGroup"
+        }
+      ],
+      "panSpeed": 1400,
+      "rotation": {
+        "$type": "EulerAngles",
+        "Pitch": 0,
+        "Roll": 0,
+        "Yaw": -85
+      },
+      "showDistricts": 0,
+      "showSubDistricts": 0,
+      "zoom": 2500
+    },
+    "WorldMap.SandboxActivitesMappinsGroup": {
+      "$type": "gamedataMappinsGroup_Record",
+      "groupName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "SandboxActivites"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.Zzz09_CourierSandboxActivityVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.WorldEncounterVariant"
+        }
+      ],
+      "widgetState": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Gigs"
+      }
+    },
+    "WorldMap.CustomFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-Settings-Video-QualitySetting-Custom"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.CustomFilter"
+      },
+      "mappins": [],
+      "shouldCollectMappins": 0
+    },
+    "WorldMap.CommonFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-Menus-WorldMap-Filter-YourProperty"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.CommonFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.CustomPositionVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.DelamainTaxiVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.DelamainTaxiDestinationVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.VehicleVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.MotorcycleVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ApartmentVariant"
+        }
+      ],
+      "shouldCollectMappins": 0
+    },
+    "WorldMap.CustomFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "CustomFilter"
+      }
+    },
+    "WorldMap.ZoomLevelImportant": {
+      "$type": "gamedataWorldMapZoomLevel_Record",
+      "canChangeFilters": 1,
+      "fov": 25,
+      "iconScale": 1,
+      "mappinFilterGroups": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.MainQuestFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CommonFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.QuestFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CyberPsychoFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CourierFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.WorldEncounterFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.ApartmentToPurchaseFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.TarotFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.DogtownGateFilterGroup"
+        }
+      ],
+      "panSpeed": 1400,
+      "rotation": {
+        "$type": "EulerAngles",
+        "Pitch": 0,
+        "Roll": 0,
+        "Yaw": -85
+      },
+      "showDistricts": 0,
+      "showSubDistricts": 0,
+      "zoom": 4500
+    },
+    "WorldMap.AllServicePointsFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-Menus-WorldMap-Filter-ServicePoint"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.ServicePointFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.CustomPositionVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.DelamainTaxiVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.DelamainTaxiDestinationVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.VehicleVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.MotorcycleVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ApartmentVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointRipperdocVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointClothesVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointFoodVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointJunkVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointMedsVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointNetTrainerVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointGunsVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.ServicePointBlackMarketVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointMeleeTrainerVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointBarVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointProstituteVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointDropPoint"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_FastTravelVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_NCARTVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.CarForPurchaseVariant"
+        }
+      ],
+      "shouldCollectMappins": 0
+    },
+    "WorldMap.MainQuestFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-Menus-WorldMap-Filter-Jobs"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.QuestFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ExclamationMarkVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.DefaultQuestVariant"
+        }
+      ],
+      "shouldCollectMappins": 0
+    },
+    "WorldMap.StoryMappinsGroup": {
+      "$type": "gamedataMappinsGroup_Record",
+      "groupName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Story"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_MinorActivityVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_GangWatchVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_OutpostVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_HiddenStashVariant"
+        }
+      ],
+      "widgetState": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Story"
+      }
+    },
+    "WorldMap.TarotFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "TarotFilter"
+      }
+    },
+    "WorldMap.WorldEncounterFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-MappinTypes-WorldEncounter"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.WorldEncounterFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.WorldEncounterVariant"
+        }
+      ],
+      "shouldCollectMappins": 0
+    },
+    "WorldMap.RipperdocFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-Menus-WorldMap-Filter-Ripperdoc"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.RipperdocFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointRipperdocVariant"
+        }
+      ],
+      "shouldCollectMappins": 1
+    },
+    "WorldMap.NoFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-Menus-WorldMap-Filter-Dynamic"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.NoFilter"
+      },
+      "mappins": [],
+      "shouldCollectMappins": 0
+    },
+    "WorldMap.QuestFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-Quests-Labels-StreetStories"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.GigsFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_FixerVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.QuestGiverVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.WorldEncounterVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.Zzz09_CourierSandboxActivityVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_BountyHuntVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_RetrievingVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ThieveryVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_SabotageVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ClientInDistressVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ConvoyVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_RacingVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.NCPDGigVariant"
+        }
+      ],
+      "shouldCollectMappins": 0
+    },
+    "WorldMap.ZoomLevelSubDistricts": {
+      "$type": "gamedataWorldMapZoomLevel_Record",
+      "canChangeFilters": 1,
+      "fov": 25,
+      "iconScale": 1,
+      "mappinFilterGroups": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.MainQuestFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CommonFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.QuestFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CyberPsychoFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CourierFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.WorldEncounterFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.DogtownGateFilterGroup"
+        }
+      ],
+      "panSpeed": 3000,
+      "rotation": {
+        "$type": "EulerAngles",
+        "Pitch": 0,
+        "Roll": 0,
+        "Yaw": -85
+      },
+      "showDistricts": 0,
+      "showSubDistricts": 1,
+      "zoom": 7000
+    },
+    "WorldMap.JobsFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-Menus-WorldMap-Filter-Jobs"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.GigsFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ExclamationMarkVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.DefaultQuestVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_FixerVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.QuestGiverVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_BountyHuntVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_RetrievingVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ThieveryVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_SabotageVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ClientInDistressVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ConvoyVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_HuntForPsychoVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_RacingVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.NCPDGigVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.WorldEncounterVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.Zzz09_CourierSandboxActivityVariant"
+        }
+      ],
+      "shouldCollectMappins": 0
+    },
+    "WorldMap.RipperdocFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "RipperdocFilter"
+      }
+    },
+    "WorldMap.RelicDeviceFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Gameplay-Devices-DisplayNames-CorporateCoreDataHolder"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.AutofixerFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.RelicDeviceBasicVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.RelicDeviceSpecialVariant"
+        }
+      ],
+      "shouldCollectMappins": 1
+    },
+    "WorldMap.CommonFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "CommonFilter"
+      }
+    },
+    "WorldMap.PlayerMappinsGroup": {
+      "$type": "gamedataMappinsGroup_Record",
+      "groupName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Player"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_FixerVariant"
+        }
+      ],
+      "widgetState": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Gigs"
+      }
+    },
+    "WorldMap.AutofixerFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-Menus-WorldMap-Filter-Autofixer"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.AutofixerFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.CarForPurchaseVariant"
+        }
+      ],
+      "shouldCollectMappins": 1
+    },
+    "WorldMap.WorldEncounterFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Outpost"
+      }
+    },
+    "WorldMap.ApartmentToPurchaseFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-MappinTypes-ApartmentToPurchase"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.ApartmentToPurchaseFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.ApartmentToPurchaseVariant"
+        }
+      ],
+      "shouldCollectMappins": 0
+    },
+    "WorldMap.ExplorationFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Story-base-journal-codex-tutorials-Exploration_groupName"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.ExplorationFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointProstituteVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.WorldEncounterVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.RelicDeviceBasicVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.RelicDeviceSpecialVariant"
+        }
+      ],
+      "shouldCollectMappins": 1
+    },
+    "WorldMap.FreeCameraSettingsDefault": {
+      "$type": "gamedataWorldMapFreeCameraSettings_Record",
+      "fovMax": 25,
+      "fovMin": 25,
+      "iconScaleMax": 1,
+      "iconScaleMin": 1,
+      "mousePanStrength": 0.00139999995,
+      "mouseRotateStrength": 0.00079999998,
+      "mouseZoomSpeedMax": 4000,
+      "mouseZoomSpeedMin": 200,
+      "panSpeedMax": 3500,
+      "panSpeedMin": 250,
+      "pitchRelativeToZoom": 0,
+      "rotationDefault": {
+        "$type": "EulerAngles",
+        "Pitch": 0,
+        "Roll": 0,
+        "Yaw": -45
+      },
+      "rotationMax": {
+        "$type": "EulerAngles",
+        "Pitch": 0,
+        "Roll": 360,
+        "Yaw": -30
+      },
+      "rotationMin": {
+        "$type": "EulerAngles",
+        "Pitch": 0,
+        "Roll": -360,
+        "Yaw": -85
+      },
+      "rotationSpeed": {
+        "$type": "EulerAngles",
+        "Pitch": 75,
+        "Roll": 95,
+        "Yaw": 75
+      },
+      "zoomDefault": 3000,
+      "zoomDefaultInFastTravel": 5000,
+      "zoomMax": 10500,
+      "zoomMin": 800,
+      "zoomSpeed": 25,
+      "zoomSpeedMax": 20000,
+      "zoomSpeedMin": 1500
+    },
+    "WorldMap.DropPointFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-MappinTypes-Dropbox"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.DropPointFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointDropPoint"
+        }
+      ],
+      "shouldCollectMappins": 0
+    },
+    "WorldMap.DogtownGateFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "DogtownGateFilter"
+      }
+    },
+    "WorldMap.StoryFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Story"
+      }
+    },
+    "WorldMap.ExplorationFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ExplorationFilter"
+      }
+    },
+    "WorldMap.ServicePointMappinsGroup": {
+      "$type": "gamedataMappinsGroup_Record",
+      "groupName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ServicePoint"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.CustomPositionVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.DelamainTaxiVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.DelamainTaxiDestinationVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.VehicleVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.MotorcycleVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ApartmentVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointRipperdocVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointClothesVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointFoodVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointJunkVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointMedsVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointNetTrainerVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointGunsVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.ServicePointBlackMarketVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointMeleeTrainerVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointBarVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointProstituteVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointDropPoint"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.RelicDeviceBasicVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.RelicDeviceSpecialVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.DogtownGateVariant"
+        }
+      ],
+      "widgetState": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ServicePoint"
+      }
+    },
+    "WorldMap.ZoomLevelVendors": {
+      "$type": "gamedataWorldMapZoomLevel_Record",
+      "canChangeFilters": 1,
+      "fov": 25,
+      "iconScale": 1,
+      "mappinFilterGroups": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.MainQuestFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CommonFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.QuestFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CyberPsychoFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CourierFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.WorldEncounterFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.RipperdocFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.ApartmentToPurchaseFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.TarotFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.DogtownGateFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.RelicDeviceFilterGroup"
+        }
+      ],
+      "panSpeed": 1400,
+      "rotation": {
+        "$type": "EulerAngles",
+        "Pitch": 0,
+        "Roll": 0,
+        "Yaw": -85
+      },
+      "showDistricts": 0,
+      "showSubDistricts": 0,
+      "zoom": 3500
+    },
+    "WorldMap.QuestMappinsGroup": {
+      "$type": "gamedataMappinsGroup_Record",
+      "groupName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Quest"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.DefaultQuestVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ExclamationMarkVariant"
+        }
+      ],
+      "widgetState": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Quest"
+      }
+    },
+    "WorldMap.ZoomLevelDistricts": {
+      "$type": "gamedataWorldMapZoomLevel_Record",
+      "canChangeFilters": 1,
+      "fov": 25,
+      "iconScale": 1,
+      "mappinFilterGroups": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CommonFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.MainQuestFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.DogtownGateFilterGroup"
+        }
+      ],
+      "panSpeed": 3500,
+      "rotation": {
+        "$type": "EulerAngles",
+        "Pitch": 0,
+        "Roll": 0,
+        "Yaw": -85
+      },
+      "showDistricts": 1,
+      "showSubDistricts": 0,
+      "zoom": 11000
+    },
+    "WorldMap.CourierFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-MappinTypes-CourierTitleDiscovered"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.CourierFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.Zzz09_CourierSandboxActivityVariant"
+        }
+      ],
+      "shouldCollectMappins": 0
+    },
+    "WorldMap.DropPointFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "DropPoint"
+      }
+    },
+    "WorldMap.ZoomLevelExtraMappins": {
+      "$type": "gamedataWorldMapZoomLevel_Record",
+      "canChangeFilters": 1,
+      "fov": 25,
+      "iconScale": 1,
+      "mappinFilterGroups": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.MainQuestFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CommonFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.QuestFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CyberPsychoFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CourierFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.WorldEncounterFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.RipperdocFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.AutofixerFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.FastTravelFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.VendorFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.DropPointFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.ExplorationFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.ApartmentToPurchaseFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.TarotFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.DogtownGateFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.RelicDeviceFilterGroup"
+        }
+      ],
+      "panSpeed": 1400,
+      "rotation": {
+        "$type": "EulerAngles",
+        "Pitch": 0,
+        "Roll": 0,
+        "Yaw": -85
+      },
+      "showDistricts": 0,
+      "showSubDistricts": 0,
+      "zoom": 1000
+    },
+    "WorldMap.RelicDeviceFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "RelicDeviceFilter"
+      }
+    },
+    "WorldMap.ApartmentToPurchaseFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ApartmentToPurchaseFilter"
+      }
+    },
+    "WorldMap.AutofixerFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "AutofixerFilter"
+      }
+    },
+    "WorldMap.ApartmentToPurchaseMappinsGroup": {
+      "$type": "gamedataMappinsGroup_Record",
+      "groupName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ApartmentToPurchase"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.ApartmentToPurchaseVariant"
+        }
+      ],
+      "widgetState": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Gigs"
+      }
+    },
+    "WorldMap.GigsFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Gigs"
+      }
+    },
+    "WorldMap.DefaultSettings": {
+      "$type": "gamedataWorldMapSettings_Record",
+      "cameraModeTransitionTime": 0.349999994,
+      "cursorBoundaryMax": {
+        "$type": "Vector2",
+        "X": 6050,
+        "Y": 5000
+      },
+      "cursorBoundaryMin": {
+        "$type": "Vector2",
+        "X": -5500,
+        "Y": -7300
+      },
+      "enableGroupTransitionAnimations": 1,
+      "freeCamera": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.FreeCameraSettingsDefault"
+      },
+      "mouseZoomTransitionTime": 0.100000001,
+      "NCPDEventsVisibilityRange": 100,
+      "topDownCamera": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.TopDownCameraSettingsDefault"
+      },
+      "zoomLevels": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.ZoomLevelDistricts"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.ZoomLevelSubDistricts"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.ZoomLevelImportant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.ZoomLevelVendors"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.ZoomLevelAllMappins"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.ZoomLevelExtraMappins"
+        }
+      ],
+      "zoomToEnabledAtMinimumZoom": 2000,
+      "zoomToZoomValue": 1250,
+      "zoomTransitionTime": 0.25
+    },
+    "WorldMap.SecondaryQuestMappinsGroup": {
+      "$type": "gamedataMappinsGroup_Record",
+      "groupName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "SecondaryQuest"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.QuestGiverVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_BountyHuntVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_RetrievingVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ThieveryVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_SabotageVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ClientInDistressVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ConvoyVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_HuntForPsychoVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_RacingVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.NCPDGigVariant"
+        }
+      ],
+      "widgetState": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Gigs"
+      }
+    },
+    "WorldMap.VehicleForSaleFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "VehicleForSaleFilter"
+      }
+    },
+    "WorldMap.VendorFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-Menus-WorldMap-Filter-Vendor"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.VendorFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointClothesVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointFoodVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointJunkVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointMedsVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointNetTrainerVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointGunsVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.ServicePointBlackMarketVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointMeleeTrainerVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointBarVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointProstituteVariant"
+        }
+      ],
+      "shouldCollectMappins": 1
+    },
+    "WorldMap.BaseZoomLevel": {
+      "$type": "gamedataWorldMapZoomLevel_Record",
+      "canChangeFilters": 1,
+      "fov": 25,
+      "iconScale": 1,
+      "mappinFilterGroups": [],
+      "panSpeed": 1,
+      "rotation": {
+        "$type": "EulerAngles",
+        "Pitch": 0,
+        "Roll": 0,
+        "Yaw": -85
+      },
+      "showDistricts": 0,
+      "showSubDistricts": 0,
+      "zoom": 1
+    },
+    "WorldMap.CourierFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Courier"
+      }
+    },
+    "WorldMap.VendorFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "VendorFilter"
+      }
+    },
+    "WorldMap.TarotFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-PanelNames-TAROT"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.TarotFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_TarotVariant"
+        }
+      ],
+      "shouldCollectMappins": 1,
+      "numberOfHitsForAdditionalAttack": {
+        "$type": "TweakDBID",
+        "$value": {
+          "$type": "TweakDBID",
+          "$storage": "uint64",
+          "$value": "0"
+        }
+      }
+    },
+    "WorldMap.PsychoFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "PsychoFilter"
+      },
+      "tireLateralSlipEffectsMul": {
+        "$type": "CName",
+        "$value": {
+          "$type": "CName",
+          "$storage": "string",
+          "$value": "None"
+        }
+      }
+    },
+    "WorldMap.TopDownCameraSettingsDefault": {
+      "$type": "gamedataWorldMapFreeCameraSettings_Record",
+      "fovMax": 25,
+      "fovMin": 25,
+      "iconScaleMax": 1,
+      "iconScaleMin": 1,
+      "mousePanStrength": 0.00139999995,
+      "mouseRotateStrength": 0.00079999998,
+      "mouseZoomSpeedMax": 4000,
+      "mouseZoomSpeedMin": 200,
+      "panSpeedMax": 3500,
+      "panSpeedMin": 250,
+      "pitchRelativeToZoom": 1,
+      "rotationDefault": {
+        "$type": "EulerAngles",
+        "Pitch": 0,
+        "Roll": 0,
+        "Yaw": 45
+      },
+      "rotationMax": {
+        "$type": "EulerAngles",
+        "Pitch": 0,
+        "Roll": 0,
+        "Yaw": -89
+      },
+      "rotationMin": {
+        "$type": "EulerAngles",
+        "Pitch": 0,
+        "Roll": 0,
+        "Yaw": -75
+      },
+      "rotationSpeed": {
+        "$type": "EulerAngles",
+        "Pitch": 0,
+        "Roll": 0,
+        "Yaw": 0
+      },
+      "zoomDefault": 3000,
+      "zoomDefaultInFastTravel": 5000,
+      "zoomMax": 15000,
+      "zoomMin": 800,
+      "zoomSpeed": 25,
+      "zoomSpeedMax": 20000,
+      "zoomSpeedMin": 1500
+    },
+    "WorldMap.NoFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "NoFilter"
+      }
+    },
+    "WorldMap.WorldMapQuickFiltersList": {
+      "$type": "gamedataWorldMapFiltersList_Record",
+      "list": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.NoFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.JobsFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.AllServicePointsFilterGroup"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "WorldMap.CustomFilterGroup"
+        }
+      ]
+    },
+    "WorldMap.FastTravelMappinsGroup": {
+      "$type": "gamedataMappinsGroup_Record",
+      "groupName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "FastTravel"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_TarotVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_FastTravelVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_NCARTVariant"
+        }
+      ],
+      "widgetState": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "FastTravel"
+      }
+    },
+    "WorldMap.VehicleForPurchaseMappinsGroup": {
+      "$type": "gamedataMappinsGroup_Record",
+      "groupName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "VehicleForPurchase"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.CarForPurchaseVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.MotorcycleForPurchaseVariant"
+        }
+      ],
+      "widgetState": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ServicePoint"
+      }
+    },
+    "WorldMap.ServicePointFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ServicePoint"
+      }
+    },
+    "WorldMap.QuestFilter": {
+      "$type": "gamedataWorldMapFilter_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Quest"
+      }
+    },
+    "WorldMap.DogtownGateFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-Menus-WorldMap-Filter-DogtownGate"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.DogtownGateFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.DogtownGateVariant"
+        }
+      ],
+      "shouldCollectMappins": 1
+    },
+    "WorldMap.FastTravelFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-Menus-WorldMap-Filter-FastTravel"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.FastTravelFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_FastTravelVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_NCARTVariant"
+        }
+      ],
+      "shouldCollectMappins": 0
+    },
+    "WorldMap.CyberPsychoFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-MappinTypes-HuntforPsycho"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.PsychoFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_HuntForPsychoVariant"
+        }
+      ],
+      "shouldCollectMappins": 0
+    },
+    "WorldMap.StoryFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-Menus-WorldMap-Filter-NcpdScanner"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.StoryFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_MinorActivityVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_GangWatchVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_HiddenStashVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_OutpostVariant"
+        }
+      ],
+      "shouldCollectMappins": 1
+    },
+    "WorldMap.ServicePointFilterGroup": {
+      "$type": "gamedataMappinUIFilterGroup_Record",
+      "filterName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "UI-Menus-WorldMap-Filter-ServicePoint"
+      },
+      "filterType": {
+        "$type": "TweakDBID",
+        "$storage": "string",
+        "$value": "WorldMap.ServicePointFilter"
+      },
+      "mappins": [
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointClothesVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointRipperdocVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointNetTrainerVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointGunsVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.ServicePointBlackMarketVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointMeleeTrainerVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointMedsVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointFoodVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointBarVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointProstituteVariant"
+        },
+        {
+          "$type": "TweakDBID",
+          "$storage": "string",
+          "$value": "Mappins.PointOfInterest_ServicePointJunkVariant"
+        }
+      ],
+      "shouldCollectMappins": 1
+    },
+    "Mappins.Zzz09_CourierSandboxActivityVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Zzz09_CourierSandboxActivityVariant"
+      }
+    },
+    "Mappins.WorldEncounterVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Zzz12_WorldEncounterVariant"
+      }
+    },
+    "Mappins.CustomPositionVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "CustomPositionVariant"
+      }
+    },
+    "Mappins.DelamainTaxiVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Zzz19_DelamainTaxiVariant"
+      }
+    },
+    "Mappins.DelamainTaxiDestinationVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Zzz20_DelamainTaxiDestinationVariant"
+      }
+    },
+    "Mappins.VehicleVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "VehicleVariant"
+      }
+    },
+    "Mappins.MotorcycleVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Zzz03_MotorcycleVariant"
+      }
+    },
+    "Mappins.PointOfInterest_ApartmentVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ApartmentVariant"
+      }
+    },
+    "Mappins.PointOfInterest_ServicePointRipperdocVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ServicePointRipperdocVariant"
+      }
+    },
+    "Mappins.PointOfInterest_ServicePointClothesVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ServicePointClothesVariant"
+      }
+    },
+    "Mappins.PointOfInterest_ServicePointFoodVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ServicePointFoodVariant"
+      }
+    },
+    "Mappins.PointOfInterest_ServicePointJunkVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ServicePointJunkVariant"
+      }
+    },
+    "Mappins.PointOfInterest_ServicePointMedsVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ServicePointMedsVariant"
+      }
+    },
+    "Mappins.PointOfInterest_ServicePointNetTrainerVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ServicePointNetTrainerVariant"
+      }
+    },
+    "Mappins.PointOfInterest_ServicePointGunsVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ServicePointGunsVariant"
+      }
+    },
+    "Mappins.ServicePointBlackMarketVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Zzz14_ServicePointBlackMarketVariant"
+      }
+    },
+    "Mappins.PointOfInterest_ServicePointMeleeTrainerVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ServicePointMeleeTrainerVariant"
+      }
+    },
+    "Mappins.PointOfInterest_ServicePointBarVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ServicePointBarVariant"
+      }
+    },
+    "Mappins.PointOfInterest_ServicePointProstituteVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ServicePointProstituteVariant"
+      }
+    },
+    "Mappins.PointOfInterest_ServicePointDropPoint": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ServicePointDropPointVariant"
+      }
+    },
+    "Mappins.PointOfInterest_FastTravelVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "FastTravelVariant"
+      }
+    },
+    "Mappins.PointOfInterest_NCARTVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Zzz17_NCARTVariant"
+      }
+    },
+    "Mappins.CarForPurchaseVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Zzz01_CarForPurchaseVariant"
+      }
+    },
+    "Mappins.PointOfInterest_ExclamationMarkVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ExclamationMarkVariant"
+      }
+    },
+    "Mappins.DefaultQuestVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "DefaultQuestVariant"
+      }
+    },
+    "Mappins.PointOfInterest_MinorActivityVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "MinorActivityVariant"
+      }
+    },
+    "Mappins.PointOfInterest_GangWatchVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "GangWatchVariant"
+      }
+    },
+    "Mappins.PointOfInterest_OutpostVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "OutpostVariant"
+      }
+    },
+    "Mappins.PointOfInterest_HiddenStashVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "HiddenStashVariant"
+      }
+    },
+    "Mappins.PointOfInterest_FixerVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "FixerVariant"
+      }
+    },
+    "Mappins.QuestGiverVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "QuestGiverVariant"
+      }
+    },
+    "Mappins.PointOfInterest_BountyHuntVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "BountyHuntVariant"
+      }
+    },
+    "Mappins.PointOfInterest_RetrievingVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "RetrievingVariant"
+      }
+    },
+    "Mappins.PointOfInterest_ThieveryVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ThieveryVariant"
+      }
+    },
+    "Mappins.PointOfInterest_SabotageVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "SabotageVariant"
+      }
+    },
+    "Mappins.PointOfInterest_ClientInDistressVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ClientInDistressVariant"
+      }
+    },
+    "Mappins.PointOfInterest_ConvoyVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "ConvoyVariant"
+      }
+    },
+    "Mappins.PointOfInterest_RacingVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Zzz18_RacingVariant"
+      }
+    },
+    "Mappins.NCPDGigVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Zzz06_NCPDGigVariant"
+      }
+    },
+    "Mappins.PointOfInterest_HuntForPsychoVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "HuntForPsychoVariant"
+      }
+    },
+    "Mappins.RelicDeviceBasicVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Zzz16_RelicDeviceBasicVariant"
+      }
+    },
+    "Mappins.RelicDeviceSpecialVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Zzz16_RelicDeviceSpecialVariant"
+      }
+    },
+    "Mappins.ApartmentToPurchaseVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Zzz05_ApartmentToPurchaseVariant"
+      }
+    },
+    "Mappins.DogtownGateVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Zzz13_DogtownGateVariant"
+      }
+    },
+    "Mappins.PointOfInterest_TarotVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "TarotVariant"
+      }
+    },
+    "Mappins.MotorcycleForPurchaseVariant": {
+      "$type": "gamedataMappinVariant_Record",
+      "enumComment": "",
+      "enumName": {
+        "$type": "CName",
+        "$storage": "string",
+        "$value": "Zzz02_MotorcycleForPurchaseVariant"
+      }
+    }
+  }
+}

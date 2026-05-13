@@ -20,6 +20,15 @@ The 3D scene renders through `WebGPURenderer` (automatic WebGL2 fallback). Nativ
 
 New constants in [`constants.js`](assets/js/constants.js): `NCZ.STENCIL_WATER` (2), `NCZ.STENCIL_OCCLUDER` (1), `NCZ.WATER_OPACITY` (1.0); plus a reworked `SHADOW_*` set for the single fitted shadow map (`SHADOW_MAP_SIZE`, `SHADOW_MAX_DISTANCE`, `SHADOW_GROUND_MARGIN`, `SHADOW_NORMAL_BIAS_TEXELS`) and `SUN_DIST`.
 
+#### Three.js-Parity: schema camera (orthographic → perspective)
+
+- Schema camera is now `PerspectiveCamera` at **FOV 25°** matching the game's TopDown view. Values mirror TweakDB `WorldMap.TopDownCameraSettingsDefault` (zoom min/default/max = 800 / 3000 / 15000 CET units). Replaces the prior `OrthographicCamera` — chosen originally without reference to the game's actual setup. See [`docs/data/worldmap_tweakdb_tree.json`](docs/data/worldmap_tweakdb_tree.json) for the full record dump.
+- Downstream perspective-aware refactors: shadow camera footprint via a 4-corner ray-cast against `Y=0` (handles tilt without an analytic `1/cos` stretch); scale bar, district→subdistrict label switch, and pin cluster threshold all driven by camera-to-target distance; `flyTo` lands at `SCHEMA_FLY_TO_DISTANCE = 1250` (TweakDB `zoomToZoomValue`).
+- **Pan envelope** now uses the game's canonical `cursorBoundary` (X[−5500..6050], Y[−7300..5000] in CET → Z[−5000..7300] in Three.js) instead of the wider terrain GLB extent. **`resetCamera`** restores the first-load `fitCameraToBox` view (whole-map fit) instead of dropping to default distance.
+- **Showcase exit** dips the 3D container's opacity for ~150 ms across the camera swap (schema 25° ↔ flyover 55° FOV) so the perspective change reads as an intentional transition rather than a hard cut.
+- **Metro LOD** mutex tier switch (B wide → G thin → R dotted) driven by schema camera-to-target distance, replacing the legacy `camera.zoom` reading. Thresholds at `MED = 7000` and `NEAR = 2500` (CET wu) align with the WorldMap zoom-ladder rather than the metro material's `VisibilityDistance*` values — the latter don't map onto a camera-to-target metric since our `zoomMax = 15000 < 18000`. Constants page documents the deviation.
+- Follow-ups queued: **CSM shadows** (the "no cascades because schema is ortho" rationale dissolved with this change); cluster-radius re-tune for the new screen-space behaviour; `pitchRelativeToZoom` lean-back curve from TweakDB; **Line2 near-plane clipping** under perspective (district outline segments whose endpoints cross the camera near plane stretch as straight rays across the viewport — pre-existing latent bug, only visible under perspective).
+
 #### Three.js-Parity: shadow accuracy
 
 - Off-screen buildings now cast shadows into the visible area. The Phase 2B GPU compute cull tests each building instance against the union of the camera frustum and the sun's shadow-camera frustum (12 planes via boolean OR) instead of the camera alone — so a caster just outside the view still makes it into the indirect-draw buffer.
