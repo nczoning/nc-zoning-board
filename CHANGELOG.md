@@ -20,6 +20,10 @@ The 3D scene renders through `WebGPURenderer` (automatic WebGL2 fallback). Nativ
 
 New constants in [`constants.js`](assets/js/constants.js): `NCZ.STENCIL_WATER` (2), `NCZ.STENCIL_OCCLUDER` (1), `NCZ.WATER_OPACITY` (1.0); plus a reworked `SHADOW_*` set for the single fitted shadow map (`SHADOW_MAP_SIZE`, `SHADOW_MAX_DISTANCE`, `SHADOW_GROUND_MARGIN`, `SHADOW_NORMAL_BIAS_TEXELS`) and `SUN_DIST`.
 
+#### Three.js-Parity: shadow accuracy
+
+- Off-screen buildings now cast shadows into the visible area. The Phase 2B GPU compute cull tests each building instance against the union of the camera frustum and the sun's shadow-camera frustum (12 planes via boolean OR) instead of the camera alone — so a caster just outside the view still makes it into the indirect-draw buffer.
+
 #### Render-on-demand
 
 - The 3D scene's rAF loop now runs only when something has actually changed (camera moved, damping in progress, sun/theme/layer/material updated, pins added) instead of unconditionally re-rendering every frame. Idle map views cost zero GPU/CPU; saves battery on every machine and recovers headroom on weaker iGPUs (Intel UHD without Iris Xe was the worst case). Implemented in [`three-scene.js`](assets/js/three-scene.js) via a new `requestRender()` entrypoint hooked into every state-mutating helper, with a `_suppressed` flag that prevents in-flight color tweens from racing the flyover camera.
