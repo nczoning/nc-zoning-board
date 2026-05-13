@@ -250,13 +250,9 @@ NCZ.METRO_LOD_ZOOM_NEAR = 20.0;  // B→R transition zoom threshold
 // Water (rendered in the transparent pass — see three-scene.js loadTerrain) writes
 // stencil=STENCIL_WATER where it's the visible surface; terrain/cliffs/buildings over-stamp
 // stencil=STENCIL_OCCLUDER where THEY are; the SeeThrough road pass renders where
-// stencil==STENCIL_WATER AND the fragment is below WATER_LEVEL_Y (i.e. genuinely under water —
-// so a road bridging the bay, whose deck is above the waterline, stays normal-styled rather
-// than going cyan). Road geometry world-Y spans roughly -27.5 (the tunnel deck) to +229.5
-// (elevated highways), so the waterline (≈ -1) cleanly separates "submerged" from "surface".
+// stencil==STENCIL_WATER (with depthTest off, so it draws on top of the water).
 NCZ.STENCIL_WATER    = 2;     // stencil ref written by the water mesh / tested by the SeeThrough roads
 NCZ.STENCIL_OCCLUDER = 1;     // stencil ref written by terrain / cliffs / buildings (visible-surface over-stamp)
-NCZ.WATER_LEVEL_Y    = -1;    // world Y of the 3dmap_water.glb sea-level sheet; SeeThrough road fragments below this are "under water"
 NCZ.WATER_OPACITY    = 1.0;   // water material opacity — water is in the transparent pass (so its stencil write is depth-limited to the visible bay) but renders visually opaque at 1.0; lower to make the ocean see-through
 
 // 3D pin layer (NCZ.ThreeMarkers) — visual + UX tunables for CSS2DObject markers
