@@ -18,6 +18,8 @@ import {
   instancedArray, instanceIndex,
   // Phase 2B compute culling
   Fn, If, storage, struct, atomicStore, atomicAdd, uint,
+  // Three.js-Parity: sun-shadow factor for unlit road/metro/border decals
+  shadow,
 } from 'three/tsl';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -79,23 +81,47 @@ const ThreeScene = (() => {
   let _rendererInitParams = null;
 
   // ── Phase 2B compute culling state ─────────────────────────────────────
-  // Six camera-frustum planes shared by every district's cull compute. We
-  // recompute them on every `controls.change` (CPU-side, via Three's
-  // existing `THREE.Frustum.setFromProjectionMatrix`) and push to the same
-  // 6 uniform nodes — much cheaper than packing/passing the projection×view
-  // matrix and re-deriving planes per-thread on the GPU. Each plane is a
-  // vec4 packing `(normal.xyz, constant)`; the visibility test is
+  // TWO 6-plane frustum sets shared by every district's cull compute:
+  //   • _frustumPlaneUniforms       — the camera frustum (what the user sees)
+  //   • _shadowFrustumPlaneUniforms — the sun's shadow camera frustum (what
+  //                                   the shadow map covers)
+  // An instance is visible to the cull if it passes EITHER frustum — so an
+  // off-screen building still in the shadow ortho box gets into the indirect
+  // buffer and casts its shadow into the visible area. (Phase 2B originally
+  // tested only the camera frustum, which made shadows pop in at screen
+  // edges on pan and vanish on small rotations at high zoom.) See
+  // [[webgpu-migration-execution]] risk register row for the rationale of
+  // Approach A (12-plane test) over sun-direction dilation or AABB union.
+  //
+  // Each plane is a vec4 packing `(normal.xyz, constant)`; the visibility
+  // test against the bounding sphere is
   //   `dot(plane.xyz, center) + plane.w >= -radius`.
+  // We recompute both sets on every `controls.change` (CPU-side, via Three's
+  // existing `THREE.Frustum.setFromProjectionMatrix`) and push to the same
+  // uniform nodes — much cheaper than passing matrices and re-deriving
+  // planes per-thread on the GPU.
   const _frustumPlaneUniforms = [
     uniform(new THREE.Vector4()), uniform(new THREE.Vector4()),
     uniform(new THREE.Vector4()), uniform(new THREE.Vector4()),
     uniform(new THREE.Vector4()), uniform(new THREE.Vector4()),
   ];
-  const _frustumScratch = new THREE.Frustum();
-  const _frustumScratchMat = new THREE.Matrix4();
+  const _shadowFrustumPlaneUniforms = [
+    uniform(new THREE.Vector4()), uniform(new THREE.Vector4()),
+    uniform(new THREE.Vector4()), uniform(new THREE.Vector4()),
+    uniform(new THREE.Vector4()), uniform(new THREE.Vector4()),
+  ];
+  const _frustumScratch       = new THREE.Frustum();
+  const _frustumScratchMat    = new THREE.Matrix4();
+  const _shadowFrustumScratch    = new THREE.Frustum();
+  const _shadowFrustumScratchMat = new THREE.Matrix4();
   // Per-district compute nodes (reset + cull) registered during loadBuildings.
   // Dispatched in pairs from `renderLoop` before `renderer.render`.
   const _cullComputes = [];
+
+  // Sun-shadow TSL factor (0 = full shadow, 1 = lit). Created once after
+  // _dirLight is ready and shared across the road / border / metro materials
+  // so all five sample the same shadow map (no extra render pass).
+  let _sunShadowNode = null;
 
   function updateFrustumUniforms() {
     if (!camera) return;
@@ -110,6 +136,31 @@ const ThreeScene = (() => {
     for (let i = 0; i < 6; i++) {
       const p = _frustumScratch.planes[i];
       _frustumPlaneUniforms[i].value.set(p.normal.x, p.normal.y, p.normal.z, p.constant);
+    }
+  }
+
+  // Refresh the 6 sun-shadow-camera frustum planes from the current light
+  // pose. Mirrors what `DirectionalLightShadow.updateMatrices()` does
+  // internally before the shadow pass — position the shadow camera at the
+  // light, aim it at the light target, refresh its world+inverse matrices —
+  // so the planes we extract match the box the shadow renderer will use.
+  // Called from `updateShadowCamera()` after the ortho box + light pose
+  // have been re-fitted, so all existing `updateShadowCamera()` call sites
+  // (controls.change, onResize, post-terrain, renderFrame fly cam,
+  // startRenderLoop) automatically refresh the union-cull's second frustum.
+  function updateShadowFrustumUniforms() {
+    if (!_dirLight) return;
+    const shadowCam = _dirLight.shadow.camera;
+    shadowCam.position.copy(_dirLight.position);
+    shadowCam.lookAt(_dirLight.target.position);
+    // Camera.updateMatrixWorld() also refreshes matrixWorldInverse — needed
+    // for the projection × view multiply below.
+    shadowCam.updateMatrixWorld(true);
+    _shadowFrustumScratchMat.multiplyMatrices(shadowCam.projectionMatrix, shadowCam.matrixWorldInverse);
+    _shadowFrustumScratch.setFromProjectionMatrix(_shadowFrustumScratchMat, THREE.WebGPUCoordinateSystem);
+    for (let i = 0; i < 6; i++) {
+      const p = _shadowFrustumScratch.planes[i];
+      _shadowFrustumPlaneUniforms[i].value.set(p.normal.x, p.normal.y, p.normal.z, p.constant);
     }
   }
   let buildingMeshes     = [];    // one InstancedMesh per district
@@ -378,6 +429,19 @@ const ThreeScene = (() => {
     _dirLight.position.copy(_dirLight.target.position).addScaledVector(_sunDir, NCZ.SUN_DIST);
     scene.add(_dirLight);
     scene.add(_dirLight.target);
+
+    // TSL sun-shadow factor (0 = full shadow, 1 = lit). Built once and shared
+    // by every road / border / metro material so they all sample the same
+    // shadow map (no extra render pass). The unlit `MeshBasicNodeMaterial`
+    // road decals would otherwise paint full-bright over terrain that *is*
+    // shadow-receiving — building shadows then stop at the road edge, which
+    // is the bug this is fixing.
+    //
+    // The "shadows off" layer toggle keeps working: `_dirLight.shadow.intensity`
+    // flows into `ShadowNode` as `mix(1, shadowNode, intensity)`, so intensity 0
+    // makes this whole factor evaluate to 1 → the `.mul(_sunShadowNode)` below
+    // becomes the identity → roads/metro full-bright as before. No recompile.
+    _sunShadowNode = shadow(_dirLight, _dirLight.shadow);
 
     // Hemisphere fill — sky-colour from above (hazy cool daylight), darker
     // ground-colour bounce from below. Reads more like an outdoor scene than a
@@ -712,9 +776,19 @@ const ThreeScene = (() => {
       const borderColor = readThemeColor('--overlay-road-border-color', '#1ec3c8');
       const metroColor  = readThemeColor('--overlay-metro-color',       '#dcaa28');
 
-      // Normal depth-tested pass — surface roads/borders sit correctly in scene
+      // Normal depth-tested pass — surface roads/borders sit correctly in scene.
+      // colorNode = materialColor × sun-shadow factor so building shadows darken
+      // the road decal (terrain underneath already receives shadows; the unlit
+      // overlay was hiding them). Theme switching still works — it mutates
+      // `mat.color`, which `materialColor` reads automatically. The additive-
+      // blended border, multiplied by a shadow factor near 0, just adds near-
+      // zero light over occluded fragments — no glow in shadow.
       normalRoadsMat   = new THREE.MeshBasicNodeMaterial({ color: roadColor,   transparent: true, opacity: 0.8 });
       normalBordersMat = new THREE.MeshBasicNodeMaterial({ color: borderColor, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
+      if (_sunShadowNode) {
+        normalRoadsMat.colorNode   = materialColor.mul(_sunShadowNode);
+        normalBordersMat.colorNode = materialColor.mul(_sunShadowNode);
+      }
 
       applyMaterial(roadsScene,   normalRoadsMat);
       applyMaterial(bordersScene, normalBordersMat);
@@ -758,6 +832,9 @@ const ThreeScene = (() => {
             lodColor.r.greaterThan(0.5).and(metroZoomUniform.lessThan(uMetroLODNear_node))
           );
       metroMat.maskNode = discardCondition.not();
+      // Sun-shadow factor composes with the LOD-discard maskNode — colorNode
+      // controls fragment colour, maskNode controls discard, independent paths.
+      if (_sunShadowNode) metroMat.colorNode = materialColor.mul(_sunShadowNode);
 
       function makeSeeThrough(source, mat) {
         const group = new THREE.Group();
@@ -791,6 +868,14 @@ const ThreeScene = (() => {
       };
       roadsMat   = new THREE.MeshBasicNodeMaterial({ ...stBase, color: roadColor,   opacity: 0.8 });
       bordersMat = new THREE.MeshBasicNodeMaterial({ ...stBase, color: borderColor, opacity: 0.6, blending: THREE.AdditiveBlending });
+      // SeeThrough roads render the Pacifica tunnel through the open bay
+      // (stencil=WATER). Multiply by the sun-shadow factor so an overhead
+      // building's shadow still darkens the tunnel-road pixels visible
+      // through the water — same reasoning as the normal-pass variants.
+      if (_sunShadowNode) {
+        roadsMat.colorNode   = materialColor.mul(_sunShadowNode);
+        bordersMat.colorNode = materialColor.mul(_sunShadowNode);
+      }
 
       applyMaterial(metroScene, metroMat);
 
@@ -1070,9 +1155,12 @@ const ThreeScene = (() => {
         })().compute(1);
 
         // (cull compute) Per frame, N threads (one per instance). Each thread
-        // tests its instance's bounding sphere against the 6 frustum planes;
-        // visible instances atomically append their original index to the
-        // visibleIndices buffer.
+        // tests its instance's bounding sphere against TWO 6-plane frusta:
+        // the camera frustum AND the sun's shadow frustum. The instance is
+        // visible if it passes either — that way off-screen buildings still
+        // inside the shadow ortho box get into the indirect buffer and cast
+        // shadows into the visible area (the original camera-only test
+        // dropped them, making shadows pop at screen edges on pan).
         // Bounding sphere center  = matrix's translation column (4th column).
         // Radius (conservative)   = max column length × √3/2 (cube → sphere).
         const cullFn = Fn(() => {
@@ -1086,24 +1174,26 @@ const ThreeScene = (() => {
           const negRadius = radius.negate();
           const c4        = vec4(center, 1.0);
 
-          // Visibility = inside (or straddling) every plane.
+          // Visibility against a frustum = inside (or straddling) every plane.
           // dist = dot(plane.xyz, center) + plane.w
           // visible plane test: dist >= -radius
-          const distP0 = _frustumPlaneUniforms[0].dot(c4);
-          const distP1 = _frustumPlaneUniforms[1].dot(c4);
-          const distP2 = _frustumPlaneUniforms[2].dot(c4);
-          const distP3 = _frustumPlaneUniforms[3].dot(c4);
-          const distP4 = _frustumPlaneUniforms[4].dot(c4);
-          const distP5 = _frustumPlaneUniforms[5].dot(c4);
-          const visible =
-            distP0.greaterThanEqual(negRadius)
-              .and(distP1.greaterThanEqual(negRadius))
-              .and(distP2.greaterThanEqual(negRadius))
-              .and(distP3.greaterThanEqual(negRadius))
-              .and(distP4.greaterThanEqual(negRadius))
-              .and(distP5.greaterThanEqual(negRadius));
+          const cameraVisible =
+            _frustumPlaneUniforms[0].dot(c4).greaterThanEqual(negRadius)
+              .and(_frustumPlaneUniforms[1].dot(c4).greaterThanEqual(negRadius))
+              .and(_frustumPlaneUniforms[2].dot(c4).greaterThanEqual(negRadius))
+              .and(_frustumPlaneUniforms[3].dot(c4).greaterThanEqual(negRadius))
+              .and(_frustumPlaneUniforms[4].dot(c4).greaterThanEqual(negRadius))
+              .and(_frustumPlaneUniforms[5].dot(c4).greaterThanEqual(negRadius));
 
-          If(visible, () => {
+          const shadowVisible =
+            _shadowFrustumPlaneUniforms[0].dot(c4).greaterThanEqual(negRadius)
+              .and(_shadowFrustumPlaneUniforms[1].dot(c4).greaterThanEqual(negRadius))
+              .and(_shadowFrustumPlaneUniforms[2].dot(c4).greaterThanEqual(negRadius))
+              .and(_shadowFrustumPlaneUniforms[3].dot(c4).greaterThanEqual(negRadius))
+              .and(_shadowFrustumPlaneUniforms[4].dot(c4).greaterThanEqual(negRadius))
+              .and(_shadowFrustumPlaneUniforms[5].dot(c4).greaterThanEqual(negRadius));
+
+          If(cameraVisible.or(shadowVisible), () => {
             const slot = atomicAdd(drawStorage.get('instanceCount'), uint(1));
             visibleIndicesBuffer.element(slot).assign(uint(idx));
           });
@@ -2076,6 +2166,11 @@ const ThreeScene = (() => {
     // Three copies these into the shadow camera during the shadow pass.
     _dirLight.target.position.copy(center);
     _dirLight.position.copy(center).addScaledVector(_sunDir, NCZ.SUN_DIST);
+
+    // Refresh the shadow-camera frustum planes that the union cull reads —
+    // off-screen casters still inside this box need to make it into the
+    // building indirect-draw buffer so their shadows land in view.
+    updateShadowFrustumUniforms();
 
     if (renderer) renderer.shadowMap.needsUpdate = true;  // shadowMap.autoUpdate is off
   }
