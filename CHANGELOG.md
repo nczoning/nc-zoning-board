@@ -23,7 +23,6 @@ New constants in [`constants.js`](assets/js/constants.js): `NCZ.STENCIL_WATER` (
 #### Three.js-Parity: shadow accuracy
 
 - Off-screen buildings now cast shadows into the visible area. The Phase 2B GPU compute cull tests each building instance against the union of the camera frustum and the sun's shadow-camera frustum (12 planes via boolean OR) instead of the camera alone — so a caster just outside the view still makes it into the indirect-draw buffer.
-- Road, road-border, and metro decals now receive sun shadows. `MeshBasicNodeMaterial.colorNode` is multiplied by a shared `shadow(_dirLight, _dirLight.shadow)` TSL node, so a building's shadow falling on terrain darkens the overlay decal on top of it too. The shadows-off layer toggle still works — `_dirLight.shadow.intensity = 0` makes the shadow factor evaluate to 1 (identity multiply).
 
 #### Render-on-demand
 

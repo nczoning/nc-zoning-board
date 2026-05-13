@@ -18,8 +18,6 @@ import {
   instancedArray, instanceIndex,
   // Phase 2B compute culling
   Fn, If, storage, struct, atomicStore, atomicAdd, uint,
-  // Three.js-Parity: sun-shadow factor for unlit road/metro/border decals
-  shadow,
 } from 'three/tsl';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -117,11 +115,6 @@ const ThreeScene = (() => {
   // Per-district compute nodes (reset + cull) registered during loadBuildings.
   // Dispatched in pairs from `renderLoop` before `renderer.render`.
   const _cullComputes = [];
-
-  // Sun-shadow TSL factor (0 = full shadow, 1 = lit). Created once after
-  // _dirLight is ready and shared across the road / border / metro materials
-  // so all five sample the same shadow map (no extra render pass).
-  let _sunShadowNode = null;
 
   function updateFrustumUniforms() {
     if (!camera) return;
@@ -430,19 +423,6 @@ const ThreeScene = (() => {
     scene.add(_dirLight);
     scene.add(_dirLight.target);
 
-    // TSL sun-shadow factor (0 = full shadow, 1 = lit). Built once and shared
-    // by every road / border / metro material so they all sample the same
-    // shadow map (no extra render pass). The unlit `MeshBasicNodeMaterial`
-    // road decals would otherwise paint full-bright over terrain that *is*
-    // shadow-receiving — building shadows then stop at the road edge, which
-    // is the bug this is fixing.
-    //
-    // The "shadows off" layer toggle keeps working: `_dirLight.shadow.intensity`
-    // flows into `ShadowNode` as `mix(1, shadowNode, intensity)`, so intensity 0
-    // makes this whole factor evaluate to 1 → the `.mul(_sunShadowNode)` below
-    // becomes the identity → roads/metro full-bright as before. No recompile.
-    _sunShadowNode = shadow(_dirLight, _dirLight.shadow);
-
     // Hemisphere fill — sky-colour from above (hazy cool daylight), darker
     // ground-colour bounce from below. Reads more like an outdoor scene than a
     // flat AmbientLight: building tops catch the sky, sides get a 50/50 mix →
@@ -695,9 +675,16 @@ const ThreeScene = (() => {
       applyMaterial(waterScene,   waterMat);
       applyMaterial(cliffsScene,  cliffsMat);
 
-      // Shadow flags — terrain and cliffs cast and receive (hills shadow valleys);
-      // water receives only (no hard shadow edges on flat ocean); buildings skipped.
-      terrainScene.traverse(c => { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; c.frustumCulled = false; } });
+      // Shadow flags — terrain RECEIVES only (no longer casts). Road/metro
+      // decals sit near-coplanar with terrain and use shadow() to receive
+      // building shadows; if terrain also casts, the decal's shadow sample
+      // reads as occluded by the terrain right under it → black-stripe acne
+      // along the road. Cliffs still cast (they're elevated and the user
+      // wants long cliff-base shadows). Water receives only (flat ocean).
+      // Side-benefit: terrain self-shadow "the wave" (grazing-sun acne) goes
+      // away as a consequence — Phase 3's footprint-scaled normalBias was
+      // there to mask exactly that.
+      terrainScene.traverse(c => { if (c.isMesh) { c.receiveShadow = true; c.frustumCulled = false; } });
       waterScene.traverse(c =>   { if (c.isMesh) { c.receiveShadow = true; c.frustumCulled = false; } });
       cliffsScene.traverse(c =>  { if (c.isMesh) { c.castShadow = true; c.receiveShadow = true; c.frustumCulled = false; } });
 
@@ -777,18 +764,15 @@ const ThreeScene = (() => {
       const metroColor  = readThemeColor('--overlay-metro-color',       '#dcaa28');
 
       // Normal depth-tested pass — surface roads/borders sit correctly in scene.
-      // colorNode = materialColor × sun-shadow factor so building shadows darken
-      // the road decal (terrain underneath already receives shadows; the unlit
-      // overlay was hiding them). Theme switching still works — it mutates
-      // `mat.color`, which `materialColor` reads automatically. The additive-
-      // blended border, multiplied by a shadow factor near 0, just adds near-
-      // zero light over occluded fragments — no glow in shadow.
+      // Flat unlit Basic so the infographic colour stays uniform across the
+      // whole road network. (Tried receiving sun shadows in this PR — both via
+      // a manual `materialColor × shadow()` multiply on Basic and via Lambert +
+      // receiveShadow — and both looked wrong: the multiply gave black-stripe
+      // acne on the coplanar road geometry, and Lambert sun-direction-tinted
+      // the network into something that read as 3D rather than infographic.
+      // Scrapped — buildings/terrain still receive shadows, decals don't.)
       normalRoadsMat   = new THREE.MeshBasicNodeMaterial({ color: roadColor,   transparent: true, opacity: 0.8 });
       normalBordersMat = new THREE.MeshBasicNodeMaterial({ color: borderColor, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
-      if (_sunShadowNode) {
-        normalRoadsMat.colorNode   = materialColor.mul(_sunShadowNode);
-        normalBordersMat.colorNode = materialColor.mul(_sunShadowNode);
-      }
 
       applyMaterial(roadsScene,   normalRoadsMat);
       applyMaterial(bordersScene, normalBordersMat);
@@ -832,9 +816,6 @@ const ThreeScene = (() => {
             lodColor.r.greaterThan(0.5).and(metroZoomUniform.lessThan(uMetroLODNear_node))
           );
       metroMat.maskNode = discardCondition.not();
-      // Sun-shadow factor composes with the LOD-discard maskNode — colorNode
-      // controls fragment colour, maskNode controls discard, independent paths.
-      if (_sunShadowNode) metroMat.colorNode = materialColor.mul(_sunShadowNode);
 
       function makeSeeThrough(source, mat) {
         const group = new THREE.Group();
@@ -868,14 +849,12 @@ const ThreeScene = (() => {
       };
       roadsMat   = new THREE.MeshBasicNodeMaterial({ ...stBase, color: roadColor,   opacity: 0.8 });
       bordersMat = new THREE.MeshBasicNodeMaterial({ ...stBase, color: borderColor, opacity: 0.6, blending: THREE.AdditiveBlending });
-      // SeeThrough roads render the Pacifica tunnel through the open bay
-      // (stencil=WATER). Multiply by the sun-shadow factor so an overhead
-      // building's shadow still darkens the tunnel-road pixels visible
-      // through the water — same reasoning as the normal-pass variants.
-      if (_sunShadowNode) {
-        roadsMat.colorNode   = materialColor.mul(_sunShadowNode);
-        bordersMat.colorNode = materialColor.mul(_sunShadowNode);
-      }
+      // No shadow multiply on the SeeThrough variants — they're an
+      // infographic "see the tunnel through the water" effect (depthTest:false,
+      // stencil=WATER), drawing road geometry that sits BELOW the water plane
+      // and surrounding terrain. Sampling the shadow map at that underwater
+      // world position reads as occluded by everything above → factor near 0
+      // → tunnel rendered fully black. Keep these flat-coloured.
 
       applyMaterial(metroScene, metroMat);
 
