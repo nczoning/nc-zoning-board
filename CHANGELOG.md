@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Renderer: WebGL → WebGPU
+
+The 3D scene renders through `WebGPURenderer` (automatic WebGL2 fallback). Native engine features replace the old WebGL workarounds; visuals are parity-or-better at the five canonical viewpoints.
+
+- **Native depth + lighting** — reverse-Z depth buffer (`reversedDepthBuffer: true`) replaces `logarithmicDepthBuffer` and keeps early-Z; the two `onBeforeCompile` shader patches (building-edge highlight, metro LOD discard) are now TSL node materials; `AmbientLight` → `HemisphereLight` ("lit like it's outside") with one fitted orthographic shadow map tracking the visible-ground footprint (no cascades).
+- **GPU compute frustum culling for buildings** — a compute pass (per camera change) appends the visible building instances to a storage buffer and writes the indirect-draw `instanceCount`; replaces Three's host-side cull, which was a no-op for our cube-at-origin instances. Building instance matrices moved from `InstancedMesh.instanceMatrix` to an `instancedArray` storage buffer.
+- **SeeThrough-roads stencil (Pacifica tunnel)** — ported to material-level stencil flags. `transparent: true` on the water material (opacity 1.0 — still visually opaque) puts it in the always-last transparent pass so its `stencil = 2` write stays depth-confined to the open bay; terrain and cliffs over-stamp `stencil = 1` like buildings.
+- **Debug dump** — `dumpDebugInfo()` branches on `renderer.isWebGPURenderer`; GPU name/vendor read from `GPUDevice.adapterInfo`. New `getCullCounts()` console helper reads the indirect buffer back for visible-vs-total building instances.
+
+New constants in [`constants.js`](assets/js/constants.js): `NCZ.STENCIL_WATER` (2), `NCZ.STENCIL_OCCLUDER` (1), `NCZ.WATER_OPACITY` (1.0); plus a reworked `SHADOW_*` set for the single fitted shadow map (`SHADOW_MAP_SIZE`, `SHADOW_MAX_DISTANCE`, `SHADOW_GROUND_MARGIN`, `SHADOW_NORMAL_BIAS_TEXELS`) and `SUN_DIST`.
+
 #### Render-on-demand
 
 - The 3D scene's rAF loop now runs only when something has actually changed (camera moved, damping in progress, sun/theme/layer/material updated, pins added) instead of unconditionally re-rendering every frame. Idle map views cost zero GPU/CPU; saves battery on every machine and recovers headroom on weaker iGPUs (Intel UHD without Iris Xe was the worst case). Implemented in [`three-scene.js`](assets/js/three-scene.js) via a new `requestRender()` entrypoint hooked into every state-mutating helper, with a `_suppressed` flag that prevents in-flight color tweens from racing the flyover camera.
