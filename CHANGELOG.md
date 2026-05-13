@@ -24,6 +24,13 @@ New constants in [`constants.js`](assets/js/constants.js): `NCZ.STENCIL_WATER` (
 
 - Off-screen buildings now cast shadows into the visible area. The Phase 2B GPU compute cull tests each building instance against the union of the camera frustum and the sun's shadow-camera frustum (12 planes via boolean OR) instead of the camera alone — so a caster just outside the view still makes it into the indirect-draw buffer.
 
+#### Showcase fly-through — WebGPU parity (partial)
+
+- `renderFrame(cam)` now dispatches the Phase 2B cull computes and refreshes the cam-frustum uniforms each cinematic frame. Previously the cull only ran in the schema `renderLoop()` (suppressed during showcase), so the building indirect buffer's `instanceCount` was frozen at whatever the schema cam last culled — buildings popped in/out of the cinematic and most shadows were missing because their casters were never in the buffer.
+- Metro LOD pinned to the R-tier (dashed close-zoom variant) for the whole showcase. The previous tier-switching read `camera.zoom`, which a perspective camera doesn't have; calibrating altitude→tier across all 11 waypoints isn't worth the tuning effort.
+- `startRenderLoop()` snaps the cull-frustum uniforms, shadow camera, and metro pseudo-zoom back to schema-cam values on showcase exit so the first post-cinematic frame draws cleanly.
+- **Still broken (separate PR)**: shadows trail off in the distance during cinematic — the fly cam's perspective view often extends past the fixed-size shadow ortho box. CSM for the showcase camera path is the planned fix.
+
 #### Render-on-demand
 
 - The 3D scene's rAF loop now runs only when something has actually changed (camera moved, damping in progress, sun/theme/layer/material updated, pins added) instead of unconditionally re-rendering every frame. Idle map views cost zero GPU/CPU; saves battery on every machine and recovers headroom on weaker iGPUs (Intel UHD without Iris Xe was the worst case). Implemented in [`three-scene.js`](assets/js/three-scene.js) via a new `requestRender()` entrypoint hooked into every state-mutating helper, with a `_suppressed` flag that prevents in-flight color tweens from racing the flyover camera.
