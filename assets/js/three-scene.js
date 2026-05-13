@@ -603,27 +603,27 @@ const ThreeScene = (() => {
         loadGLB('3dmap_cliffs.glb'),
       ]);
 
-      // SeeThrough-roads stencil chain (Pacifica tunnel — a road under visible open water).
-      //   • Water writes stencil=2 where it's the visible surface. The water GLB is a flat
-      //     sea-level sheet (world Y ≈ -1) the whole terrain (Y -99..+879) pokes through, so
-      //     for stencilZPass to land only on "pixels where you see water" (the open bay = where
-      //     the terrain dips below -1), water must be depth-tested against the FULLY-rendered
-      //     opaque scene. `transparent: true` (opacity stays 1.0 — still visually opaque) moves
-      //     water out of the opaque list into the transparent pass, which is unconditionally
-      //     drawn after every opaque object — so its depth test sees terrain/cliffs/buildings
-      //     already in the depth buffer and fails over all of them, confining stencil=2 to the
-      //     bay. (Plain renderOrder doesn't push water past the terrain in the opaque sort under
-      //     WebGPURenderer — cause unclear; the transparent pass sidesteps the sort entirely.)
-      //     renderOrder stays 0, so water still draws before the SeeThrough roads (renderOrder 1).
-      //   • Terrain, cliffs and buildings over-stamp stencil=1 where THEY are the visible surface
-      //     (depth-tested, ZPass:Replace) — so SeeThrough roads (stencilFunc:Equal,2) don't draw
-      //     through them. This is safe vs the tunnel because water (transparent pass) re-writes
-      //     stencil=2 over the bay AFTER the terrain seabed wrote stencil=1 there in the opaque pass.
-      const stencilOverstamp = { stencilWrite: true, stencilRef: 1, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp };
+      // SeeThrough-roads stencil chain (Pacifica tunnel — a road visible *through* the open bay).
+      //   • Water writes stencil=STENCIL_WATER where it's the visible surface. The water GLB is a
+      //     flat sea-level sheet (world Y ≈ -1) the whole terrain (Y -99..+879) pokes through, so
+      //     for stencilZPass to land only on "pixels where you see water" (the open bay = where the
+      //     terrain dips below sea level), water must be depth-tested against the FULLY-rendered
+      //     opaque scene. `transparent: true` (opacity = WATER_OPACITY, 1.0 by default — still
+      //     visually opaque) moves water out of the opaque list into the transparent pass, which is
+      //     unconditionally drawn after every opaque object — so its depth test sees terrain/cliffs/
+      //     buildings already in the depth buffer and fails over all of them, confining
+      //     stencil=STENCIL_WATER to the bay. (Plain renderOrder doesn't push water past the terrain
+      //     in the opaque sort under WebGPURenderer — cause unclear; the transparent pass sidesteps
+      //     the sort entirely.) renderOrder stays 0, so water still draws before the SeeThrough roads.
+      //   • Terrain, cliffs and buildings over-stamp stencil=STENCIL_OCCLUDER where THEY are the
+      //     visible surface (depth-tested, ZPass:Replace) — so SeeThrough roads don't draw through
+      //     them. Safe vs the tunnel because water (transparent pass) re-writes stencil=STENCIL_WATER
+      //     over the bay AFTER the terrain seabed wrote stencil=STENCIL_OCCLUDER there in the opaque pass.
+      const stencilOverstamp = { stencilWrite: true, stencilRef: NCZ.STENCIL_OCCLUDER, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp };
       terrainMat = makeHillshadeMaterial('--scene-terrain', '#566c88', stencilOverstamp);
       waterMat   = makeHillshadeMaterial('--scene-water',   '#2a3f57', {
-        transparent: true,
-        stencilWrite: true, stencilRef: 2,
+        transparent: true, opacity: NCZ.WATER_OPACITY,
+        stencilWrite: true, stencilRef: NCZ.STENCIL_WATER,
         stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp,
       });
       cliffsMat  = makeHillshadeMaterial('--scene-cliffs',  '#566c88', stencilOverstamp);
@@ -773,14 +773,20 @@ const ThreeScene = (() => {
         return group;
       }
 
-      // SeeThrough pass: depthTest:false + stencil=EQUAL(2) → only renders where water is above road
-      // Pacifica tunnel: water writes stencil=2 → tunnel visible ✓
-      // Mountain roads: terrain has no stencil=2 → hidden ✓
-      // Buildings: stencil=1 ≠ 2 → hidden ✓
+      // SeeThrough pass: depthTest:false + stencil=EQUAL(STENCIL_WATER) → only renders where water
+      // is the visible surface at this pixel — i.e. the open bay (see the stencil-chain comment in
+      // loadTerrain). Pacifica tunnel: water writes stencil=STENCIL_WATER → the tunnel road + border
+      // (below the water) draw on top of it = visible through the water ✓.  Mountain / city roads:
+      // terrain/cliffs/buildings over-stamp stencil=STENCIL_OCCLUDER ≠ STENCIL_WATER → hidden ✓.
+      // (A road *bridging* the bay still gets a SeeThrough copy where stencil==STENCIL_WATER — its
+      // road is the same blue as the surface copy so no visible change, and its border's extra
+      // additive cyan reads as a slightly brighter edge over the bay. Tried masking that out by
+      // world-Y < waterline; it just dimmed the bay-area road borders for no real gain, so it's
+      // intentionally left as-is.)
       const stBase = {
         transparent: true, depthTest: false, depthWrite: false,
         stencilWrite: true, stencilWriteMask: 0x00,
-        stencilFunc: THREE.EqualStencilFunc, stencilRef: 2, stencilFuncMask: 0xff,
+        stencilFunc: THREE.EqualStencilFunc, stencilRef: NCZ.STENCIL_WATER, stencilFuncMask: 0xff,
         stencilFail: THREE.KeepStencilOp, stencilZFail: THREE.KeepStencilOp, stencilZPass: THREE.KeepStencilOp,
       };
       roadsMat   = new THREE.MeshBasicNodeMaterial({ ...stBase, color: roadColor,   opacity: 0.8 });
@@ -1138,9 +1144,9 @@ const ThreeScene = (() => {
 
         group.add(mesh);
         buildingMeshes.push(mesh);
-        // Write stencil=1 so SeeThrough roads are blocked where buildings are
+        // Over-stamp stencil=STENCIL_OCCLUDER so SeeThrough roads are blocked where buildings are visible
         mat.stencilWrite = true;
-        mat.stencilRef   = 1;
+        mat.stencilRef   = NCZ.STENCIL_OCCLUDER;
         mat.stencilFunc  = THREE.AlwaysStencilFunc;
         mat.stencilZPass = THREE.ReplaceStencilOp;
         mat.needsUpdate  = true;

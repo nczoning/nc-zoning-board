@@ -246,6 +246,15 @@ NCZ.SUBDISTRICT_ZOOM_3D = 2.5;
 NCZ.METRO_LOD_ZOOM_MED  = 8.0;   // G→B transition zoom threshold
 NCZ.METRO_LOD_ZOOM_NEAR = 20.0;  // B→R transition zoom threshold
 
+// SeeThrough roads — the Pacifica tunnel: a road visible *through* the open bay water.
+// Water (rendered in the transparent pass — see three-scene.js loadTerrain) writes
+// stencil=STENCIL_WATER where it's the visible surface; terrain/cliffs/buildings over-stamp
+// stencil=STENCIL_OCCLUDER where THEY are; the SeeThrough road pass renders where
+// stencil==STENCIL_WATER (with depthTest off, so it draws on top of the water).
+NCZ.STENCIL_WATER    = 2;     // stencil ref written by the water mesh / tested by the SeeThrough roads
+NCZ.STENCIL_OCCLUDER = 1;     // stencil ref written by terrain / cliffs / buildings (visible-surface over-stamp)
+NCZ.WATER_OPACITY    = 1.0;   // water material opacity — water is in the transparent pass (so its stencil write is depth-limited to the visible bay) but renders visually opaque at 1.0; lower to make the ocean see-through
+
 // 3D pin layer (NCZ.ThreeMarkers) — visual + UX tunables for CSS2DObject markers
 // Used ONLY by pin/popup rendering. Mod data Z is read raw everywhere else.
 NCZ.PIN_3D_GROUND_OFFSET            =  5;  // CET metres above player CET Z — purely cosmetic lift so the diamond reads above the surface, not embedded
