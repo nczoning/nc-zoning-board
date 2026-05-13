@@ -183,27 +183,40 @@ NCZ.DISTRICT_LINE_OPACITY   = 0.85;
 // no-op for everyone at DPR ≤ 1.5, so most desktops see zero change.
 NCZ.MAX_DEVICE_PIXEL_RATIO = 1.5;
 
-// Camera — orthographic projection, positioned above world centre looking straight down
-NCZ.CAMERA_NEAR     = -20000;           // near plane behind the camera (orthographic — not a clip distance)
-NCZ.CAMERA_FAR      =  20000;           // far plane in front; sized for max-tilt + max-pan worst case (~23k) with margin
-NCZ.CAMERA_HEIGHT   =  10000;           // Y position above world centre (CET units)
+// Camera — perspective projection, positioned above world centre looking straight down.
+// Source: TweakDB WorldMap.TopDownCameraSettingsDefault — see docs/data/worldmap_tweakdb_tree.json.
+// The schema camera matches the game's TopDown view (FOV 25°, distance in CET / world units).
+NCZ.SCHEMA_CAMERA_FOV              = 25;     // degrees — game canonical (TopDownCameraSettingsDefault.fovMin/Max)
+NCZ.SCHEMA_CAMERA_NEAR             = 10;     // CET units — perspective near clip; must be > 0
+NCZ.SCHEMA_CAMERA_FAR              = 50000;  // CET units — far clip; covers shadow camera + sun sphere
+NCZ.SCHEMA_CAMERA_DEFAULT_DISTANCE = 3000;   // CET units — opening distance (TweakDB zoomDefault)
+NCZ.SCHEMA_CAMERA_MIN_DISTANCE     = 800;    // CET units — zoom-in limit  (TweakDB zoomMin)
+NCZ.SCHEMA_CAMERA_MAX_DISTANCE     = 15000;  // CET units — zoom-out limit (TweakDB zoomMax)
+NCZ.SCHEMA_FLY_TO_DISTANCE         = 1250;   // CET units — fly-to-pin target distance (TweakDB zoomToZoomValue)
 
-// Camera controls (OrbitControls) — source: TweakDB WorldMap.FreeCameraSettingsDefault
+// Pan envelope — clamps controls.target so the camera can't roam off the map.
+// Source: TweakDB WorldMap.DefaultSettings.cursorBoundary{Min,Max}.
+// CET → Three.js: X stays as-is; CET Y maps to Three Z with a sign flip
+// (GLB_Z = -CET_Y), so CET Y range (-7300..5000) becomes Three Z (-5000..7300).
+NCZ.PAN_BOUND_MIN_X =  -5500;  // CET / Three X — TweakDB cursorBoundaryMin.X
+NCZ.PAN_BOUND_MAX_X =   6050;  // CET / Three X — TweakDB cursorBoundaryMax.X
+NCZ.PAN_BOUND_MIN_Z =  -5000;  // Three Z — derived from -cursorBoundaryMax.Y
+NCZ.PAN_BOUND_MAX_Z =   7300;  // Three Z — derived from -cursorBoundaryMin.Y
+
+// Camera controls (OrbitControls)
 NCZ.CAMERA_MIN_TILT     = 0;              // min polar angle (Three.js default: 0)           — 0 = perfectly top-down
 NCZ.CAMERA_MAX_TILT     = Math.PI * 0.39; // max polar angle (Three.js default: Math.PI)     — ~70° tilt from top-down
 NCZ.CAMERA_DAMPING      = 0.05;           // dampingFactor   (Three.js default: 0.05)        — higher = more inertia/lag
-NCZ.CAMERA_ZOOM_MIN     = 2.0;            // minZoom         (Three.js default: 0)           — zoom-out limit; small = small map
-NCZ.CAMERA_ZOOM_MAX     = 50.0;           // maxZoom         (Three.js default: Infinity)    — zoom-in limit; large = close up
 NCZ.CAMERA_ZOOM_SPEED   = 2.0;            // zoomSpeed       (Three.js default: 1.0)         — scroll wheel rate; increase if too slow
 NCZ.CAMERA_PAN_SPEED    = 1.0;            // panSpeed        (Three.js default: 1.0)         — left-drag pan rate
 NCZ.CAMERA_ROTATE_SPEED = 0.6;            // rotateSpeed     (Three.js default: 1.0)         — right-drag tilt rate; lower = more precise
 
 // Shadow map — one OrthographicCamera fitted each frame to exactly the visible-
 // ground footprint (updateShadowCamera in three-scene.js), rendered into a
-// single depth32float texture (the WebGPU `shadowMapping` pattern). No cascades:
-// our schema camera is orthographic (uniform pixels-per-world-unit), so there's
-// no perspective near/far disparity for cascaded maps to exploit — one tight map
-// is simpler and, for this camera, sharper.
+// single depth32float texture (the WebGPU `shadowMapping` pattern). Single map
+// for now; a CSM revisit is queued — the original "no cascades because schema
+// is ortho" rationale no longer holds since the schema camera moved to perspective
+// (FOV 25°, TweakDB-aligned), see [[align-schematic-camera-to-game]].
 NCZ.SHADOW_MAP_SIZE      = 4096;  // px² — ~3 u/texel at a whole-city zoom; razor-sharp zoomed in (the footprint shrinks with zoom)
 NCZ.SHADOW_MAX_DISTANCE  = 12000; // CET units — cap on the footprint half-side. Keeps the shadow reasonably sharp at the zoomed-out + max-tilt extreme (where the visible ground would otherwise run ~20 km wide); ground past the cap is a clean unshadowed falloff. Never bites at normal zooms.
 NCZ.SHADOW_GROUND_MARGIN =   600; // CET units the footprint extends past the visible ground — covers building heights / terrain relief + a sliver of just-off-screen casters. Wider off-screen-caster coverage waits on the union-frustum cull (a follow-up).
@@ -236,15 +249,35 @@ NCZ.BUILDING_EDGE_INTENSITY =  0.05;  // max mix weight — keeps effect subtle;
 NCZ.BUILDING_TEX_FLOOR      =   0.3;  // minimum _m.dds brightness — prevents faces going pitch-black
 NCZ.BUILDING_TEX_RANGE      =   0.7;  // brightness range above the floor (floor + range = max)
 
-// Three.js orthographic camera.zoom threshold for district→subdistrict label switch
-NCZ.SUBDISTRICT_ZOOM_3D = 2.5;
+// Camera distance threshold for district→subdistrict label switch.
+// Source: TweakDB WorldMap.ZoomLevelSubDistricts.zoom = 7000.
+// Below this distance the camera is "zoomed in enough" to show subdistricts.
+NCZ.SUBDISTRICT_DISTANCE_3D = 7000;
 
 // Metro LOD zoom thresholds — vertex COLOR_0 channels are mutually exclusive tiers:
 // B = wide solid line (far zoom only,    zoom < LOD_MED)   — VisibilityDistanceBold=30000
 // G = thin solid line (medium zoom only, LOD_MED < zoom < LOD_NEAR) — VisibilityDistanceRegular=18000
 // R = dotted line     (close zoom only,  zoom > LOD_NEAR)  — VisibilityDistanceDashed=5000
-NCZ.METRO_LOD_ZOOM_MED  = 8.0;   // G→B transition zoom threshold
-NCZ.METRO_LOD_ZOOM_NEAR = 20.0;  // B→R transition zoom threshold
+// Metro LOD thresholds — schema camera-to-target distance (CET units).
+// Mutually-exclusive tiers (one renders at a time, in-game look):
+//   B (wide solid) when distance > MED
+//   G (thin solid) when NEAR < distance < MED
+//   R (dotted)     when distance < NEAR
+//
+// Canonical material values (3dmap_metro.Material.json) are
+// VisibilityDistanceRegular = 18000 and VisibilityDistanceDashed = 5000.
+// They don't apply directly to our metric: schema camera-to-target distance
+// maxes at SCHEMA_CAMERA_MAX_DISTANCE = 15000 wu, so MED = 18000 would mean
+// the B tier never appears in our camera range. The game's compiled shader
+// almost certainly applies these via a metric we can't see (possibly view-
+// space depth with tilt, or a scale factor we don't have).
+//
+// These values align with the WorldMap zoom-ladder instead — same TweakDB
+// source-of-truth, different mapping: when subdistricts appear
+// (`ZoomLevelSubDistricts.zoom = 7000`), metro changes B → G; when full
+// mappins appear (`ZoomLevelAllMappins.zoom = 2500`), metro changes G → R.
+NCZ.METRO_LOD_DISTANCE_MED  = 7000;   // G↔B boundary — aligns with subdistrict-visible zoom
+NCZ.METRO_LOD_DISTANCE_NEAR = 2500;   // R↔G boundary — aligns with all-mappins-visible zoom
 
 // SeeThrough roads — the Pacifica tunnel: a road visible *through* the open bay water.
 // Water (rendered in the transparent pass — see three-scene.js loadTerrain) writes
@@ -261,7 +294,7 @@ NCZ.PIN_3D_GROUND_OFFSET            =  5;  // CET metres above player CET Z — 
 NCZ.PIN_3D_DRAG_THRESHOLD_PX        =  4;  // pixels of pointerdown→pointerup movement before a click is treated as a drag (and thus does not close the popup)
 NCZ.PIN_3D_POPUP_FLIP_PADDING_PX    = 24;  // pixels of clearance above the viewport top before the popup flips from above-pin to below-pin placement
 NCZ.PIN_3D_FLY_DURATION_MS          = 700; // total tween time for sidebar click → camera fly-to-pin
-NCZ.PIN_3D_FLY_ZOOM                 = 15;  // target camera.zoom at the end of the fly — close enough to read pin context, not max-zoom
+// Fly-to-pin target distance lives in SCHEMA_FLY_TO_DISTANCE (TweakDB zoomToZoomValue = 1250)
 NCZ.PIN_3D_CLUSTER_RADIUS_PX        = 40;  // screen-pixel radius for grouping pins into a cluster — matches Leaflet's maxClusterRadius
 NCZ.PIN_3D_PAN_EDGE_FRACTION        = 0.5; // viewport-relative pan padding — at the bound, the world edge sits at screen-center (matches Leaflet's `panEdgeFraction`). Smaller = tighter bound.
 NCZ.PIN_3D_SCALE_TARGET_PX          = 100; // ideal scale-bar width in pixels — the actual bar rounds to a "nice" length (1, 2, 5 × 10ⁿ metres) closest to this width

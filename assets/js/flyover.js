@@ -439,51 +439,84 @@ const Flyover = (() => {
     flyoverLoop();
   }
 
+  // Short fade-out/in across the camera swap. The showcase camera renders at
+  // FOV 55° and the schema camera at 25°; cutting from one to the other is a
+  // jarring perspective snap. Dipping the 3D container's opacity for a moment
+  // bridges them — feels like an intentional transition, not a glitch.
+  const EXIT_FADE_MS = 150;
+
   function stopFlyover() {
     if (!flyActive) return;
     flyActive = false;
     if (flyFrameId !== null) { cancelAnimationFrame(flyFrameId); flyFrameId = null; }
-    // Restore clusters before swapping the camera back, so the recompute
-    // triggered by setActiveCamera(null) sees the cluster layer visible
-    // again and rebuilds the clustered state cleanly.
-    NCZ.ThreeMarkers?.setUnclusteredMode?.(false);
-    // Hand the marker overlay back to the schema camera so pins project against
-    // the orthographic view again. setActiveCamera(null) also re-runs cluster
-    // recompute so cluster math resyncs (the cluster recompute is suppressed
-    // while a non-schema camera is active).
-    NCZ.ThreeMarkers?.setActiveCamera?.(null);
-    clearLayerReveal();
-    if (_audio) {
-      _audio.pause();
-      _audio.currentTime = 0;
-      if (_onAudioEnded) { _audio.removeEventListener('ended', _onAudioEnded); _onAudioEnded = null; }
-    }
-    hideStartScreen();
-    resetFade();
-    NCZ.ThreeScene.setControlsEnabled(true);
-    NCZ.ThreeScene.startRenderLoop();
-    NCZ.ThreeScene.setSunSphereVisible?.(false);
 
-    // Restore whichever theme the user had before showcase started
-    if (_savedTheme) { applyThemeSmooth(_savedTheme); _savedTheme = null; }
+    const canvas    = NCZ.ThreeScene.getCanvasElement?.();
+    const container = canvas?.parentElement || null;
 
-    _runOpts = null;
-
-    // Restore all overlay checkboxes + sun slider to exactly what they were.
-    // Dispatching the native events ensures the app.js handlers run —
-    // layer visibility, shadow state, and UI all stay in sync.
-    if (_savedState) {
-      _savedState.overlays.forEach(({ cb, checked }) => {
-        cb.checked = checked;
-        cb.dispatchEvent(new Event('change'));
-      });
-      const slider = document.getElementById('scene-sun-slider');
-      if (slider && _savedState.sunSlider !== null) {
-        slider.value = _savedState.sunSlider;
-        slider.dispatchEvent(new Event('input'));
+    const doRestore = () => {
+      // Restore clusters before swapping the camera back, so the recompute
+      // triggered by setActiveCamera(null) sees the cluster layer visible
+      // again and rebuilds the clustered state cleanly.
+      NCZ.ThreeMarkers?.setUnclusteredMode?.(false);
+      // Hand the marker overlay back to the schema camera so pins project
+      // against the perspective FOV-25° view again. setActiveCamera(null)
+      // also re-runs cluster recompute (suppressed while a non-schema camera
+      // is active).
+      NCZ.ThreeMarkers?.setActiveCamera?.(null);
+      clearLayerReveal();
+      if (_audio) {
+        _audio.pause();
+        _audio.currentTime = 0;
+        if (_onAudioEnded) { _audio.removeEventListener('ended', _onAudioEnded); _onAudioEnded = null; }
       }
-      _savedState = null;
+      hideStartScreen();
+      resetFade();
+      NCZ.ThreeScene.setControlsEnabled(true);
+      NCZ.ThreeScene.startRenderLoop();
+      NCZ.ThreeScene.setSunSphereVisible?.(false);
+
+      // Restore whichever theme the user had before showcase started
+      if (_savedTheme) { applyThemeSmooth(_savedTheme); _savedTheme = null; }
+
+      _runOpts = null;
+
+      // Restore all overlay checkboxes + sun slider to exactly what they were.
+      // Dispatching the native events ensures the app.js handlers run —
+      // layer visibility, shadow state, and UI all stay in sync.
+      if (_savedState) {
+        _savedState.overlays.forEach(({ cb, checked }) => {
+          cb.checked = checked;
+          cb.dispatchEvent(new Event('change'));
+        });
+        const slider = document.getElementById('scene-sun-slider');
+        if (slider && _savedState.sunSlider !== null) {
+          slider.value = _savedState.sunSlider;
+          slider.dispatchEvent(new Event('input'));
+        }
+        _savedState = null;
+      }
+    };
+
+    if (!container || document.hidden) {
+      doRestore();
+      return;
     }
+
+    container.style.transition = `opacity ${EXIT_FADE_MS}ms ease-out`;
+    container.style.opacity = '0';
+    setTimeout(() => {
+      doRestore();
+      // Two-rAF gate so the swap's first render lands while we're still at
+      // opacity 0, then we fade back up. requestAnimationFrame alone races
+      // some browsers' commit timing.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        container.style.opacity = '1';
+      }));
+      setTimeout(() => {
+        container.style.transition = '';
+        container.style.opacity = '';
+      }, EXIT_FADE_MS + 50);
+    }, EXIT_FADE_MS);
   }
 
   function flyoverLoop() {
