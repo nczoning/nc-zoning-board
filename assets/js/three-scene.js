@@ -1536,13 +1536,16 @@ const ThreeScene = (() => {
     if (!renderer || !buildingMaterials.length) return null;
     const byDistrict = [];
     let total = 0, visible = 0;
-    for (const mat of buildingMaterials) {
+    // buildingMeshes and buildingMaterials are pushed in lockstep in loadBuildings,
+    // so the index aligns — use it for the district name (`buildings-<district>`).
+    for (let i = 0; i < buildingMaterials.length; i++) {
+      const mat  = buildingMaterials[i];
       const attr = mat.userData.indirectAttribute;
       if (!attr) continue;
       const cap  = mat.userData.instanceMatricesBuffer?.value?.count ?? null;
       const buf  = await renderer.getArrayBufferAsync(attr);
       const instanceCount = new Uint32Array(buf)[1];
-      byDistrict.push({ name: mat.name || '?', instanceCount, capacity: cap });
+      byDistrict.push({ name: buildingMeshes[i]?.name || mat.name || `district-${i}`, instanceCount, capacity: cap });
       if (cap != null) total += cap;
       visible += instanceCount;
     }
