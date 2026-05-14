@@ -249,10 +249,17 @@ NCZ.BUILDING_EDGE_INTENSITY =  0.05;  // max mix weight — keeps effect subtle;
 NCZ.BUILDING_TEX_FLOOR      =   0.3;  // minimum _m.dds brightness — prevents faces going pitch-black
 NCZ.BUILDING_TEX_RANGE      =   0.7;  // brightness range above the floor (floor + range = max)
 
-// Camera distance threshold for district→subdistrict label switch.
-// Source: TweakDB WorldMap.ZoomLevelSubDistricts.zoom = 7000.
-// Below this distance the camera is "zoomed in enough" to show subdistricts.
-NCZ.SUBDISTRICT_DISTANCE_3D = 7000;
+// District / subdistrict outline visibility thresholds in CET camera-to-target
+// distance. Three-state, matching the game's WorldMap.ZoomLevel* TweakDB records:
+//   d ≥ DISTRICT_DISTANCE_3D            → main district outlines visible
+//   SUBDISTRICT_DISTANCE_3D ≤ d < DISTRICT_DISTANCE_3D → subdistrict outlines visible
+//   d < SUBDISTRICT_DISTANCE_3D          → neither (mappin tiers only)
+// Sources: WorldMap.ZoomLevelDistricts.zoom = 11000 (showDistricts = 1),
+// WorldMap.ZoomLevelSubDistricts.zoom = 7000 (showSubDistricts = 1). All
+// closer zoom-level records (Important / Vendors / AllMappins / ExtraMappins)
+// have both flags false — i.e. neither outline tier is shown below 7000.
+NCZ.DISTRICT_DISTANCE_3D    = 11000;
+NCZ.SUBDISTRICT_DISTANCE_3D =  7000;
 
 // Metro LOD zoom thresholds — vertex COLOR_0 channels are mutually exclusive tiers:
 // B = wide solid line (far zoom only,    zoom < LOD_MED)   — VisibilityDistanceBold=30000

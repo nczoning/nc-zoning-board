@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Three.js-Parity: district outline visibility + camera ergonomics
+
+Three changes, all matching game behaviour more closely than what shipped in #653:
+
+- **Three-state district outline visibility** mirroring TweakDB `WorldMap.ZoomLevel*` `showDistricts` / `showSubDistricts` flags: districts visible at d ≥ 11000, subdistricts at 7000 ≤ d < 11000, **neither** below 7000. The "always-visible" group (Dogtown / Morro Rock main outlines, Casino subdistrict) is now tied to the outline-tier-visible rule too — vanishes with subs at close zoom. Closes the long-standing "colored rays across the viewport at close zoom" bug as a side effect: the rays originated in `Line2NodeMaterial`'s screen-space line shader hitting some failure mode under perspective + reverse-Z (issue [#654](https://github.com/spuddeh/nc-zoning-board/issues/654)), but they only ever appeared when subdistrict outlines were rendered at d < 7000 — exactly the zoom band the game itself leaves empty. Matching the game's visibility eliminates the bug surface entirely.
+- **Ground-plane panning** (`controls.screenSpacePanning = false`) replaces the OrbitControls default. Under perspective, the default screen-space pan has a world-Y component whenever the camera is tilted — left-drag panning at high tilt slowly lifts `controls.target` off the ground, the orbit pivot moves up, and the camera itself appears to climb as you pan. Orthographic hid this; perspective surfaced it. Ground-plane panning constrains the target to Y=0 implicitly and makes vertical-drag move at the same rate as horizontal-drag at any tilt.
+- **Polygon vertex dedup at load** (epsilon = 0.1 wu) in `buildLine` defends against zero-length edges in `data/subdistricts.json` — the Shapely `difference()` / `unary_union()` pipeline in `scripts/regenerate_subdistricts.py` rounds output coordinates to 2 decimal places, which can collapse points produced 0.001 wu apart into identical coordinates. Catches the 8 degenerate vertices currently present in 4 badlands/pacifica subdistricts. Not the root cause of the rays (verified by testing), kept as defensive code.
+
+Issue #654 still tracks the underlying `Line2NodeMaterial` × `reversedDepthBuffer` interaction (the actual shader path causing the rays — root cause likely the screen-space line shader producing NaN/Inf direction vectors for some near-camera projection edge case). The visibility-rule fix puts that bug out of the user's typical zoom range without solving the shader bug itself.
+
 #### Renderer: WebGL → WebGPU
 
 The 3D scene renders through `WebGPURenderer` (automatic WebGL2 fallback). Native engine features replace the old WebGL workarounds; visuals are parity-or-better at the five canonical viewpoints.
