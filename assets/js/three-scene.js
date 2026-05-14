@@ -493,7 +493,18 @@ const ThreeScene = (() => {
     controls.panSpeed       = NCZ.CAMERA_PAN_SPEED;
     controls.rotateSpeed    = NCZ.CAMERA_ROTATE_SPEED;
     controls.enableDamping  = true;
-    controls.screenSpacePanning = true;
+    // Ground-plane panning, not screen-space. Under perspective, screen-space
+    // panning (the OrbitControls default) has a world-Y component whenever
+    // the camera is tilted — left-drag at high tilt lifts controls.target off
+    // the ground, the orbit pivot moves up, and subsequent rotates/zooms
+    // behave around a lifted point so the camera itself appears to climb as
+    // you pan. With screenSpacePanning=false, panning is constrained to the
+    // plane orthogonal to the camera up vector (world XZ), so target stays
+    // at Y=0 implicitly and vertical drag at high tilt moves the target
+    // forward/back along the camera look direction at the same rate as
+    // horizontal drag moves it left/right. Ortho hid the drift; perspective
+    // surfaces it. See controls 'change' handler — no y-clamp needed.
+    controls.screenSpacePanning = false;
     controls.target.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
     controls.update();
     updateFrustumUniforms();   // seed frustum planes for the first cull dispatch
@@ -609,8 +620,9 @@ const ThreeScene = (() => {
   };
 
   // Sub-groups inside layers.districts (parent group controls overall visibility):
-  let _districtOuter = null; // districts with subs — visible when zoomed OUT
-  let _districtSub   = null; // canonical subdistricts — visible when zoomed IN
+  let _districtOuter  = null; // districts with subs — visible at the districts zoom band (d ≥ 11000)
+  let _districtSub    = null; // canonical subdistricts — visible at the subs band (7000 ≤ d < 11000)
+  let _districtAlways = null; // no-sub districts (Dogtown / Morro Rock) + non-canonical subs (Casino) — visible whenever EITHER outline tier is
 
   function setLayerVisibility(name, visible) {
     if (name === 'districts') {
@@ -632,12 +644,19 @@ const ThreeScene = (() => {
 
   function updateDistrictZoom() {
     if (!_districtOuter || !_districtSub || !controls) return;
+    // Three-state visibility, matching WorldMap.ZoomLevel* records:
+    //   d ≥ 11000: main district outlines (ZoomLevelDistricts.showDistricts = 1)
+    //   7000 ≤ d < 11000: subdistrict outlines (ZoomLevelSubDistricts.showSubDistricts = 1)
+    //   d < 7000: neither (every closer zoom-level record has both flags false)
+    // The game hides outlines entirely at close zoom — only mappins remain.
+    // alwaysGroup (no-sub districts + non-canonical subs) follows the same
+    // outline-tier-visible rule: shown whenever EITHER district or subdistrict
+    // tier would render, hidden together with them below 7000.
     // Distance from camera to target = distance-to-ground (target sits on Y=0).
-    // Smaller distance = more zoomed in; subdistricts replace districts under the threshold.
     const distance = camera.position.distanceTo(controls.target);
-    const zoomedIn = distance < NCZ.SUBDISTRICT_DISTANCE_3D;
-    _districtOuter.visible = !zoomedIn;
-    _districtSub.visible   =  zoomedIn;
+    _districtOuter.visible = distance >= NCZ.DISTRICT_DISTANCE_3D;
+    _districtSub.visible   = distance >= NCZ.SUBDISTRICT_DISTANCE_3D && distance < NCZ.DISTRICT_DISTANCE_3D;
+    if (_districtAlways) _districtAlways.visible = distance >= NCZ.SUBDISTRICT_DISTANCE_3D;
   }
 
   // ── Scale bar ───────────────────────────────────────────────────────
@@ -981,8 +1000,9 @@ const ThreeScene = (() => {
       subGroup.visible  = false;
       outerGroup.visible = true;
 
-      _districtOuter = outerGroup;
-      _districtSub   = subGroup;
+      _districtOuter  = outerGroup;
+      _districtSub    = subGroup;
+      _districtAlways = alwaysGroup;
       layers.districts = parent;
       scene.add(parent);
       requestRender();
@@ -1400,13 +1420,59 @@ const ThreeScene = (() => {
   // District line materials — stored so resolution can be updated on resize
   const districtLineMaterials = [];
 
+  // Drop consecutive ring vertices within ε CET units of each other. The
+  // cleanup script (scripts/regenerate_subdistricts.py) runs Shapely boolean
+  // ops on subdistrict polygons and rounds the output to 2 decimal places —
+  // when two operation-produced vertices land within 0.01 wu of each other,
+  // rounding collapses them to identical coordinates, leaving a zero-length
+  // edge in the ring. Line2NodeMaterial's screen-space line shader divides by
+  // `length(ndcEnd - ndcStart)` to get the segment direction; degenerate
+  // (or sub-pixel after projection) edges produce NaN/Inf direction vectors,
+  // which render as long colored rays across the viewport at close zoom.
+  //
+  // ε = 0.1 wu catches only the literally-degenerate cases observed in
+  // data/subdistricts.json (0.000, 0.010, 0.020 wu edges in badlands subs);
+  // legit polygon corners with closely-spaced vertices (smallest seen ≥ 0.347
+  // wu) are preserved. Bump ε if the rays survive at this threshold.
+  function dedupRing(ring, epsilon = 0.1) {
+    if (ring.length < 2) return ring;
+    const eps2 = epsilon * epsilon;
+    const out = [ring[0]];
+    for (let i = 1; i < ring.length; i++) {
+      const prev = out[out.length - 1];
+      const cur = ring[i];
+      const dx = cur[0] - prev[0];
+      const dy = cur[1] - prev[1];
+      if (dx * dx + dy * dy > eps2) out.push(cur);
+    }
+    // Drop the implicit closing edge if first ≈ last too
+    if (out.length >= 2) {
+      const first = out[0], last = out[out.length - 1];
+      const dx = first[0] - last[0];
+      const dy = first[1] - last[1];
+      if (dx * dx + dy * dy <= eps2) out.pop();
+    }
+    return out;
+  }
+
   // Build a Line2 (fat line) from CET [x, y] ring points.
   // depthTest:false means lines always render over terrain, matching the game's UI overlay approach.
   function buildLine(ring, color, lineWidth) {
+    const cleaned = dedupRing(ring);
+    if (cleaned.length < 3) {
+      // Degenerate polygon after dedup — can't draw a meaningful ring. Build
+      // an empty Line2 so the caller's group structure is preserved.
+      const empty = new LineGeometry();
+      empty.setPositions([]);
+      const placeholderMat = new THREE.Line2NodeMaterial({ color, linewidth: lineWidth, depthTest: false, transparent: true, opacity: 0 });
+      districtLineMaterials.push(placeholderMat);
+      return new Line2(empty, placeholderMat);
+    }
+
     const positions = [];
-    for (const pt of ring) positions.push(pt[0], 0, -pt[1]);
+    for (const pt of cleaned) positions.push(pt[0], 0, -pt[1]);
     // Close the ring
-    if (ring.length > 0) positions.push(ring[0][0], 0, -ring[0][1]);
+    positions.push(cleaned[0][0], 0, -cleaned[0][1]);
 
     const geometry = new LineGeometry();
     geometry.setPositions(positions);
