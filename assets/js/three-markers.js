@@ -59,6 +59,13 @@ const ThreeMarkers = (() => {
                                     // whose contents the cluster panel is showing
   const _projectVec = new THREE.Vector3();
 
+  // Set by the container pointerup handler when the gesture exceeded
+  // PIN_3D_DRAG_THRESHOLD_PX; read by per-pin and per-cluster click
+  // handlers. Lives at IIFE scope because click events fire AFTER
+  // pointerup, on element listeners, and need to see the flag set during
+  // the just-finished gesture. Reset on every pointerdown. See attach().
+  let _dragSuppressClick = false;
+
   // Render-on-demand bridge. ThreeScene's loop only re-renders (and re-runs
   // our render() in turn) when explicitly asked. Anything that mutates pin
   // visibility, position, popup state, or cluster layout without moving the
@@ -162,23 +169,42 @@ const ThreeMarkers = (() => {
     tooltipObj.renderOrder = 999;
     scene.add(tooltipObj);
 
-    // Click outside any pin closes the popup, matching Leaflet — but only on
-    // a *true* click. Releasing an OrbitControls drag fires a click event too;
-    // tracking pointerdown→pointerup distance lets us ignore drags.
+    // Drag-vs-click discrimination — Leaflet pattern.
+    //
+    // OrbitControls is attached to the container (see three-scene.js), and
+    // its setPointerCapture is monkey-patched to a no-op there so the
+    // natural click flow survives — mousedown on a pin → mouseup on a pin
+    // → click event fires on the pin. But a click ALSO fires if the user
+    // pans the camera then releases over a pin (mousedown=pin, mouseup=pin
+    // even with movement in between). Leaflet handles this by tracking
+    // drag distance at the container level and suppressing the next click
+    // when it exceeds the tolerance threshold.
+    //
+    // _dragSuppressClick is set in the pointerup handler below when the
+    // pointerdown→pointerup distance exceeds PIN_3D_DRAG_THRESHOLD_PX, and
+    // read by the per-pin and per-cluster click handlers (in buildPins
+    // and getOrCreateClusterObj). The flag is reset on every pointerdown
+    // so a subsequent true click after the suppressed one still works.
     let pointerDown = null;
     container.addEventListener('pointerdown', (e) => {
       pointerDown = { x: e.clientX, y: e.clientY };
+      _dragSuppressClick = false;
     });
     container.addEventListener('pointerup', (e) => {
       const start = pointerDown;
       pointerDown = null;
-      if (!start || !popup) return;
+      if (!start) return;
       const dist = Math.hypot(e.clientX - start.x, e.clientY - start.y);
-      if (dist > NCZ.PIN_3D_DRAG_THRESHOLD_PX) return;  // was a drag, not a click
+      if (dist > NCZ.PIN_3D_DRAG_THRESHOLD_PX) {
+        _dragSuppressClick = true;       // suppress the synthesised click
+        return;
+      }
+      // True click on empty space (canvas) closes any open popup, matching
+      // Leaflet's behaviour. Pin and cluster clicks are handled by their
+      // own element listeners — guard so this doesn't double-act on them.
+      if (!popup) return;
       if (e.target.closest('.three-popup')) return;
       if (e.target.closest('.three-marker')) return;
-      // Cluster click opens the cluster panel; matches Leaflet's behaviour
-      // where clicking a cluster does NOT close an already-open popup.
       if (e.target.closest('.marker-cluster')) return;
       closePopup();
     });
@@ -227,6 +253,11 @@ const ThreeMarkers = (() => {
       el.style.pointerEvents = 'auto';
       el.style.cursor = 'pointer';
       el.addEventListener('click', (e) => {
+        // Leaflet pattern: a drag that ended on the pin still fires a click
+        // event. _dragSuppressClick is set by the container-level pointerup
+        // when the gesture moved beyond PIN_3D_DRAG_THRESHOLD_PX, so we
+        // ignore those — only true clicks open the popup.
+        if (_dragSuppressClick) return;
         e.stopPropagation();
         // Toggle behaviour to match Leaflet: clicking the already-selected
         // pin deselects it. Sidebar item clicks (focusMod) deliberately
@@ -475,6 +506,8 @@ const ThreeMarkers = (() => {
     obj.name = `cluster-pool-${_clusterPool.length}`;
     obj.layers.set(NCZ.LAYER_PINS);
     root.addEventListener('click', (e) => {
+      // Drag-then-release-on-cluster also fires a click; suppress per Leaflet.
+      if (_dragSuppressClick) return;
       e.stopPropagation();
       // userData.modIds is set by recomputeClusters each time the bubble is
       // assigned to a group; pass to whatever handler app.js registered.
@@ -517,6 +550,18 @@ const ThreeMarkers = (() => {
     card.className = `three-popup ncz-dynamic-popup ncz-popup-top popup-${catStyle.class}`;
     card.innerHTML = html;
     anchor.appendChild(card);
+
+    // The popup card has pointer-events:auto so its buttons/links are
+    // interactive. Because OrbitControls is now wired to the container
+    // (see three-scene.js), every pointerdown that bubbles up to it
+    // arms a potential drag — a tiny mouse jiggle inside the popup would
+    // pan the camera. Stop pointer events at the card boundary so the
+    // popup behaves like a self-contained widget, exactly as the 2D
+    // Leaflet popup shields the map drag handler from its own clicks.
+    // Wheel left intentionally bubbling — we don't have scrollable
+    // popup content today, and forwarding wheel-to-zoom while a popup
+    // is open matches Leaflet behaviour.
+    card.addEventListener('pointerdown', (e) => e.stopPropagation());
 
     // Clipboard copy handler — same behaviour as Leaflet popup
     const copyBtn = card.querySelector('.ui-popup-action-link-copy-link');
