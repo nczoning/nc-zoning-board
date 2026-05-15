@@ -327,6 +327,33 @@ const Flyover = (() => {
 
   const _flyPos = new THREE.Vector3();
   const _flyTar = new THREE.Vector3();
+  let _lastShadowTraceMs = 0; // throttle anchor for the `__shadowTrace` debug logger (10 Hz cap)
+  let _shadowTraceMarkerN = 0; // sequential marker id; user-pressed Space during shadow trace push a marker into the buffer
+
+  // Space-bar marker for the shadow trace. When `NCZ.__shadowTrace` is true
+  // and the showcase is running, pressing Space pushes a fully-decorated
+  // trace entry into `window.__shadowTraceBuffer` with a `marker: N` field,
+  // capturing the EXACT moment the user sees a visual issue. Lets us
+  // correlate "shadows turned off here" complaints with the per-frame state
+  // — much sharper than guessing from audio timestamps.
+  window.addEventListener('keydown', (e) => {
+    if (!flyActive || !NCZ.__shadowTrace) return;
+    if (e.code !== 'Space' && e.key !== ' ') return;
+    e.preventDefault();
+    _shadowTraceMarkerN++;
+    const lastEntry = (window.__shadowTraceBuffer || [])[(window.__shadowTraceBuffer || []).length - 1] || {};
+    const entry = {
+      marker: _shadowTraceMarkerN,
+      at:    _audio ? +_audio.currentTime.toFixed(2) : null,
+      seg:   flySeg,
+      segT:  +(((performance.now() - flySegStart) / (FLYOVER_WAYPOINTS[flySeg + 1]?.[6] || 1)).toFixed(3)),
+      cam:   _flyPos.toArray().map(v => Math.round(v)),
+      tar:   _flyTar.toArray().map(v => Math.round(v)),
+      ...NCZ.ThreeScene.getShadowSnapshot?.(),
+    };
+    (window.__shadowTraceBuffer ||= []).push(entry);
+    console.log(`[shadow-trace-MARK#${_shadowTraceMarkerN}]`, JSON.stringify(entry));
+  });
 
   function smoothstep(t) { return t * t * (3 - 2 * t); }
 
@@ -559,6 +586,31 @@ const Flyover = (() => {
     // placeholders, if showPins=false) track the cinematic camera. CSS2DRenderer's
     // layer-test handles visibility based on the flyCamera's mask.
     NCZ.ThreeMarkers?.render?.();
+
+    // Shadow trace logger — gated on `NCZ.__shadowTrace` (set via devtools:
+    // `NCZ.__shadowTrace = true` before clicking Showcase). Throttled to ~10 Hz
+    // and tagged `[shadow-trace]` so Needle's `console_read` filter can pull
+    // just these entries. Logged per-frame data: audio time, waypoint segment
+    // + t, cam/look positions, plus the full shadow snapshot from
+    // getShadowSnapshot() — light pose, shadow camera bounds, fit state
+    // (incl. degeneration fallback flag), renderer flags, hemisphere fill.
+    if (NCZ.__shadowTrace && now - _lastShadowTraceMs > 100) {
+      _lastShadowTraceMs = now;
+      const entry = {
+        at:    _audio ? +_audio.currentTime.toFixed(2) : null,
+        seg:   flySeg,
+        segT:  +rawT.toFixed(3),
+        cam:   _flyPos.toArray().map(v => Math.round(v)),
+        tar:   _flyTar.toArray().map(v => Math.round(v)),
+        ...NCZ.ThreeScene.getShadowSnapshot?.(),
+      };
+      // Push to a global buffer too — Needle MCP's console capture is flaky;
+      // this lets the user copy the entire trace via devtools with one call:
+      //   copy(JSON.stringify(window.__shadowTraceBuffer))
+      // and paste back here for offline analysis.
+      (window.__shadowTraceBuffer ||= []).push(entry);
+      console.log('[shadow-trace]', JSON.stringify(entry));
+    }
 
     if (rawT >= 1) {
       flySeg++;
