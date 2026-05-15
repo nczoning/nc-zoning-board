@@ -481,8 +481,30 @@ const ThreeScene = (() => {
     _sunSphere.visible = false;
     scene.add(_sunSphere);
 
-    // OrbitControls — left=pan, right=tilt, middle=zoom
-    controls = new OrbitControls(camera, renderer.domElement);
+    // OrbitControls — left=pan, right=tilt, middle=zoom.
+    //
+    // Attached to `container` (#map-3d), not `renderer.domElement` (the
+    // canvas), so pointer events bubbling up from the CSS2D pin/cluster
+    // overlay reach the controls — mirroring Leaflet's pattern where the
+    // map's drag handler lives on the container element above the marker
+    // layer. Combined with the pointer-capture defeat below, this lets
+    // OrbitControls see drag/zoom gestures that start on a pin while the
+    // pin's own `click` event still fires naturally on mouseup. See
+    // wiki/learnings about the prior synthetic-event approach failing
+    // because pointer capture redirected pointerup off the pin.
+    const _orbitDom = renderer.domElement.parentElement;
+    controls = new OrbitControls(camera, _orbitDom);
+    // Defeat OrbitControls' setPointerCapture — Leaflet doesn't use pointer
+    // capture for its map drag, and that's exactly the property that
+    // preserves click event dispatch on child markers. Without this
+    // override, `pointerup` would retarget to the container and the
+    // browser would fire `click` on the lowest common ancestor (the
+    // container) instead of on the pin. No-op'ing both methods is a
+    // single-line patch; the only behavioural trade-off is that a drag
+    // pointer leaving the container during a gesture goes silent — the
+    // container fills the viewport so this is a near-impossible case.
+    _orbitDom.setPointerCapture     = () => {};
+    _orbitDom.releasePointerCapture = () => {};
     controls.mouseButtons = {
       LEFT:   THREE.MOUSE.PAN,
       MIDDLE: THREE.MOUSE.DOLLY,
