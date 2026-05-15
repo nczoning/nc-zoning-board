@@ -39,7 +39,6 @@ window.NCZ = window.NCZ || {};
 // Default sun direction (unit, points from the ground toward the sun) until the
 // real SunCalc-driven position arrives via setSunPosition.
 const SUN_DIR = new THREE.Vector3(-1, 1.5, -1).normalize();
-const _GROUND_NORMAL = new THREE.Vector3(0, 1, 0);
 // Hemisphere-fill sky colour, lerped by sun elevation: hazy cool daylight when
 // high, warm hazy when low (the real sky scatters orange at golden hour too).
 const SKY_NOON    = new THREE.Color(0x8a96a6);
@@ -56,8 +55,13 @@ const ThreeScene = (() => {
   let _dirLight      = null; // the sun (DirectionalLight + single fitted shadow camera)
   let _hemiLight     = null; // sky/ground fill (replaces a flat AmbientLight)
   let _sunDir        = SUN_DIR.clone(); // unit, ground→sun; updated by setSunPosition, consumed by updateShadowCamera
-  let _shadowGroundCenter = new THREE.Vector3(); // world point the shadow camera is centred on (the visible-ground centre)
   let _shadowScratchV = new THREE.Vector3();     // reused by updateShadowCamera so it doesn't allocate per camera move
+  // Last computed shadow fit (half + center) captured by updateShadowCamera —
+  // exposed via getShadowSnapshot() for the `__shadowTrace` debug logger.
+  // `fallback` true means rect was degenerate and we used the world-centered
+  // safety net; `lastUpdateMs` lets us detect frames where updateShadowCamera
+  // didn't run.
+  let _lastShadowFit = { half: 0, cx: 0, cz: 0, fallback: false, lastUpdateMs: 0 };
   // Reusable scratch state for visible-ground-rect ray casts (perspective camera)
   const _groundRectCorner = new THREE.Vector3();
   const _groundRectMin    = new THREE.Vector3();
@@ -2245,31 +2249,80 @@ const ThreeScene = (() => {
     if (!_dirLight || !renderCam) return;
     const shadowCam = _dirLight.shadow.camera;
 
+    // Two fit paths — the camera shapes are too different to share one.
+    //
+    // Schema cam (interactive top-down perspective with controls): rect-fit.
+    // Ray-cast NDC corners → Y=0 → bbox. Tight, sharp, matches the user's
+    // view. Always succeeds for the schema cam because controls constrain
+    // tilt below horizontal, so corners always hit ground at reasonable
+    // distances. This is the "shadows look good on schema map" path.
+    //
+    // Showcase fly cam (cinematic perspective, often near-horizontal):
+    // fixed-size box centred where the camera's forward ray meets the
+    // ground. Half-side is the cap (`SHADOW_MAX_DISTANCE + GROUND_MARGIN`),
+    // size never changes per frame. Box translates smoothly with the
+    // cinematic camera — no per-frame size discontinuities, no visible
+    // "shadow box pop" at camera-tilt transitions. Coarser texels than the
+    // schema cam, but cinematic motion masks that and consistency matters
+    // more than peak sharpness here. (Trace analysis on this branch showed
+    // rect-fit on the fly cam produced 11000-wu single-frame `half` jumps
+    // at every WP that crossed the horizon line, regardless of maxT
+    // clamping — see shadow_trace_2.json analysis.)
     let half, center;
+    let rectValid = false;
     if (renderCam === camera && controls) {
-      // Schema perspective camera — fit a square to the visible ground rect
-      // (computed by ray-casting from camera through the four NDC corners and
-      // intersecting Y=0). The rect handles tilt and aspect naturally — no
-      // analytic 1/cos(tilt) stretch needed. A square of side = rect diagonal
-      // contains it from any sun azimuth; cap so it can't reach the horizon at
-      // the zoomed-out extreme.
-      _computeVisibleGroundRect(camera);
-      const W = _groundRectMax.x - _groundRectMin.x;
-      const D = _groundRectMax.z - _groundRectMin.z;
-      half = Math.min(0.5 * Math.hypot(W, D), NCZ.SHADOW_MAX_DISTANCE) + NCZ.SHADOW_GROUND_MARGIN;
-      // Pin the centre to the ground plane (Y = 0): controls.target can drift
-      // off Y=0 with screen-space panning at a tilt, which would slide the
-      // footprint off the terrain. The terrain is at Y≈0 — centre on it.
-      center = _shadowScratchV.set(controls.target.x, 0, controls.target.z);
+      _computeVisibleGroundRect(renderCam);
+      rectValid = Number.isFinite(_groundRectMin.x);
+      if (rectValid) {
+        const W = _groundRectMax.x - _groundRectMin.x;
+        const D = _groundRectMax.z - _groundRectMin.z;
+        half = Math.min(0.5 * Math.hypot(W, D), NCZ.SHADOW_MAX_DISTANCE) + NCZ.SHADOW_GROUND_MARGIN;
+        center = _shadowScratchV.set(
+          (_groundRectMin.x + _groundRectMax.x) * 0.5,
+          0,
+          (_groundRectMin.z + _groundRectMax.z) * 0.5,
+        );
+      } else {
+        // Degenerate (shouldn't happen for the schema cam given controls.maxPolarAngle,
+        // but the safety net stays). World-centered fallback at the cap.
+        half = NCZ.SHADOW_MAX_DISTANCE + NCZ.SHADOW_GROUND_MARGIN;
+        center = _shadowScratchV.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
+      }
     } else {
-      // External camera (showcase fly cam) — square at the shadow draw distance,
-      // centred where the camera's forward ray meets the ground (Y = 0).
+      // External cam (showcase fly cam) — fixed-size box, ray-to-ground centre,
+      // with tHit capped. Without the cap, a camera looking near-horizontal
+      // (dy just below -1e-4, e.g. -0.003) produces tHit ≈ cam.y / |dy| = tens
+      // of thousands of wu, sending the box centre far outside the world and
+      // making shadows vanish (trace shadow_trace_3.json: M#2 had centre at
+      // [-14213, -81284] when cam was at +617). Cap keeps the centre within
+      // a reasonable distance in the camera-forward direction; for cameras
+      // looking up or horizontal (dy >= threshold) we project the same cap
+      // distance forward so the centre stays near what's framed.
       half = NCZ.SHADOW_MAX_DISTANCE + NCZ.SHADOW_GROUND_MARGIN;
-      const dir   = _shadowScratchV.set(0, 0, -1).applyQuaternion(renderCam.quaternion);
-      const denom = dir.dot(_GROUND_NORMAL);
-      const tHit  = Math.abs(denom) > 1e-4 ? Math.max(0, -renderCam.position.y / denom) : 0;
-      center = _shadowGroundCenter.copy(renderCam.position).addScaledVector(dir, tHit);
+      const dir = _shadowScratchV.set(0, 0, -1).applyQuaternion(renderCam.quaternion);
+      const dy  = dir.y;
+      const MAX_T_HIT = NCZ.SHADOW_MAX_DISTANCE * 0.6;   // ≈ 7200 wu — covers world half-diagonal (~8.5km) without ballooning
+      const tHit = (dy < -1e-4)
+        ? Math.min(-renderCam.position.y / dy, MAX_T_HIT) // ground in front — clamp far hits
+        : MAX_T_HIT;                                       // looking up / horizontal — project forward by cap
+      center = _shadowScratchV.set(
+        renderCam.position.x + dir.x * tHit,
+        0,
+        renderCam.position.z + dir.z * tHit,
+      );
     }
+    // Clamp the centre to world bounds. The scene is finite (~12km × 12km);
+    // nothing is rendered outside it, so a centre past the world edge wastes
+    // half the shadow texture covering empty void. Three Z = -CET Y, so the
+    // world Z range in three-space is [-WORLD_MAX_Y, -WORLD_MIN_Y].
+    center.x = Math.max(NCZ.WORLD_MIN_X, Math.min(NCZ.WORLD_MAX_X, center.x));
+    center.z = Math.max(-NCZ.WORLD_MAX_Y, Math.min(-NCZ.WORLD_MIN_Y, center.z));
+    // Capture fit for getShadowSnapshot trace.
+    _lastShadowFit.half = half;
+    _lastShadowFit.cx = center.x;
+    _lastShadowFit.cz = center.z;
+    _lastShadowFit.fallback = !rectValid && renderCam === camera;
+    _lastShadowFit.lastUpdateMs = performance.now();
 
     shadowCam.left = -half; shadowCam.right = half;
     shadowCam.top  =  half; shadowCam.bottom = -half;
@@ -2313,6 +2366,55 @@ const ThreeScene = (() => {
   function getShadowsEnabled() { return _shadowsOn; }
   function getSunElevation() { return _sunEl; }
 
+  // Comprehensive shadow + lighting state snapshot for the `__shadowTrace`
+  // debug logger (set NCZ.__shadowTrace = true to enable per-frame logging
+  // in flyover.js). Captures everything that could explain "shadows turn
+  // off at some waypoints": light pose, shadow camera bounds, fit state,
+  // renderer flags, hemisphere fill — so a post-mortem of the trace can
+  // disambiguate any failure mode without re-instrumenting.
+  function getShadowSnapshot() {
+    if (!_dirLight || !renderer) return null;
+    const sc = _dirLight.shadow?.camera;
+    return {
+      sun: {
+        pos:    _dirLight.position.toArray().map(v => Math.round(v)),
+        tar:    _dirLight.target.position.toArray().map(v => Math.round(v)),
+        dir:    _sunDir.toArray().map(v => +v.toFixed(3)),
+        elDeg:  +(_sunEl * 180 / Math.PI).toFixed(1),
+        intens: +_dirLight.intensity.toFixed(2),
+        color:  _dirLight.color.getHexString(),
+      },
+      shadow: {
+        cast:    _dirLight.castShadow,
+        intens:  +_dirLight.shadow.intensity.toFixed(2),
+        mapSize: _dirLight.shadow.mapSize.toArray(),
+        bias:    _dirLight.shadow.bias,
+        nBias:   +_dirLight.shadow.normalBias.toFixed(2),
+        cam: sc ? {
+          lrtb: [Math.round(sc.left), Math.round(sc.right), Math.round(sc.top), Math.round(sc.bottom)],
+          nf:   [Math.round(sc.near), Math.round(sc.far)],
+        } : null,
+      },
+      fit: {
+        half:     Math.round(_lastShadowFit.half),
+        center:   [Math.round(_lastShadowFit.cx), Math.round(_lastShadowFit.cz)],
+        fallback: _lastShadowFit.fallback,
+        ageMs:    Math.round(performance.now() - _lastShadowFit.lastUpdateMs),
+      },
+      rend: {
+        smEnabled:    renderer.shadowMap.enabled,
+        smAutoUpdate: renderer.shadowMap.autoUpdate,
+        smNeedsUpd:   renderer.shadowMap.needsUpdate,
+        smType:       renderer.shadowMap.type,
+      },
+      hemi: _hemiLight ? {
+        intens: +_hemiLight.intensity.toFixed(2),
+        sky:    _hemiLight.color.getHexString(),
+        ground: _hemiLight.groundColor?.getHexString?.(),
+      } : null,
+    };
+  }
+
   function getLayerVisibility(name) {
     if (name === 'shadows') return _shadowsOn;
     if (name === 'pins')    return NCZ.ThreeMarkers?.getOverlayVisible?.() ?? null;
@@ -2347,7 +2449,7 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, setBuildingEdgeIntensity, dumpDebugInfo };
+  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, setBuildingEdgeIntensity, dumpDebugInfo };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;

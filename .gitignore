@@ -28,6 +28,7 @@ data/metro.json
 data/landmarks.json
 data/terrain_contours.json
 scripts/output/
+scripts/logs/
 scripts/__pycache__/
 
 # Ignore system and agent files
