@@ -218,7 +218,7 @@ NCZ.CAMERA_ROTATE_SPEED = 0.6;            // rotateSpeed     (Three.js default: 
 // is ortho" rationale no longer holds since the schema camera moved to perspective
 // (FOV 25°, TweakDB-aligned), see [[align-schematic-camera-to-game]].
 NCZ.SHADOW_MAP_SIZE      = 4096;  // px² — ~3 u/texel at a whole-city zoom; razor-sharp zoomed in (the footprint shrinks with zoom)
-NCZ.SHADOW_MAX_DISTANCE  = 12000; // CET units — cap on the footprint half-side. Keeps the shadow reasonably sharp at the zoomed-out + max-tilt extreme (where the visible ground would otherwise run ~20 km wide); ground past the cap is a clean unshadowed falloff. Never bites at normal zooms.
+NCZ.SHADOW_MAX_DISTANCE  =  8600; // CET units — cap on the footprint half-side. Matches the world half-diagonal (sqrt((WORLD_MAX_X-WORLD_MIN_X)² + (WORLD_MAX_Y-WORLD_MIN_Y)²) / 2 ≈ 8565 wu) with tiny headroom: nothing renders past the world bounds, so a larger cap just stretches texels over empty void. Trace data on PR #656 showed `half` pinned at the cap (12600 = 12000 cap + 600 margin) every showcase frame; reducing the cap shrinks the box uniformly → ~1.4× sharper texels for free at no performance cost.
 NCZ.SHADOW_GROUND_MARGIN =   600; // CET units the footprint extends past the visible ground — covers building heights / terrain relief + a sliver of just-off-screen casters. Wider off-screen-caster coverage waits on the union-frustum cull (a follow-up).
 NCZ.SHADOW_CAM_NEAR      =     1; // shadow camera near clip
 NCZ.SHADOW_CAM_FAR       = 40000; // shadow camera far clip — the camera sits SUN_DIST up the sun ray, so this must still reach the far edge of the footprint even at a low sun (orthographic ⇒ a wide range costs no precision)
