@@ -569,6 +569,23 @@ const ThreeScene = (() => {
     // container fills the viewport so this is a near-impossible case.
     _orbitDom.setPointerCapture     = () => {};
     _orbitDom.releasePointerCapture = () => {};
+    // Scene-control UI (#scene-controls — Reset/Showcase buttons, sun slider,
+    // tilt readout) lives *inside* #map-3d, so its gestures bubble up to the
+    // OrbitControls listeners on _orbitDom and pan/zoom/tilt the camera while
+    // you're operating a control (dragging the sun slider moved the map).
+    // This is the inverse of the pin/cluster case above: pins *want* the
+    // gesture to reach the camera (drag-to-pan, click still fires); controls
+    // do NOT. Mirror Leaflet's L.DomEvent.disableClickPropagation /
+    // disableScrollPropagation — stop the gesture-initiating events at the
+    // control container so OrbitControls (the ancestor listener) never sees
+    // them. stopPropagation only (no preventDefault / stopImmediatePropagation)
+    // leaves the controls' own behaviour and click handlers fully intact.
+    const _sceneControls = document.getElementById('scene-controls');
+    if (_sceneControls) {
+      for (const evt of ['pointerdown', 'wheel', 'contextmenu']) {
+        _sceneControls.addEventListener(evt, (e) => e.stopPropagation());
+      }
+    }
     controls.mouseButtons = {
       LEFT:   THREE.MOUSE.PAN,
       MIDDLE: THREE.MOUSE.DOLLY,

@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OrbitControls` now attaches to `#map-3d` (parent of canvas + CSS2D overlay) instead of `renderer.domElement`, with `setPointerCapture` / `releasePointerCapture` overridden to no-ops on that element. Copies Leaflet's `Draggable` pattern (drag handler at the container, no pointer capture) so pan/zoom gestures pass through pins and cluster bubbles to the camera while the per-element `click` handlers stay intact.
 - Drag-vs-click discrimination via a `_dragSuppressClick` flag in `three-markers.js` (set when the container-level `pointerdown→pointerup` distance exceeds `PIN_3D_DRAG_THRESHOLD_PX`). Popup card stops `pointerdown` propagation so internal interactions don't arm phantom drags.
+- `#scene-controls` (Reset/Showcase buttons, sun slider, tilt) now stops `pointerdown`/`wheel`/`contextmenu` propagation so operating an on-canvas control no longer pans/zooms the camera (the inverse of the pin case — Leaflet's `disableClickPropagation` idiom).
 
 #### Three.js-Parity: district outline visibility + camera ergonomics
 
