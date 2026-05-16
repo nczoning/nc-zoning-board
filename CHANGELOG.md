@@ -386,6 +386,24 @@ Opt-in cinematic module — add or remove the `<script>` tag to include or exclu
 - Terrain/cliffs colors derived from game material data (`BaseColorScale RGB(86,108,136)`); per-theme `--scene-terrain/water/cliffs` CSS vars
 - SCHEMA/SAT view toggle with tooltips; controls reference and Reset view button
 
+## [0.3.5] - 2026-05-16
+
+### Added
+
+- **Auto-discovery health monitor**: scheduled GitHub Action runs the real `parseNcZoningBlock()` against all live NCZoning-tagged Nexus mods daily and posts a Discord alert listing any that are missing from the map — split into "malformed block" (author fix needed) vs "tagged, no block". Catches silent parse failures within a day instead of when an author complains. Local/dry runs (no webhook) print the payload for review instead of sending.
+
+## [0.3.4] - 2026-05-16
+
+### Fixed
+
+- **Auto-discovery — resilient BBCode parsing**: `parseNcZoningBlock()` now strips all BBCode tags and token-anchors the `NCZoning:` sentinel (anywhere in the description, every occurrence) instead of requiring an intact `[code]…[/code]` wrapper. Blocks that lost their `[code]` tags, picked up stray `[spoiler]`/`[size]`/`[font]`/`[color]` styling, or were pasted glued inline to prose (e.g. from a copy-paste round-trip) now parse correctly.
+
+## [0.3.3] - 2026-05-04
+
+### Fixed
+
+- **Thumbnails — chunked `modsByUid` fetch**: Large single `modsByUid` requests (~250 UIDs) were silently truncated by the Nexus V2 API, so some manual-mod pins loaded without thumbnails until a later reload "self-healed" it. Now chunked into 50-UID parallel batches (`NEXUS_BATCH_SIZE`) with a one-shot retry of dropped UIDs; short chunks log the missing UIDs to tell flakiness apart from stale `nexus_id`s.
+
 ## [0.3.2] - 2026-04-09
 
 ### 16k WebP Tile Layer
