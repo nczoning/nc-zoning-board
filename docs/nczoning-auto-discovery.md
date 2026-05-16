@@ -84,7 +84,7 @@ The Nexus uploader is always included as the first author automatically. Use `au
 
 ### Parsing rules
 
-- The parser anchors on a line that reads `NCZoning:` on its own, then reads the `key=value` lines that follow it
+- The parser finds the `NCZoning:` marker (it can sit inline — even glued to the end of a sentence) and reads the `key=value` lines that follow it; if `NCZoning:` also appears in your prose, the real block is still found as long as its `coords`/`category` are valid
 - `coords` and `category` are required — mods missing either are skipped entirely
 - `coords` accepts either 2 values (`X,Y` — legacy format) or 3 values (`X,Y,Z` — new format). For new submissions, Z is required
 - `tags` that don't exist in the tag registry are silently dropped (the mod still appears)

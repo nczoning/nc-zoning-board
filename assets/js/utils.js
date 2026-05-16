@@ -136,13 +136,18 @@ NCZ.pickDirectionAndPosition = function (anchorPoint, size, mapSize, config) {
  * Parse the NCZoning: metadata block from a Nexus mod description.
  * Returns a parsed object, or null if no valid block is present.
  *
- * Resilient to blocks that have lost their [code] wrapper or picked up
- * stray BBCode styling ([spoiler]/[size]/[font]/[color], often per-line)
- * — e.g. from a copy-paste round-trip (Discord → Nexus) or the author
- * manually reformatting. We strip every BBCode tag first, so a clean
- * [code] block and a styled/unwrapped one normalize to the same plain
- * text, then anchor on the `NCZoning:` sentinel line and read the
- * key=value lines that follow it.
+ * Resilient to however the author actually pasted the block:
+ *  - lost [code] wrapper or stray styling ([spoiler]/[size]/[font]/
+ *    [color], often per-line) from a copy-paste round-trip
+ *  - the sentinel glued to the end of a sentence (e.g. `...Making!
+ *    [code]NCZoning:` — stripping [code] fuses it onto the prose)
+ *  - a false-positive "NCZoning:" mention earlier in the description
+ *
+ * Strategy: strip all BBCode, then treat `NCZoning:` as a token that
+ * can appear anywhere (not a whole line). Every occurrence is tried as
+ * a candidate; the first one whose following lines yield valid coords +
+ * category wins, so the coords/category validation — not the sentinel's
+ * position — is what disambiguates the real block from prose.
  */
 NCZ.parseNcZoningBlock = function (description, validTagNames) {
   if (!description) return null;
@@ -154,60 +159,62 @@ NCZ.parseNcZoningBlock = function (description, validTagNames) {
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/\[\/?[a-z][^\]]*\]/gi, "");
 
-  const lines = text.split("\n").map((l) => l.trim());
-  const start = lines.findIndex((l) => /^NCZoning\s*:$/i.test(l));
-  if (start === -1) return null;
-
-  // Read recognized key=value lines after the sentinel. Blank lines (left
-  // behind by stripped per-line tags) are skipped; once we've collected at
-  // least one field, the first unrecognized non-empty line ends the block
-  // so trailing description prose isn't mis-parsed.
   const RECOGNIZED = new Set(["coords", "category", "tags", "yaw", "credits", "authors"]);
-  const data = {};
-  for (let i = start + 1; i < lines.length; i++) {
-    const line = lines[i];
-    if (!line) continue;
-    const eqIdx = line.indexOf("=");
-    const key = eqIdx === -1 ? "" : line.slice(0, eqIdx).trim().toLowerCase();
-    if (!RECOGNIZED.has(key)) {
-      if (Object.keys(data).length) break;
-      continue;
-    }
-    const value = line.slice(eqIdx + 1).trim();
-    if (value && !(key in data)) data[key] = value;
-  }
-
-  // coords is required — two or three comma-separated numbers [X, Y] or [X, Y, Z]
-  if (!data.coords) return null;
-  const coordParts = data.coords.split(",").map((s) => parseFloat(s.trim()));
-  // Prevent invalid input: reject < 2 values (missing Y or both), > 3 values (extra fields), or NaN (failed parse)
-  if (coordParts.length < 2 || coordParts.length > 3 || coordParts.some(isNaN)) return null;
-
-  // category is required
   const validCategories = ["location-overhaul", "new-location", "other"];
-  if (!data.category || !validCategories.includes(data.category)) return null;
 
-  // tags: filter to known tags only — unknown tags silently dropped
-  const tags = data.tags
-    ? data.tags.split(",").map((t) => t.trim()).filter((t) => validTagNames.has(t))
-    : [];
+  // Turn a collected key=value map into the public parsed object, or
+  // null if required fields are missing/invalid (also the signal to try
+  // the next NCZoning: candidate).
+  const finalize = (data) => {
+    if (!data.coords) return null;
+    // coords: two or three comma-separated numbers [X, Y] or [X, Y, Z].
+    // Reject < 2 (missing Y/both), > 3 (extra fields), or NaN (bad parse).
+    const coordParts = data.coords.split(",").map((s) => parseFloat(s.trim()));
+    if (coordParts.length < 2 || coordParts.length > 3 || coordParts.some(isNaN)) return null;
+    if (!data.category || !validCategories.includes(data.category)) return null;
 
-  // additional authors beyond Nexus uploader
-  const additionalAuthors = data.authors
-    ? data.authors.split(",").map((a) => a.trim()).filter(Boolean)
-    : [];
-
-  // yaw is optional
-  const yaw = data.yaw && !isNaN(parseFloat(data.yaw)) ? parseFloat(data.yaw) : null;
-
-  return {
-    coordinates: coordParts,
-    category: data.category,
-    tags,
-    credits: data.credits || null,
-    additionalAuthors,
-    yaw,
+    return {
+      coordinates: coordParts,
+      category: data.category,
+      // tags: filter to known tags only — unknown tags silently dropped
+      tags: data.tags
+        ? data.tags.split(",").map((t) => t.trim()).filter((t) => validTagNames.has(t))
+        : [],
+      credits: data.credits || null,
+      // additional authors beyond the Nexus uploader
+      additionalAuthors: data.authors
+        ? data.authors.split(",").map((a) => a.trim()).filter(Boolean)
+        : [],
+      yaw: data.yaw && !isNaN(parseFloat(data.yaw)) ? parseFloat(data.yaw) : null,
+    };
   };
+
+  // `NCZoning:` is a token, not a line — authors paste it inline after
+  // prose. [ \t]* (not \s*) tolerates `NCZoning :` without swallowing the
+  // newline that separates it from the first field.
+  const sentinel = /NCZoning[ \t]*:/gi;
+  let m;
+  while ((m = sentinel.exec(text)) !== null) {
+    const data = {};
+    // Read the lines that follow this candidate. Blank lines (left behind
+    // by stripped per-line tags) are skipped; the first non-blank line
+    // that isn't a recognized key=value ends the block, so neither the
+    // glued-on prose before the sentinel nor description text after the
+    // fields is mis-parsed.
+    for (const raw of text.slice(m.index + m[0].length).split("\n")) {
+      const line = raw.trim();
+      if (!line) continue;
+      const eqIdx = line.indexOf("=");
+      const key = eqIdx === -1 ? "" : line.slice(0, eqIdx).trim().toLowerCase();
+      if (!RECOGNIZED.has(key)) break;
+      const value = line.slice(eqIdx + 1).trim();
+      if (value && !(key in data)) data[key] = value;
+    }
+    const parsed = finalize(data);
+    if (parsed) return parsed;
+    // Not a valid block (false-positive mention) — try the next occurrence.
+  }
+  return null;
 };
 
 // Returns true when a mod was updated on Nexus within the recent window.
