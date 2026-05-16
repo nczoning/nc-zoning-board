@@ -91,7 +91,9 @@ git merge origin/main --no-edit         # Merge main's changes
 git push origin dev
 ```
 
-Do this **at minimum weekly** and **always before starting a new phase**. Merge conflicts are usually limited to `CHANGELOG.md` (which has `[Unreleased]` entries on dev that don't exist on main) and are trivial to resolve.
+Do this **ad-hoc, whenever `main` has changes `dev` needs** — a Leaflet/satellite-view bugfix, new location JSONs, tooling, or docs. There is **no fixed cadence**: no weekly schedule, no per-phase requirement. Sync on demand.
+
+Merge conflicts are **almost always limited to `CHANGELOG.md`**, and the conflict is structural: `dev` carries a long-lived `[Unreleased]` block (the 3D-map changelog) that `main` doesn't have, while `main` accumulates released `[0.3.x]` sections `dev` doesn't have. **Resolve by union, in order:** keep dev's entire `[Unreleased]` body, then place main's released `[0.3.x]` sections immediately below it (above the previously-newest released version). Drop neither side — a correct resolution just removes the `<<<<<<<` / `=======` / `>>>>>>>` markers with both blocks intact.
 
 ## Phase status
 
