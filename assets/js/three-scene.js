@@ -394,6 +394,13 @@ const ThreeScene = (() => {
         maxStorageBuffersInVertexStage: 1,
       },
     };
+    // TEMP — verification only, remove before dev→main. ?forcewebgl forces
+    // the WebGL2 backend so the WebGPU-unavailable → 2D-Leaflet fallback can
+    // be exercised on any browser (no about:config / exotic browser needed).
+    if (new URLSearchParams(window.location.search).has('forcewebgl')) {
+      _rendererInitParams.forceWebGL = true;
+      console.warn('[NCZ] ?forcewebgl — forcing WebGL2 backend (test gate).');
+    }
     renderer = new THREE.WebGPURenderer(_rendererInitParams);
     try {
       await renderer.init();   // WebGPURenderer requires async init before any use
