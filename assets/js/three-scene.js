@@ -347,6 +347,14 @@ const ThreeScene = (() => {
     if (initialized) return;
     initialized = true;
 
+    // Diagnostic gate (?webgpuprobe). Captures the *real* WebGPU
+    // adapter/device negotiation BEFORE Three.js swallows it into a single
+    // "WebGPU is not available" log line. Separate from ?debug so it doesn't
+    // pull in the stats.js panels. Belt-and-suspenders try/catch: the probe
+    // also self-guards, but init() must never throw because of it.
+    const PROBE = new URLSearchParams(window.location.search).has('webgpuprobe');
+    if (PROBE) { try { await runWebGPUProbe(); } catch (_) { /* never blocks init */ } }
+
     const container = document.getElementById(containerId);
     loadingEl     = container.querySelector('.scene-loading');
     loadingFillEl = container.querySelector('.scene-loading__fill');
@@ -1994,6 +2002,151 @@ const ThreeScene = (() => {
     }
 
     return dump;
+  }
+
+  // ── WebGPU diagnostic probe (?webgpuprobe) ─────────────────────────────
+  // Three.js collapses every WebGPU negotiation failure into one opaque log
+  // line ("WebGPU is not available, running under WebGL2 backend"), and r184's
+  // WebGPUBackend keeps the GPUAdapter local to its init() — so post-init we
+  // can't see *why* it bailed. This pre-init probe replicates the exact
+  // adapter/device requests Three.js makes and surfaces the real rejection.
+  //
+  // Output convention follows the project's devtools `copy()` debug pattern
+  // (see learnings/shadowtrace-spacebar-marker-pattern): the full text is
+  // stashed on window.__webgpuProbe so the tester runs `copy(__webgpuProbe)`
+  // and pastes it back — no clipboard user-gesture needed at page load.
+  async function runWebGPUProbe() {
+    const lines = [];
+    const log = (s) => lines.push(s);
+    // Each GPUAdapter vends exactly one device; reusing one across the three
+    // requestDevice() attempts would test an already-consumed adapter and
+    // give misleading results. Always pull a fresh adapter per attempt.
+    const freshAdapter = () => navigator.gpu.requestAdapter();
+
+    try {
+      log('NCZoning WebGPU Probe — ' + new Date().toISOString());
+      log('─'.repeat(50));
+      log('User agent:            ' + navigator.userAgent);
+      log('navigator.gpu present: ' + !!navigator.gpu);
+
+      if (!navigator.gpu) {
+        log('');
+        log('navigator.gpu is absent — this browser does not expose WebGPU.');
+      } else {
+        const adapter = await navigator.gpu.requestAdapter();
+        log('');
+        log('requestAdapter() (default):');
+        if (!adapter) {
+          log('  → null (no adapter returned)');
+        } else {
+          log('  isFallbackAdapter: ' + adapter.isFallbackAdapter);
+          const info = adapter.info || {};
+          log('  info.vendor:       ' + info.vendor);
+          log('  info.architecture: ' + info.architecture);
+          log('  info.device:       ' + info.device);
+          log('  info.description:  ' + info.description);
+          log('  features:          ' + [...adapter.features].sort().join(', '));
+
+          const lim = adapter.limits;
+          log('');
+          log('adapter.limits (for-in enumeration):');
+          const keys = [];
+          for (const k in lim) keys.push(k);
+          keys.sort();
+          if (keys.length === 0) {
+            log('  (for-in yielded no keys — see explicit key limits below)');
+          } else {
+            for (const k of keys) log('  ' + k + ' = ' + lim[k]);
+          }
+          // Explicit readout of the limits that decide the buildings path,
+          // independent of whether for-in enumerates getters on this browser.
+          log('');
+          log('key limits (explicit):');
+          for (const k of [
+            'maxStorageBuffersInVertexStage',
+            'maxStorageBuffersInFragmentStage',
+            'maxStorageBuffersPerShaderStage',
+            'maxStorageBufferBindingSize',
+            'maxBufferSize',
+          ]) {
+            log('  ' + k + ' = ' + lim[k] + ' (typeof ' + typeof lim[k] + ')');
+          }
+          log('');
+          log('  >>> maxStorageBuffersInVertexStage = ' +
+              lim.maxStorageBuffersInVertexStage +
+              '  (this is the make-or-break number)');
+        }
+
+        const adapterHP = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+        log('');
+        log('requestAdapter({powerPreference:"high-performance"}): ' +
+            (adapterHP ? ('ok, isFallbackAdapter=' + adapterHP.isFallbackAdapter) : 'null'));
+
+        // (4) Exactly what three-scene.js currently asks Three.js to request.
+        log('');
+        log('requestDevice({requiredLimits:{maxStorageBuffersInVertexStage:1}}):');
+        try {
+          const a = await freshAdapter();
+          const d = await a.requestDevice({ requiredLimits: { maxStorageBuffersInVertexStage: 1 } });
+          log('  → SUCCESS. device.limits.maxStorageBuffersInVertexStage = ' +
+              d.limits.maxStorageBuffersInVertexStage);
+          d.destroy();
+        } catch (err) {
+          log('  → REJECTED. name=' + err.name + '  message=' + err.message);
+        }
+
+        // (5) Contrast control — does the device come up at all without limits?
+        log('');
+        log('requestDevice() (no requiredLimits — contrast control):');
+        try {
+          const a = await freshAdapter();
+          const d = await a.requestDevice();
+          log('  → SUCCESS. device.limits.maxStorageBuffersInVertexStage = ' +
+              d.limits.maxStorageBuffersInVertexStage);
+          d.destroy();
+        } catch (err) {
+          log('  → REJECTED. name=' + err.name + '  message=' + err.message);
+        }
+
+        // (6) Pre-validates the Phase B fix: only request the limit when the
+        // adapter actually reports it.
+        log('');
+        log('requestDevice() (clamped — request limit only if adapter supports ≥1):');
+        try {
+          const a = await freshAdapter();
+          const supports = !!(a && a.limits && a.limits.maxStorageBuffersInVertexStage >= 1);
+          log('  adapter.limits.maxStorageBuffersInVertexStage = ' +
+              (a && a.limits ? a.limits.maxStorageBuffersInVertexStage : '(no adapter)') +
+              ' → ' + (supports ? 'requesting it' : 'omitting it'));
+          const d = await a.requestDevice(
+            supports ? { requiredLimits: { maxStorageBuffersInVertexStage: 1 } } : undefined
+          );
+          log('  → SUCCESS. device.limits.maxStorageBuffersInVertexStage = ' +
+              d.limits.maxStorageBuffersInVertexStage);
+          d.destroy();
+        } catch (err) {
+          log('  → REJECTED. name=' + err.name + '  message=' + err.message);
+        }
+      }
+    } catch (outer) {
+      log('');
+      log('PROBE ERROR (unexpected): ' + ((outer && outer.stack) || outer));
+    }
+
+    const text = lines.join('\n');
+    window.__webgpuProbe = text;
+    console.log(
+      '[NCZ] WebGPU probe complete. Run  copy(__webgpuProbe)  in this console ' +
+      'to copy it, then paste it back.\n\n' + text
+    );
+    // Opportunistic — works if the page happens to be focused; the
+    // copy(__webgpuProbe) path above is the reliable one at page load.
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        () => console.log('[NCZ] WebGPU probe — also copied to clipboard ✓'),
+        ()  => { /* expected without a user gesture — use copy(__webgpuProbe) */ }
+      );
+    }
   }
 
   // ── Flyover API ────────────────────────────────────────────────────────
