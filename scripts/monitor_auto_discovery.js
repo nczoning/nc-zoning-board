@@ -123,10 +123,6 @@ async function fetchTaggedMods({ endpoint, gameId, batchSize }) {
 
 async function postDiscord(failures, total) {
   const url = process.env.DISCORD_WEBHOOK_URL;
-  if (!url) {
-    console.log("DISCORD_WEBHOOK_URL not set — skipping notification (local run).");
-    return;
-  }
   const MAX_PER_GROUP = 12;
   const fmt = (group) => {
     const lines = group
@@ -170,6 +166,14 @@ async function postDiscord(failures, total) {
       },
     ],
   };
+  if (!url) {
+    // No webhook (local run / dry run): print the exact payload that
+    // would be POSTed so the alert can be reviewed without sending it.
+    console.log("\n--- DISCORD_WEBHOOK_URL not set — preview of payload that would be sent ---");
+    console.log(JSON.stringify(body, null, 2));
+    console.log("--- end preview (nothing was sent) ---");
+    return;
+  }
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
