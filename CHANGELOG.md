@@ -7,11 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.3] - 2026-05-16
+## [0.3.4] - 2026-05-16
 
 ### Fixed
 
 - **Auto-discovery — resilient BBCode parsing**: `parseNcZoningBlock()` now strips all BBCode tags and token-anchors the `NCZoning:` sentinel (anywhere in the description, every occurrence) instead of requiring an intact `[code]…[/code]` wrapper. Blocks that lost their `[code]` tags, picked up stray `[spoiler]`/`[size]`/`[font]`/`[color]` styling, or were pasted glued inline to prose (e.g. from a copy-paste round-trip) now parse correctly.
+
+## [0.3.3] - 2026-05-04
+
+### Fixed
+
+- **Thumbnails — chunked `modsByUid` fetch**: Large single `modsByUid` requests (~250 UIDs) were silently truncated by the Nexus V2 API, so some manual-mod pins loaded without thumbnails until a later reload "self-healed" it. Now chunked into 50-UID parallel batches (`NEXUS_BATCH_SIZE`) with a one-shot retry of dropped UIDs; short chunks log the missing UIDs to tell flakiness apart from stale `nexus_id`s.
 
 ## [0.3.2] - 2026-04-09
 
