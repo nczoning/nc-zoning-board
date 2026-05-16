@@ -1,0 +1,22 @@
+{
+    "id": "28663ee0-f8a5-474e-8940-1ede730dad21",
+    "name": "H10 Minimal Apartment Clean Up",
+    "authors": [
+        "LiquidBronze"
+    ],
+    "credits": "",
+    "coordinates": [
+        -1382.3882,
+        1270.984,
+        123.0649
+    ],
+    "nexus_id": "19605",
+    "description": "This is a very minimal mod to clean up the H10 apartment.",
+    "category": "location-overhaul",
+    "tags": [
+        "apartment",
+        "kitsch",
+        "streetkid"
+    ],
+    "yaw": -79.1
+}
