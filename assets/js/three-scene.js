@@ -48,6 +48,11 @@ const ThreeScene = (() => {
   let renderer, camera, scene, controls;
   let animationId = null;
   let initialized = false;
+  // True only when the renderer ended up on a real WebGPU backend. The webgpu
+  // build reports renderer.isWebGPURenderer === true even on its WebGL2
+  // fallback, so that flag can't be trusted — renderer.backend.isWebGPUBackend
+  // (set by r184's WebGPUBackend, absent on WebGLBackend) is the real signal.
+  let _webgpuActive = false;
   let loadingEl      = null;
   let loadingFillEl  = null;
   let loadStepsTotal = 0;
@@ -341,6 +346,11 @@ const ThreeScene = (() => {
     if (loadingEl) loadingEl.style.display = 'none';
   }
 
+  // Public: did the renderer end up on a real WebGPU backend? app.js calls
+  // this after init() resolves to decide whether to start the 3D render loop
+  // or fall the user back to the 2D Leaflet map.
+  function isWebGPUActive() { return _webgpuActive; }
+
   // ── Scene init ─────────────────────────────────────────────────────────
 
   async function init(containerId) {
@@ -411,8 +421,35 @@ const ThreeScene = (() => {
       reversedDepthBuffer: true,
       requiredLimits,
     };
+    // TEMP — verification only, remove before dev→main. ?forcewebgl forces
+    // the WebGL2 backend so the WebGPU-unavailable → 2D-Leaflet fallback can
+    // be exercised on any browser (no about:config / exotic browser needed).
+    if (new URLSearchParams(window.location.search).has('forcewebgl')) {
+      _rendererInitParams.forceWebGL = true;
+      console.warn('[NCZ] ?forcewebgl — forcing WebGL2 backend (test gate).');
+    }
     renderer = new THREE.WebGPURenderer(_rendererInitParams);
-    await renderer.init();   // WebGPURenderer requires async init before any use
+    try {
+      await renderer.init();   // WebGPURenderer requires async init before any use
+    } catch (err) {
+      // Neither WebGPU nor the WebGL2 fallback could initialise — bail to 2D.
+      console.warn('[NCZ] Renderer init failed — falling back to the 2D map.', err);
+      _webgpuActive = false;
+      hideLoading();
+      return;
+    }
+    // The 3D scene's buildings hard-depend on WebGPU compute (storage buffers,
+    // indirect draw, atomics — no WebGL2 equivalent). On the WebGL2 fallback
+    // they throw and the scene is broken-looking, so we don't render a
+    // degraded 3D view at all: abort init here and let app.js fall the user
+    // back to the fully-functional 2D Leaflet map (see forceSatFallback).
+    _webgpuActive = !!renderer.backend?.isWebGPUBackend;
+    if (!_webgpuActive) {
+      console.warn('[NCZ] WebGPU unavailable — renderer on WebGL2 backend. ' +
+                   'Aborting 3D init; using the 2D map instead.');
+      hideLoading();
+      return;
+    }
     // Make the sRGB-correct colour pipeline explicit. These match Three.js r170
     // defaults (since r152 / r155 respectively) but stating them here protects
     // the scene's appearance against future Three.js default changes — both flags
@@ -1922,10 +1959,10 @@ const ThreeScene = (() => {
         // No `getContextAttributes()` on WebGPURenderer — track from constructor
         // params via a sentinel set at init time. Falls back to the legacy path
         // for WebGL2 where the WebGL context exposes these directly.
-        antialias:      renderer.isWebGPURenderer
+        antialias:      _webgpuActive
                           ? !!_rendererInitParams?.antialias
                           : !!(renderer.getContextAttributes?.() && renderer.getContextAttributes().antialias),
-        backend:        renderer.isWebGPURenderer ? 'WebGPU' : 'WebGL2',
+        backend:        _webgpuActive ? 'WebGPU' : 'WebGL2',
         // _shadowsOn is the user-facing state; renderer.shadowMap.enabled stays
         // true permanently (the toggle flips shadow intensity, not the pass).
         shadowsEnabled: _shadowsOn,
@@ -2643,7 +2680,7 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, setBuildingEdgeIntensity, dumpDebugInfo };
+  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, setBuildingEdgeIntensity, dumpDebugInfo, isWebGPUActive };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;

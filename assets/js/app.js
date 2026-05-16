@@ -47,6 +47,15 @@ document.addEventListener("DOMContentLoaded", () => {
     aboutModal.classList.add("hidden");
   });
 
+  // WebGPU-unsupported notice — footer button. The header X is handled by the
+  // delegated .terminal-close-btn[data-close-modal] listener above.
+  const closeWebgpuModalBtn = document.getElementById("close-webgpu-unsupported-modal");
+  if (closeWebgpuModalBtn) {
+    closeWebgpuModalBtn.addEventListener("click", () => {
+      document.getElementById("webgpu-unsupported-modal").classList.add("hidden");
+    });
+  }
+
 // Parameters Modal Logic
   const parametersBtn = document.getElementById("parameters-btn");
   const parametersModal = document.getElementById("parameters-modal");
@@ -565,7 +574,12 @@ async function initMap() {
   // Set inside the data-load try block once mods + markers are available.
   // switchView calls it after toggling so the open popup persists across views.
   let onViewSwitched = null;
+  // Set false once WebGPU is known unavailable (forceSatFallback). Blocks any
+  // re-entry into the broken 3D view — deep link, keyboard, stray call.
+  let threeDAvailable = true;
+  let webgpuFallbackDone = false;
   function switchView(viewName) {
+    if (viewName === "schema" && !threeDAvailable) return;
     document.querySelectorAll(".map-view-btn").forEach(btn => {
       btn.classList.toggle("active", btn.dataset.view === viewName);
     });
@@ -583,7 +597,16 @@ async function initMap() {
       // First-call goes through full async init; subsequent calls early-out
       // synchronously (initialized guard) and the chain still resolves immediately.
       Promise.resolve(NCZ.ThreeScene.init("map-3d"))
-        .then(() => NCZ.ThreeScene.startRenderLoop());
+        .then(() => {
+          // init() aborts early (no render loop wired) when the renderer fell
+          // back to WebGL2 — buildings can't run there. Don't show a broken
+          // 3D scene: drop the user onto the 2D Leaflet map instead.
+          if (NCZ.ThreeScene.isWebGPUActive()) {
+            NCZ.ThreeScene.startRenderLoop();
+          } else {
+            forceSatFallback();
+          }
+        });
     } else {
       map3dEl.style.display = "none";
       mapEl.style.display   = "block";
@@ -591,6 +614,24 @@ async function initMap() {
       map.invalidateSize();
     }
     onViewSwitched?.(viewName);
+  }
+
+  // WebGPU unavailable → the 3D view can't render correctly. Lock it off and
+  // present the fully-functional 2D Leaflet map plus a one-time notice.
+  // Idempotent: only the first call does anything.
+  function forceSatFallback() {
+    if (webgpuFallbackDone) return;
+    webgpuFallbackDone = true;
+    threeDAvailable = false;
+    switchView("sat");
+    const schemaBtn = document.querySelector('.map-view-btn[data-view="schema"]');
+    if (schemaBtn) {
+      schemaBtn.disabled = true;
+      schemaBtn.classList.add("unavailable");
+      schemaBtn.title = "3D view unavailable — WebGPU not supported";
+    }
+    const modal = document.getElementById("webgpu-unsupported-modal");
+    if (modal) modal.classList.remove("hidden");
   }
 
   document.querySelectorAll(".map-view-btn").forEach(btn => {
