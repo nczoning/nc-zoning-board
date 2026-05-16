@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-05-16
+
 ### Fixed
 
-- **Auto-discovery — resilient BBCode parsing**: `parseNcZoningBlock()` now strips all BBCode tags and anchors on the `NCZoning:` sentinel instead of requiring an intact `[code]…[/code]` wrapper. Blocks that lost their `[code]` tags or picked up stray `[spoiler]`/`[size]`/`[font]`/`[color]` styling (e.g. from a copy-paste round-trip) now parse correctly.
+- **Auto-discovery — resilient BBCode parsing**: `parseNcZoningBlock()` now strips all BBCode tags and token-anchors the `NCZoning:` sentinel (anywhere in the description, every occurrence) instead of requiring an intact `[code]…[/code]` wrapper. Blocks that lost their `[code]` tags, picked up stray `[spoiler]`/`[size]`/`[font]`/`[color]` styling, or were pasted glued inline to prose (e.g. from a copy-paste round-trip) now parse correctly.
 
 ## [0.3.2] - 2026-04-09
 
