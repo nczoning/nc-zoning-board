@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Auto-discovery — resilient BBCode parsing**: `parseNcZoningBlock()` now strips all BBCode tags and anchors on the `NCZoning:` sentinel instead of requiring an intact `[code]…[/code]` wrapper. Blocks that lost their `[code]` tags or picked up stray `[spoiler]`/`[size]`/`[font]`/`[color]` styling (e.g. from a copy-paste round-trip) now parse correctly.
+
 ## [0.3.2] - 2026-04-09
 
 ### 16k WebP Tile Layer

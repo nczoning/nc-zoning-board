@@ -84,11 +84,11 @@ The Nexus uploader is always included as the first author automatically. Use `au
 
 ### Parsing rules
 
-- The block must start with `NCZoning:` on the first line inside `[code]`
+- The parser anchors on a line that reads `NCZoning:` on its own, then reads the `key=value` lines that follow it
 - `coords` and `category` are required — mods missing either are skipped entirely
 - `coords` accepts either 2 values (`X,Y` — legacy format) or 3 values (`X,Y,Z` — new format). For new submissions, Z is required
 - `tags` that don't exist in the tag registry are silently dropped (the mod still appears)
-- The `[spoiler]` wrapper is stripped before parsing — both formats work identically
+- All BBCode formatting is stripped before parsing, so the block still works if it loses its `[code]` wrapper or picks up stray styling (`[spoiler]`, `[size]`, `[font]`, `[color]`) — e.g. from a copy-paste round-trip. The `[code]` wrapper is still recommended for readability; the generator emits it
 
 ### Transition Note
 

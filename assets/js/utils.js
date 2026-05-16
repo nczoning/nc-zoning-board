@@ -133,29 +133,48 @@ NCZ.pickDirectionAndPosition = function (anchorPoint, size, mapSize, config) {
 };
 
 /**
- * Parse the [code]NCZoning:...[/code] metadata block from a Nexus mod description.
- * Returns a parsed object or null if the block is missing/invalid.
+ * Parse the NCZoning: metadata block from a Nexus mod description.
+ * Returns a parsed object, or null if no valid block is present.
+ *
+ * Resilient to blocks that have lost their [code] wrapper or picked up
+ * stray BBCode styling ([spoiler]/[size]/[font]/[color], often per-line)
+ * — e.g. from a copy-paste round-trip (Discord → Nexus) or the author
+ * manually reformatting. We strip every BBCode tag first, so a clean
+ * [code] block and a styled/unwrapped one normalize to the same plain
+ * text, then anchor on the `NCZoning:` sentinel line and read the
+ * key=value lines that follow it.
  */
 NCZ.parseNcZoningBlock = function (description, validTagNames) {
   if (!description) return null;
 
-  // Normalize HTML line breaks from Nexus API to actual newlines
-  let text = description.replace(/<br\s*\/?>/gi, "\n");
+  // Normalize HTML line breaks, then strip every BBCode [tag]/[/tag].
+  // This subsumes the old [spoiler] unwrap and the [code] requirement —
+  // both become tag noise that disappears, leaving plain key=value text.
+  const text = description
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/\[\/?[a-z][^\]]*\]/gi, "");
 
-  // Strip outer [spoiler]...[/spoiler] wrapper if present
-  text = text.replace(/\[spoiler\]([\s\S]*?)\[\/spoiler\]/gi, "$1");
+  const lines = text.split("\n").map((l) => l.trim());
+  const start = lines.findIndex((l) => /^NCZoning\s*:$/i.test(l));
+  if (start === -1) return null;
 
-  // Extract [code]NCZoning:\n...[/code] block
-  const match = text.match(/\[code\]\s*NCZoning:\s*\n([\s\S]*?)\[\/code\]/i);
-  if (!match) return null;
-
+  // Read recognized key=value lines after the sentinel. Blank lines (left
+  // behind by stripped per-line tags) are skipped; once we've collected at
+  // least one field, the first unrecognized non-empty line ends the block
+  // so trailing description prose isn't mis-parsed.
+  const RECOGNIZED = new Set(["coords", "category", "tags", "yaw", "credits", "authors"]);
   const data = {};
-  for (const line of match[1].split("\n")) {
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line) continue;
     const eqIdx = line.indexOf("=");
-    if (eqIdx === -1) continue;
-    const key = line.slice(0, eqIdx).trim().toLowerCase();
+    const key = eqIdx === -1 ? "" : line.slice(0, eqIdx).trim().toLowerCase();
+    if (!RECOGNIZED.has(key)) {
+      if (Object.keys(data).length) break;
+      continue;
+    }
     const value = line.slice(eqIdx + 1).trim();
-    if (key && value) data[key] = value;
+    if (value && !(key in data)) data[key] = value;
   }
 
   // coords is required — two or three comma-separated numbers [X, Y] or [X, Y, Z]
