@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Three.js-Parity: cluster panel UX cleanup (E12)
+
+- Picking a mod from the cluster panel now flies to the pin and **keeps the panel open** as a comparison list (was: closed on click). The picked pin stays full-opacity, the rest of its cluster dims; re-clicking the active cluster bubble (before a pin is picked) toggles the panel closed; empty-canvas click closes the panel in 3D too (2D parity).
+- The cluster is **guaranteed to dissolve** on pick via force-individual (2D pulls the markers out of `markerClusterGroup`; 3D excludes them from the distance clusterer) instead of depending on zoom/spacing. **Spiderfy removed entirely** — `focusMarker` no longer uses `zoomToShowLayer`; a clustered-but-focused pin is kept visible by force-individual instead.
+- `?mod=` deep-link is now written eagerly on focus (not on popup open) so cross-view camera/popup restore works for clustered pins; 2D popup-open deferred to flyTo settle to kill the ghost/vibrating double-popup.
+
 #### Three.js-Parity: camera gestures over pins/clusters/popups
 
 - `OrbitControls` now attaches to `#map-3d` (parent of canvas + CSS2D overlay) instead of `renderer.domElement`, with `setPointerCapture` / `releasePointerCapture` overridden to no-ops on that element. Copies Leaflet's `Draggable` pattern (drag handler at the container, no pointer capture) so pan/zoom gestures pass through pins and cluster bubbles to the camera while the per-element `click` handlers stay intact.

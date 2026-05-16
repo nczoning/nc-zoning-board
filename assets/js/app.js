@@ -894,6 +894,32 @@ async function initMap() {
   let focusedMarker = null;
   let isZoomTransitioning = false;
   let focusedRestoreFrame = null;
+  // The single non-panel marker currently pulled out of the cluster group
+  // for focus (Discover / sidebar / deep-link). The 2D analogue of 3D's
+  // "popupModId is excluded from the clusterer" rule — replaces spiderfy as
+  // the way a clustered-but-focused pin stays visible. Panel-set markers are
+  // owned by applyPanelPinFocus instead; this is only for the lone-pin paths.
+  let soloFocusMarker = null;
+
+  // ?mod= deep-link sync. Mirrors NCZ.ThreeMarkers.syncUrlForMod so the two
+  // views stay coherent. Called EAGERLY when focus is initiated (not only
+  // from popupopen) — the popup now opens deferred (on flyTo's moveend), so
+  // waiting for popupopen left a window where switching views lost the
+  // pin (the "shared camera/popup broken on clustered pins" bug: clustered
+  // pins go through the deferred path, unclustered ones opened synchronously).
+  function setModUrlParam(mod) {
+    if (!mod) return;
+    const isNum = /^\d+$/.test(String(mod.nexus_id));
+    const lid = isNum ? String(mod.nexus_id) : mod.id;
+    const url = new URL(window.location.href);
+    url.searchParams.set(NCZ.URL_PARAM_MOD, lid);
+    history.replaceState(null, "", url.toString());
+  }
+  function clearModUrlParam() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete(NCZ.URL_PARAM_MOD);
+    history.replaceState(null, "", url.toString());
+  }
 
   function repositionActivePopup() {
     if (!activePopup) return;
@@ -909,32 +935,23 @@ async function initMap() {
     });
   }
 
+  // Safety net only: re-open the focused popup if it closed while the marker
+  // is an un-clustered singleton. Spiderfy was removed entirely (per product
+  // decision) — focused/selected markers are now kept visible by pulling
+  // them OUT of the cluster group (soloFocusMarker / applyPanelPinFocus), so
+  // a focused marker is never hidden inside a bubble and never needs
+  // spiderfying. For force-individual markers this whole function early-
+  // returns at the hasLayer check (they're not in the group); it survives
+  // only for any legacy clustered-focus edge.
   function restoreFocusedPopupIfVisible() {
     if (!focusedMarker) return;
+    if (panelSelectedModId !== null) return;
     if (!markerClusterGroup.hasLayer(focusedMarker)) return;
     const visibleParent = markerClusterGroup.getVisibleParent(focusedMarker);
     if (!visibleParent) return;
-
-    if (visibleParent === focusedMarker) {
-      if (!focusedMarker.isPopupOpen()) {
-        focusedMarker.openPopup();
-      }
-      return;
+    if (visibleParent === focusedMarker && !focusedMarker.isPopupOpen()) {
+      focusedMarker.openPopup();
     }
-
-    // Keep focused markers visible even when they are clustered by re-spiderfying
-    // their current cluster once zoom animations have settled.
-    if (typeof visibleParent.spiderfy !== "function" || markerClusterGroup._inZoomAnimation) return;
-    if (markerClusterGroup._spiderfied === visibleParent) return;
-
-    const targetCluster = visibleParent;
-    const targetMarker = focusedMarker;
-    markerClusterGroup.once("spiderfied", (event) => {
-      if (event.cluster !== targetCluster) return;
-      if (focusedMarker !== targetMarker) return;
-      scheduleFocusedPopupRestore();
-    });
-    targetCluster.spiderfy();
   }
 
   function scheduleFocusedPopupRestore() {
@@ -951,13 +968,7 @@ async function initMap() {
     const popupSource = e.popup?._source;
     if (popupSource?.modData) {
       focusedMarker = popupSource;
-      // URL sync: reflect the open pin in the address bar
-      const mod = popupSource.modData;
-      const isNum = /^\d+$/.test(String(mod.nexus_id));
-      const lid = isNum ? String(mod.nexus_id) : mod.id;
-      const url = new URL(window.location.href);
-      url.searchParams.set(NCZ.URL_PARAM_MOD, lid);
-      history.replaceState(null, "", url.toString());
+      setModUrlParam(popupSource.modData);
     }
     repositionActivePopup();
     scheduleActivePopupReposition();
@@ -993,9 +1004,7 @@ async function initMap() {
       Boolean(markerClusterGroup._inZoomAnimation);
     // URL sync: clear the mod param when popup closes (unless zoom-related)
     if (popupSource?.modData && !isZoomRelatedClose) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete(NCZ.URL_PARAM_MOD);
-      history.replaceState(null, "", url.toString());
+      clearModUrlParam();
     }
     if (
       focusedMarker &&
@@ -1005,6 +1014,17 @@ async function initMap() {
     ) {
       // Manual close on a visible marker clears focused state.
       focusedMarker = null;
+    }
+    // Genuine dismissal of the soloed lone-pin's popup → let it re-cluster.
+    // Skipped on zoom-driven closes (transient) and when the marker belongs
+    // to an open panel set (clearPanelPinFocus owns that restore).
+    if (
+      soloFocusMarker &&
+      popupSource === soloFocusMarker &&
+      !isZoomRelatedClose &&
+      !panelClusterModIds?.has(soloFocusMarker.modData.id)
+    ) {
+      setSoloFocusMarker(null);
     }
     if (popupRepositionFrame !== null) {
       cancelAnimationFrame(popupRepositionFrame);
@@ -1171,6 +1191,22 @@ async function initMap() {
   // breaks up the cluster the panel was opened for.
   let panelClusterModIds = null;
 
+  // The panel mod the user last clicked. null = panel just opened, no pin
+  // chosen yet (cluster still on screen). Once set, the panel becomes a
+  // static comparison list: successor tracking is suppressed (the cluster
+  // it followed has been flown into and dissolved) and the cluster bubble's
+  // toggle-close no longer applies (there's no bubble to re-click). Drives
+  // the "selected pin prominent, rest dimmed" emphasis.
+  let panelSelectedModId = null;
+
+  // True only while pin emphasis is actually applied (a panel item was
+  // clicked). Lets clearPanelPinFocus() short-circuit when there's nothing
+  // to undo — important because populateClusterPanel() calls it on EVERY
+  // (re)populate, including the high-frequency successor-tracking path
+  // during camera moves. Without this, each successor recompute would do a
+  // full marker sweep + a synchronous 3D recomputeClusters for no reason.
+  let panelPinFocusApplied = false;
+
   // Adds .marker-cluster-active to the SAT cluster bubble whose modIds best
   // match panelClusterModIds. Called after each Leaflet cluster recompute
   // (zoomend / animationend / filter) because Leaflet recreates DOM elements.
@@ -1201,20 +1237,173 @@ async function initMap() {
     }
   }
 
+  // True iff `set` contains exactly the IDs in `list`. Used by both cluster
+  // bubble click handlers (2D + 3D) to detect "user clicked the cluster
+  // whose contents are already in the panel" → toggle-close instead of
+  // re-populate. Cheap O(n) — cluster sizes are bounded by markercluster's
+  // disable-clustering-at-zoom threshold.
+  function isSameModSet(set, list) {
+    if (!set || set.size !== list.length) return false;
+    for (const id of list) if (!set.has(id)) return false;
+    return true;
+  }
+
+  // "Top pin, rest fade": after a panel item is clicked the cluster has
+  // dissolved (focusMarker/focusMod flew in past the cluster radius), so the
+  // member pins are individually visible. Dim every panel pin except the
+  // selected one. 2D uses Leaflet's marker.setOpacity (survives the marker
+  // DOM being recreated on zoom) + a zIndexOffset so the chosen pin sits
+  // above its now-faded neighbours; 3D delegates to ThreeMarkers, which sets
+  // the inner .marker-pin opacity (the only mechanism that survives
+  // CSS2DRenderer's per-frame inline restyling). Two mechanisms, one
+  // behaviour — the divergence is forced by the two views' DOM lifecycles,
+  // not parallel styling.
+  function applyPanelPinFocus() {
+    if (!panelClusterModIds) return;
+    for (const id of panelClusterModIds) {
+      const marker = allMarkers.find((m) => m.modData.id === id);
+      if (!marker) continue;
+      // 2D force-individual: Leaflet.markercluster has no per-marker
+      // "don't cluster" flag — the idiomatic way to keep specific markers
+      // always visible is to pull them out of the cluster group and add
+      // them straight to the map. Idempotent: only move if still grouped.
+      if (markerClusterGroup.hasLayer(marker)) {
+        markerClusterGroup.removeLayer(marker);
+        marker.addTo(map);
+      }
+      const selected = id === panelSelectedModId;
+      marker.setOpacity(selected ? 1 : 0.3);
+      marker.setZIndexOffset(selected ? 1000 : 0);
+    }
+    const ids = [...panelClusterModIds];
+    NCZ.ThreeMarkers?.setPanelPinFocus?.(ids, panelSelectedModId);
+    // 3D equivalent: exclude the whole set from the distance-based clusterer
+    // so dissolution doesn't depend on how tightly the mods are packed.
+    NCZ.ThreeMarkers?.setForcedIndividualIds?.(new Set(ids));
+    panelPinFocusApplied = true;
+  }
+
+  // Restore every panel pin to full opacity / default stacking. Must run
+  // before panelClusterModIds is cleared (it drives the 2D iteration).
+  // No-ops unless emphasis was actually applied — keeps the per-populate
+  // call cheap and breaks the populateClusterPanel→clear→setForced→recompute
+  // re-entry in the common (no pin picked) case.
+  function clearPanelPinFocus() {
+    if (!panelPinFocusApplied) return;
+    if (panelClusterModIds) {
+      for (const id of panelClusterModIds) {
+        const marker = allMarkers.find((m) => m.modData.id === id);
+        if (!marker) continue;
+        marker.setOpacity(1);
+        marker.setZIndexOffset(0);
+        // Return the marker to the cluster group so it re-clusters normally.
+        // Only if we actually pulled it out (standalone on the map and not
+        // in the group) — guards the cluster-mode-then-close path where no
+        // marker was ever moved.
+        if (map.hasLayer(marker) && !markerClusterGroup.hasLayer(marker)) {
+          map.removeLayer(marker);
+          markerClusterGroup.addLayer(marker);
+        }
+      }
+    }
+    NCZ.ThreeMarkers?.setPanelPinFocus?.(null, null);
+    NCZ.ThreeMarkers?.setForcedIndividualIds?.(null);
+    panelPinFocusApplied = false;
+  }
+
   // Hide and reset cluster menu state
   function hideClusterPanel() {
     clusterModList.innerHTML = "";
     clusterPanelCount.textContent = "";
     clusterPanel.classList.add("cluster-panel-closed");
+    clearPanelPinFocus();          // restore pin opacity/stacking first
     panelClusterModIds = null;
+    panelSelectedModId = null;
     // Clear the active mark on whichever bubble was highlighted.
     refreshActiveSatClusterMark();
     NCZ.ThreeMarkers?.setActiveClusterMods?.(null);
   }
 
-  function focusMarker(marker) {
+  // Shared 2D focus motion.
+  //
+  // 1. Close any popup that's already open FIRST. A lingering popup from the
+  //    previously-selected pin would otherwise stay visible through the
+  //    0.6s flyTo, repositioned every animation frame by the custom dynamic-
+  //    popup placer → the "ghost / vibrating, faded double-popup". Nothing
+  //    visible during the fly = no vibration.
+  // 2. Sync ?mod= EAGERLY (not from popupopen). The popup is opened deferred
+  //    on moveend, so a view switch during the fly would otherwise see no
+  //    ?mod= and fail to restore — that's the "shared camera/popup broken
+  //    on clustered pins" report (clustered pins route through this deferred
+  //    path; unclustered ones open synchronously and were unaffected).
+  // 3. Open the popup only once the flyTo settles. `opened` + the
+  //    `focusedMarker === marker` guard handle rapid re-clicks (flyTo B
+  //    interrupts flyTo A → A's moveend still fires, but focus moved on).
+  // targetZoom never zooms OUT — keep the user's zoom if already close.
+  // (6/8 is a building-detail zoom; tune here if it feels too near/far.)
+  function flyToMarkerAndOpen(marker) {
+    map.closePopup();
     focusedMarker = marker;
-    markerClusterGroup.zoomToShowLayer(marker, () => marker.openPopup());
+    setModUrlParam(marker.modData);
+    const targetZoom = Math.max(map.getZoom(), 6);
+    let opened = false;
+    const openOnce = () => {
+      if (opened) return;
+      opened = true;
+      if (focusedMarker === marker) marker.openPopup();
+    };
+    map.once("moveend", openOnce);
+    map.flyTo(marker.getLatLng(), targetZoom, { duration: 0.6 });
+  }
+
+  // Pull `marker` out of the cluster group so a clustered-but-focused pin is
+  // visible without spiderfy. Returns the previously soloed marker to the
+  // group first — unless it belongs to an active panel set, which
+  // applyPanelPinFocus / clearPanelPinFocus own. This is the lone-pin path
+  // (Discover / sidebar / deep-link); the panel path force-individuals the
+  // whole set separately.
+  // IMPORTANT ordering: reassign `soloFocusMarker` to the new marker FIRST,
+  // operate on a local `prev`. `map.removeLayer(prev)` synchronously closes
+  // prev's popup → the popupclose handler's solo-release branch fires
+  // re-entrantly; if `soloFocusMarker` still pointed at `prev` there, that
+  // branch would call setSoloFocusMarker(null) mid-call and the line below
+  // would `markerClusterGroup.addLayer(null)` — prev removed from the map
+  // and never re-added = the "Discover removes the pin when clicked again"
+  // bug. Reassigning first makes `popupSource === soloFocusMarker` false in
+  // the re-entrant check, so it no-ops; using the `prev` local makes the
+  // re-add robust regardless.
+  function setSoloFocusMarker(marker) {
+    const prev = soloFocusMarker;
+    soloFocusMarker = marker || null;
+    if (prev && prev !== marker) {
+      const ownedByPanel = panelClusterModIds?.has(prev.modData.id);
+      if (
+        !ownedByPanel &&
+        map.hasLayer(prev) &&
+        !markerClusterGroup.hasLayer(prev)
+      ) {
+        map.removeLayer(prev);
+        markerClusterGroup.addLayer(prev);
+      }
+    }
+    if (marker && markerClusterGroup.hasLayer(marker)) {
+      markerClusterGroup.removeLayer(marker);
+      marker.addTo(map);
+    }
+  }
+
+  // Lone-pin focus (Discover / sidebar / deep-link). Force the marker
+  // individual (no clustering, no spiderfy), then fly + open.
+  function focusMarker(marker) {
+    setSoloFocusMarker(marker);
+    flyToMarkerAndOpen(marker);
+  }
+
+  // Panel-item focus. The marker is already individual (applyPanelPinFocus
+  // pulled the whole panel set out of the cluster group before this runs),
+  // so just fly + open — no solo bookkeeping needed.
+  function flyToPanelMarker(marker) {
+    flyToMarkerAndOpen(marker);
   }
 
   function focusRandomVisibleMarker() {
@@ -1256,10 +1445,19 @@ async function initMap() {
 
   // Populates the cluster panel with a sorted list of mods. View-agnostic —
   // both the Leaflet clusterclick handler and ThreeMarkers cluster clicks
-  // call this. onItemClick receives the mod object; the active view decides
-  // how to focus it (focusMarker for SAT, NCZ.ThreeMarkers.focusMod for SCHEMA).
+  // call this. onItemClick receives the mod object; the active view flies to
+  // it (focusMarker for SAT, NCZ.ThreeMarkers.focusMod for SCHEMA) — the fly
+  // dissolves the cluster but the panel stays open as a comparison list, so
+  // the user can click each member in turn. The clicked pin is kept at full
+  // opacity and the rest dim (applyPanelPinFocus).
   function populateClusterPanel(modsList, opts = {}) {
     const { onItemClick, nexusThumbs = {} } = opts;
+
+    // New cluster context → drop any prior pin emphasis and selection.
+    // Runs before panelClusterModIds is reassigned (below) so the old set
+    // is the one un-dimmed.
+    clearPanelPinFocus();
+    panelSelectedModId = null;
 
     clusterModList.innerHTML = "";
     clusterPanelCount.textContent = `(${modsList.length})`;
@@ -1320,6 +1518,15 @@ async function initMap() {
         }
 
         button.addEventListener("click", () => {
+          // Order matters: select → force-individual → fly.
+          // applyPanelPinFocus must run BEFORE the fly so the whole panel
+          // set is already pulled out of the cluster group (2D) / excluded
+          // from the clusterer (3D); otherwise the bubble persists through
+          // the fly (the original recording bug). The panel stays open on
+          // desktop; mobile still closes it (full-screen panel + fly +
+          // popup at once is too much there).
+          panelSelectedModId = mod.id;
+          applyPanelPinFocus();
           onItemClick?.(mod);
           if (window.innerWidth < NCZ.MOBILE_BREAKPOINT) hideClusterPanel();
         });
@@ -1440,17 +1647,34 @@ async function initMap() {
         .slice()
         .sort((left, right) => NCZ.sortModsByUpdated(left.modData, right.modData));
       const childMods = childMarkers.map((m) => m.modData);
+      // Toggle-close: re-clicking the cluster whose contents the panel shows
+      // closes it — but only before a pin was picked. Once a pin is selected
+      // the cluster has dissolved (flown into), so this path can't be hit
+      // for that cluster anyway; the guard makes the intent explicit.
+      if (
+        panelSelectedModId === null &&
+        isSameModSet(panelClusterModIds, childMods.map((m) => m.id))
+      ) {
+        hideClusterPanel();
+        return;
+      }
       populateClusterPanel(childMods, {
         nexusThumbs,
         onItemClick: (mod) => {
           const marker = childMarkers.find((m) => m.modData.id === mod.id);
-          if (marker) focusMarker(marker);
+          if (marker) flyToPanelMarker(marker);
         },
       });
     });
 
     // 3D (ThreeMarkers) cluster click → cluster panel
     NCZ.ThreeMarkers?.setClusterClickHandler?.((modIds) => {
+      // Toggle-close on the active cluster, before a pin is picked (parity
+      // with 2D — see that handler for the rationale).
+      if (panelSelectedModId === null && isSameModSet(panelClusterModIds, modIds)) {
+        hideClusterPanel();
+        return;
+      }
       const idSet = new Set(modIds);
       const childMods = mods
         .filter((m) => idSet.has(m.id))
@@ -1461,6 +1685,11 @@ async function initMap() {
       });
     });
 
+    // 3D empty-canvas click → close the cluster panel. Parity with the 2D
+    // `map.on("click", hideClusterPanel)` below: clicking empty space (not a
+    // pin / cluster / popup) dismisses the panel in both views.
+    NCZ.ThreeMarkers?.setEmptyClickHandler?.(hideClusterPanel);
+
     // 3D map-aware panel: when 3D clusters recompute (camera moved/zoomed/
     // tilted), follow the cluster the panel was opened for. Find the
     // "successor" — the current cluster with the most overlap with the
@@ -1469,6 +1698,10 @@ async function initMap() {
     // best successor has fewer than 2 mods (no longer a real cluster).
     NCZ.ThreeMarkers?.setClustersChangedHandler?.((clusterSets) => {
       if (!panelClusterModIds || panelClusterModIds.size === 0) return;
+      // Once a pin is picked the panel is a static comparison list — the
+      // flyTo already dissolved the cluster it tracked, so don't let the
+      // recompute close or rewrite the panel out from under the user.
+      if (panelSelectedModId !== null) return;
       // Skip while SAT is active — SAT panel state is independent.
       if (mapEl.style.display !== "none") return;
 
@@ -1517,6 +1750,9 @@ async function initMap() {
     // sync with Leaflet's automatic cluster recomputation.
     function recomputeSatClusterPanel() {
       if (!panelClusterModIds || panelClusterModIds.size === 0) return;
+      // Pin picked → static comparison list; the panel set is force-
+      // individual now, so don't auto-close or rewrite the panel.
+      if (panelSelectedModId !== null) return;
       // Skip while SCHEMA is active — SCHEMA panel state is independent.
       if (mapEl.style.display === "none") return;
 
@@ -1576,7 +1812,7 @@ async function initMap() {
         nexusThumbs,
         onItemClick: (mod) => {
           const m = childMarkers.find((cm) => cm.modData.id === mod.id);
-          if (m) focusMarker(m);
+          if (m) flyToPanelMarker(m);
         },
       });
     }
@@ -1585,7 +1821,7 @@ async function initMap() {
     // recomputed at the new zoom level).
     map.on("zoomend", recomputeSatClusterPanel);
     // markercluster fires animationend after cluster animations settle —
-    // covers spiderfy/unspiderfy and zoom-driven cluster regrouping.
+    // covers zoom-driven cluster regrouping (spiderfy is no longer used).
     markerClusterGroup.on("animationend", recomputeSatClusterPanel);
 
     sortedMods.forEach((mod) => {
@@ -1907,9 +2143,14 @@ async function initMap() {
       if (clearTagFiltersBtn) clearTagFiltersBtn.hidden = activeTags.length === 0;
       if (clearAuthorFiltersBtn) clearAuthorFiltersBtn.hidden = activeAuthors.length === 0;
 
+      // Close any open cluster panel FIRST. hideClusterPanel →
+      // clearPanelPinFocus returns any force-individual (comparison-mode)
+      // markers from the map back into the cluster group before we wipe it,
+      // so they can't orphan on the map or survive a filter that excludes
+      // them. Order matters: this must precede clearLayers().
+      hideClusterPanel();
       // Clear current cluster group
       markerClusterGroup.clearLayers();
-      hideClusterPanel();
       const visibleMarkers = [];
 
       // Compute which mods pass all filters (view-agnostic)
