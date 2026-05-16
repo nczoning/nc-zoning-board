@@ -379,18 +379,37 @@ const ThreeScene = (() => {
     // Windows for navigator.gpu.requestAdapter() per https://crbug.com/369219127.
     // Hybrid-graphics laptops fall back to OS adapter selection. Watch list
     // item: revisit if dGPU isn't getting selected.)
+    // requiredLimits: buildings read an `instancedArray` storage buffer from
+    // the vertex shader. Under Three.js's `featureLevel:'compatibility'`
+    // adapter request the vertex-stage storage-buffer limit defaults to 0, so
+    // Chrome needs `maxStorageBuffersInVertexStage:1` opted in explicitly or
+    // the first draw throws a binding-visibility error.
+    //
+    // But that per-stage limit is a newer split of the older unified
+    // `maxStorageBuffersPerShaderStage`. Firefox 150 doesn't implement the new
+    // name at all, and WebGPU rejects the ENTIRE device request if
+    // `requiredLimits` names a limit the adapter doesn't expose
+    // ("OperationError: Limit 'maxStorageBuffersInVertexStage' not
+    // recognized") — which is exactly why the 3D scene silently fell back to
+    // WebGL2 on Firefox. So probe the adapter first and only ask for the limit
+    // on adapters that actually have it; Firefox's core mode allows the
+    // vertex-stage read under its `maxStorageBuffersPerShaderStage` budget
+    // without the opt-in. (Confirmed via the ?webgpuprobe diagnostic, PR #665.)
+    const requiredLimits = {};
+    try {
+      const probeAdapter = await navigator.gpu?.requestAdapter();
+      if (typeof probeAdapter?.limits?.maxStorageBuffersInVertexStage === 'number') {
+        requiredLimits.maxStorageBuffersInVertexStage = 1;
+      }
+    } catch (_) {
+      // No navigator.gpu / adapter — WebGPURenderer falls back to WebGL2 on
+      // its own; nothing to require here.
+    }
     _rendererInitParams = {
       antialias: true,
       stencil: true,
       reversedDepthBuffer: true,
-      // requiredLimits: tell the WebGPU adapter we need to read storage
-      // buffers from the vertex stage (default is 0). Buildings use an
-      // `instancedArray` storage buffer to fetch per-instance matrices
-      // directly in the vertex shader — without this, the first draw call
-      // throws a binding-visibility validation error.
-      requiredLimits: {
-        maxStorageBuffersInVertexStage: 1,
-      },
+      requiredLimits,
     };
     renderer = new THREE.WebGPURenderer(_rendererInitParams);
     await renderer.init();   // WebGPURenderer requires async init before any use
