@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Auto-discovery health monitor**: scheduled GitHub Action runs the real `parseNcZoningBlock()` against all live NCZoning-tagged Nexus mods daily and posts a Discord alert listing any that are missing from the map — split into "malformed block" (author fix needed) vs "tagged, no block". Catches silent parse failures within a day instead of when an author complains.
+
 ## [0.3.4] - 2026-05-16
 
 ### Fixed
