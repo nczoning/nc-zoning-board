@@ -10,11 +10,13 @@
         -914.7684,
         8.0033
     ],
-    "nexus_id": "28736",
+    "nexus_id": "29732",
     "description": "An unassuming safehouse right in the middle of Arroyo, right past Red Dirt bar. Need to be purchased first on the terminal right by the front door",
     "category": "new-location",
     "tags": [
-        "house"
+        "apartment",
+        "house",
+        "neokitsch"
     ],
     "yaw": -126.2372
 }
