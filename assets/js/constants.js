@@ -249,6 +249,17 @@ NCZ.BUILDING_EDGE_INTENSITY =  0.05;  // max mix weight — keeps effect subtle;
 NCZ.BUILDING_TEX_FLOOR      =   0.3;  // minimum _m.dds brightness — prevents faces going pitch-black
 NCZ.BUILDING_TEX_RANGE      =   0.7;  // brightness range above the floor (floor + range = max)
 
+// Terrain "graph-paper" grid — decoded from the game's 3d_map_terrain pixel
+// shader (PIX DXIL capture; see wiki/sources/terrain-grid-shader.md). Three
+// nested anti-aliased line grids on world XZ, combined into one line factor.
+// Every value below is the game's exact decoded value — the "game:" note in
+// each comment keeps the original recoverable if a value is later tuned.
+NCZ.TERRAIN_GRID_CELLS       = [80, 8, 400]; // world-unit cell sizes, main/fine/major — game: [80, 8, 400]
+NCZ.TERRAIN_GRID_LINE_N      = [20, 2, 75];  // line-width factors, line ≈ cell/N wide — game: [20, 2, 75]
+NCZ.TERRAIN_GRID_FINE_OFFSET = 1423.6;       // phase offset on the fine grid — game: 1423.6
+NCZ.TERRAIN_GRID_MAIN_WEIGHT = 0.65;         // main-grid contribution, before the fine grid is subtracted — game: 0.65
+NCZ.TERRAIN_GRID_MAJOR_BOOST = 50;           // major-line emphasis: (1 + BOOST·major) multiplies the result — game: 50
+
 // District / subdistrict outline visibility thresholds in CET camera-to-target
 // distance. Three-state, matching the game's WorldMap.ZoomLevel* TweakDB records:
 //   d ≥ DISTRICT_DISTANCE_3D            → main district outlines visible
