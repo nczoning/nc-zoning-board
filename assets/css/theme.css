@@ -128,6 +128,7 @@ html.theme-night-corp {
     --scene-cliffs:          #2e4a62;
     --scene-buildings:       #8aacbf;
     --scene-buildings-edge:  #00f0ff;
+    --scene-grid:            #5b86a8;
 
     /* Overlay colors (roads/metro for SCHEMA, districts for both) */
     --overlay-road-color:        #485c70;
@@ -170,6 +171,7 @@ html.theme-arasaka {
     --scene-cliffs:          #3a2e2e;
     --scene-buildings:       #a08888;
     --scene-buildings-edge:  #ff5050;
+    --scene-grid:            #8a5a5a;
 
     /* Overlay colors */
     --overlay-road-color:        #4a3838;
@@ -212,6 +214,7 @@ html.theme-militech {
     --scene-cliffs:          #384030;
     --scene-buildings:       #8a9070;
     --scene-buildings-edge:  #ffd040;
+    --scene-grid:            #6f7c55;
 
     /* Overlay colors */
     --overlay-road-color:        #485248;
@@ -254,6 +257,7 @@ html.theme-aldecaldos {
     --scene-cliffs:          #3a3428;
     --scene-buildings:       #9a9080;
     --scene-buildings-edge:  #ff8050;
+    --scene-grid:            #847349;
 
     /* Overlay colors */
     --overlay-road-color:        #4a4238;
@@ -296,6 +300,7 @@ html.theme-synthwave {
     --scene-cliffs:          #140828;
     --scene-buildings:       #6040a0;
     --scene-buildings-edge:  #00d4ff;
+    --scene-grid:            #6a3aa0;
 
     /* Overlay colors — road borders are cyan for neon grid feel */
     --overlay-road-color:        #18102a;

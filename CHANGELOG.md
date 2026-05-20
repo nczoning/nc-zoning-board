@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Three.js-Parity: procedural terrain grid
+
+- Terrain, water and cliffs now carry the game's "graph-paper" grid — a procedural three-tier anti-aliased line grid (cells 80 / 8 / 400 wu) on world XZ, decoded from the game's `3d_map_terrain` pixel shader.
+- New theme variable `--scene-grid` colours the grid lines per theme; surface base colours are unchanged. New `NCZ.TERRAIN_GRID_*` constants in [`constants.js`](assets/js/constants.js).
+
 #### Three.js-Parity: cluster panel UX cleanup (E12)
 
 - Picking a mod from the cluster panel now flies to the pin and **keeps the panel open** as a comparison list (was: closed on click). The picked pin stays full-opacity, the rest of its cluster dims; re-clicking the active cluster bubble (before a pin is picked) toggles the panel closed; empty-canvas click closes the panel in 3D too (2D parity).

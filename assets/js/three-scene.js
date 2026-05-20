@@ -15,10 +15,12 @@
 import * as THREE from 'three';
 import {
   attribute, uniform, texture, positionWorld, positionLocal, normalLocal,
-  transformNormal, transformNormalToView, uv, vec2, vec4, float, materialColor,
+  transformNormal, transformNormalToView, uv, vec2, vec4, float, mix, smoothstep, materialColor,
   instancedArray, instanceIndex,
   // Phase 2B compute culling
   Fn, If, storage, struct, atomicStore, atomicAdd, uint,
+  // Terrain grid shader
+  dFdx, dFdy,
 } from 'three/tsl';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -235,13 +237,73 @@ const ThreeScene = (() => {
 
   // Derive edge highlight colour from the building base colour.
 
+  // ── Terrain "graph-paper" grid ─────────────────────────────────────────────
+  // Decoded from the game's 3d_map_terrain pixel shader (PIX DXIL capture —
+  // see wiki/sources/terrain-grid-shader.md). In-game, terrain, water AND
+  // cliffs all use that one material template, so every hillshade material
+  // below carries the grid.
+
+  // Continuous anti-aliased grid-line coverage. The game's original formula
+  // (round() + min(frac()·N,1), integrated over the pixel footprint) has hard
+  // step discontinuities — coverage JUMPS as the camera moves, and the game
+  // hides the resulting shimmer with TAA, which our scene does not have. This
+  // replacement is continuous so it antialiases itself, no TAA needed:
+  //   • triangle-wave distance to the nearest line centre — no jumps,
+  //   • smoothstep ramp across the pixel footprint,
+  //   • minification compensation — once a line is thinner than a pixel it is
+  //     drawn at footprint width and dimmed proportionally, so it fades out
+  //     smoothly instead of aliasing.
+  // N is the line-width factor — a line spans ≈ cell/N. The +0.5 places the
+  // lines where the game's formula put them (same grid, no flicker).
+  const gridCoverage = Fn(([c, N]) => {
+    const w         = dFdx(c).abs().max(dFdy(c).abs());                  // pixel footprint per axis
+    const halfWidth = float(0.5).div(N);                                 // line half-width (cell fraction)
+    const dist      = float(0.5).sub(c.add(0.5).fract().sub(0.5).abs()); // 0 on a line, 0.5 mid-cell
+    const eff       = w.max(halfWidth);                                  // never thinner than a pixel
+    const cov       = float(1).sub(smoothstep(eff.sub(w), eff.add(w), dist))
+                              .mul(halfWidth.div(eff));                  // dim sub-pixel lines → fade
+    return cov.x.max(cov.y).clamp(0, 1);   // a line in X or Y
+  });
+
+  // Three nested grids on world XZ (cells 80 / 8 / 400 wu) combined into one
+  // line factor: main grid, minus the fine grid, with major lines boosted.
+  function terrainGridFactor() {
+    const P = positionWorld.xz;
+    const [cellA, cellB, cellC] = NCZ.TERRAIN_GRID_CELLS;
+    const [nA, nB, nC]          = NCZ.TERRAIN_GRID_LINE_N;
+    const a = gridCoverage(P.div(cellA), nA);
+    const b = gridCoverage(P.div(cellB).add(NCZ.TERRAIN_GRID_FINE_OFFSET), nB);
+    const c = gridCoverage(P.div(cellC), nC);
+    return a.mul(NCZ.TERRAIN_GRID_MAIN_WEIGHT).sub(b)
+            .mul(c.mul(NCZ.TERRAIN_GRID_MAJOR_BOOST).add(1))
+            .clamp(0, 1);
+  }
+
+  // Hillshade material for terrain / water / cliffs. `colorNode` lerps the
+  // theme base colour → theme grid colour by the procedural grid factor, so
+  // each surface keeps its existing per-theme colour and the grid rides on
+  // top. Where there's no grid line the factor is 0 and the colorNode is
+  // exactly `materialColor` — the fill is identical to the plain material.
+  //
+  // Use the `mix()` FUNCTION, never the `.mix()` node method here: the
+  // method does not evaluate as `mix(receiver, b, t)` — `materialColor.mix(
+  // uGrid, 0)` rendered the grid colour, not the base colour, washing the
+  // whole surface even at factor 0. The `mix(a, b, t)` function is correct
+  // (verified: `mix(materialColor, uGrid, 0) === materialColor`).
+  //
+  // Base colour stays in `material.color` (read via `materialColor`); only
+  // the grid line colour is a `uniform()` on userData.tslUniforms.
   function makeHillshadeMaterial(colorVar, fallback, extra = {}) {
-    return new THREE.MeshLambertNodeMaterial({
+    const mat = new THREE.MeshLambertNodeMaterial({
       color: readThemeColor(colorVar, fallback),
       flatShading: true,
       side: THREE.DoubleSide,
       ...extra,
     });
+    const uGrid = uniform(readThemeColor('--scene-grid', '#6d8ab0'));
+    mat.userData.tslUniforms = { uGrid };
+    mat.colorNode = mix(materialColor, uGrid, terrainGridFactor());
+    return mat;
   }
 
 
@@ -2292,9 +2354,18 @@ const ThreeScene = (() => {
 
     scene.background = readThemeColor('--primary', '#0a192f');
 
-    if (terrainMat) terrainMat.color.copy(readThemeColor('--scene-terrain',      '#566c88'));
-    if (waterMat)   waterMat.color.copy(readThemeColor('--scene-water',           '#2a3f57'));
-    if (cliffsMat)  cliffsMat.color.copy(readThemeColor('--scene-cliffs',         '#566c88'));
+    // Terrain/water/cliffs: base colour is material.color; the grid line
+    // colour is the shared uGrid uniform stashed on each material.
+    const gridColour = readThemeColor('--scene-grid', '#6d8ab0');
+    const setHillshade = (m, baseVar, baseFallback) => {
+      if (!m) return;
+      m.color.copy(readThemeColor(baseVar, baseFallback));
+      const u = m.userData.tslUniforms;
+      if (u) u.uGrid.value.copy(gridColour);
+    };
+    setHillshade(terrainMat, '--scene-terrain', '#566c88');
+    setHillshade(waterMat,   '--scene-water',   '#2a3f57');
+    setHillshade(cliffsMat,  '--scene-cliffs',  '#566c88');
     if (roadsMat)         roadsMat.color.copy(readThemeColor('--overlay-road-color',         '#504b41'));
     if (normalRoadsMat)   normalRoadsMat.color.copy(readThemeColor('--overlay-road-color',    '#504b41'));
     if (bordersMat)       bordersMat.color.copy(readThemeColor('--overlay-road-border-color', '#1ec3c8'));
@@ -2329,6 +2400,10 @@ const ThreeScene = (() => {
       lerp:  (f, t, a) => m?.color.lerpColors(f, t, a),
       ...extra,
     });
+    // The grid line colour is one uniform shared by all three hillshade mats.
+    const eachGridUniform = (op) => [terrainMat, waterMat, cliffsMat].forEach(m => {
+      const u = m?.userData.tslUniforms; if (u) op(u.uGrid.value);
+    });
     return [
       { key: 'bg', cssVar: '--primary', fallback: '#0a192f',
         get:   () => scene?.background?.clone() ?? null,
@@ -2338,6 +2413,11 @@ const ThreeScene = (() => {
       { key: 'terrain',  cssVar: '--scene-terrain',  fallback: '#566c88', ...mat(terrainMat) },
       { key: 'water',    cssVar: '--scene-water',    fallback: '#2a3f57', ...mat(waterMat) },
       { key: 'cliffs',   cssVar: '--scene-cliffs',   fallback: '#566c88', ...mat(cliffsMat) },
+      { key: 'grid',     cssVar: '--scene-grid',     fallback: '#6d8ab0',
+        get:   () => terrainMat?.userData.tslUniforms?.uGrid.value.clone() ?? null,
+        reset: c  => { if (c) eachGridUniform(v => v.copy(c)); },
+        lerp:  (f, t, a) => { if (f && t) eachGridUniform(v => v.lerpColors(f, t, a)); },
+      },
       { key: 'roads',    cssVar: '--overlay-road-color', fallback: '#504b41',
         get:   () => roadsMat?.color.clone() ?? null,
         reset: c  => { roadsMat?.color.copy(c); normalRoadsMat?.color.copy(c); },
