@@ -241,11 +241,11 @@ NCZ.DDS_PIXEL_OFFSET  = 148;      // byte offset to pixel data: 128-byte standar
 NCZ.UINT16_MAX        = 65535.0;  // normalisation denominator — pixel channels are 0–65535
 NCZ.DDS_ALPHA_THRESH  = 655;      // 0.01 × UINT16_MAX — position alpha below this marks an empty/invalid slot
 
-// Building shader — onBeforeCompile patches to MeshLambertMaterial
-// EdgeThickness and EdgeSharpness match the game's 3d_map_cubes.mt shader parameters.
-NCZ.BUILDING_EDGE_THICKNESS =  0.005;  // UV-space glow width — game default 0.0001 is sub-pixel and flickers; widened for stability
-NCZ.BUILDING_EDGE_SHARPNESS =  4.0;   // power falloff — lower = softer gradient (game default: 30)
-NCZ.BUILDING_EDGE_INTENSITY =  0.05;  // max mix weight — keeps effect subtle; game equivalent is full strength at tiny thickness
+// Building edge highlight — decoded from the game's 3d_map_cubes.mt gbuffer
+// pixel shader (PIX capture; see wiki/sources/building-edge-shader.md).
+// Per-district EdgeThickness / EdgeSharpnessPower live in DISTRICT_META
+// (three-scene.js) alongside the other per-district game constants.
+NCZ.BUILDING_EDGE_CAMDIST_K =  0.002; // game's camera-distance widening coefficient: k = camDist × this × EdgeThickness
 NCZ.BUILDING_TEX_FLOOR      =   0.3;  // minimum _m.dds brightness — prevents faces going pitch-black
 NCZ.BUILDING_TEX_RANGE      =   0.7;  // brightness range above the floor (floor + range = max)
 
