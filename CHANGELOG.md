@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Three.js-Parity: building surface modulation
+
+- Building `_m` surface modulation corrected to the game's decoded value — `0.4 + 0.5·m` (was a guessed `0.3 + 0.7·m`). Decoded from the same `3d_map_cubes.mt` shader capture; the shader's vertical-AO term ships disabled, so it collapses to a flat floor + range.
+
 #### Three.js-Parity: building edge highlight
 
 - Building edge highlight rewritten to the game's actual algorithm, decoded from the `3d_map_cubes.mt` gbuffer shader (PIX capture): `saturate(pow(max(|1-2u|,|1-2v|), EdgeSharpnessPower))` mixed into the albedo. Real per-district constants (`EdgeThickness`/`EdgeSharpnessPower`) replace the previous guessed values.

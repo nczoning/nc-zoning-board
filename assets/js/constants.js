@@ -246,8 +246,13 @@ NCZ.DDS_ALPHA_THRESH  = 655;      // 0.01 × UINT16_MAX — position alpha below
 // Per-district EdgeThickness / EdgeSharpnessPower live in DISTRICT_META
 // (three-scene.js) alongside the other per-district game constants.
 NCZ.BUILDING_EDGE_CAMDIST_K =  0.002; // game's camera-distance widening coefficient: k = camDist × this × EdgeThickness
-NCZ.BUILDING_TEX_FLOOR      =   0.3;  // minimum _m.dds brightness — prevents faces going pitch-black
-NCZ.BUILDING_TEX_RANGE      =   0.7;  // brightness range above the floor (floor + range = max)
+// _m surface modulation, decoded from the 3d_map_cubes.mt gbuffer shader
+// (PIX capture; see wiki/sources/building-edge-shader.md). Game formula:
+//   surface = 0.5·(0.05 + 0.75·ao + m)   →   ao = 1 (the vertical-AO term is
+// gated by DebugScaleOffset, which ships at a default that disables it)
+//   →   surface = 0.5·(0.8 + m) = 0.4 + 0.5·m
+NCZ.BUILDING_TEX_FLOOR      =   0.4;  // _m.dds brightness floor — game 0.5·0.8
+NCZ.BUILDING_TEX_RANGE      =   0.5;  // brightness range above the floor — game 0.5·m
 
 // Terrain "graph-paper" grid — decoded from the game's 3d_map_terrain pixel
 // shader (PIX DXIL capture; see wiki/sources/terrain-grid-shader.md). Three
