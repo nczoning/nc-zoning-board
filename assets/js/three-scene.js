@@ -14,7 +14,7 @@
 
 import * as THREE from 'three';
 import {
-  attribute, uniform, texture, positionWorld, positionLocal, normalLocal,
+  attribute, uniform, texture, positionWorld, positionLocal, normalLocal, normalWorld,
   transformNormal, transformNormalToView, uv, vec2, vec4, float, mix, smoothstep, materialColor,
   instancedArray, instanceIndex,
   // Phase 2B compute culling
@@ -64,6 +64,12 @@ const ThreeScene = (() => {
   let _dirLight      = null; // the sun (DirectionalLight + single fitted shadow camera)
   let _hemiLight     = null; // sky/ground fill (replaces a flat AmbientLight)
   let _sunDir        = SUN_DIR.clone(); // unit, ground→sun; updated by setSunPosition, consumed by updateShadowCamera
+  // Hybrid building/landmark shading uniforms (see applyBuildingShading). The
+  // sun is layered on top of the flat game base as an explicit highlight, so
+  // its direction + day/night strength are passed in as uniforms rather than
+  // going through a lighting model. Updated each frame by setSunPosition.
+  const _sunDirUniform       = uniform(new THREE.Vector3().copy(SUN_DIR));
+  const _sunHighlightUniform = uniform(NCZ.BUILDING_SUN_HIGHLIGHT);
   let _shadowScratchV = new THREE.Vector3();     // reused by updateShadowCamera so it doesn't allocate per camera move
   // Last computed shadow fit (half + center) captured by updateShadowCamera —
   // exposed via getShadowSnapshot() for the `__shadowTrace` debug logger.
@@ -314,6 +320,53 @@ const ThreeScene = (() => {
     return hi.pow(p1).sub(lo.pow(p1))
              .div( hi.sub(lo).max(0.0001).mul(p1) )
              .clamp(0, 1);
+  });
+
+  // ── Building / landmark hybrid shading ─────────────────────────────────────
+  // The game's flat building term `0.5·(0.05 + 0.75·ao + mTex)` collapses (ao
+  // disabled by the default DebugScaleOffset — see building-edge-shader.md) to
+  // `0.4 + 0.5·m`, which is EXACTLY our `modulation`. So `albedo × modulation`
+  // already is the in-game flat-lit look.
+  //
+  // The old pipeline then ran that through MeshLambertNodeMaterial's lighting
+  // pass (`ambient ≈0.35 + sun·NdotL`), multiplying the already-correct base
+  // DOWN by ~0.5 — that double-multiply darkened buildings and capped the red
+  // channel at ~88/255 (wiki/learnings/theme-renderer-colour-calibration).
+  //
+  // This hybrid keeps the flat base AS the brightness floor and only LAYERS the
+  // sun on top:
+  //   building = base × shadowMul × (1 + sunHighlight·NdotL)
+  //   • base       — albedo × modulation, the decoded flat game term.
+  //   • shadowMul  — multiplicative AO-style darkening. With a bright flat base
+  //                  the old "remove the sun" shadow does nothing, so cast
+  //                  shadows must darken the whole result directly; BUILDING_
+  //                  SHADOW_MIN is the floor so shadowed faces dim, not crush.
+  //   • sun term   — a directional HIGHLIGHT added on top (NdotL clamped ≥ 0:
+  //                  the sun only adds, never subtracts — base is the floor).
+  //                  Full day/night response is kept via _sunHighlightUniform.
+  // `shadowFactor` (0 = full shadow → 1 = lit) is the engine's per-pixel sun
+  // shadow, harvested via `receivedShadowNode` (see buildBuildingMaterial) so
+  // the renderer still schedules the shadow map as its own pass — a standalone
+  // `shadow()` sample inside a caster's material makes the shadow pass both
+  // write AND read ShadowDepthTexture, a WebGPU same-scope usage error.
+  function applyBuildingShading(base, worldNormal, shadowFactor) {
+    const ndotl     = worldNormal.normalize().dot(_sunDirUniform).max(0);
+    const sunTerm   = float(1).add(_sunHighlightUniform.mul(ndotl));
+    // Remap shadow 0..1 to [BUILDING_SHADOW_MIN, 1] so a fully-shadowed face
+    // darkens AO-style instead of going black. The shadows layer toggle works
+    // for free: _dirLight.shadow.intensity 0 makes shadowFactor 1 → shadowMul 1.
+    const shadowMul = shadowFactor.mul(1 - NCZ.BUILDING_SHADOW_MIN)
+                        .add(NCZ.BUILDING_SHADOW_MIN);
+    return base.mul(shadowMul).mul(sunTerm);
+  }
+
+  // `receivedShadowNode` body shared by the building + landmark materials:
+  // capture the engine's sun-shadow factor into `target` (a float .toVar())
+  // for applyBuildingShading, and return it unchanged so the (discarded)
+  // lighting pass still behaves normally.
+  const captureShadowInto = (target) => Fn(([shadowFactor]) => {
+    target.assign(shadowFactor);
+    return shadowFactor;
   });
 
   // Hillshade material for terrain / water / cliffs. `colorNode` lerps the
@@ -1253,9 +1306,10 @@ const ThreeScene = (() => {
 
   // ── Buildings ──────────────────────────────────────────────────────────
   // CPU decodes _data.dds (16-bit RGBA) → InstancedMesh matrices.
-  // MeshLambertNodeMaterial with TSL `colorNode` (_m.dds planar UV modulation)
-  // and `emissiveNode` (silhouette edge highlight). See buildBuildingMaterial.
-  // Shadow casting/receiving handled automatically by Three.js.
+  // MeshLambertNodeMaterial whose `outputNode` substitutes the hybrid sun /
+  // shadow shading for the stock Lambert result — composing the _m.dds
+  // planar-UV modulation, the edge highlight, and applyBuildingShading.
+  // Shadow casting + receiving stay on the engine's managed path.
 
   // ── Landmarks ─────────────────────────────────────────────────────────
   // GLBs are in local mesh space. World positions from cp2077_extract_footprints.py
@@ -1281,10 +1335,24 @@ const ThreeScene = (() => {
   async function loadLandmarks() {
     registerLoadStep(1);
     try {
+      // Same hybrid shading as the building cubes (flat base + sun highlight +
+      // multiplicative shadow — see applyBuildingShading). The monuments have no
+      // _m modulation or edge highlight, so the base is just the themed
+      // --scene-landmarks colour; normalWorld is correct here since landmarks
+      // use ordinary mesh transforms (no instanced positionNode).
+      //
+      // MeshLambertNodeMaterial purely so the engine's shadow pass runs and
+      // `receivedShadowNode` can harvest the sun-shadow factor; `outputNode`
+      // then discards the dark Lambert result and substitutes the hybrid.
       landmarkMat = new THREE.MeshLambertNodeMaterial({
         color: readThemeColor('--scene-landmarks', '#8aacbf'),
         flatShading: true,
       });
+      const landmarkShadow = float(1).toVar();
+      landmarkMat.receivedShadowNode = captureShadowInto(landmarkShadow);
+      landmarkMat.outputNode = vec4(
+        applyBuildingShading(materialColor, normalWorld, landmarkShadow), 1
+      );
       const mat = landmarkMat;
 
       // Unique GLB files (ferris wheel is shared)
@@ -1544,33 +1612,36 @@ const ThreeScene = (() => {
 
   // Build the MeshLambertNodeMaterial for one district.
   //
-  // The TSL graph composes three effects on top of the standard Lambert pipeline:
+  // It is a Lambert material but its lit result is never shown — `outputNode`
+  // substitutes the hybrid shading. The lighting pass still runs so the
+  // engine renders + schedules the sun shadow map normally and
+  // `receivedShadowNode` can harvest the per-pixel shadow factor (a standalone
+  // `shadow()` sample inside a caster's material would make the shadow pass
+  // write AND read ShadowDepthTexture — a WebGPU usage error).
   //
-  //   0. Per-instance positioning + normals (vertex stage, via `geometryNode`)
+  // The TSL graph composes four stages:
+  //
+  //   0. Per-instance positioning + normals (vertex stage)
   //      The buildings group is rendered as a non-instanced `Mesh` backed by
   //      an `InstancedBufferGeometry` whose instance matrices live in an
   //      `instancedArray` storage buffer (see `loadBuildings()`).
-  //      `material.geometryNode` runs BEFORE the standard pipeline and
-  //      mutates `positionLocal`/`normalLocal` in place — the same pattern
-  //      `InstanceNode.setup()` uses for `InstancedMesh`. After it runs
-  //      every downstream computation (positionWorld, normalView, lighting,
-  //      shadow depth) sees the instance-transformed values automatically.
-  //      Phase 2B compute culling will slot a `visibleIndices` lookup
-  //      between `instanceIndex` and the matrix fetch with no other changes.
+  //      `material.positionNode` overwrites `positionLocal` with the
+  //      instance-transformed position; `normalNode` carries the matching
+  //      view-space normal so the engine's shadow-receive bias is correct.
+  //      Shadow CASTING reuses `positionNode`. Phase 2B compute culling slots
+  //      a `visibleIndices` lookup between `instanceIndex` and the matrix fetch.
   //
-  //   1. `_m.dds` surface modulation (pre-lighting, via `colorNode`)
-  //      Original GLSL hook: `#include <color_fragment>`
-  //      Samples the district's `_m` heightmap with a world-space planar UV
-  //      and multiplies the diffuse colour. Because `geometryNode` already
-  //      put the instance-transformed position into `positionLocal`,
-  //      `positionWorld` (= modelWorldMatrix · positionLocal) gives the
-  //      correct world position automatically — same code path as Phase 1.
+  //   1. `_m.dds` surface modulation — samples the district's `_m` heightmap
+  //      with a world-space planar UV; the decoded game term `0.4 + 0.5·m`.
   //
-  //   2. Edge highlight (pre-lighting, via `colorNode`)
-  //      The game's gbuffer shader lerps EdgeColor into the ALBEDO before
-  //      lighting (decoded — wiki/sources/building-edge-shader.md), so the
-  //      edge is a recoloured lit surface, not an emissive overlay. We mix on
-  //      `colorNode` for the same result. See `buildingEdgeCoverage`.
+  //   2. Edge highlight — the game's gbuffer shader lerps EdgeColor into the
+  //      ALBEDO before lighting (decoded — wiki/sources/building-edge-shader.md).
+  //      See `buildingEdgeCoverage`.
+  //
+  //   3. Hybrid sun / shadow shading — `applyBuildingShading` layers the sun
+  //      highlight + multiplicative shadow on top of the flat base, fed to
+  //      `outputNode`. Replaces the old Lambert lighting result, which
+  //      double-multiplied the already-correct flat base (the red-cap bug).
   //
   // Per-district `uniform()` node refs are stashed on `mat.userData.tslUniforms`
   // so the colour-binding registry (`getColorBindings.buildingsEdge`) can mutate
@@ -1597,36 +1668,26 @@ const ThreeScene = (() => {
     // Only uEdgeColor needs runtime mutation (theme rewire / flyover tweens).
     mat.userData.tslUniforms = { uEdgeColor };
 
-    // (0) Per-instance positioning + normals — explicit space transforms.
+    // (0) Per-instance positioning + normals.
     //
-    // `material.normalNode` is consumed by `NodeMaterial.setupNormal()` as:
-    //   `vec3(this.normalNode).normalize()` — used DIRECTLY for lighting
-    //   without any further matrix transforms. So whatever we provide must
-    //   already be in VIEW space.
-    //
-    // Composition:
-    //   1. `transformNormal(normalLocal, instMatrix)` — applies the instance
-    //      matrix to the local normal using the inverse-transpose form
-    //      (handles non-uniform building scale). Output is in WORLD space
-    //      because our matrices encode world transforms (group at origin).
-    //   2. `transformNormalToView(...)` — applies modelNormalMatrix
-    //      (identity for our group) and cameraViewMatrix.transformDirection
-    //      to take world → view. This is the same helper Three.js uses
-    //      internally for the default `normalLocal → normalView` path.
-    //
-    // Earlier attempts that set `normalNode` directly to a world-space
-    // value (via `transformNormal` alone or `mat3(M).mul(normalLocal)`)
-    // produced view-dependent lighting because lighting was computing
-    // dot(world_normal, view_lightDir) — values in different coordinate
-    // spaces.
     // Phase 2B: `instanceIndex` is the COMPACTED draw index (0..visibleCount).
     // We dereference through `visibleIndicesBuffer` to get the original
     // instance index, then fetch that instance's matrix. Compute pass writes
     // visibleIndices each frame; vertex shader reads through it transparently.
-    const realIndex  = visibleIndicesBuffer.element(instanceIndex);
-    const instMatrix = instanceMatricesBuffer.element(realIndex);
-    mat.positionNode = instMatrix.mul(vec4(positionLocal, 1)).xyz;
-    mat.normalNode   = transformNormalToView(transformNormal(normalLocal, instMatrix));
+    //
+    // `transformNormal(normalLocal, instMatrix)` applies the instance matrix to
+    // the local cube normal via the inverse-transpose form (handles the
+    // non-uniform per-building scale). The result is in WORLD space because our
+    // matrices encode world transforms (the buildings group sits at the origin)
+    // — that is the space `applyBuildingShading` needs for its NdotL against the
+    // world-space `_sunDirUniform`. `normalNode` additionally takes it to VIEW
+    // space (`transformNormalToView`) for the Lambert lighting pass, whose only
+    // surviving job is to keep the engine's shadow-receive bias correct.
+    const realIndex   = visibleIndicesBuffer.element(instanceIndex);
+    const instMatrix  = instanceMatricesBuffer.element(realIndex);
+    mat.positionNode  = instMatrix.mul(vec4(positionLocal, 1)).xyz;
+    const worldNormal = transformNormal(normalLocal, instMatrix);
+    mat.normalNode    = transformNormalToView(worldNormal);
 
     // World-space planar UV — XZ plane, normalised against the district's CET
     // bounds. Original GLSL: vMUv = ((wx - off.x - min.x)/(max.x - min.x),
@@ -1667,7 +1728,17 @@ const ThreeScene = (() => {
                      .add(materialColor.g.mul(0.587))
                      .add(materialColor.b.mul(0.114));
     const edgeTint = uEdgeColor.mul(baseLuma.mul(2));
-    mat.colorNode  = mix(materialColor, edgeTint, edge).mul(modulation);
+
+    // (3) `base` = the decoded flat in-game look — edge-tinted albedo × _m
+    // modulation. applyBuildingShading layers the sun highlight + multiplicative
+    // shadow on top (the hybrid model). `receivedShadowNode` harvests the
+    // engine's sun-shadow factor into `buildingShadow`; `outputNode` then
+    // replaces the dark Lambert result with the hybrid. The flat base is the
+    // brightness floor; the old Lambert multiply that capped red is gone.
+    const base           = mix(materialColor, edgeTint, edge).mul(modulation);
+    const buildingShadow = float(1).toVar();
+    mat.receivedShadowNode = captureShadowInto(buildingShadow);
+    mat.outputNode = vec4(applyBuildingShading(base, worldNormal, buildingShadow), 1);
 
     return mat;
   }
@@ -2668,7 +2739,13 @@ const ThreeScene = (() => {
     _hemiLight.intensity  = NCZ.AMBIENT_INTENSITY * Math.max(NCZ.SUN_AMBIENT_MIN, intensity);
     _hemiLight.color.lerpColors(SKY_HORIZON, SKY_NOON, t);
 
-    // Building materials use MeshLambertNodeMaterial — scene lights update automatically.
+    // Hybrid building / landmark shading uniforms (applyBuildingShading). The
+    // buildings' lit Lambert result is discarded, so the sun highlight is fed
+    // in directly: direction for the NdotL highlight, strength scaled by the
+    // day's `intensity` so the highlight fades toward night while the flat
+    // base stays put.
+    _sunDirUniform.value.copy(_sunDir);
+    _sunHighlightUniform.value = NCZ.BUILDING_SUN_HIGHLIGHT * intensity;
 
     // Move and recolour the visible sun sphere.
     // Centred on Night City (WORLD_CX, 0, -WORLD_CY) so it hangs over the map.

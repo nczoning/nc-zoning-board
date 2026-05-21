@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Three.js-Parity: building hybrid shading
+
+- Buildings + landmarks reworked to a hybrid shading model: the decoded flat game term (`albedo × modulation`) is the brightness base, the sun adds a directional highlight on top, and cast shadows darken the result multiplicatively (AO-style). Replaces the Lambert lighting pass, which multiplied the already-correct flat base down again — darkening buildings and capping the red channel.
+- Buildings render brighter as a result; the per-theme `--scene-buildings` values still need rebalancing to suit (tracked as a follow-up).
+
 #### Three.js-Parity: building edge surface gradient
 
 - Building faces now carry the game's centre-dark → edge-light gradient. The decoded edge term `pow(X, EdgeSharpnessPower)` is a gradient, not a step — it had been rendered as a flat thin band, dropping the falloff. Now rendered as the real gradient, box-filtered over the pixel footprint so the steep rim self-antialiases under minification.

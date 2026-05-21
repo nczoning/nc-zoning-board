@@ -287,6 +287,11 @@ NCZ.BUILDING_EDGE_CAMDIST_K =  0.002; // game's camera-distance widening coeffic
 //   →   surface = 0.5·(0.8 + m) = 0.4 + 0.5·m
 NCZ.BUILDING_TEX_FLOOR      =   0.4;  // _m.dds brightness floor — game 0.5·0.8
 NCZ.BUILDING_TEX_RANGE      =   0.5;  // brightness range above the floor — game 0.5·m
+// Hybrid building/landmark shading (see applyBuildingShading in three-scene.js).
+// The flat `albedo × modulation` base IS the in-game flat-lit look; the sun is
+// layered on top as a highlight + multiplicative shadow, never a Lambert multiply.
+NCZ.BUILDING_SHADOW_MIN     =  0.55;  // multiplicative floor for a fully sun-shadowed building face (base × this; AO-style, not black)
+NCZ.BUILDING_SUN_HIGHLIGHT  =  0.35;  // max directional sun-highlight strength at full daylight: a sun-facing face reaches base × (1 + this)
 
 // Terrain "graph-paper" grid — decoded from the game's 3d_map_terrain pixel
 // shader (PIX DXIL capture; see wiki/sources/terrain-grid-shader.md). Three
