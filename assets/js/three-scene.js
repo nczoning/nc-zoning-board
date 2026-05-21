@@ -107,6 +107,8 @@ const ThreeScene = (() => {
   let _sunAz = Math.PI * 0.25, _sunEl = Math.PI * 0.35; // last setSunPosition args
   let _terrainBox = null;     // THREE.Box3 of the terrain GLB; gates pan-bound clamp
                               // because the bound shouldn't activate before terrain loads
+  let _introTween   = null;   // E5 intro fly-in tween, or null when idle
+  let _introLastTime = 0;     // performance.now() of the previous intro frame
 
   // Material refs — stored so updateMaterials() can re-apply theme colors live
   let terrainMat = null;
@@ -586,8 +588,11 @@ const ThreeScene = (() => {
       NCZ.SCHEMA_CAMERA_FOV, aspect, NCZ.SCHEMA_CAMERA_NEAR, NCZ.SCHEMA_CAMERA_FAR,
     );
     camera.name = 'schema-camera';
-    camera.position.set(NCZ.WORLD_CX, NCZ.SCHEMA_CAMERA_DEFAULT_DISTANCE, -NCZ.WORLD_CY);
-    camera.lookAt(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
+    // Open at the E5 intro's far pose; playIntro() flies it down to the rest
+    // pose once the scene has finished loading.
+    const _introStart = introCameraPose(NCZ.SCHEMA_INTRO_START_DISTANCE, NCZ.SCHEMA_INTRO_START_TILT);
+    camera.position.copy(_introStart.position);
+    camera.lookAt(_introStart.target);
     camera.up.set(0, 1, 0);
     camera.updateProjectionMatrix();
 
@@ -706,7 +711,11 @@ const ThreeScene = (() => {
     // horizontal drag moves it left/right. Ortho hid the drift; perspective
     // surfaces it. See controls 'change' handler — no y-clamp needed.
     controls.screenSpacePanning = false;
-    controls.target.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
+    // Target the same point the camera is posed over (the E5 intro start —
+    // see camera.position above). A mismatch here would make controls.update()
+    // derive a bogus azimuth from the off-axis offset, rotating the pre-intro
+    // loading view ~180° (it looked upside-down before this).
+    controls.target.copy(_introStart.target);
     controls.update();
     updateFrustumUniforms();   // seed frustum planes for the first cull dispatch
     updateShadowCamera();      // seed the shadow camera from the initial pose
@@ -717,6 +726,12 @@ const ThreeScene = (() => {
       updateFrustumUniforms();   // Phase 2B: refresh the 6 cull-frustum planes
       updateScaleBar();
       requestRender();
+    });
+
+    // Cancel the E5 intro fly-in the moment the user grabs the controls, and
+    // release the render-loop hold the tween took (paired setContinuousRender).
+    controls.addEventListener('start', () => {
+      if (_introTween) { _introTween = null; setContinuousRender(false); }
     });
 
     // Pan bounds — clamp controls.target so the camera can't drift
@@ -978,8 +993,8 @@ const ThreeScene = (() => {
       // (the visible square) instead of the playable-CET-world extent
       // (which is asymmetric north-south).
       const box = new THREE.Box3().setFromObject(terrainScene);
-      _terrainBox = box;
-      fitCameraToBox(box);
+      _terrainBox = box;   // retained for the pan-bound clamp; the opening
+                           // camera framing is the E5 intro fly-in (playIntro).
 
       stepProgress(); // terrain done
       updateShadowCamera(); // re-fit the shadow camera now the schema camera is sized to terrain
@@ -993,7 +1008,7 @@ const ThreeScene = (() => {
       // Tier 2+3: start all concurrent tasks, hide loading only when all complete.
       // Add future loaders (loadLandmarks etc.) to this array.
       Promise.all([loadRoadsMetro(), loadDistricts(), loadBuildings(), loadLandmarks()])
-        .then(hideLoading);
+        .then(() => { hideLoading(); playIntro(); });
 
     } catch (err) {
       console.error('[NCZ] Terrain GLB load failed:', err);
@@ -1713,22 +1728,80 @@ const ThreeScene = (() => {
     return line;
   }
 
-  function fitCameraToBox(box) {
-    const size   = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    const aspect = renderer.domElement.clientWidth / renderer.domElement.clientHeight;
-    // Distance needed to fit the larger of width / height into the perspective
-    // frustum, accounting for aspect on the horizontal axis. tan(FOV/2) × distance
-    // = halfHeight; horizontal frustum half-width = halfHeight × aspect.
-    const halfFovY = (NCZ.SCHEMA_CAMERA_FOV * Math.PI) / 360;
-    const distForHeight = (size.z / 2) / Math.tan(halfFovY);
-    const distForWidth  = (size.x / 2) / (Math.tan(halfFovY) * aspect);
-    const distance = Math.max(distForHeight, distForWidth);
+  // ── E5 intro fly-in ────────────────────────────────────────────────────
+  // On first load the camera eases from a far, leaned-back pose down to a
+  // whole-city framing. Replaces the old fitCameraToBox opening: that fit
+  // distance always exceeded controls.maxDistance (the terrain box is far
+  // taller than the ~6650 wu the FOV can frame at maxDistance), so the map
+  // silently opened fully zoomed out — the "opens too far" bug E5 closes.
 
-    controls.target.set(center.x, 0, center.z);
-    camera.position.set(center.x, distance, center.z);
-    camera.lookAt(center.x, 0, center.z);
-    controls.update();
+  // Camera pose for the intro: position offset from the framing target by
+  // `distance` at `tiltDeg` off vertical, along the fixed intro azimuth.
+  // The target is SCHEMA_INTRO_REST_CENTER ([cetX, cetY]) or world centre —
+  // the same point for the start and rest poses, so the fly-in is a straight
+  // top-down descent with no sideways pan. (Three spherical: phi = polar
+  // angle from +Y, theta = azimuth.)
+  function introCameraPose(distance, tiltDeg) {
+    const c = NCZ.SCHEMA_INTRO_REST_CENTER;
+    const target = c
+      ? new THREE.Vector3(c[0], 0, -c[1])
+      : new THREE.Vector3(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
+    const phi    = (tiltDeg * Math.PI) / 180;
+    const theta  = NCZ.SCHEMA_INTRO_AZIMUTH;
+    const position = new THREE.Vector3(
+      target.x + distance * Math.sin(phi) * Math.sin(theta),
+      target.y + distance * Math.cos(phi),
+      target.z + distance * Math.sin(phi) * Math.cos(theta),
+    );
+    return { target, position };
+  }
+
+  const easeInOutCubic = (u) =>
+    u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+
+  // Start the intro fly-in. When a ?mod= deep-link is present the intro is
+  // skipped — the camera snaps straight to the rest pose so app.js's
+  // deep-link handler flies to the pin from a sensible whole-city framing.
+  function playIntro() {
+    if (!controls || !camera) return;
+    const rest = introCameraPose(NCZ.SCHEMA_INTRO_REST_DISTANCE, NCZ.SCHEMA_INTRO_REST_TILT);
+
+    if (new URLSearchParams(window.location.search).get(NCZ.URL_PARAM_MOD)) {
+      controls.target.copy(rest.target);
+      camera.position.copy(rest.position);
+      controls.update();
+      requestRender();
+      return;
+    }
+
+    const start = introCameraPose(NCZ.SCHEMA_INTRO_START_DISTANCE, NCZ.SCHEMA_INTRO_START_TILT);
+    _introTween = {
+      startTarget: start.target, endTarget: rest.target,
+      startPos:    start.position, endPos:  rest.position,
+      elapsed: 0,
+      duration: NCZ.SCHEMA_INTRO_DURATION_MS,
+    };
+    _introLastTime = performance.now();
+    setContinuousRender(true);   // hold the loop open for the fly's duration
+    requestRender();
+  }
+
+  // Advance the intro fly-in one frame. Called at the top of renderLoop so
+  // the camera mutation lands before controls.update() reconciles it — that
+  // reconcile fires the 'change' listener, refreshing district zoom, metro
+  // LOD, the shadow camera, scale bar and cull frustum as the camera moves.
+  function updateIntroTween() {
+    if (!_introTween) return;
+    const now = performance.now();
+    _introTween.elapsed += now - _introLastTime;
+    _introLastTime = now;
+    const e = easeInOutCubic(Math.min(_introTween.elapsed / _introTween.duration, 1));
+    controls.target.lerpVectors(_introTween.startTarget, _introTween.endTarget, e);
+    camera.position.lerpVectors(_introTween.startPos, _introTween.endPos, e);
+    if (_introTween.elapsed >= _introTween.duration) {
+      _introTween = null;
+      setContinuousRender(false);  // release the hold; render-on-demand resumes
+    }
   }
 
   // ── Render loop ────────────────────────────────────────────────────────
@@ -1824,6 +1897,7 @@ const ThreeScene = (() => {
   function renderLoop() {
     animationId = null;
     if (stats) stats.begin();
+    updateIntroTween();   // E5 intro fly-in — mutate the camera before controls.update() reconciles
     const dampingActive = controls.update();
     // Phase 2B: dispatch per-district reset+cull computes BEFORE render.
     // Each district's `reset` clears its indirect.instanceCount to 0; `cull`
@@ -2366,17 +2440,14 @@ const ThreeScene = (() => {
   function resetCamera() {
     if (!controls) return;
 
-    // Match the first-load view: fit the camera to the terrain box (same code
-    // path init runs after terrain loads), capped at maxDistance by OrbitControls
-    // on the controls.update() below. Falls back to the default distance pose if
-    // terrain hasn't loaded yet (early reset before assets ready).
-    if (_terrainBox) {
-      fitCameraToBox(_terrainBox);
-    } else {
-      controls.target.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
-      camera.position.set(NCZ.WORLD_CX, NCZ.SCHEMA_CAMERA_DEFAULT_DISTANCE, -NCZ.WORLD_CY);
-      camera.lookAt(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
-    }
+    // Snap back to the E5 intro's rest pose — the whole-city framing the
+    // camera comes to rest at on first load. Cancel an in-flight intro
+    // (and release its render-loop hold) if Reset is hit during the fly-in.
+    if (_introTween) { _introTween = null; setContinuousRender(false); }
+    const rest = introCameraPose(NCZ.SCHEMA_INTRO_REST_DISTANCE, NCZ.SCHEMA_INTRO_REST_TILT);
+    controls.target.copy(rest.target);
+    camera.position.copy(rest.position);
+    camera.lookAt(rest.target);
     camera.up.set(0, 1, 0);
 
     controls.autoRotate = false;

@@ -189,10 +189,30 @@ NCZ.MAX_DEVICE_PIXEL_RATIO = 1.5;
 NCZ.SCHEMA_CAMERA_FOV              = 25;     // degrees — game canonical (TopDownCameraSettingsDefault.fovMin/Max)
 NCZ.SCHEMA_CAMERA_NEAR             = 10;     // CET units — perspective near clip; must be > 0
 NCZ.SCHEMA_CAMERA_FAR              = 50000;  // CET units — far clip; covers shadow camera + sun sphere
-NCZ.SCHEMA_CAMERA_DEFAULT_DISTANCE = 3000;   // CET units — opening distance (TweakDB zoomDefault)
 NCZ.SCHEMA_CAMERA_MIN_DISTANCE     = 800;    // CET units — zoom-in limit  (TweakDB zoomMin)
 NCZ.SCHEMA_CAMERA_MAX_DISTANCE     = 15000;  // CET units — zoom-out limit (TweakDB zoomMax)
 NCZ.SCHEMA_FLY_TO_DISTANCE         = 1250;   // CET units — fly-to-pin target distance (TweakDB zoomToZoomValue)
+
+// 3D-map intro fly-in (E5) — on first load the camera drops in from a far,
+// near-straight-down pose, descending and leaning back to a resting framing
+// of the city. Skipped when a ?mod= deep-link is present (the deep-link
+// fly-to takes over). The near-vertical start "feels" like a top-down reveal;
+// the rest tilt matches the game's leaned-back default for its world map.
+//
+// START_TILT is 2°, not 0°: at *exactly* straight-down the camera-to-target
+// offset is (0, +y, 0) and OrbitControls derives the azimuth as
+// atan2(0, 0) — degenerate, so float noise picks the angle and makeSafe()
+// perpetuates it as a camera roll (the map renders rotated/upside-down).
+// 2° gives the offset a solid z-component → stable azimuth 0. Visually
+// indistinguishable from dead top-down.
+NCZ.SCHEMA_INTRO_START_DISTANCE = 15000;       // CET units — far pose (= SCHEMA_CAMERA_MAX_DISTANCE)
+NCZ.SCHEMA_INTRO_REST_DISTANCE  = 12200;       // CET units — resting framing distance (whole city in frame)
+NCZ.SCHEMA_INTRO_START_TILT     = 2;           // degrees off vertical at the far pose — near top-down (see note above)
+NCZ.SCHEMA_INTRO_REST_TILT      = 11;          // degrees off vertical at the rest pose — game world-map lean-back
+NCZ.SCHEMA_INTRO_AZIMUTH        = 0;           // radians — compass heading of the lean; constant start→rest (no sweep)
+NCZ.SCHEMA_INTRO_DURATION_MS    = 1200;        // fly-in length — ~"first second after load" per E5
+NCZ.SCHEMA_INTRO_REST_CENTER    = [-800, -500]; // [cetX, cetY] framed by the rest pose — the city's visual centre
+                                                // (not the world centre, which is biased south into the badlands)
 
 // Pan envelope — clamps controls.target so the camera can't roam off the map.
 // Source: TweakDB WorldMap.DefaultSettings.cursorBoundary{Min,Max}.
