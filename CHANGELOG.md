@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Three.js-Parity: building edge surface gradient
+
+- Building faces now carry the game's centre-dark → edge-light gradient. The decoded edge term `pow(X, EdgeSharpnessPower)` is a gradient, not a step — it had been rendered as a flat thin band, dropping the falloff. Now rendered as the real gradient, box-filtered over the pixel footprint so the steep rim self-antialiases under minification.
+
 #### Default "Game" theme
 
 - New **Game** theme — matches Cyberpunk 2077's in-game world-map palette (UI colours, calibrated 3D scene, roads/metro). Selectable from the theme dropdown.
