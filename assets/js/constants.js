@@ -277,30 +277,23 @@ NCZ.TERRAIN_GRID_MAJOR_BOOST = 50;           // major-line emphasis: (1 + BOOST�
 NCZ.DISTRICT_DISTANCE_3D    = 11000;
 NCZ.SUBDISTRICT_DISTANCE_3D =  7000;
 
-// Metro LOD zoom thresholds — vertex COLOR_0 channels are mutually exclusive tiers:
-// B = wide solid line (far zoom only,    zoom < LOD_MED)   — VisibilityDistanceBold=30000
-// G = thin solid line (medium zoom only, LOD_MED < zoom < LOD_NEAR) — VisibilityDistanceRegular=18000
-// R = dotted line     (close zoom only,  zoom > LOD_NEAR)  — VisibilityDistanceDashed=5000
-// Metro LOD thresholds — schema camera-to-target distance (CET units).
-// Mutually-exclusive tiers (one renders at a time, in-game look):
-//   B (wide solid) when distance > MED
-//   G (thin solid) when NEAR < distance < MED
-//   R (dotted)     when distance < NEAR
+// Metro LOD — decoded from the game's 3d_map_metro.mt pixel shader (PIX
+// capture; see wiki/sources/metro-lod-shader.md). The metro mesh carries
+// three LOD tiers in COLOR_0, one channel per vertex:
+//   R = dotted (closest)   G = thin solid (medium)   B = wide solid (far)
+// Each tier is fully visible below its distance threshold and crossfades
+// out over METRO_LOD_TRANSITION; past the far threshold the metro hides.
 //
-// Canonical material values (3dmap_metro.Material.json) are
-// VisibilityDistanceRegular = 18000 and VisibilityDistanceDashed = 5000.
-// They don't apply directly to our metric: schema camera-to-target distance
-// maxes at SCHEMA_CAMERA_MAX_DISTANCE = 15000 wu, so MED = 18000 would mean
-// the B tier never appears in our camera range. The game's compiled shader
-// almost certainly applies these via a metric we can't see (possibly view-
-// space depth with tilt, or a scale factor we don't have).
-//
-// These values align with the WorldMap zoom-ladder instead — same TweakDB
-// source-of-truth, different mapping: when subdistricts appear
-// (`ZoomLevelSubDistricts.zoom = 7000`), metro changes B → G; when full
-// mappins appear (`ZoomLevelAllMappins.zoom = 2500`), metro changes G → R.
-NCZ.METRO_LOD_DISTANCE_MED  = 7000;   // G↔B boundary — aligns with subdistrict-visible zoom
-NCZ.METRO_LOD_DISTANCE_NEAR = 2500;   // R↔G boundary — aligns with all-mappins-visible zoom
+// The game drives this off `D = 2 × cameraZ`, comparing against
+// VisibilityDistance{Dashed,Regular,Bold} = 5000 / 18000 / 30000. Our
+// camera-to-target distance is that same metric halved, so the thresholds
+// below are the game values ÷ 2 — FAR (15000) lands exactly on
+// SCHEMA_CAMERA_MAX_DISTANCE, which is why the raw game values looked too
+// large until the `2×` was decoded out of the camera cbuffer.
+NCZ.METRO_LOD_DISTANCE_NEAR = 2500;   // R→G boundary  (game VisibilityDistanceDashed  5000 ÷ 2)
+NCZ.METRO_LOD_DISTANCE_MED  = 9000;   // G→B boundary  (game VisibilityDistanceRegular 18000 ÷ 2)
+NCZ.METRO_LOD_DISTANCE_FAR  = 15000;  // B→hidden      (game VisibilityDistanceBold    30000 ÷ 2)
+NCZ.METRO_LOD_TRANSITION    = 150;    // crossfade band width (game TransitionLength 300 ÷ 2)
 
 // SeeThrough roads — the Pacifica tunnel: a road visible *through* the open bay water.
 // Water (rendered in the transparent pass — see three-scene.js loadTerrain) writes
