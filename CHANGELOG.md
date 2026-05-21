@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Default "Game" theme
+
+- New **Game** theme — matches Cyberpunk 2077's in-game world-map palette (UI colours, calibrated 3D scene, roads/metro). Selectable from the theme dropdown.
+- Road, border and metro decals now use the game's decoded blend — additive, with metro at the decoded `0.235` opacity (was eyeballed Normal-blend / `0.9`). The five other themes' `--overlay-metro-color` were rebrightened to suit the lower opacity.
+
 #### Three.js-Parity: intro camera fly-in (E5)
 
 - The 3D map now opens with a brief (~1.2 s) fly-in — the camera eases from a far, slightly leaned-back pose down to a whole-city framing (11000 wu). Skipped when a `?mod=` deep-link is present. New `NCZ.SCHEMA_INTRO_*` constants.

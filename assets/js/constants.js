@@ -41,6 +41,13 @@ NCZ.THEMES = [
     logo: "assets/img/synthwave-logo.png",
     logoAlt: "Synthwave",
   },
+  {
+    id: "game",
+    label: "Game",
+    className: "theme-game",
+    logo: "assets/img/game-logo.png",
+    logoAlt: "Night City",
+  },
 ];
 
 // Category visual styles (color, label, CSS class)
