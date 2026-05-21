@@ -1279,7 +1279,7 @@ const ThreeScene = (() => {
     registerLoadStep(1);
     try {
       landmarkMat = new THREE.MeshLambertNodeMaterial({
-        color: readThemeColor('--scene-buildings', '#8aacbf'),
+        color: readThemeColor('--scene-landmarks', '#8aacbf'),
         flatShading: true,
       });
       const mat = landmarkMat;
@@ -2488,8 +2488,11 @@ const ThreeScene = (() => {
     if (normalBordersMat) normalBordersMat.color.copy(readThemeColor('--overlay-road-border-color', '#1ec3c8'));
     if (metroMat)   metroMat.color.copy(readThemeColor('--overlay-metro-color',        '#dcaa28'));
 
-    // Update landmark material — shares --scene-buildings colour
-    if (landmarkMat) landmarkMat.color.copy(readThemeColor('--scene-buildings', '#7a8fa0'));
+    // Update landmark material — its own --scene-landmarks colour. The game's
+    // monument meshes are a separate material from the building cubes; the
+    // Preem Map mod recolours buildings but leaves the monuments vanilla, so
+    // landmarks must be themed independently.
+    if (landmarkMat) landmarkMat.color.copy(readThemeColor('--scene-landmarks', '#7a8fa0'));
 
     // Update building materials — MeshLambertNodeMaterial.color + TSL edge-colour uniform
     if (buildingMaterials.length) {
@@ -2547,9 +2550,10 @@ const ThreeScene = (() => {
       { key: 'metro',    cssVar: '--overlay-metro-color', fallback: '#dcaa28', ...mat(metroMat) },
       { key: 'buildings', cssVar: '--scene-buildings', fallback: '#8aacbf',
         get:   () => buildingMaterials[0]?.color.clone() ?? null,
-        reset: c  => { buildingMaterials.forEach(m => m.color.copy(c)); landmarkMat?.color.copy(c); },
-        lerp:  (f, t, a) => { buildingMaterials.forEach(m => m.color.lerpColors(f, t, a)); landmarkMat?.color.lerpColors(f, t, a); },
+        reset: c  => { buildingMaterials.forEach(m => m.color.copy(c)); },
+        lerp:  (f, t, a) => { buildingMaterials.forEach(m => m.color.lerpColors(f, t, a)); },
       },
+      { key: 'landmarks', cssVar: '--scene-landmarks', fallback: '#8aacbf', ...mat(landmarkMat) },
       { key: 'buildingsEdge', cssVar: '--scene-buildings-edge', fallback: '#ffffff',
         get:   () => buildingMaterials[0]?.userData.tslUniforms?.uEdgeColor.value.clone() ?? null,
         reset: c  => buildingMaterials.forEach(m => { const u = m.userData.tslUniforms; if (u) u.uEdgeColor.value.copy(c); }),

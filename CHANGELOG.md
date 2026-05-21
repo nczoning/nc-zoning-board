@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New **Game** theme — matches Cyberpunk 2077's in-game world-map palette (UI colours, calibrated 3D scene, roads/metro). Selectable from the theme dropdown.
 - Road, border and metro decals now use the game's decoded blend — additive, with metro at the decoded `0.235` opacity (was eyeballed Normal-blend / `0.9`). The five other themes' `--overlay-metro-color` were rebrightened to suit the lower opacity.
 
+#### Preem Map theme
+
+- New **Preem Map** theme — based on the Preem Map mod by CyanideX (used with permission; attribution required at ship time). 3D-scene colours renderer-calibrated to the mod's in-game palette.
+- New `--scene-landmarks` theme variable — the landmark monuments are now coloured independently of the building cubes (the Preem mod recolours buildings but leaves the monument meshes vanilla). The other six themes set it equal to their building colour, unchanged.
+
 #### Three.js-Parity: intro camera fly-in (E5)
 
 - The 3D map now opens with a brief (~1.2 s) fly-in — the camera eases from a far, slightly leaned-back pose down to a whole-city framing (11000 wu). Skipped when a `?mod=` deep-link is present. New `NCZ.SCHEMA_INTRO_*` constants.

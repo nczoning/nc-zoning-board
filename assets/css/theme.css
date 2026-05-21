@@ -127,6 +127,7 @@ html.theme-night-corp {
     --scene-water:           #1e3048;
     --scene-cliffs:          #2e4a62;
     --scene-buildings:       #8aacbf;
+    --scene-landmarks:       #8aacbf;
     --scene-buildings-edge:  #00f0ff;
     --scene-grid:            #5b86a8;
 
@@ -170,6 +171,7 @@ html.theme-arasaka {
     --scene-water:           #241818;
     --scene-cliffs:          #3a2e2e;
     --scene-buildings:       #a08888;
+    --scene-landmarks:       #a08888;
     --scene-buildings-edge:  #ff5050;
     --scene-grid:            #8a5a5a;
 
@@ -213,6 +215,7 @@ html.theme-militech {
     --scene-water:           #202c20;
     --scene-cliffs:          #384030;
     --scene-buildings:       #8a9070;
+    --scene-landmarks:       #8a9070;
     --scene-buildings-edge:  #ffd040;
     --scene-grid:            #6f7c55;
 
@@ -256,6 +259,7 @@ html.theme-aldecaldos {
     --scene-water:           #242018;
     --scene-cliffs:          #3a3428;
     --scene-buildings:       #9a9080;
+    --scene-landmarks:       #9a9080;
     --scene-buildings-edge:  #ff8050;
     --scene-grid:            #847349;
 
@@ -299,6 +303,7 @@ html.theme-synthwave {
     --scene-water:           #080418;
     --scene-cliffs:          #140828;
     --scene-buildings:       #6040a0;
+    --scene-landmarks:       #6040a0;
     --scene-buildings-edge:  #00d4ff;
     --scene-grid:            #6a3aa0;
 
@@ -333,10 +338,10 @@ html.theme-game {
     --white-86: rgba(237, 231, 230, 0.86);
 
     /* Theme category colors */
-    --category-location-overhaul: var(--secondary);
-    --category-location-overhaul-glow: var(--secondary-40);
-    --category-new-location: var(--tertiary);
-    --category-new-location-glow: var(--tertiary-40);
+    --category-location-overhaul: var(--tertiary);
+    --category-location-overhaul-glow: var(--tertiary-40);
+    --category-new-location: var(--secondary);
+    --category-new-location-glow: var(--secondary-40);
     --category-other: var(--gray);
     --category-other-glow: var(--gray-40);
 
@@ -354,6 +359,7 @@ html.theme-game {
     --scene-water:           #385775;
     --scene-cliffs:          #486e90;
     --scene-buildings:       #ff9fa7;
+    --scene-landmarks:       #ff9fa7;  /* monument GLBs — same as buildings here */
     --scene-buildings-edge:  #ff99a5;  /* 3d_map_cubes.mt EdgeColor */
     --scene-grid:            #6d8ab0;  /* 3d_map_terrain.mt LinesColor */
 
@@ -365,6 +371,62 @@ html.theme-game {
     --overlay-road-color:        #0e5a60;  /* 3dmap_roads #1cb3bf x~0.5 (additive) */
     --overlay-road-border-color: #178e92;  /* 3dmap_roads_borders #1ec3c8 x~0.72 — kept bright */
     --overlay-metro-color:       #ffeded;  /* 3dmap_metro.Material.json (verbatim) */
+}
+
+html.theme-preem {
+    /* Preem Map theme — based on the Preem Map mod by CyanideX (permission
+       granted 2026-05-01; attribution required at ship time). 3D-scene colours
+       are renderer-calibrated: the eyedropped in-game Preem look inverted
+       through the measured renderer transfer (see the theme-renderer-colour-
+       calibration wiki learning). UI chrome derived from the Preem 3D palette. */
+    /* UI chrome — canonical Preem material colours where one exists.
+       Preem Map ships no UI inkstyle, so there is no canonical page-background
+       or text colour; --primary/--dark-accent reuse Preem's dark teal map
+       colours, --white has no canonical source (light teal-tint, design pick). */
+    --primary: #082d38;        /* 3dmap_water LinesColor — darkest Preem value */
+    --secondary: #18ffec;      /* 3d_map_cubes EdgeColor */
+    --tertiary: #ca654a;       /* 3dmap_roads_borders Color */
+
+    --gray: #787879;           /* 3d_map_cubes BaseColorScale */
+
+    --white: #d4e8e6;          /* no canonical Preem source — design pick */
+    --dark-accent: #1e2e36;    /* 3dmap_terrain LinesColor */
+
+    /* Themed surfaces */
+    --surface-panel: rgba(8, 45, 56, 0.95);
+    --surface-hover: rgba(24, 255, 236, 0.07);
+    --surface-panel-90: rgba(8, 45, 56, 0.9);
+    --surface-tooltip-95: rgba(4, 20, 26, 0.95);
+    --surface-tooltip-85: rgba(4, 20, 26, 0.85);
+    --surface-nav-80: rgba(8, 45, 56, 0.8);
+    --white-78: rgba(212, 232, 230, 0.78);
+    --white-86: rgba(212, 232, 230, 0.86);
+
+    /* Theme category colors */
+    --category-location-overhaul: var(--secondary);
+    --category-location-overhaul-glow: var(--secondary-40);
+    --category-new-location: var(--tertiary);
+    --category-new-location-glow: var(--tertiary-40);
+    --category-other: var(--gray);
+    --category-other-glow: var(--gray-40);
+
+    /* 3D scene mesh colors — renderer-calibrated to the eyedropped in-game
+       Preem targets (dark building body #0a3d3c, terrain #042c30,
+       water #021114). Buildings read dark with a bright teal edge. */
+    --scene-terrain:         #1f737f;
+    --scene-water:           #15404c;
+    --scene-cliffs:          #1f737f;
+    --scene-buildings:       #2f9aa0;
+    --scene-landmarks:       #ff9fa7;  /* Game-theme building colour — Preem leaves monuments vanilla */
+    --scene-buildings-edge:  #18ffec;  /* 3d_map_cubes.mt EdgeColor (used directly) */
+    --scene-grid:            #1e2e36;  /* 3dmap_terrain.Material LinesColor (used directly) */
+
+    /* Overlay colors — additive. Roads/borders darkened from the raw Preem
+       material (#c92917 / #ca654a) — full-strength additive blows them out;
+       metro keeps the raw value (additive @0.235 is gentle). */
+    --overlay-road-color:        #7a3812;  /* orange — Preem roads read orange, not pure red */
+    --overlay-road-border-color: #984c38;  /* 3dmap_roads_borders #ca654a x~0.75 — kept bright */
+    --overlay-metro-color:       #999689;  /* 3dmap_metro.Material (verbatim) */
 }
 
 /* Global reset */
