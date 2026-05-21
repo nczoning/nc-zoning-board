@@ -292,25 +292,28 @@ const ThreeScene = (() => {
   // see wiki/sources/building-edge-shader.md). The game computes
   //   X    = max(|1-2u|, |1-2v|) + camDist·0.002·EdgeThickness / faceSize
   //   edge = saturate(pow(X, EdgeSharpnessPower))
-  // — a near-step the game resolves with TAA. Our scene has no TAA, so (exactly
-  // as the terrain grid, PR #685) we keep the game's band PLACEMENT — `band`,
-  // derived from the real EdgeSharpnessPower — and substitute an analytic
-  // fwidth-AA coverage for the missing temporal AA:
-  //   • continuous distance-to-border (no per-pixel step),
-  //   • smoothstep ramp across the pixel footprint,
-  //   • minification fade — a sub-pixel-thin edge dims out instead of aliasing.
-  // `band` = 1 − 0.5^(1/EdgeSharpnessPower): the point where the game's
-  // pow(X, power) curve crosses 0.5 — i.e. the game's perceived edge thickness.
-  const buildingEdgeCoverage = Fn(([faceUv, band, camTerm]) => {
-    // 1 − |1−2u| == 2·min(u, 1−u): 0 on a face border, 1 at the face centre.
-    const dEdge = float(1).sub(faceUv.x.mul(2).sub(1).abs())
-          .min(  float(1).sub(faceUv.y.mul(2).sub(1).abs()) );
-    const d   = dEdge.sub(camTerm);                 // game's camera-distance widening
-    const w   = dFdx(d).abs().max(dFdy(d).abs());   // pixel footprint of d
-    const eff = w.max(band);                        // band never thinner than a pixel
-    return float(1).sub(smoothstep(eff.sub(w), eff.add(w), d))
-                   .mul(band.div(eff))              // dim sub-pixel edges → no shimmer
-                   .clamp(0, 1);
+  // `pow(X, power)` is NOT a step — it is a GRADIENT: ~0 across the inner face,
+  // curving up to the bright rim. `edge` then lerps albedo → EdgeColor, so each
+  // face shades dark-centre → light-edge (the in-game look). An earlier port
+  // mistook the steep curve for a near-step and rendered a flat smoothstep
+  // band, which dropped the gradient — this restores it.
+  // No TAA here, so the steep rim is box-filtered over X's pixel footprint:
+  // the analytic mean of X^p over [lo,hi] is
+  //   (hi^(p+1) − lo^(p+1)) / ((hi − lo)(p+1))
+  // → X^p as the footprint → 0, and self-flattens (toward 1/(p+1)) when the
+  // whole gradient goes sub-pixel under minification, instead of shimmering.
+  const buildingEdgeCoverage = Fn(([faceUv, sharpness, camTerm]) => {
+    // X = max(|1−2u|, |1−2v|) + camTerm — 0 at the face centre, 1 at the edge.
+    const X = faceUv.x.mul(2).sub(1).abs()
+          .max( faceUv.y.mul(2).sub(1).abs() )
+          .add(camTerm);
+    const hw = dFdx(X).abs().max(dFdy(X).abs()).mul(0.5);  // half pixel-footprint of X
+    const lo = X.sub(hw).clamp(0, 1);
+    const hi = X.add(hw).clamp(0, 1);
+    const p1 = sharpness.add(1);
+    return hi.pow(p1).sub(lo.pow(p1))
+             .div( hi.sub(lo).max(0.0001).mul(p1) )
+             .clamp(0, 1);
   });
 
   // Hillshade material for terrain / water / cliffs. `colorNode` lerps the
@@ -1583,13 +1586,13 @@ const ThreeScene = (() => {
     const uOffset        = uniform(new THREE.Vector2(meta.offset[0], meta.offset[1]));
     const uEdgeColor     = uniform(readThemeColor('--scene-buildings-edge', '#ffffff'));
     // Edge highlight constants, decoded from 3d_map_cubes.mt (per-district):
-    //   uEdgeBand    — band half-width = 1 − 0.5^(1/EdgeSharpnessPower), the
-    //                  point where the game's pow(X, power) crosses 0.5.
+    //   uEdgeSharpness — EdgeSharpnessPower (30 / 50): the exponent of the
+    //                  pow(X, power) edge gradient.
     //   uEdgeCamCoeff — the camera-distance widening, k = camDist·0.002·
     //                  EdgeThickness, pre-divided by cubeSize (the game divides
     //                  by the per-face world size; cubeSize is its stand-in —
     //                  the term is sub-pixel at map zoom regardless).
-    const uEdgeBand     = uniform(1 - Math.pow(0.5, 1 / meta.edgeSharpness));
+    const uEdgeSharpness = uniform(meta.edgeSharpness);
     const uEdgeCamCoeff = uniform(NCZ.BUILDING_EDGE_CAMDIST_K * meta.edgeThickness / meta.cubeSize);
     // Only uEdgeColor needs runtime mutation (theme rewire / flyover tweens).
     mat.userData.tslUniforms = { uEdgeColor };
@@ -1651,11 +1654,20 @@ const ThreeScene = (() => {
     // in for the game's TAA (see `buildingEdgeCoverage`). The game lerps the
     // edge into the gbuffer ALBEDO before lighting, so we mix on `colorNode`,
     // before the _m modulation, to match. `camTerm` = the game's
-    // camDist·0.002·EdgeThickness/cubeSize widening. Edge COLOUR is
-    // intentionally theme-driven (uEdgeColor), not the game's #FF99A5.
-    const camDist = instWorldPos4.xyz.sub(cameraPosition).length();
-    const edge    = buildingEdgeCoverage(uv(), uEdgeBand, camDist.mul(uEdgeCamCoeff));
-    mat.colorNode = mix(materialColor, uEdgeColor, edge).mul(modulation);
+    // camDist·0.002·EdgeThickness/cubeSize widening.
+    //
+    // The game's edge tint is `EdgeColor · 2 · luma(BaseColorScale)` — a
+    // brightness boost that drives the rim toward (clamped) white. The HUE
+    // stays theme-driven (uEdgeColor); only the 2·luma scale is the game's.
+    // Dropping it (an earlier port did) leaves the rim far too dim vs the
+    // in-game map.
+    const camDist  = instWorldPos4.xyz.sub(cameraPosition).length();
+    const edge     = buildingEdgeCoverage(uv(), uEdgeSharpness, camDist.mul(uEdgeCamCoeff));
+    const baseLuma = materialColor.r.mul(0.299)
+                     .add(materialColor.g.mul(0.587))
+                     .add(materialColor.b.mul(0.114));
+    const edgeTint = uEdgeColor.mul(baseLuma.mul(2));
+    mat.colorNode  = mix(materialColor, edgeTint, edge).mul(modulation);
 
     return mat;
   }
