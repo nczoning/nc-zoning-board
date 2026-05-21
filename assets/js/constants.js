@@ -48,6 +48,13 @@ NCZ.THEMES = [
     logo: "assets/img/game-logo.png",
     logoAlt: "Night City",
   },
+  {
+    id: "preem",
+    label: "Preem Map",
+    className: "theme-preem",
+    logo: "assets/img/preem-logo.png",
+    logoAlt: "Preem Map",
+  },
 ];
 
 // Category visual styles (color, label, CSS class)
