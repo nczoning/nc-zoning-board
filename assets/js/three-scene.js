@@ -1606,7 +1606,10 @@ const ThreeScene = (() => {
       wzNeg.sub(uOffset.y).sub(uTransMin.y).div(uTransMax.y.sub(uTransMin.y))
     );
 
-    // (1) Diffuse modulation — sample _m, scale base colour
+    // (1) Diffuse modulation — sample _m, scale base colour. The game's
+    // gbuffer shader applies `surface = 0.4 + 0.5·m` to the albedo (decoded —
+    // wiki/sources/building-edge-shader.md; the shader's vertical-AO term is
+    // disabled by the default DebugScaleOffset, so it collapses to floor+range).
     const mVal = texture(mTex, planarUv.clamp(0, 1)).r;
     const modulation = float(NCZ.BUILDING_TEX_FLOOR).add(mVal.mul(NCZ.BUILDING_TEX_RANGE));
 
