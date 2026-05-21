@@ -1654,11 +1654,20 @@ const ThreeScene = (() => {
     // in for the game's TAA (see `buildingEdgeCoverage`). The game lerps the
     // edge into the gbuffer ALBEDO before lighting, so we mix on `colorNode`,
     // before the _m modulation, to match. `camTerm` = the game's
-    // camDist·0.002·EdgeThickness/cubeSize widening. Edge COLOUR is
-    // intentionally theme-driven (uEdgeColor), not the game's #FF99A5.
-    const camDist = instWorldPos4.xyz.sub(cameraPosition).length();
-    const edge    = buildingEdgeCoverage(uv(), uEdgeSharpness, camDist.mul(uEdgeCamCoeff));
-    mat.colorNode = mix(materialColor, uEdgeColor, edge).mul(modulation);
+    // camDist·0.002·EdgeThickness/cubeSize widening.
+    //
+    // The game's edge tint is `EdgeColor · 2 · luma(BaseColorScale)` — a
+    // brightness boost that drives the rim toward (clamped) white. The HUE
+    // stays theme-driven (uEdgeColor); only the 2·luma scale is the game's.
+    // Dropping it (an earlier port did) leaves the rim far too dim vs the
+    // in-game map.
+    const camDist  = instWorldPos4.xyz.sub(cameraPosition).length();
+    const edge     = buildingEdgeCoverage(uv(), uEdgeSharpness, camDist.mul(uEdgeCamCoeff));
+    const baseLuma = materialColor.r.mul(0.299)
+                     .add(materialColor.g.mul(0.587))
+                     .add(materialColor.b.mul(0.114));
+    const edgeTint = uEdgeColor.mul(baseLuma.mul(2));
+    mat.colorNode  = mix(materialColor, edgeTint, edge).mul(modulation);
 
     return mat;
   }
