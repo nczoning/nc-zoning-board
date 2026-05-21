@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Three.js-Parity: intro camera fly-in (E5)
+
+- The 3D map now opens with a brief (~1.2 s) fly-in — the camera eases from a far, slightly leaned-back pose down to a whole-city framing (11000 wu). Skipped when a `?mod=` deep-link is present. New `NCZ.SCHEMA_INTRO_*` constants.
+- Fixed: the map silently opened fully zoomed out. The old `fitCameraToBox` opening computed a fit distance that always exceeded `controls.maxDistance`, so the documented opening distance never took effect. `fitCameraToBox` removed; `resetCamera` now snaps to the fly-in's rest pose.
+
 #### Three.js-Parity: metro LOD crossfade
 
 - Metro LOD tiers (dotted / thin / wide) now **crossfade** by camera distance instead of hard-switching, decoded from the `3d_map_metro.mt` pixel shader (PIX capture). Real thresholds: tiers change at 2500 / 9000 / 15000 wu (game `VisibilityDistance*` ÷ 2 — the game's metric is `2 × cameraZ`), crossfading over a 150 wu band.
@@ -68,7 +73,7 @@ New constants in [`constants.js`](assets/js/constants.js): `NCZ.STENCIL_WATER` (
 
 - Schema camera is now `PerspectiveCamera` at **FOV 25°** matching the game's TopDown view. Values mirror TweakDB `WorldMap.TopDownCameraSettingsDefault` (zoom min/default/max = 800 / 3000 / 15000 CET units). Replaces the prior `OrthographicCamera` — chosen originally without reference to the game's actual setup. See [`docs/data/worldmap_tweakdb_tree.json`](docs/data/worldmap_tweakdb_tree.json) for the full record dump.
 - Downstream perspective-aware refactors: shadow camera footprint via a 4-corner ray-cast against `Y=0` (handles tilt without an analytic `1/cos` stretch); scale bar, district→subdistrict label switch, and pin cluster threshold all driven by camera-to-target distance; `flyTo` lands at `SCHEMA_FLY_TO_DISTANCE = 1250` (TweakDB `zoomToZoomValue`).
-- **Pan envelope** now uses the game's canonical `cursorBoundary` (X[−5500..6050], Y[−7300..5000] in CET → Z[−5000..7300] in Three.js) instead of the wider terrain GLB extent. **`resetCamera`** restores the first-load `fitCameraToBox` view (whole-map fit) instead of dropping to default distance.
+- **Pan envelope** now uses the game's canonical `cursorBoundary` (X[−5500..6050], Y[−7300..5000] in CET → Z[−5000..7300] in Three.js) instead of the wider terrain GLB extent.
 - **Showcase exit** dips the 3D container's opacity for ~150 ms across the camera swap (schema 25° ↔ flyover 55° FOV) so the perspective change reads as an intentional transition rather than a hard cut.
 - **Metro LOD** mutex tier switch (B wide → G thin → R dotted) driven by schema camera-to-target distance, replacing the legacy `camera.zoom` reading. Thresholds at `MED = 7000` and `NEAR = 2500` (CET wu) align with the WorldMap zoom-ladder rather than the metro material's `VisibilityDistance*` values — the latter don't map onto a camera-to-target metric since our `zoomMax = 15000 < 18000`. Constants page documents the deviation.
 - Follow-ups queued: **CSM shadows** (the "no cascades because schema is ortho" rationale dissolved with this change); cluster-radius re-tune for the new screen-space behaviour; `pitchRelativeToZoom` lean-back curve from TweakDB; **Line2 near-plane clipping** under perspective (district outline segments whose endpoints cross the camera near plane stretch as straight rays across the viewport — pre-existing latent bug, only visible under perspective).
