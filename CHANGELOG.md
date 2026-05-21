@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Three.js-Parity: building edge highlight
+
+- Building edge highlight rewritten to the game's actual algorithm, decoded from the `3d_map_cubes.mt` gbuffer shader (PIX capture): `saturate(pow(max(|1-2u|,|1-2v|), EdgeSharpnessPower))` mixed into the albedo. Real per-district constants (`EdgeThickness`/`EdgeSharpnessPower`) replace the previous guessed values.
+- Flicker fixed — analytic `fwidth` anti-aliasing stands in for the game's TAA, the same approach as the terrain grid.
+
 #### Three.js-Parity: procedural terrain grid
 
 - Terrain, water and cliffs now carry the game's "graph-paper" grid — a procedural three-tier anti-aliased line grid (cells 80 / 8 / 400 wu) on world XZ, decoded from the game's `3d_map_terrain` pixel shader.

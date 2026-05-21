@@ -21,6 +21,8 @@ import {
   Fn, If, storage, struct, atomicStore, atomicAdd, uint,
   // Terrain grid shader
   dFdx, dFdy,
+  // Building edge highlight
+  cameraPosition,
 } from 'three/tsl';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -213,15 +215,19 @@ const ThreeScene = (() => {
   // transMin/transMax: district-local CET XYZ bounds (before district offset)
   // offset: world XY offset applied to decoded positions (no Z offset)
   // cubeSize: half-extent multiplier (from CubeSize shader parameter)
+  // edgeThickness / edgeSharpness: EdgeThickness / EdgeSharpnessPower from
+  //   3d_map_cubes.mt — drive the building edge highlight (see
+  //   wiki/sources/building-edge-shader.md). edgeSharpness sets the visible
+  //   band width; edgeThickness only feeds the sub-pixel camera-distance term.
   const DISTRICT_META = [
-    { name: 'westbrook',     dataDds: 'assets/dds/westbrook_data.dds',    mDds: 'assets/dds/westbrook_m.dds',    cubeSize: 197.0,        transMin: [-1078.94739, -1148.69434, -18.4205875],  transMax: [1155.12,      1562.87903,  507.894714],  offset: [  -97.209,    590.849] },
-    { name: 'city_center',   dataDds: 'assets/dds/city_center_data.dds',  mDds: 'assets/dds/city_center_m.dds',  cubeSize: 168.289993,   transMin: [ -770.609192, -530.549133, -40.6581497],  transMax: [1316.82483,    649.75531,  642.893127],  offset: [-2116.637,    106.508] },
-    { name: 'heywood',       dataDds: 'assets/dds/heywood_data.dds',      mDds: 'assets/dds/heywood_m.dds',      cubeSize: 197.236832,   transMin: [-1080.35107,  -418.153046, -38.4002304],  transMax: [1136.94556,   1372.15979,  374.181305],  offset: [-1576.732,  -1002.811] },
-    { name: 'pacifica',      dataDds: 'assets/dds/pacifica_data.dds',     mDds: 'assets/dds/pacifica_m.dds',     cubeSize: 305.600006,   transMin: [-4008.396,   -4575.14941, -51.9539986],  transMax: [8258.31641,   7254.10059,  264.306946],  offset: [-2422.441,  -2368.156] },
-    { name: 'santo_domingo', dataDds: 'assets/dds/santo_domingo_data.dds',mDds: 'assets/dds/santo_domingo_m.dds',cubeSize: 139.342102,   transMin: [-1328.95288, -1880.02502, -37.5960007],  transMax: [1555.26318,   1369.01294,  332.348328],  offset: [  -15.944,  -1610.080] },
-    { name: 'watson',        dataDds: 'assets/dds/watson_data.dds',       mDds: 'assets/dds/watson_m.dds',       cubeSize: 237.175003,   transMin: [-1254.46997, -1258.68469, -24.7028503],  transMax: [1988.5448,    2032.52405,  475.268005],  offset: [-1979.372,   1873.951] },
-    { name: 'ep1_dogtown',   dataDds: 'assets/dds/dogtown_data.dds',      mDds: 'assets/dds/dogtown_m.dds',      cubeSize: 198.020691,   transMin: [-2650.0,     -3126.6084,   -0.750015974], transMax: [-1025.51855, -1803.58118,  493.576111],  offset: [    0.0,        0.0  ] },
-    { name: 'ep1_spaceport', dataDds: 'assets/dds/spaceport_data.dds',    mDds: 'assets/dds/spaceport_m.dds',    cubeSize: 115.298218,   transMin: [-1168.5874,   -765.104614, -41.4592323],  transMax: [1219.45483,   1018.70129,  296.498138],  offset: [-4200.000,    200.000] },
+    { name: 'westbrook',     dataDds: 'assets/dds/westbrook_data.dds',    mDds: 'assets/dds/westbrook_m.dds',    cubeSize: 197.0,        transMin: [-1078.94739, -1148.69434, -18.4205875],  transMax: [1155.12,      1562.87903,  507.894714],  offset: [  -97.209,    590.849], edgeThickness: 0.0001, edgeSharpness: 30 },
+    { name: 'city_center',   dataDds: 'assets/dds/city_center_data.dds',  mDds: 'assets/dds/city_center_m.dds',  cubeSize: 168.289993,   transMin: [ -770.609192, -530.549133, -40.6581497],  transMax: [1316.82483,    649.75531,  642.893127],  offset: [-2116.637,    106.508], edgeThickness: 0.0001, edgeSharpness: 30 },
+    { name: 'heywood',       dataDds: 'assets/dds/heywood_data.dds',      mDds: 'assets/dds/heywood_m.dds',      cubeSize: 197.236832,   transMin: [-1080.35107,  -418.153046, -38.4002304],  transMax: [1136.94556,   1372.15979,  374.181305],  offset: [-1576.732,  -1002.811], edgeThickness: 0.0005, edgeSharpness: 50 },
+    { name: 'pacifica',      dataDds: 'assets/dds/pacifica_data.dds',     mDds: 'assets/dds/pacifica_m.dds',     cubeSize: 305.600006,   transMin: [-4008.396,   -4575.14941, -51.9539986],  transMax: [8258.31641,   7254.10059,  264.306946],  offset: [-2422.441,  -2368.156], edgeThickness: 0.0005, edgeSharpness: 50 },
+    { name: 'santo_domingo', dataDds: 'assets/dds/santo_domingo_data.dds',mDds: 'assets/dds/santo_domingo_m.dds',cubeSize: 139.342102,   transMin: [-1328.95288, -1880.02502, -37.5960007],  transMax: [1555.26318,   1369.01294,  332.348328],  offset: [  -15.944,  -1610.080], edgeThickness: 0.0001, edgeSharpness: 30 },
+    { name: 'watson',        dataDds: 'assets/dds/watson_data.dds',       mDds: 'assets/dds/watson_m.dds',       cubeSize: 237.175003,   transMin: [-1254.46997, -1258.68469, -24.7028503],  transMax: [1988.5448,    2032.52405,  475.268005],  offset: [-1979.372,   1873.951], edgeThickness: 0.0005, edgeSharpness: 50 },
+    { name: 'ep1_dogtown',   dataDds: 'assets/dds/dogtown_data.dds',      mDds: 'assets/dds/dogtown_m.dds',      cubeSize: 198.020691,   transMin: [-2650.0,     -3126.6084,   -0.750015974], transMax: [-1025.51855, -1803.58118,  493.576111],  offset: [    0.0,        0.0  ], edgeThickness: 0.0005, edgeSharpness: 50 },
+    { name: 'ep1_spaceport', dataDds: 'assets/dds/spaceport_data.dds',    mDds: 'assets/dds/spaceport_m.dds',    cubeSize: 115.298218,   transMin: [-1168.5874,   -765.104614, -41.4592323],  transMax: [1219.45483,   1018.70129,  296.498138],  offset: [-4200.000,    200.000], edgeThickness: 0.0005, edgeSharpness: 50 },
   ];
 
   // ── Helpers ────────────────────────────────────────────────────────────
@@ -278,6 +284,32 @@ const ThreeScene = (() => {
             .mul(c.mul(NCZ.TERRAIN_GRID_MAJOR_BOOST).add(1))
             .clamp(0, 1);
   }
+
+  // ── Building edge highlight ────────────────────────────────────────────────
+  // Decoded from the game's 3d_map_cubes.mt gbuffer pixel shader (PIX capture —
+  // see wiki/sources/building-edge-shader.md). The game computes
+  //   X    = max(|1-2u|, |1-2v|) + camDist·0.002·EdgeThickness / faceSize
+  //   edge = saturate(pow(X, EdgeSharpnessPower))
+  // — a near-step the game resolves with TAA. Our scene has no TAA, so (exactly
+  // as the terrain grid, PR #685) we keep the game's band PLACEMENT — `band`,
+  // derived from the real EdgeSharpnessPower — and substitute an analytic
+  // fwidth-AA coverage for the missing temporal AA:
+  //   • continuous distance-to-border (no per-pixel step),
+  //   • smoothstep ramp across the pixel footprint,
+  //   • minification fade — a sub-pixel-thin edge dims out instead of aliasing.
+  // `band` = 1 − 0.5^(1/EdgeSharpnessPower): the point where the game's
+  // pow(X, power) curve crosses 0.5 — i.e. the game's perceived edge thickness.
+  const buildingEdgeCoverage = Fn(([faceUv, band, camTerm]) => {
+    // 1 − |1−2u| == 2·min(u, 1−u): 0 on a face border, 1 at the face centre.
+    const dEdge = float(1).sub(faceUv.x.mul(2).sub(1).abs())
+          .min(  float(1).sub(faceUv.y.mul(2).sub(1).abs()) );
+    const d   = dEdge.sub(camTerm);                 // game's camera-distance widening
+    const w   = dFdx(d).abs().max(dFdy(d).abs());   // pixel footprint of d
+    const eff = w.max(band);                        // band never thinner than a pixel
+    return float(1).sub(smoothstep(eff.sub(w), eff.add(w), d))
+                   .mul(band.div(eff))              // dim sub-pixel edges → no shimmer
+                   .clamp(0, 1);
+  });
 
   // Hillshade material for terrain / water / cliffs. `colorNode` lerps the
   // theme base colour → theme grid colour by the procedural grid factor, so
@@ -1497,13 +1529,11 @@ const ThreeScene = (() => {
   //      `positionWorld` (= modelWorldMatrix · positionLocal) gives the
   //      correct world position automatically — same code path as Phase 1.
   //
-  //   2. Edge highlight (post-lighting, via `emissiveNode`)
-  //      Original GLSL hook: `outgoingLight = mix(outgoingLight, edgeColor, ef)`
-  //      WebGPU has no user-facing post-lighting hook (NodeMaterial's
-  //      `outgoingLightNode` is a builder-local). `emissiveNode` is the closest
-  //      idiomatic fit — emissive is added to the lit colour at exactly the
-  //      same point in the pipeline. At our default 0.15 intensity the additive
-  //      vs mix difference is visually indistinguishable, and we keep tonemap.
+  //   2. Edge highlight (pre-lighting, via `colorNode`)
+  //      The game's gbuffer shader lerps EdgeColor into the ALBEDO before
+  //      lighting (decoded — wiki/sources/building-edge-shader.md), so the
+  //      edge is a recoloured lit surface, not an emissive overlay. We mix on
+  //      `colorNode` for the same result. See `buildingEdgeCoverage`.
   //
   // Per-district `uniform()` node refs are stashed on `mat.userData.tslUniforms`
   // so the colour-binding registry (`getColorBindings.buildingsEdge`) can mutate
@@ -1518,11 +1548,17 @@ const ThreeScene = (() => {
     const uTransMax      = uniform(new THREE.Vector2(meta.transMax[0], meta.transMax[1]));
     const uOffset        = uniform(new THREE.Vector2(meta.offset[0], meta.offset[1]));
     const uEdgeColor     = uniform(readThemeColor('--scene-buildings-edge', '#ffffff'));
-    const uEdgeThickness = uniform(NCZ.BUILDING_EDGE_THICKNESS);
-    const uEdgeSharpness = uniform(NCZ.BUILDING_EDGE_SHARPNESS);
-    const uEdgeIntensity = uniform(NCZ.BUILDING_EDGE_INTENSITY);
-    // Surfaced for runtime mutation (theme rewire, debug intensity tweaks)
-    mat.userData.tslUniforms = { uEdgeColor, uEdgeIntensity, uEdgeThickness, uEdgeSharpness };
+    // Edge highlight constants, decoded from 3d_map_cubes.mt (per-district):
+    //   uEdgeBand    — band half-width = 1 − 0.5^(1/EdgeSharpnessPower), the
+    //                  point where the game's pow(X, power) crosses 0.5.
+    //   uEdgeCamCoeff — the camera-distance widening, k = camDist·0.002·
+    //                  EdgeThickness, pre-divided by cubeSize (the game divides
+    //                  by the per-face world size; cubeSize is its stand-in —
+    //                  the term is sub-pixel at map zoom regardless).
+    const uEdgeBand     = uniform(1 - Math.pow(0.5, 1 / meta.edgeSharpness));
+    const uEdgeCamCoeff = uniform(NCZ.BUILDING_EDGE_CAMDIST_K * meta.edgeThickness / meta.cubeSize);
+    // Only uEdgeColor needs runtime mutation (theme rewire / flyover tweens).
+    mat.userData.tslUniforms = { uEdgeColor };
 
     // (0) Per-instance positioning + normals — explicit space transforms.
     //
@@ -1573,15 +1609,16 @@ const ThreeScene = (() => {
     // (1) Diffuse modulation — sample _m, scale base colour
     const mVal = texture(mTex, planarUv.clamp(0, 1)).r;
     const modulation = float(NCZ.BUILDING_TEX_FLOOR).add(mVal.mul(NCZ.BUILDING_TEX_RANGE));
-    mat.colorNode = materialColor.mul(modulation);
 
-    // (2) Edge highlight — distance-from-edge in local UV → emissive add
-    // ed = min(min(u, 1-u), min(v, 1-v)) — minimum of all 4 face-edge distances
-    // ef = (1 - pow(clamp(ed/thick, 0, 1), sharp)) * intens — sharp ramp near edge
-    const luv = uv();
-    const ed = luv.x.min(float(1).sub(luv.x)).min(luv.y).min(float(1).sub(luv.y));
-    const ef = float(1).sub(ed.div(uEdgeThickness).clamp(0, 1).pow(uEdgeSharpness)).mul(uEdgeIntensity);
-    mat.emissiveNode = uEdgeColor.mul(ef);
+    // (2) Edge highlight — the decoded game algorithm with fwidth AA standing
+    // in for the game's TAA (see `buildingEdgeCoverage`). The game lerps the
+    // edge into the gbuffer ALBEDO before lighting, so we mix on `colorNode`,
+    // before the _m modulation, to match. `camTerm` = the game's
+    // camDist·0.002·EdgeThickness/cubeSize widening. Edge COLOUR is
+    // intentionally theme-driven (uEdgeColor), not the game's #FF99A5.
+    const camDist = instWorldPos4.xyz.sub(cameraPosition).length();
+    const edge    = buildingEdgeCoverage(uv(), uEdgeBand, camDist.mul(uEdgeCamCoeff));
+    mat.colorNode = mix(materialColor, uEdgeColor, edge).mul(modulation);
 
     return mat;
   }
@@ -1925,20 +1962,6 @@ const ThreeScene = (() => {
       scene.overrideMaterial = _debugOverrideMat;
     } else {
       scene.overrideMaterial = null;
-    }
-    requestRender();
-  }
-
-  // Runtime control of the building edge highlight intensity. The TSL
-  // uEdgeIntensity uniform is captured from NCZ.BUILDING_EDGE_INTENSITY at
-  // material-compile time, so changing the constant alone doesn't propagate
-  // to live materials — this iterates the cached uniform refs and updates them.
-  // Diagnostic use: set to 0 to test whether shimmer disappears entirely;
-  // future Stage 2 quality preset use: dim/disable highlight on Low.
-  function setBuildingEdgeIntensity(value) {
-    for (const mat of buildingMaterials) {
-      const u = mat.userData.tslUniforms;
-      if (u?.uEdgeIntensity) u.uEdgeIntensity.value = value;
     }
     requestRender();
   }
@@ -2777,7 +2800,7 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, setBuildingEdgeIntensity, dumpDebugInfo, isWebGPUActive };
+  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;
