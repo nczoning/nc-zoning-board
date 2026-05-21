@@ -1064,28 +1064,38 @@ const ThreeScene = (() => {
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       });
-      // Mutually-exclusive LOD tiers driven by a single CPU uniform (schema
-      // camera-to-target distance). One tier renders at a time across the whole
-      // metro mesh, replacing rather than overlaying as the user zooms. Matches
-      // the in-game "wide → thin → dashed" transition.
-      //   B (wide solid) when distance > MED
-      //   G (thin solid) when NEAR < distance < MED
-      //   R (dotted)     when distance < NEAR
-      metroDistanceUniform     = uniform(NCZ.SCHEMA_CAMERA_DEFAULT_DISTANCE);
-      const uMetroLODMed_node  = uniform(NCZ.METRO_LOD_DISTANCE_MED);
-      const uMetroLODNear_node = uniform(NCZ.METRO_LOD_DISTANCE_NEAR);
-      const lodColor = attribute('color');
-      const discardCondition =
-        lodColor.b.greaterThan(0.5).and(metroDistanceUniform.lessThan(uMetroLODMed_node))
-          .or(
-            lodColor.g.greaterThan(0.5).and(
-              metroDistanceUniform.greaterThan(uMetroLODMed_node).or(metroDistanceUniform.lessThan(uMetroLODNear_node))
-            )
-          )
-          .or(
-            lodColor.r.greaterThan(0.5).and(metroDistanceUniform.greaterThan(uMetroLODNear_node))
-          );
-      metroMat.maskNode = discardCondition.not();
+      // Metro LOD — decoded from 3d_map_metro.mt's pixel shader (PIX capture;
+      // see wiki/sources/metro-lod-shader.md). The metro mesh carries three
+      // tiers in COLOR_0 (R dotted / G thin / B wide), one channel per vertex.
+      // Each tier is fully on below its distance threshold and crossfades out
+      // over METRO_LOD_TRANSITION — the game dissolves tiers, it doesn't snap.
+      // Driven by one CPU uniform: schema camera-to-target distance, seeded
+      // from the LIVE camera here — a constant seed showed the wrong tier on
+      // the first frame until the first camera move (the load-flicker bug).
+      metroDistanceUniform = uniform(camera.position.distanceTo(controls.target));
+      const uMetroNear = uniform(NCZ.METRO_LOD_DISTANCE_NEAR);
+      const uMetroMed  = uniform(NCZ.METRO_LOD_DISTANCE_MED);
+      const uMetroFar  = uniform(NCZ.METRO_LOD_DISTANCE_FAR);
+      const uMetroW    = uniform(NCZ.METRO_LOD_TRANSITION);
+      const lodColor   = attribute('color');
+      // Per-tier ramp: 1 below `threshold`, ramps to 0 by `threshold + W`.
+      const tierRamp = (threshold) =>
+        threshold.add(uMetroW).sub(metroDistanceUniform).div(uMetroW).clamp(0, 1);
+      const fNear = tierRamp(uMetroNear);
+      const fMed  = tierRamp(uMetroMed);
+      const fFar  = tierRamp(uMetroFar);
+      // Mutually-exclusive tier weights — the game's min(ramp, 1 - prevRamp)
+      // chain, so adjacent tiers crossfade and never both reach full.
+      const nearW = fNear;
+      const midW  = fMed.min(float(1).sub(fNear));
+      const farW  = fFar.min(float(1).sub(fMed));
+      // Each vertex carries exactly one tier in COLOR_0; `max` selects its
+      // weight. The result drives alpha — tiers fade in/out under additive blend.
+      const metroLOD = nearW.mul(lodColor.r)
+        .max(midW.mul(lodColor.g))
+        .max(farW.mul(lodColor.b));
+      metroMat.opacityNode = metroLOD.mul(0.9);            // 0.9 = base metro opacity
+      metroMat.maskNode    = metroLOD.greaterThan(0.001);  // drop fully-faded fragments
 
       function makeSeeThrough(source, mat) {
         const group = new THREE.Group();

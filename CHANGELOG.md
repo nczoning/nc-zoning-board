@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Three.js-Parity: metro LOD crossfade
+
+- Metro LOD tiers (dotted / thin / wide) now **crossfade** by camera distance instead of hard-switching, decoded from the `3d_map_metro.mt` pixel shader (PIX capture). Real thresholds: tiers change at 2500 / 9000 / 15000 wu (game `VisibilityDistance*` ÷ 2 — the game's metric is `2 × cameraZ`), crossfading over a 150 wu band.
+- Fixed: the metro showed the wrong tier on first load until the camera moved — the distance uniform was seeded from a constant instead of the live camera.
+
 #### Three.js-Parity: building surface modulation
 
 - Building `_m` surface modulation corrected to the game's decoded value — `0.4 + 0.5·m` (was a guessed `0.3 + 0.7·m`). Decoded from the same `3d_map_cubes.mt` shader capture; the shader's vertical-AO term ships disabled, so it collapses to a flat floor + range.
