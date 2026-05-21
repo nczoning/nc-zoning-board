@@ -1049,8 +1049,15 @@ const ThreeScene = (() => {
       // acne on the coplanar road geometry, and Lambert sun-direction-tinted
       // the network into something that read as 3D rather than infographic.
       // Scrapped — buildings/terrain still receive shadows, decals don't.)
-      normalRoadsMat   = new THREE.MeshBasicNodeMaterial({ color: roadColor,   transparent: true, opacity: 0.8 });
-      normalBordersMat = new THREE.MeshBasicNodeMaterial({ color: borderColor, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
+      // Blend + opacity here are decoded constants, not tuning. 3d_map_solid.mt
+      // has a fixed One/One additive PSO; the per-material AdditiveAlphaBlend flag
+      // decides whether the additive contribution is pre-scaled by Color.Alpha.
+      // Roads = AdditiveAlphaBlend 0 / alpha 255, borders = AdditiveAlphaBlend 1 /
+      // alpha 255 → both full-strength additive. (Roads were Normal-blend opacity
+      // 0.8 — an eyeballed guess that also let the road colour drift with whatever
+      // sat under it; additive is the game-faithful blend.)
+      normalRoadsMat   = new THREE.MeshBasicNodeMaterial({ color: roadColor,   transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending });
+      normalBordersMat = new THREE.MeshBasicNodeMaterial({ color: borderColor, transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending, depthWrite: false });
 
       applyMaterial(roadsScene,   normalRoadsMat);
       applyMaterial(bordersScene, normalBordersMat);
@@ -1075,7 +1082,7 @@ const ThreeScene = (() => {
       metroMat = new THREE.MeshBasicNodeMaterial({
         color: metroColor,
         transparent: true,
-        opacity: 0.9,
+        opacity: 0.235,  // 3dmap_metro Color.Alpha 60/255 — AdditiveAlphaBlend=1
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       });
@@ -1109,7 +1116,7 @@ const ThreeScene = (() => {
       const metroLOD = nearW.mul(lodColor.r)
         .max(midW.mul(lodColor.g))
         .max(farW.mul(lodColor.b));
-      metroMat.opacityNode = metroLOD.mul(0.9);            // 0.9 = base metro opacity
+      metroMat.opacityNode = metroLOD.mul(0.235);          // decoded base opacity (3dmap_metro Color.Alpha 60/255)
       metroMat.maskNode    = metroLOD.greaterThan(0.001);  // drop fully-faded fragments
 
       function makeSeeThrough(source, mat) {
@@ -1142,8 +1149,10 @@ const ThreeScene = (() => {
         stencilFunc: THREE.EqualStencilFunc, stencilRef: NCZ.STENCIL_WATER, stencilFuncMask: 0xff,
         stencilFail: THREE.KeepStencilOp, stencilZFail: THREE.KeepStencilOp, stencilZPass: THREE.KeepStencilOp,
       };
-      roadsMat   = new THREE.MeshBasicNodeMaterial({ ...stBase, color: roadColor,   opacity: 0.8 });
-      bordersMat = new THREE.MeshBasicNodeMaterial({ ...stBase, color: borderColor, opacity: 0.6, blending: THREE.AdditiveBlending });
+      // SeeThrough variants match the normal pass — full-strength additive (see
+      // the decoded-constant note on normalRoadsMat above).
+      roadsMat   = new THREE.MeshBasicNodeMaterial({ ...stBase, color: roadColor,   opacity: 1.0, blending: THREE.AdditiveBlending });
+      bordersMat = new THREE.MeshBasicNodeMaterial({ ...stBase, color: borderColor, opacity: 1.0, blending: THREE.AdditiveBlending });
       // No shadow multiply on the SeeThrough variants — they're an
       // infographic "see the tunnel through the water" effect (depthTest:false,
       // stencil=WATER), drawing road geometry that sits BELOW the water plane

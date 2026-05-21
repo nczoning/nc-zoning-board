@@ -133,7 +133,7 @@ html.theme-night-corp {
     /* Overlay colors (roads/metro for SCHEMA, districts for both) */
     --overlay-road-color:        #485c70;
     --overlay-road-border-color: #608898;
-    --overlay-metro-color:       #608898;
+    --overlay-metro-color:       #bfe0ec;  /* light — additive @0.235 opacity */
 
 }
 
@@ -176,7 +176,7 @@ html.theme-arasaka {
     /* Overlay colors */
     --overlay-road-color:        #4a3838;
     --overlay-road-border-color: #603030;
-    --overlay-metro-color:       #604848;
+    --overlay-metro-color:       #f0d2d2;  /* light — additive @0.235 opacity */
 
 }
 
@@ -219,7 +219,7 @@ html.theme-militech {
     /* Overlay colors */
     --overlay-road-color:        #485248;
     --overlay-road-border-color: #606040;
-    --overlay-metro-color:       #606850;
+    --overlay-metro-color:       #ebe6c4;  /* light — additive @0.235 opacity */
 
 }
 
@@ -262,7 +262,7 @@ html.theme-aldecaldos {
     /* Overlay colors */
     --overlay-road-color:        #4a4238;
     --overlay-road-border-color: #605840;
-    --overlay-metro-color:       #5a5040;
+    --overlay-metro-color:       #ecdcc0;  /* light — additive @0.235 opacity */
 
 }
 
@@ -305,7 +305,66 @@ html.theme-synthwave {
     /* Overlay colors — road borders are cyan for neon grid feel */
     --overlay-road-color:        #18102a;
     --overlay-road-border-color: #006890;
-    --overlay-metro-color:       #40206a;
+    --overlay-metro-color:       #d9b6f5;  /* light — additive @0.235 opacity */
+}
+
+html.theme-game {
+    /* Cyberpunk 2077 in-game world-map palette. Every value is extracted
+       verbatim from WolvenKit material/inkstyle exports — this is the one
+       theme that keeps the raw game colours instead of restyling them.
+       See wiki/sources/game-theme-colors.md for the full derivation. */
+    --primary: #0e0e17;       /* MainColors.Fullscreen_PrimaryBackgroundDarkest */
+    --secondary: #ff6159;     /* MainColors.Red (HDR clamped) */
+    --tertiary: #5ef6ff;      /* MainColors.Blue (HDR clamped) */
+
+    --gray: #a09a96;          /* MainColors.Grey */
+
+    --white: #ede7e6;
+    --dark-accent: #121221;   /* MainColors.Fullscreen_PrimaryBackgroundDark */
+
+    /* Themed surfaces */
+    --surface-panel: rgba(14, 14, 23, 0.95);
+    --surface-hover: rgba(255, 97, 89, 0.08);
+    --surface-panel-90: rgba(14, 14, 23, 0.9);
+    --surface-tooltip-95: rgba(8, 8, 14, 0.95);
+    --surface-tooltip-85: rgba(8, 8, 14, 0.85);
+    --surface-nav-80: rgba(14, 14, 23, 0.8);
+    --white-78: rgba(237, 231, 230, 0.78);
+    --white-86: rgba(237, 231, 230, 0.86);
+
+    /* Theme category colors */
+    --category-location-overhaul: var(--secondary);
+    --category-location-overhaul-glow: var(--secondary-40);
+    --category-new-location: var(--tertiary);
+    --category-new-location-glow: var(--tertiary-40);
+    --category-other: var(--gray);
+    --category-other-glow: var(--gray-40);
+
+    /* 3D scene mesh colors. NOT raw game albedo — the renderer darkens albedo
+       through a concave (tonemapped) curve (gain ~0.2–0.34, measured against
+       the live renderer), so these are inverse-transfer values: solved so the
+       LIT result lands on the eyedropped in-game map colours (terrain #16293a,
+       water #0e1d2a, buildings #76353a). Calibrated at high sun.
+         terrain/water/cliffs — measured + validated (terrain ΔRGB ≈ 16).
+         buildings — measured (2-point fit). G/B land on target; the RED
+           channel is shading-capped at ~88/255, below the game's 118, so R
+           is maxed and buildings render a little darker than #76353a. Closing
+           that needs a scene-lighting change, not a theme value. */
+    --scene-terrain:         #486e90;
+    --scene-water:           #385775;
+    --scene-cliffs:          #486e90;
+    --scene-buildings:       #ff9fa7;
+    --scene-buildings-edge:  #ff99a5;  /* 3d_map_cubes.mt EdgeColor */
+    --scene-grid:            #6d8ab0;  /* 3d_map_terrain.mt LinesColor */
+
+    /* Overlay colors. Metro is the verbatim game value (additive @0.235 is
+       gentle). Roads/borders are the game colours #1cb3bf / #1ec3c8 darkened
+       for full-strength additive (raw values blow out) — same raw-value-vs-
+       blend-input gap as the --scene-* colours. Borders stay brighter than the
+       road fill: the game emphasises the road edge. */
+    --overlay-road-color:        #0e5a60;  /* 3dmap_roads #1cb3bf x~0.5 (additive) */
+    --overlay-road-border-color: #178e92;  /* 3dmap_roads_borders #1ec3c8 x~0.72 — kept bright */
+    --overlay-metro-color:       #ffeded;  /* 3dmap_metro.Material.json (verbatim) */
 }
 
 /* Global reset */
