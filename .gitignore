@@ -44,3 +44,8 @@ Thumbs.db
 # Uncompressed source GLBs — drop WolvenKit exports here for `npm run encode-meshopt`.
 # Repo only commits the encoded output at assets/glb-meshopt/.
 assets/glb-source/
+
+# Source .cube for the colour-grading LUT — drop the WolvenKit .cube export
+# here for `npm run build-lut`. Repo only commits the runtime asset at
+# assets/data/.
+assets/lut-source/
