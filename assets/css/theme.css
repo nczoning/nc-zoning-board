@@ -351,12 +351,17 @@ html.theme-game {
        no inverse-transfer fudge. Sources: 3d_map_cubes.mt BaseColorScale,
        3d_map_terrain.mt BaseColorScale, 3dmap_water terrain×0.7. */
     --scene-terrain:         #566c88;  /* 3d_map_terrain.mt BaseColorScale */
-    --scene-water:           #3c4c5f;  /* terrain × 0.7 brightness (3dmap_water.mi) */
+    --scene-water:           #566c88;  /* shares the terrain albedo; 0.7 Brightness applied on the water material (3dmap_water.mi) */
     --scene-cliffs:          #566c88;  /* shares the terrain material */
     --scene-buildings:       #c97e87;  /* 3d_map_cubes.mt BaseColorScale */
-    --scene-landmarks:       #c97e87;  /* monument GLBs — same as buildings here */
+    --scene-landmarks:       #c97e87;  /* monuments render the same red as the buildings in-game (verified vs the SDR landmark capture) — = --scene-buildings */
     --scene-buildings-edge:  #ff99a5;  /* 3d_map_cubes.mt EdgeColor */
     --scene-grid:            #6d8ab0;  /* 3d_map_terrain.mt LinesColor */
+
+    /* Enable the in-game colour grade + braindance LUT (decoded from
+       3dmap.envparam ColorGradingAreaSettings — see aces-tonemap.js). The five
+       stylised themes leave this unset (0) and get only the ACES tonemap. */
+    --scene-grade:           1;
 
     /* Overlay colors. Metro is the verbatim game value (additive @0.235 is
        gentle). Roads/borders are the game colours #1cb3bf / #1ec3c8 darkened

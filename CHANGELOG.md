@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Three.js-Parity: in-game lighting pipeline (ACES tonemap + grade + LUT)
+
+- The 3D scene now reproduces the in-game map's full decoded colour pipeline — an ACES SSTS tonemap, the envparam colour grade, and the **braindance grading LUT** — all from `base/weather/24h_basic/3dmap.envparam`. New standalone module [`aces-tonemap.js`](assets/js/aces-tonemap.js) (the ACES Output Transform, registered as a custom WebGPU tone-mapping function); new [`scripts/build_lut.js`](scripts/build_lut.js) extracts the 32³ LUT to `assets/data/braindance-lut.bin`.
+- Game theme `--scene-*` are now the exact extracted material albedo (no eyedropping); the grade + LUT are gated to the Game theme via the `--scene-grade` CSS variable — the five stylised themes keep their own look and get only the tonemap.
+- Sun, ambient and `toneMappingExposure` calibrated against an SDR PIX capture of the in-game map. Full pipeline documented in [docs/3d-map-lighting.md](docs/3d-map-lighting.md).
+
 #### Three.js-Parity: building edge surface gradient
 
 - Building faces now carry the game's centre-dark → edge-light gradient. The decoded edge term `pow(X, EdgeSharpnessPower)` is a gradient, not a step — it had been rendered as a flat thin band, dropping the falloff. Now rendered as the real gradient, box-filtered over the pixel footprint so the steep rim self-antialiases under minification.

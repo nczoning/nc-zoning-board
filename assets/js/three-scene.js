@@ -37,6 +37,9 @@ import { Line2 } from 'three/addons/lines/webgpu/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import Stats from 'three/addons/libs/stats.module.js';
+// The exact in-game 3D-map colour pipeline (decoded from 3dmap.envparam):
+// ACES tonemap + colour grade + braindance LUT — see assets/js/aces-tonemap.js.
+import { registerCP2077ToneMapping, loadBraindanceLUT, setSceneGradeEnabled } from './aces-tonemap.js';
 
 window.NCZ = window.NCZ || {};
 
@@ -239,6 +242,16 @@ const ThreeScene = (() => {
     catch { return new THREE.Color(fallback); }
   }
 
+  // Whether the active theme wants the in-game colour grade + braindance LUT.
+  // Driven by the `--scene-grade` CSS custom property: the Game (and later
+  // Preem) themes set it to 1; the five stylised themes leave it unset (0), so
+  // they keep their own colour identity and get only the ACES tonemap.
+  function themeGradeEnabled() {
+    const raw = getComputedStyle(document.documentElement)
+      .getPropertyValue('--scene-grade').trim();
+    return parseFloat(raw) > 0;
+  }
+
   // Derive edge highlight colour from the building base colour.
 
   // ── Terrain "graph-paper" grid ─────────────────────────────────────────────
@@ -326,7 +339,7 @@ const ThreeScene = (() => {
   //
   // Base colour stays in `material.color` (read via `materialColor`); only
   // the grid line colour is a `uniform()` on userData.tslUniforms.
-  function makeHillshadeMaterial(colorVar, fallback, extra = {}) {
+  function makeHillshadeMaterial(colorVar, fallback, extra = {}, brightness = 1) {
     const mat = new THREE.MeshLambertNodeMaterial({
       color: readThemeColor(colorVar, fallback),
       flatShading: true,
@@ -335,7 +348,11 @@ const ThreeScene = (() => {
     });
     const uGrid = uniform(readThemeColor('--scene-grid', '#6d8ab0'));
     mat.userData.tslUniforms = { uGrid };
-    mat.colorNode = mix(materialColor, uGrid, terrainGridFactor());
+    // Base colour + procedural grid. `brightness` is the material's decoded
+    // Brightness param — water is 0.7 (3dmap_water.mi overrides it on the
+    // shared terrain material); terrain and cliffs are 1.
+    const shaded = mix(materialColor, uGrid, terrainGridFactor());
+    mat.colorNode = brightness === 1 ? shaded : shaded.mul(brightness);
     return mat;
   }
 
@@ -551,18 +568,23 @@ const ThreeScene = (() => {
     // have shifted in past major versions.
     THREE.ColorManagement.enabled = true;
     renderer.outputColorSpace     = THREE.SRGBColorSpace;
-    // Tonemap. The in-game 3D map renders through ACES (decoded from
-    // 3dmap.envparam: TonemappingModeACES), but its STonemappingACESParams set
-    // `desaturate: 0` — saturation-preserving. Three.js's ACESFilmicToneMapping
-    // is the Narkowicz approximation, which visibly DESATURATES saturated
-    // colours — it washed the red out of the building albedo (rendered ~30%
-    // short on the red channel vs the in-game target). NeutralToneMapping
-    // (Khronos PBR Neutral) compresses highlights without shifting hue or
-    // desaturating, so it matches the game's `desaturate: 0` ACES *intent*
-    // far better than Three's ACES fit does.
+    // Tonemap — the exact in-game 3D-map ACES Output Transform. The map renders
+    // through `TonemappingModeACES` (decoded from 3dmap.envparam); aces-tonemap.js
+    // ports the ACES SSTS tone scale parametrised by the decoded
+    // STonemappingACESParams and registers it as a custom WebGPU tone-mapping
+    // function. This supersedes the interim NeutralToneMapping; Three's built-in
+    // ACESFilmicToneMapping (the Narkowicz approximation — desaturates) is not used.
     // Exposure is a calibration knob — tuned against the in-game map.
-    renderer.toneMapping         = THREE.NeutralToneMapping;
+    renderer.toneMapping         = registerCP2077ToneMapping(renderer);
     renderer.toneMappingExposure = NCZ.SCENE_TONEMAP_EXPOSURE;
+    // Load the braindance grading LUT — fire-and-forget; the texture binding is
+    // stable so the data fill uploads transparently once the fetch lands. The
+    // grade + LUT are gated per theme via the --scene-grade CSS var (Game/Preem
+    // set it to 1; the five stylised themes leave it 0). Seed it from the
+    // active theme; updateMaterials() re-reads it on every theme switch.
+    loadBraindanceLUT('assets/data/braindance-lut.bin')
+      .catch(err => console.warn('[NCZ] braindance LUT load failed:', err));
+    setSceneGradeEnabled(themeGradeEnabled());
     // Cap effective DPR — see NCZ.MAX_DEVICE_PIXEL_RATIO. The debug-dump
     // "Renderer DPR" line shows the capped value; "Display ... DPR" still shows
     // the raw window.devicePixelRatio, so the two diverge for capped users.
@@ -650,19 +672,6 @@ const ThreeScene = (() => {
     _hemiLight.name = 'sky-fill';
     scene.add(_hemiLight);
     // Sun position is applied by app.js via the slider once terrain has loaded.
-
-    // TEMP calibration hook — live-tune lighting without reloading. REMOVE before PR.
-    window.__ncz_cal = {
-      r: renderer, sun: _dirLight, hemi: _hemiLight,
-      set: (o = {}) => {
-        if (o.exposure != null) renderer.toneMappingExposure = o.exposure;
-        if (o.sun      != null) _dirLight.intensity = o.sun;
-        if (o.ambient  != null) _hemiLight.intensity = o.ambient;
-        renderer.shadowMap.needsUpdate = true;
-        requestRender();
-        return { exposure: renderer.toneMappingExposure, sun: _dirLight.intensity, ambient: _hemiLight.intensity };
-      },
-    };
 
     // Visible sun sphere — hidden by default, shown during showcase only.
     // Radius NCZ.SUN_SPHERE_RADIUS units at NCZ.SUN_SPHERE_DIST distance ≈ 1.7° apparent diameter (≈3× real sun).
@@ -973,11 +982,11 @@ const ThreeScene = (() => {
       //     over the bay AFTER the terrain seabed wrote stencil=STENCIL_OCCLUDER there in the opaque pass.
       const stencilOverstamp = { stencilWrite: true, stencilRef: NCZ.STENCIL_OCCLUDER, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp };
       terrainMat = makeHillshadeMaterial('--scene-terrain', '#566c88', stencilOverstamp);
-      waterMat   = makeHillshadeMaterial('--scene-water',   '#2a3f57', {
+      waterMat   = makeHillshadeMaterial('--scene-water',   '#566c88', {
         transparent: true, opacity: NCZ.WATER_OPACITY,
         stencilWrite: true, stencilRef: NCZ.STENCIL_WATER,
         stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp,
-      });
+      }, 0.7); // 0.7 = Brightness override in 3dmap_water.mi (shared terrain material)
       cliffsMat  = makeHillshadeMaterial('--scene-cliffs',  '#566c88', stencilOverstamp);
       applyMaterial(terrainScene, terrainMat);
       applyMaterial(waterScene,   waterMat);
@@ -2508,6 +2517,10 @@ const ThreeScene = (() => {
     if (!scene) return;
 
     scene.background = readThemeColor('--primary', '#0a192f');
+
+    // Colour grade + braindance LUT follow the theme (--scene-grade): on for
+    // the Game / Preem map-replica themes, off for the stylised themes.
+    setSceneGradeEnabled(themeGradeEnabled());
 
     // Terrain/water/cliffs: base colour is material.color; the grid line
     // colour is the shared uGrid uniform stashed on each material.
