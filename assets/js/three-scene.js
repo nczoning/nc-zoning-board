@@ -574,9 +574,14 @@ const ThreeScene = (() => {
     // STonemappingACESParams and registers it as a custom WebGPU tone-mapping
     // function. This supersedes the interim NeutralToneMapping; Three's built-in
     // ACESFilmicToneMapping (the Narkowicz approximation — desaturates) is not used.
-    // Exposure is a calibration knob — tuned against the in-game map.
+    // Exposure (NCZ.SCENE_EXPOSURE) — a normalised gauge. The in-game map's
+    // physical camera decodes to exposure 0.000108, but that value can't be
+    // used literally: it's a global multiplier and would crush the unlit
+    // [0,1]-colour overlays (roads/metro/district lines) to black. So exposure
+    // stays in the overlay-friendly range and the lights are scaled to match.
+    // See the lighting block in constants.js.
     renderer.toneMapping         = registerCP2077ToneMapping(renderer);
-    renderer.toneMappingExposure = NCZ.SCENE_TONEMAP_EXPOSURE;
+    renderer.toneMappingExposure = NCZ.SCENE_EXPOSURE;
     // Load the braindance grading LUT — fire-and-forget; the texture binding is
     // stable so the data fill uploads transparently once the fetch lands. The
     // grade + LUT are gated per theme via the --scene-grade CSS var (Game/Preem

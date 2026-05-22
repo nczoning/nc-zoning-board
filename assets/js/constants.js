@@ -262,20 +262,34 @@ NCZ.SHADOW_CAM_FAR       = 40000; // shadow camera far clip — the camera sits 
 NCZ.SHADOW_BIAS          =     0; // NDC depth bias — 0; native depth32float + reverse-Z have ample depth precision (the old -0.0005 was for the WebGL RGBA8-packed path). The geometric self-shadow ("texel patch covers a depth range") is handled by the normal bias instead:
 NCZ.SHADOW_NORMAL_BIAS_TEXELS = 2.5; // receiver-sample offset along the surface normal, in shadow-texel widths — converted to world units per-frame by updateShadowCamera (scaling with the footprint keeps it the same texel offset at every zoom). Raise to kill residual grazing-sun acne ("the wave" on flat terrain/water); lower if shadows visibly detach from their casters at high zoom.
 
-// Lighting — calibrated to the in-game 3D world map environment
-// (base/weather/24h_basic/3dmap.envparam, decoded). The game lights the map
-// with a fixed low sun + a 6-direction ambient cube, through an ACES tonemap.
-// Sun + ambient COLOURS are the decoded envparam values (linear RGB); the
-// intensities + SCENE_TONEMAP_EXPOSURE are renderer-calibrated to in-game captures.
-// SUN/AMBIENT intensities + SCENE_TONEMAP_EXPOSURE: calibrated 2026-05-22 against
-// the SDR PIX capture of the in-game map, sampling clean terrain content (no
-// edge highlight / bloom). Terrain landed rgb(11,31,46) vs the game's (15,31,40).
-NCZ.SCENE_TONEMAP_EXPOSURE = 0.85;                  // renderer.toneMappingExposure — calibration knob
+// Lighting — recalibrated to the decoded in-game 3D world map environment
+// (base/weather/24h_basic/3dmap.env + 3dmap.envparam).
+//
+// The flat-looking buildings were a lighting problem, not a colour one: the
+// old sun:ambient ratio (1.1 : 0.42 ≈ 2.6 : 1) had ambient washing every face
+// to nearly the same tone. The in-game map's within-building contrast is
+// ~10× (bright sun-faces vs shadow faces); decoding the envparam and fitting
+// against the in-game SDR capture gives a sun:ambient ratio of ~50 : 1.
+//
+// Decode note — the in-game map exposes through a *physical camera*
+// (`CameraAreaSettings`: f/3.0, ISO 35, 1/300 s ⇒ EV100 12.9, exposure
+// 1/(1.2·2^EV) = 0.000108; cross-confirmed in PIX event-306 cb12 [50].x =
+// 0.000108025). That exposure can't be used literally here: the roads, metro
+// and district lines are *unlit* materials with plain [0,1] colours, and a
+// 0.000108 global `toneMappingExposure` would crush them to black. So the
+// renderer works in a normalised gauge — exposure stays at the value the
+// unlit overlays need (0.85), and the lights are scaled by the same factor
+// (0.000108/0.85). The building result is identical; the overlays survive.
+//
+// SUN/AMBIENT are still a capture-fit ratio (the exact engine lux awaits the
+// PIX light-accumulation pass — TODO(pix)). Sun + ambient COLOURS are exact
+// decoded envparam values (linear RGB).
+NCZ.SCENE_EXPOSURE     = 0.85;                      // renderer.toneMappingExposure — normalised gauge (keeps unlit overlays in range)
 NCZ.SUN_COLOR_RGB      = [0.975, 0.869, 0.774];     // envparam LightAreaSettings.sunColor — warm white (linear)
-NCZ.SUN_INTENSITY      = 1.1;                       // calibrated — envparam alpha 0.5 is REDengine units, not Three.js
+NCZ.SUN_INTENSITY      = 6.35;                      // capture-fit — sun:ambient ≈ 50:1 gives the in-game within-building contrast
 NCZ.AMBIENT_SKY_RGB    = [0.796, 0.895, 1.0];       // envparam AmbientOverride — the 5 bright cube faces, cool white (linear)
 NCZ.AMBIENT_GROUND_RGB = [0.566, 0.766, 1.0];       // envparam AmbientOverride — the dim ground face, blue (linear)
-NCZ.AMBIENT_INTENSITY  = 0.42;                      // calibrated — envparam HDR alpha 2000 has no 1:1 Three.js unit
+NCZ.AMBIENT_INTENSITY  = 0.127;                     // capture-fit — sun:ambient ≈ 50:1 (was 0.42; too high → flat buildings)
 NCZ.SUN_DIST           = 22000;  // CET units the sun light (and its shadow camera) sits up the sun ray from the visible-ground centre — only the direction matters for shading; large enough that the whole footprint stays in front of the shadow camera even at a low sun
 NCZ.SUN_SPHERE_DIST    = 20000;  // visible sun disc distance from world centre
 NCZ.SUN_SPHERE_RADIUS  =   600;  // CET units — ≈1.7° apparent diameter at SUN_SPHERE_DIST (≈3× real sun)

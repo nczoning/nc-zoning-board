@@ -578,6 +578,14 @@ async function initMap() {
   // re-entry into the broken 3D view — deep link, keyboard, stray call.
   let threeDAvailable = true;
   let webgpuFallbackDone = false;
+  // ?gamelight — calibration reference mode. Pins the 3D scene to the decoded
+  // in-game 3D-map lighting state: sun fixed at the 3dmap.envparam
+  // GlobalLightOverride (azimuth 107.12°, elevation 7°), time-of-day slider
+  // frozen, and the Districts/Pins overlays stripped so the terrain/buildings
+  // can be colour-matched against the in-game SDR capture without obstruction.
+  // A reproducible reference frame — same URL always yields the identical
+  // lighting state. Debug/calibration only; not linked from the UI.
+  const GAMELIGHT = new URLSearchParams(window.location.search).has('gamelight');
   function switchView(viewName) {
     if (viewName === "schema" && !threeDAvailable) return;
     document.querySelectorAll(".map-view-btn").forEach(btn => {
@@ -603,6 +611,7 @@ async function initMap() {
           // 3D scene: drop the user onto the 2D Leaflet map instead.
           if (NCZ.ThreeScene.isWebGPUActive()) {
             NCZ.ThreeScene.startRenderLoop();
+            if (GAMELIGHT) applyGameLightRef();
           } else {
             forceSatFallback();
           }
@@ -654,7 +663,20 @@ async function initMap() {
   const sunSlider      = document.getElementById("scene-sun-slider");
   const sunTimeDisplay = document.getElementById("scene-sun-time");
 
+  // The decoded 3dmap.envparam GlobalLightOverride sun — fixed, no time of day.
+  const GAMELIGHT_SUN_AZIMUTH   = 107.121956 * Math.PI / 180;
+  const GAMELIGHT_SUN_ELEVATION = 7 * Math.PI / 180;
+
   function applySunTime(morroMinutes) {
+    // ?gamelight — pin to the decoded reference sun, ignore the slider value.
+    // Gating here (not just at the call sites) means every path that drives the
+    // sun — slider setup, terrain-loaded apply, the UI-sync poll — keeps it
+    // pinned, so the reference frame can't drift.
+    if (GAMELIGHT) {
+      NCZ.ThreeScene?.setSunPosition?.(GAMELIGHT_SUN_AZIMUTH, GAMELIGHT_SUN_ELEVATION);
+      if (sunTimeDisplay) sunTimeDisplay.textContent = 'REF';
+      return;
+    }
     // morroMinutes = Morro Bay PDT (e.g. 600 = 10:00 AM PDT)
     if (typeof SunCalc === 'undefined' || !NCZ.ThreeScene?.setSunPosition) return;
     const date = new Date(SOLSTICE);
@@ -691,6 +713,27 @@ async function initMap() {
   document.getElementById("overlay-shadows")?.addEventListener("change", e => {
     NCZ.ThreeScene?.setShadowsEnabled?.(e.target.checked);
   });
+
+  // ?gamelight — apply the calibration reference state once the 3D scene is
+  // live (called from switchView's schema branch). The sun is already pinned
+  // by applySunTime()'s GAMELIGHT gate; here we freeze the slider and strip the
+  // Districts/Pins overlays so they don't obscure the surfaces being matched
+  // against the in-game capture. Shadows default off, so no action needed there.
+  function applyGameLightRef() {
+    applySunTime(0); // GAMELIGHT-gated → pins the decoded reference sun
+    if (sunSlider) {
+      sunSlider.disabled = true;
+      sunSlider.title = '?gamelight — sun pinned to the decoded in-game reference';
+    }
+    document.querySelectorAll('[data-overlay]').forEach(cb => {
+      const overlay = cb.dataset.overlay;
+      if ((overlay === 'districts' || overlay === 'pins') && cb.checked) {
+        cb.checked = false;
+        cb.dispatchEvent(new Event('change'));
+      }
+    });
+    console.info('[NCZ] ?gamelight — calibration reference: sun az 107.12°/el 7°, overlays stripped.');
+  }
 
   const flyoverBtn = document.getElementById("scene-flyover-btn");
   // Elements to hide during showcase. We save each one's inline display value
@@ -869,6 +912,20 @@ async function initMap() {
   let _lastPolledSunEl = null;
   setInterval(() => {
     if (!NCZ.ThreeScene?.getLayerVisibility) return;
+
+    // ?gamelight — hold the calibration reference state. Districts and the
+    // shadow pass initialise asynchronously (after terrain load), so the
+    // one-shot applyGameLightRef() can't catch them; re-assert here. The
+    // checkbox sync below then unticks them to match. Guarded so it's a no-op
+    // once settled (no per-tick shadow-map invalidation).
+    if (GAMELIGHT) {
+      if (NCZ.ThreeScene.getLayerVisibility('districts')) {
+        NCZ.ThreeScene.setLayerVisibility('districts', false);
+      }
+      if (NCZ.ThreeScene.getShadowsEnabled?.()) {
+        NCZ.ThreeScene.setShadowsEnabled(false);
+      }
+    }
 
     // Overlay checkboxes
     document.querySelectorAll("[data-overlay]").forEach(cb => {
