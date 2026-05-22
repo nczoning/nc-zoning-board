@@ -345,21 +345,16 @@ html.theme-game {
     --category-other: var(--gray);
     --category-other-glow: var(--gray-40);
 
-    /* 3D scene mesh colors. NOT raw game albedo — the renderer darkens albedo
-       through a concave (tonemapped) curve (gain ~0.2–0.34, measured against
-       the live renderer), so these are inverse-transfer values: solved so the
-       LIT result lands on the eyedropped in-game map colours (terrain #16293a,
-       water #0e1d2a, buildings #76353a). Calibrated at high sun.
-         terrain/water/cliffs — measured + validated (terrain ΔRGB ≈ 16).
-         buildings — measured (2-point fit). G/B land on target; the RED
-           channel is shading-capped at ~88/255, below the game's 118, so R
-           is maxed and buildings render a little darker than #76353a. Closing
-           that needs a scene-lighting change, not a theme value. */
-    --scene-terrain:         #486e90;
-    --scene-water:           #385775;
-    --scene-cliffs:          #486e90;
-    --scene-buildings:       #ff9fa7;
-    --scene-landmarks:       #ff9fa7;  /* monument GLBs — same as buildings here */
+    /* 3D scene mesh colors — the raw game material albedo, verbatim. The scene
+       now reproduces the game's lighting pipeline (ACES tonemap + the decoded
+       3dmap.envparam sun/ambient), so exact game colours in → in-game look out;
+       no inverse-transfer fudge. Sources: 3d_map_cubes.mt BaseColorScale,
+       3d_map_terrain.mt BaseColorScale, 3dmap_water terrain×0.7. */
+    --scene-terrain:         #566c88;  /* 3d_map_terrain.mt BaseColorScale */
+    --scene-water:           #3c4c5f;  /* terrain × 0.7 brightness (3dmap_water.mi) */
+    --scene-cliffs:          #566c88;  /* shares the terrain material */
+    --scene-buildings:       #c97e87;  /* 3d_map_cubes.mt BaseColorScale */
+    --scene-landmarks:       #c97e87;  /* monument GLBs — same as buildings here */
     --scene-buildings-edge:  #ff99a5;  /* 3d_map_cubes.mt EdgeColor */
     --scene-grid:            #6d8ab0;  /* 3d_map_terrain.mt LinesColor */
 

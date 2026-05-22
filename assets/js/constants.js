@@ -259,15 +259,20 @@ NCZ.SHADOW_CAM_FAR       = 40000; // shadow camera far clip — the camera sits 
 NCZ.SHADOW_BIAS          =     0; // NDC depth bias — 0; native depth32float + reverse-Z have ample depth precision (the old -0.0005 was for the WebGL RGBA8-packed path). The geometric self-shadow ("texel patch covers a depth range") is handled by the normal bias instead:
 NCZ.SHADOW_NORMAL_BIAS_TEXELS = 2.5; // receiver-sample offset along the surface normal, in shadow-texel widths — converted to world units per-frame by updateShadowCamera (scaling with the footprint keeps it the same texel offset at every zoom). Raise to kill residual grazing-sun acne ("the wave" on flat terrain/water); lower if shadows visibly detach from their casters at high zoom.
 
-// Lighting — directional sun + hemisphere fill
-NCZ.AMBIENT_INTENSITY  = 0.35;   // hemisphere-fill share; the sun gets (1 - this) at full elevation
+// Lighting — calibrated to the in-game 3D world map environment
+// (base/weather/24h_basic/3dmap.envparam, decoded). The game lights the map
+// with a fixed low sun + a 6-direction ambient cube, through an ACES tonemap.
+// Sun + ambient COLOURS are the decoded envparam values (linear RGB); the
+// intensities + SCENE_TONEMAP_EXPOSURE are renderer-calibrated to in-game captures.
+NCZ.SCENE_TONEMAP_EXPOSURE = 1.0;                   // renderer.toneMappingExposure (ACES filmic) — calibration knob
+NCZ.SUN_COLOR_RGB      = [0.975, 0.869, 0.774];     // envparam LightAreaSettings.sunColor — warm white (linear)
+NCZ.SUN_INTENSITY      = 0.5;                       // envparam GlobalLightOverrideAreaSettings.color alpha — transfers directly
+NCZ.AMBIENT_SKY_RGB    = [0.796, 0.895, 1.0];       // envparam AmbientOverride — the 5 bright cube faces, cool white (linear)
+NCZ.AMBIENT_GROUND_RGB = [0.566, 0.766, 1.0];       // envparam AmbientOverride — the dim ground face, blue (linear)
+NCZ.AMBIENT_INTENSITY  = 1.0;                       // hemisphere ambient — envparam HDR alpha 2000 has no 1:1 unit; exposure is the bridge
 NCZ.SUN_DIST           = 22000;  // CET units the sun light (and its shadow camera) sits up the sun ray from the visible-ground centre — only the direction matters for shading; large enough that the whole footprint stays in front of the shadow camera even at a low sun
 NCZ.SUN_SPHERE_DIST    = 20000;  // visible sun disc distance from world centre
 NCZ.SUN_SPHERE_RADIUS  =   600;  // CET units — ≈1.7° apparent diameter at SUN_SPHERE_DIST (≈3× real sun)
-NCZ.SUN_COLOR_ELEV     =    20;  // degrees — light is warm orange below this, neutral white above
-NCZ.SUN_INTENSITY_ELEV =    30;  // degrees — full intensity reached above this elevation
-NCZ.SUN_INTENSITY_MIN  =   0.2;  // minimum intensity multiplier at the horizon
-NCZ.SUN_AMBIENT_MIN    =   0.4;  // minimum ambient intensity scale factor (prevents total darkness at night)
 
 // Building instance decode — DDS _data.dds (DXGI_FORMAT_R16G16B16A16_UNORM, DX10 header)
 // Each pixel encodes one building instance across three horizontal blocks: position | rotation | scale.

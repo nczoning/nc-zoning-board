@@ -43,10 +43,6 @@ window.NCZ = window.NCZ || {};
 // Default sun direction (unit, points from the ground toward the sun) until the
 // real SunCalc-driven position arrives via setSunPosition.
 const SUN_DIR = new THREE.Vector3(-1, 1.5, -1).normalize();
-// Hemisphere-fill sky colour, lerped by sun elevation: hazy cool daylight when
-// high, warm hazy when low (the real sky scatters orange at golden hour too).
-const SKY_NOON    = new THREE.Color(0x8a96a6);
-const SKY_HORIZON = new THREE.Color(0xc9a878);
 
 const ThreeScene = (() => {
   let renderer, camera, scene, controls;
@@ -555,6 +551,18 @@ const ThreeScene = (() => {
     // have shifted in past major versions.
     THREE.ColorManagement.enabled = true;
     renderer.outputColorSpace     = THREE.SRGBColorSpace;
+    // Tonemap. The in-game 3D map renders through ACES (decoded from
+    // 3dmap.envparam: TonemappingModeACES), but its STonemappingACESParams set
+    // `desaturate: 0` — saturation-preserving. Three.js's ACESFilmicToneMapping
+    // is the Narkowicz approximation, which visibly DESATURATES saturated
+    // colours — it washed the red out of the building albedo (rendered ~30%
+    // short on the red channel vs the in-game target). NeutralToneMapping
+    // (Khronos PBR Neutral) compresses highlights without shifting hue or
+    // desaturating, so it matches the game's `desaturate: 0` ACES *intent*
+    // far better than Three's ACES fit does.
+    // Exposure is a calibration knob — tuned against the in-game map.
+    renderer.toneMapping         = THREE.NeutralToneMapping;
+    renderer.toneMappingExposure = NCZ.SCENE_TONEMAP_EXPOSURE;
     // Cap effective DPR — see NCZ.MAX_DEVICE_PIXEL_RATIO. The debug-dump
     // "Renderer DPR" line shows the capped value; "Display ... DPR" still shows
     // the raw window.devicePixelRatio, so the two diverge for capped users.
@@ -599,17 +607,22 @@ const ThreeScene = (() => {
     camera.up.set(0, 1, 0);
     camera.updateProjectionMatrix();
 
-    // ── Lighting: outdoor model — directional sun + hemisphere fill ──
-    // The sun: a DirectionalLight whose direction tracks the real Morro Bay sun
-    // (SunCalc, via setSunPosition; default NW hillshade until then). One shadow
-    // map, an OrthographicCamera fitted each move to exactly the visible-ground
-    // footprint (updateShadowCamera) — single map for now; a CSM revisit is
-    // queued (see [[align-schematic-camera-to-game]] — the original "no cascades
-    // because schema is ortho" rationale dissolved when the schema camera moved
-    // to perspective). castShadow stays on permanently; the "shadows" layer
-    // toggle flips shadow *intensity* (toggling castShadow on a live light
-    // tears its depth texture down mid-frame and crashes WebGPURenderer).
-    _dirLight = new THREE.DirectionalLight(0xffffff, 1.0 - NCZ.AMBIENT_INTENSITY);
+    // ── Lighting: calibrated to the in-game 3D map (3dmap.envparam) ──
+    // The game lights the world map with a fixed low sun + a 6-direction ambient
+    // cube, through an ACES tonemap (decoded from base/weather/24h_basic/
+    // 3dmap.envparam). We reproduce that: a DirectionalLight with the decoded
+    // warm sun colour + a HemisphereLight with the decoded sky/ground colours,
+    // both at fixed (calibrated) intensity — the game's map has no time-of-day
+    // variation. The sun slider still moves the sun's *direction* (shadows sweep,
+    // faces relight); colour + intensity stay put. Cast shadows are layered on
+    // top as an intentional artistic choice (the in-game map has them disabled).
+    //
+    // One shadow map, an OrthographicCamera fitted each move to the visible-ground
+    // footprint (updateShadowCamera). castShadow stays on permanently; the
+    // "shadows" layer toggle flips shadow *intensity* (toggling castShadow on a
+    // live light tears its depth texture down mid-frame and crashes WebGPURenderer).
+    _dirLight = new THREE.DirectionalLight(0xffffff, NCZ.SUN_INTENSITY);
+    _dirLight.color.setRGB(...NCZ.SUN_COLOR_RGB, THREE.LinearSRGBColorSpace);
     _dirLight.name = 'sun';
     _dirLight.castShadow         = true;
     _dirLight.shadow.mapSize.set(NCZ.SHADOW_MAP_SIZE, NCZ.SHADOW_MAP_SIZE);
@@ -628,14 +641,28 @@ const ThreeScene = (() => {
     scene.add(_dirLight);
     scene.add(_dirLight.target);
 
-    // Hemisphere fill — sky-colour from above (hazy cool daylight), darker
-    // ground-colour bounce from below. Reads more like an outdoor scene than a
-    // flat AmbientLight: building tops catch the sky, sides get a 50/50 mix →
-    // subtle face-to-face contrast for free. Intensity tracks the day in setSunPosition.
-    _hemiLight = new THREE.HemisphereLight(0x8a96a6, 0x1c2128, NCZ.AMBIENT_INTENSITY);
+    // Hemisphere ambient — the decoded envparam ambient cube collapses to a
+    // hemisphere: 5 bright cool-white faces (sky + sides) over 1 dim blue face
+    // (ground). Fixed colour + intensity, matching the game's fixed environment.
+    _hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, NCZ.AMBIENT_INTENSITY);
+    _hemiLight.color.setRGB(...NCZ.AMBIENT_SKY_RGB, THREE.LinearSRGBColorSpace);
+    _hemiLight.groundColor.setRGB(...NCZ.AMBIENT_GROUND_RGB, THREE.LinearSRGBColorSpace);
     _hemiLight.name = 'sky-fill';
     scene.add(_hemiLight);
     // Sun position is applied by app.js via the slider once terrain has loaded.
+
+    // TEMP calibration hook — live-tune lighting without reloading. REMOVE before PR.
+    window.__ncz_cal = {
+      r: renderer, sun: _dirLight, hemi: _hemiLight,
+      set: (o = {}) => {
+        if (o.exposure != null) renderer.toneMappingExposure = o.exposure;
+        if (o.sun      != null) _dirLight.intensity = o.sun;
+        if (o.ambient  != null) _hemiLight.intensity = o.ambient;
+        renderer.shadowMap.needsUpdate = true;
+        requestRender();
+        return { exposure: renderer.toneMappingExposure, sun: _dirLight.intensity, ambient: _hemiLight.intensity };
+      },
+    };
 
     // Visible sun sphere — hidden by default, shown during showcase only.
     // Radius NCZ.SUN_SPHERE_RADIUS units at NCZ.SUN_SPHERE_DIST distance ≈ 1.7° apparent diameter (≈3× real sun).
@@ -2652,25 +2679,11 @@ const ThreeScene = (() => {
     _dirLight.position.copy(_dirLight.target.position).addScaledVector(_sunDir, NCZ.SUN_DIST);
     if (renderer) renderer.shadowMap.needsUpdate = true;   // sun moved ⇒ re-render the shadow map
 
-    // Colour: warm orange at horizon → neutral white above ~NCZ.SUN_COLOR_ELEV°.
-    // setRGB writes linear-light values directly (ColorManagement does NOT convert
-    // these from sRGB the way a hex string would be). Tuned by eye with sRGB output
-    // gamma-encode active — do not "convert" them.
-    const elevDeg = el * 180 / Math.PI;
-    const t = Math.min(1, Math.max(0, elevDeg / NCZ.SUN_COLOR_ELEV));
-    _dirLight.color.setRGB(1, 0.45 + t * 0.55, 0.1 + t * 0.9);
+    // Sun + ambient colour and intensity are fixed (calibrated to 3dmap.envparam,
+    // set once at light construction) — the in-game map has no time-of-day
+    // variation. The slider only moves the sun's direction, above.
 
-    // Intensity: dims near the horizon, full above ~NCZ.SUN_INTENSITY_ELEV°
-    const intensity = NCZ.SUN_INTENSITY_MIN + (1 - NCZ.SUN_INTENSITY_MIN) * Math.min(1, Math.max(0, elevDeg / NCZ.SUN_INTENSITY_ELEV));
-    _dirLight.intensity   = (1 - NCZ.AMBIENT_INTENSITY) * intensity;
-    // Hemisphere fill: track the day's brightness, and warm the sky toward
-    // sunset so the whole scene shifts warm (the real sky scatters orange too).
-    _hemiLight.intensity  = NCZ.AMBIENT_INTENSITY * Math.max(NCZ.SUN_AMBIENT_MIN, intensity);
-    _hemiLight.color.lerpColors(SKY_HORIZON, SKY_NOON, t);
-
-    // Building materials use MeshLambertNodeMaterial — scene lights update automatically.
-
-    // Move and recolour the visible sun sphere.
+    // Move the visible sun sphere (shown during showcase only).
     // Centred on Night City (WORLD_CX, 0, -WORLD_CY) so it hangs over the map.
     if (_sunSphere) {
       const SUN_SPHERE_DIST = NCZ.SUN_SPHERE_DIST;
@@ -2681,12 +2694,6 @@ const ThreeScene = (() => {
         NCZ.WORLD_CX + nx * SUN_SPHERE_DIST,
         ny * SUN_SPHERE_DIST,
         -NCZ.WORLD_CY + nz * SUN_SPHERE_DIST,
-      );
-      // Warm orange at horizon → bright yellow at noon, slightly more saturated than the light
-      _sunSphere.material.color.setRGB(
-        Math.min(1, _dirLight.color.r * 1.3),
-        Math.min(1, _dirLight.color.g * 1.15),
-        Math.min(1, _dirLight.color.b * 0.8),
       );
     }
     requestRender();
