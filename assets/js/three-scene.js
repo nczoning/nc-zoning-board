@@ -102,6 +102,11 @@ const ThreeScene = (() => {
     }
   }
   let _shadowsOn     = true;  // shadows on by default; checkbox reflects this via poll
+  // Stored shadow strength — independent of the on/off toggle. Initialised from
+  // the constant; the Shadows overlay multiplies by this when enabled, by 0 when
+  // off. The ?lighttune slider mutates this value so tuned shadow strength
+  // survives a Shadows toggle (instead of resetting to NCZ.SHADOW_INTENSITY).
+  let _shadowIntensity = NCZ.SHADOW_INTENSITY;
   let _sunSphere     = null; // visible sun disc — shown during showcase only
   let _sunAz = Math.PI * 0.25, _sunEl = Math.PI * 0.35; // last *requested* setSunPosition args — placeholders only until the first call (the slider init in app.js), which may land before the lights exist
   let _terrainBox = null;     // THREE.Box3 of the terrain GLB; gates pan-bound clamp
@@ -658,7 +663,7 @@ const ThreeScene = (() => {
     _dirLight.shadow.camera.name = 'sun-shadow-cam';
     _dirLight.shadow.bias        = NCZ.SHADOW_BIAS;        // 0 — native depth32float + reverse-Z need no depth cushion
     // normalBias is set per-frame by updateShadowCamera (scaled with the footprint).
-    _dirLight.shadow.intensity   = _shadowsOn ? 1 : 0;
+    _dirLight.shadow.intensity   = _shadowsOn ? _shadowIntensity : 0;
     _dirLight.target.name = 'sun-target';
     // Position the light + target are set by updateShadowCamera (it centres the
     // shadow on the visible ground); seed them at the world centre so the first
@@ -2875,12 +2880,35 @@ const ThreeScene = (() => {
     // reads it via a live `reference` node, so it applies next render with no
     // recompile. (The shadow pass still runs at intensity 0 — a visual switch,
     // not a perf one; disabling the pass safely under WebGPU is deferred.)
-    if (_dirLight) _dirLight.shadow.intensity = enabled ? 1 : 0;
+    // Multiply the *stored* strength (which the tuner may have changed) by 1 or 0.
+    if (_dirLight) _dirLight.shadow.intensity = enabled ? _shadowIntensity : 0;
     requestRender();
   }
 
   function getShadowsEnabled() { return _shadowsOn; }
   function getSunElevation() { return _sunEl; }
+
+  // Live light/exposure setters — used by the ?lighttune debug panel.
+  function setSunIntensity(v)     { if (_dirLight)  _dirLight.intensity  = v; requestRender(); }
+  function setAmbientIntensity(v) { if (_hemiLight) _hemiLight.intensity = v; requestRender(); }
+  function setSceneExposure(v)    { if (renderer)   renderer.toneMappingExposure = v; requestRender(); }
+  function setShadowIntensity(v)  {
+    // Updates the *stored* shadow strength so it survives a Shadows toggle.
+    // The live light intensity tracks it only while shadows are on (off = 0).
+    _shadowIntensity = v;
+    if (_dirLight) _dirLight.shadow.intensity = _shadowsOn ? v : 0;
+    requestRender();
+  }
+  function getLightingState() {
+    return {
+      sun:      _dirLight  ? _dirLight.intensity         : null,
+      ambient:  _hemiLight ? _hemiLight.intensity        : null,
+      exposure: renderer   ? renderer.toneMappingExposure : null,
+      // Stored, not live — the live value goes to 0 when the Shadows overlay
+      // is off; this returns the tuned strength regardless of on/off state.
+      shadow:   _shadowIntensity,
+    };
+  }
 
   // Comprehensive shadow + lighting state snapshot for the `__shadowTrace`
   // debug logger (set NCZ.__shadowTrace = true to enable per-frame logging
@@ -2965,7 +2993,7 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
+  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSunIntensity, setAmbientIntensity, setSceneExposure, setShadowIntensity, getLightingState, getSunElevation, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;

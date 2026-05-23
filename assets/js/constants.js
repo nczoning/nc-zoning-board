@@ -284,12 +284,13 @@ NCZ.SHADOW_NORMAL_BIAS_TEXELS = 2.5; // receiver-sample offset along the surface
 // SUN/AMBIENT are still a capture-fit ratio (the exact engine lux awaits the
 // PIX light-accumulation pass — TODO(pix)). Sun + ambient COLOURS are exact
 // decoded envparam values (linear RGB).
-NCZ.SCENE_EXPOSURE     = 0.85;                      // renderer.toneMappingExposure — normalised gauge (keeps unlit overlays in range)
+NCZ.SCENE_EXPOSURE     = 0.720;                     // renderer.toneMappingExposure — normalised gauge (keeps unlit overlays in range)
 NCZ.SUN_COLOR_RGB      = [0.975, 0.869, 0.774];     // envparam LightAreaSettings.sunColor — warm white (linear)
-NCZ.SUN_INTENSITY      = 6.35;                      // capture-fit — sun:ambient ≈ 50:1 gives the in-game within-building contrast
+NCZ.SUN_INTENSITY      = 3.00;                      // envelope-fit (sun:ambient ratio + level tuned across V1/V2/V3/V4)
 NCZ.AMBIENT_SKY_RGB    = [0.796, 0.895, 1.0];       // envparam AmbientOverride — the 5 bright cube faces, cool white (linear)
 NCZ.AMBIENT_GROUND_RGB = [0.566, 0.766, 1.0];       // envparam AmbientOverride — the dim ground face, blue (linear)
-NCZ.AMBIENT_INTENSITY  = 0.127;                     // capture-fit — sun:ambient ≈ 50:1 (was 0.42; too high → flat buildings)
+NCZ.AMBIENT_INTENSITY  = 0.405;                     // envelope-fit — sun:ambient ≈ 7.4:1
+NCZ.SHADOW_INTENSITY   = 0.60;                      // cast-shadow strength when "Shadows" overlay is on — tuned with the new lighting
 NCZ.SUN_DIST           = 22000;  // CET units the sun light (and its shadow camera) sits up the sun ray from the visible-ground centre — only the direction matters for shading; large enough that the whole footprint stays in front of the shadow camera even at a low sun
 NCZ.SUN_SPHERE_DIST    = 20000;  // visible sun disc distance from world centre
 NCZ.SUN_SPHERE_RADIUS  =   600;  // CET units — ≈1.7° apparent diameter at SUN_SPHERE_DIST (≈3× real sun)
