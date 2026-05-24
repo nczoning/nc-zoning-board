@@ -1,0 +1,20 @@
+{
+    "id": "29bf9b31-da51-43d2-a4e7-c8123bd8b28c",
+    "name": "H10 Stripper Den",
+    "authors": [
+        "LordBLKRamen"
+    ],
+    "credits": "",
+    "coordinates": [
+        -1388.7671,
+        1271.2734,
+        123.0824
+    ],
+    "nexus_id": "29939",
+    "description": "Transform V's H10 apartment into the ultimate Night City hangout. Pour a whiskey at your personal bar, light up a smoke, hit the dance floor by the stripper pole, or just kick back and soak in the neon glow. Your apartment finally lives up to your reputation.",
+    "category": "location-overhaul",
+    "tags": [
+        "apartment"
+    ],
+    "yaw": -91.9
+}
