@@ -1,0 +1,20 @@
+{
+    "id": "b0bf26d3-c9b4-4650-9b8c-2266560784a4",
+    "name": "h10 v.1",
+    "authors": [
+        "thumbsuckerr"
+    ],
+    "credits": "",
+    "coordinates": [
+        -1388.7671,
+        1271.2734,
+        123.0824
+    ],
+    "nexus_id": "29962",
+    "description": "a nice clean h10 for a nice clean netrunner. usable netrunner chair with ability to change appearance, and ice bath inside the secret room. wardrobe prompt is in the same spot, but now is the fridge. tons of smartframes, and open bed window",
+    "category": "location-overhaul",
+    "tags": [
+        "apartment"
+    ],
+    "yaw": -91.9
+}
