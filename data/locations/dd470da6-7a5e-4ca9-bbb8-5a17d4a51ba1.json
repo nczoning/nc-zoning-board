@@ -14,8 +14,9 @@
     "description": "Enhances the Organitopia natural history museum in the south of Dogtown by adding several new fossils and fixes.",
     "category": "location-overhaul",
     "tags": [
+        "corpo",
         "entertainment",
-        "photos"
+        "entropism"
     ],
     "yaw": -163.125
 }
