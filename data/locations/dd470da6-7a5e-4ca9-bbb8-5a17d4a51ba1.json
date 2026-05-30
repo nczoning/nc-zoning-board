@@ -1,0 +1,21 @@
+{
+    "id": "dd470da6-7a5e-4ca9-bbb8-5a17d4a51ba1",
+    "name": "Dogtown Natural History Museum Enhanced",
+    "authors": [
+        "LordTrilobite"
+    ],
+    "credits": "",
+    "coordinates": [
+        -2132.3486,
+        -3067.1846,
+        121.2386
+    ],
+    "nexus_id": "30073",
+    "description": "Enhances the Organitopia natural history museum in the south of Dogtown by adding several new fossils and fixes.",
+    "category": "location-overhaul",
+    "tags": [
+        "entertainment",
+        "photos"
+    ],
+    "yaw": -163.125
+}
