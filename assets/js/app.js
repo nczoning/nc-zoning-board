@@ -1005,16 +1005,17 @@ async function initMap() {
 
   // 3. Fetch and Setup Data
   try {
-    const { mods, tagsDict } = await NCZ.fetchModData();
+    const { mods, tagsDict, excludedIds } = await NCZ.fetchModData();
 
-    // Auto-discover mods tagged "NCZoning" on Nexus (manual entries win on conflict)
+    // Auto-discover mods tagged "NCZoning" on Nexus (manual entries win on conflict;
+    // excluded ids are never rendered, even with a valid block)
     const existingNexusIds = new Set(
       mods
         .filter((m) => m.nexus_id && !["WIP", "Dummy"].includes(String(m.nexus_id)))
         .map((m) => String(m.nexus_id)),
     );
     const validTagNames = new Set(Object.keys(tagsDict));
-    const { mods: autoMods, meta: autoMeta } = await NCZ.fetchNexusTaggedMods(existingNexusIds, validTagNames);
+    const { mods: autoMods, meta: autoMeta } = await NCZ.fetchNexusTaggedMods(existingNexusIds, validTagNames, excludedIds);
     mods.push(...autoMods);
 
     modCountEl.textContent = `(${mods.length})`;

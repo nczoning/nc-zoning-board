@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-06-05
+
+### Added
+
+- **Auto-discovery exclusion list** (`data/excluded_mods.json`): mods tagged `NCZoning` that shouldn't appear on the map (mistaken or too-minor tags) are listed here and skipped by both auto-discovery (`services.js`) and the health monitor — the latter stops re-flagging them daily. First entry: mod 29860.
+
+### Changed
+
+- **Monitor Discord alert**: clearer copy — each category now states the concrete action ("ask the author to regenerate", "add a manual entry or exclude"), and the footer/description note how many mods are on the exclusion list.
+
 ## [0.3.5] - 2026-05-16
 
 ### Added
