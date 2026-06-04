@@ -153,6 +153,27 @@ The **NCZoning** tag is provided by the Nexus Mods team specifically for this sy
 
 ---
 
+## Exclusion List (maintainers)
+
+Some mods carry the **NCZoning** tag but should not appear on the map — a mistaken tag, or a mod the maintainers judge too minor to register. These can't be handled by a manual entry (we don't *want* them on the map), and a tag we don't control can't simply be removed, so they are listed in `data/excluded_mods.json`:
+
+```json
+{
+  "29860": "Ripperdoc Sogo Interior Changes — minor mod, tagged without a block; kept off the map."
+}
+```
+
+The format is a flat `{ "nexusId": "reason" }` object (same shape as `data/tags.json`). The `reason` is a maintainer note only — it is never shown to users.
+
+An excluded id is honoured in two places:
+
+1. **Auto-discovery (`services.js`)** — the mod is never rendered as a pin, *even if its block parses correctly*. This is what stops a mistakenly-tagged mod that happens to have valid coordinates from showing up.
+2. **Health monitor (`scripts/monitor_auto_discovery.js`)** — the mod is skipped, so the daily Discord alert stops flagging it. Without this, an intentionally-excluded mod with no block would be reported every single day.
+
+To exclude a mod, add its Nexus id and a short reason to `data/excluded_mods.json` and open a PR. To re-include it later, delete the entry.
+
+---
+
 ## Using the BBCode Generator
 
 The map includes a built-in generator to make adding the block easier. Click **[+] Submit** in the map header (or the **Submit a New Mod Location** button in the sidebar) to open the generator. The modal walks you through four steps:

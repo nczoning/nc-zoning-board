@@ -115,14 +115,20 @@ NCZ.fetchNexusThumbnailsFromApi = async function (validIds) {
 // ModsFilter schema: https://graphql.nexusmods.com/#definition-ModsFilter
 // Fields use [BaseFilterValue] = array of { value: ... } objects.
 // "uploader" on the Mod type is a plain string (username), not a nested object.
-NCZ.fetchNexusTaggedMods = async function (existingNexusIds, validTagNames) {
+NCZ.fetchNexusTaggedMods = async function (existingNexusIds, validTagNames, excludedNexusIds) {
+  // Mods tagged NCZoning by mistake (or too minor to map) — never rendered,
+  // even if their block parses. Optional arg so existing callers/tests don't break.
+  const excluded = excludedNexusIds || new Set();
   // Return cached auto-discovery results if still fresh
   const cached = NCZ.cacheGet(NCZ.AUTODISCOVERY_CACHE_KEY, NCZ.AUTODISCOVERY_CACHE_TTL);
   if (cached) {
-    // Re-filter against current manual entries (may have changed since cache was written)
+    // Re-filter against current manual + excluded entries (either may have
+    // changed since the cache was written).
     const cachedMods = Array.isArray(cached) ? cached : cached.mods;
     const cachedMeta = Array.isArray(cached) ? {} : (cached.meta || {});
-    const filtered = cachedMods.filter((m) => !existingNexusIds.has(m.nexus_id));
+    const filtered = cachedMods.filter(
+      (m) => !existingNexusIds.has(m.nexus_id) && !excluded.has(m.nexus_id),
+    );
     console.log(`NCZoning: serving ${filtered.length} auto-discovered mods from cache`);
     return { mods: filtered, meta: cachedMeta };
   }
@@ -189,6 +195,11 @@ NCZ.fetchNexusTaggedMods = async function (existingNexusIds, validTagNames) {
 
       for (const node of nodes) {
         const nexusId = String(node.modId);
+        if (excluded.has(nexusId)) {
+          // Intentionally off the map — skip without creating a meta entry.
+          console.log(`NCZoning: excluding mod ${nexusId} (${node.name}) — on the exclusion list`);
+          continue;
+        }
         if (existingNexusIds.has(nexusId)) {
           // Manual entry wins for mod data, but preserve API metadata for backfilling _updatedAt
           meta[nexusId] = {
@@ -242,14 +253,24 @@ NCZ.fetchNexusTaggedMods = async function (existingNexusIds, validTagNames) {
   return { mods: results, meta };
 };
 
-// Fetch mod registry (mods.json) and tag definitions (tags.json) in parallel.
-// Returns { mods: Array, tagsDict: Object }.
+// Fetch mod registry (mods.json), tag definitions (tags.json), and the
+// auto-discovery exclusion list (excluded_mods.json) in parallel.
+// Returns { mods: Array, tagsDict: Object, excludedIds: Set<string> }.
 NCZ.fetchModData = async function () {
-  const [modsRes, tagsRes] = await Promise.all([
+  const [modsRes, tagsRes, excludedRes] = await Promise.all([
     fetch(NCZ.DATA_MODS_PATH),
     fetch(NCZ.DATA_TAGS_PATH),
+    fetch(NCZ.DATA_EXCLUDED_PATH),
   ]);
   const mods = await modsRes.json();
   const tagsDict = await tagsRes.json();
-  return { mods, tagsDict };
+  // Flat { "nexusId": "reason" } object; a missing/broken file must not break
+  // the page, so fall back to an empty exclusion set.
+  let excludedIds = new Set();
+  try {
+    excludedIds = new Set(Object.keys(await excludedRes.json()).map(String));
+  } catch (err) {
+    console.warn("NCZoning: could not load exclusion list, proceeding with none", err);
+  }
+  return { mods, tagsDict, excludedIds };
 };

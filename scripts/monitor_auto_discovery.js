@@ -79,6 +79,22 @@ function loadManualNexusIds() {
   return ids;
 }
 
+// --- Intentionally-excluded nexus_ids (data/excluded_mods.json) --------------
+// Mods tagged NCZoning by mistake, or too minor to map, that we deliberately
+// keep off the board. They have no manual entry and never will, so without
+// this list the monitor would flag them every single day. Flat
+// { "nexusId": "reason" } object — same shape as data/tags.json.
+function loadExcludedNexusIds() {
+  const file = path.join(ROOT, "data/excluded_mods.json");
+  try {
+    const obj = JSON.parse(fs.readFileSync(file, "utf8"));
+    return new Set(Object.keys(obj).map(String));
+  } catch {
+    // No list (or unreadable) just means nothing is excluded.
+    return new Set();
+  }
+}
+
 // --- Fetch every NCZoning-tagged mod (same query/pagination as services.js) --
 async function fetchTaggedMods({ endpoint, gameId, batchSize }) {
   const query = `
@@ -121,7 +137,7 @@ async function fetchTaggedMods({ endpoint, gameId, batchSize }) {
   return out;
 }
 
-async function postDiscord(failures, total) {
+async function postDiscord(failures, total, excludedCount) {
   const url = process.env.DISCORD_WEBHOOK_URL;
   const MAX_PER_GROUP = 12;
   const fmt = (group) => {
@@ -137,32 +153,45 @@ async function postDiscord(failures, total) {
   // a speculative/mistaken tag or an author who never finished setup.
   const malformed = failures.filter((f) => f.attemptedBlock);
   const noBlock = failures.filter((f) => !f.attemptedBlock);
+  const n = failures.length;
 
   const fields = [];
   if (malformed.length) {
     fields.push({
-      name: `🔧 Malformed block — ${malformed.length} (author tried, parse failed)`,
-      value: fmt(malformed),
+      name: `🔧 Malformed block — ${malformed.length}`,
+      value:
+        `Author added an \`NCZoning:\` block but it failed to parse. ` +
+        `**Action:** ask them to regenerate it with the in-app BBCode Generator.\n` +
+        fmt(malformed),
     });
   }
   if (noBlock.length) {
     fields.push({
-      name: `🏷️ Tagged, no block — ${noBlock.length} (no NCZoning: in description)`,
-      value: fmt(noBlock),
+      name: `🏷️ Tagged, no block — ${noBlock.length}`,
+      value:
+        `Tagged \`NCZoning\` but the description has no metadata block. ` +
+        `**Action:** add a manual registry entry if it belongs on the map, ` +
+        `or add its id to \`data/excluded_mods.json\` to stop this alert.\n` +
+        fmt(noBlock),
     });
   }
+
+  const excludedNote = excludedCount
+    ? ` ${excludedCount} mod${excludedCount === 1 ? "" : "s"} on the exclusion list ${excludedCount === 1 ? "is" : "are"} ignored.`
+    : "";
 
   const body = {
     embeds: [
       {
-        title: `⚠️ Auto-discovery: ${failures.length} NCZoning mod(s) missing from the map`,
+        title: `⚠️ Auto-discovery: ${n} NCZoning mod${n === 1 ? "" : "s"} tagged but not on the map`,
         description:
-          `Tagged **NCZoning** on Nexus but not appearing as live pins. ` +
-          `Malformed blocks need an author fix; no-block tags may be ` +
-          `mistaken or incomplete.`,
+          `${n} mod${n === 1 ? " is" : "s are"} tagged **NCZoning** on Nexus ` +
+          `but not showing as ${n === 1 ? "a live pin" : "live pins"}, because the ` +
+          `metadata block is missing or unreadable. Each entry below says what to do.` +
+          excludedNote,
         color: 15105570, // amber/orange — warning, not error
         fields,
-        footer: { text: `NC Zoning Board • ${total} tagged mods scanned` },
+        footer: { text: `NC Zoning Board • scanned ${total} NCZoning-tagged mod${total === 1 ? "" : "s"}` },
       },
     ],
   };
@@ -191,14 +220,19 @@ async function postDiscord(failures, total) {
     const consts = loadNexusConstants();
     const validTagNames = loadValidTagNames();
     const manualIds = loadManualNexusIds();
+    const excludedIds = loadExcludedNexusIds();
 
     const mods = await fetchTaggedMods(consts);
-    console.log(`Scanned ${mods.length} NCZoning-tagged mods (${manualIds.size} manual ids excluded).`);
+    console.log(
+      `Scanned ${mods.length} NCZoning-tagged mods ` +
+        `(${manualIds.size} manual, ${excludedIds.size} excluded).`,
+    );
 
     const failures = [];
     for (const mod of mods) {
       const id = String(mod.modId);
       if (manualIds.has(id)) continue; // manual registry covers it
+      if (excludedIds.has(id)) continue; // intentionally kept off the map
       if (!parse(mod.description, validTagNames)) {
         // A `NCZoning` mention means the author attempted a block that
         // failed to parse (actionable: fix it) vs. no block at all
@@ -219,7 +253,7 @@ async function postDiscord(failures, total) {
       for (const f of failures) {
         console.log(`   - ${f.modId}  [${f.attemptedBlock ? "malformed" : "no-block "}]  ${f.name}`);
       }
-      await postDiscord(failures, mods.length);
+      await postDiscord(failures, mods.length, excludedIds.size);
     }
     process.exit(0); // report, not a gate
   } catch (err) {
