@@ -1,0 +1,21 @@
+{
+    "id": "21779088-7c8d-4812-a835-d2cc9408094a",
+    "name": "Impoverished Japantown Hostel",
+    "authors": [
+        "yoimflying"
+    ],
+    "credits": "",
+    "coordinates": [
+        -380.5103,
+        1218.7118,
+        23.4524
+    ],
+    "nexus_id": "29945",
+    "description": "IM back, Chooms, with a new spin on the apartment genre, with housing being expensive in NightCity and almost everyone living in poverty I thought to myself, why not make a hostel where you, the player, can live amongst your fellow impoverished neighbors in squaller.",
+    "category": "new-location",
+    "tags": [
+        "apartment",
+        "entropism"
+    ],
+    "yaw": 122.0588
+}
