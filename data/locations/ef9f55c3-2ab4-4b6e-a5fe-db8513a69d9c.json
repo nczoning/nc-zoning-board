@@ -1,0 +1,21 @@
+{
+    "id": "ef9f55c3-2ab4-4b6e-a5fe-db8513a69d9c",
+    "name": "NC Beats - Player Home and Radio EXT Station",
+    "authors": [
+        "Seracen"
+    ],
+    "credits": "",
+    "coordinates": [
+        2453.8979,
+        -747.4419,
+        67.712
+    ],
+    "nexus_id": "7554",
+    "description": "Meticulously crafted Player home, and curated Radio EXT Station, with stream friendly music and DJ voice work. Reworked with WB and Native Interactions. Also some custom followers for AMM",
+    "category": "new-location",
+    "tags": [
+        "apartment",
+        "house"
+    ],
+    "yaw": -57.4282
+}
