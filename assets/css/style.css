@@ -2444,13 +2444,13 @@ body::before {
 
     .lt-title {
         font-family: var(--font-heading);
-        font-size: var(--text-2xs);
-        color: var(--primary);
-        letter-spacing: 0.12em;
+        font-size: var(--text-xs);
+        color: var(--secondary);
+        letter-spacing: 0.15em;
         text-transform: uppercase;
         border-bottom: var(--ui-border-thin) solid var(--secondary-20);
-        padding-bottom: var(--space-2xs);
-        margin-bottom: var(--space-2xs);
+        padding-bottom: var(--space-xs);
+        margin-bottom: var(--space-xs);
     }
 
     .lt-row {
@@ -2461,7 +2461,7 @@ body::before {
     }
 
     .lt-label {
-        color: var(--gray);
+        color: var(--white);
         font-family: var(--font-heading);
         font-size: var(--text-2xs);
         text-transform: uppercase;
@@ -2470,6 +2470,11 @@ body::before {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        transition: color 0.15s;
+
+        &:hover {
+            color: var(--secondary);
+        }
     }
 
     input[type="range"] {
@@ -2496,8 +2501,8 @@ body::before {
         }
 
         &:focus {
-            border-color: var(--primary);
-            color: var(--primary);
+            border-color: var(--secondary);
+            color: var(--secondary);
         }
 
         /* Strip Webkit/Firefox spinners. */
@@ -2534,8 +2539,8 @@ body::before {
             transition: border-color 0.15s, color 0.15s, background-color 0.15s;
 
             &:hover {
-                border-color: var(--primary);
-                color: var(--primary);
+                border-color: var(--secondary);
+                color: var(--white);
                 background-color: var(--secondary-20);
             }
         }
