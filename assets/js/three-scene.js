@@ -1662,7 +1662,8 @@ const ThreeScene = (() => {
     const realIndex  = visibleIndicesBuffer.element(instanceIndex);
     const instMatrix = instanceMatricesBuffer.element(realIndex);
     mat.positionNode = instMatrix.mul(vec4(positionLocal, 1)).xyz;
-    mat.normalNode   = transformNormalToView(transformNormal(normalLocal, instMatrix));
+    const worldNormal = transformNormal(normalLocal, instMatrix); // also drives the _m slope guard below
+    mat.normalNode   = transformNormalToView(worldNormal);
 
     // World-space planar UV — XZ plane, normalised against the district's CET
     // bounds. Original GLSL: vMUv = ((wx - off.x - min.x)/(max.x - min.x),
@@ -1679,11 +1680,34 @@ const ThreeScene = (() => {
       wzNeg.sub(uOffset.y).sub(uTransMin.y).div(uTransMax.y.sub(uTransMin.y))
     );
 
+    // Sloped-face guard: ~12.5% of instances have oblique quaternions
+    // (_data.dds census — 32k of 255k tilted >2° off any 90° multiple), and on
+    // their slanted faces the fragment-position planar UV paints a recognisable
+    // 2-D patch of the district map — a top-down projection landing on a
+    // non-horizontal surface. The game has the same latent artifact (its
+    // vertical-AO gbuffer term ships disabled, and its near-top-down map camera
+    // never shows walls), but our tilting camera does. Steep faces therefore
+    // sample _m at the instance's own centre instead — each building's walls
+    // and slopes carry their own roof texel, which cannot image — blended by
+    // the world normal's up-ness so flat roofs keep the exact decoded planar
+    // sample. See wiki/learnings/planar-detail-texture-images-on-tilted-instances.md.
+    const instCenter4 = instMatrix.mul(vec4(0, 0, 0, 1)); // unit-cube origin = box centre
+    const centerUv = vec2(
+      instCenter4.x.sub(uOffset.x).sub(uTransMin.x).div(uTransMax.x.sub(uTransMin.x)),
+      instCenter4.z.negate().sub(uOffset.y).sub(uTransMin.y).div(uTransMax.y.sub(uTransMin.y))
+    );
+    const upness = smoothstep(
+      float(NCZ.BUILDING_TEX_SLOPE_FADE_START),
+      float(NCZ.BUILDING_TEX_SLOPE_FADE_END),
+      worldNormal.normalize().y
+    );
+    const mUv = mix(centerUv, planarUv, upness);
+
     // (1) Diffuse modulation — sample _m, scale base colour. The game's
     // gbuffer shader applies `surface = 0.4 + 0.5·m` to the albedo (decoded —
     // wiki/sources/building-edge-shader.md; the shader's vertical-AO term is
     // disabled by the default DebugScaleOffset, so it collapses to floor+range).
-    const mVal = texture(mTex, planarUv.clamp(0, 1)).r;
+    const mVal = texture(mTex, mUv.clamp(0, 1)).r;
     const modulation = float(NCZ.BUILDING_TEX_FLOOR).add(mVal.mul(NCZ.BUILDING_TEX_RANGE));
 
     // (2) Edge highlight — the decoded game algorithm with fwidth AA standing

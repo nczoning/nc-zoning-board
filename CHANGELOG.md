@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Fixed: `_m` roof detail imaged onto sloped building faces
+
+- Tilted building instances (~12.5% of the 255k boxes have oblique rotations) no longer show a ghostly 2-D patch of the district map on their slanted faces. The top-down `_m.dds` planar projection now applies only to near-flat tops; steeper faces sample the building's own centre texel instead.
+
 #### Fixed: default sun time never applied on load
 
 - The documented default sun time now actually applies on cold load. The slider's init request fired before the 3D lights existed and was silently dropped; the UI-sync poll then wrote the scene's placeholder elevation (~63°, ≈ 15:00) back onto the slider, and the post-terrain re-apply locked it in.
