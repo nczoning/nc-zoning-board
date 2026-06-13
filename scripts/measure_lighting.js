@@ -107,6 +107,87 @@ async function setSun(page, minutes) {
   await sleep(350); // shadow map re-render
 }
 
+const sunLabel = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+
+// Boot a page with the scene ready and all measurement contaminants removed:
+// theme pinned + welcome modal pre-dismissed before boot, overlays off,
+// shadows on (real default condition), floating UI hidden.
+async function setupPage(browser, theme, port) {
+  const page = await browser.newPage();
+  await page.evaluateOnNewDocument((t) => {
+    localStorage.setItem('nc_theme_id', t);
+    sessionStorage.setItem('nc_zoning_board_visited', 'true');
+  }, theme);
+  await page.goto(`http://localhost:${port}/`, { waitUntil: 'domcontentloaded' });
+  await waitForScene(page);
+  await page.evaluate(() => {
+    NCZ.ThreeScene.setLayerVisibility('districts', false);
+    NCZ.ThreeScene.setLayerVisibility('pins', false);
+    NCZ.ThreeScene.setShadowsEnabled(true);
+    const style = document.createElement('style');
+    style.textContent = '#overlay-controls, #scene-controls, #sidebar, #sidebar-open { visibility: hidden !important; }';
+    document.head.appendChild(style);
+  });
+  const canvas = await page.$('#map-3d canvas');
+  if (!canvas) throw new Error('3D canvas not found — is the SCHEMA view active?');
+  return { page, canvas };
+}
+
+// Solve mode: hold ONE representative view (P1 default city) at the brightness
+// the user's anchor exposure produces, and read off the exposure each sun time
+// needs. Exposure→brightness is monotonic below clip, so bisection is robust.
+// Output: a {minutes, elevationDeg, exposure} table to bake into applySunTime.
+async function runSolve(browser, port) {
+  const ANCHOR_SUN = Number(optOf('anchor-sun', 480)); // 8 AM default load
+  const ANCHOR_EXPOSURE = Number(optOf('anchor-exposure', 1.0));
+  const SOLVE_POSE = SPEC.poses.find((p) => p.id === optOf('solve-pose', 'P1-city-default'));
+  const theme = optOf('theme', 'game');
+  const TOL = 0.004;
+
+  console.log(`\n━━ SOLVE ━━ pose ${SOLVE_POSE.id}, anchor ${ANCHOR_EXPOSURE} @ ${sunLabel(ANCHOR_SUN)}, theme ${theme}`);
+  const { page, canvas } = await setupPage(browser, theme, port);
+
+  const medianAt = async (exposure) => {
+    await page.evaluate((e) => NCZ.ThreeScene.setSceneExposure(e), exposure);
+    await sleep(120);
+    const stats = await frameStats(await canvas.screenshot());
+    return stats;
+  };
+  const elevationDeg = () => page.evaluate(() => NCZ.ThreeScene.getSunElevation() * 180 / Math.PI);
+
+  // Target brightness = anchor exposure at the anchor sun on the solve pose.
+  await setSun(page, ANCHOR_SUN);
+  await setPose(page, SOLVE_POSE);
+  const targetStats = await medianAt(ANCHOR_EXPOSURE);
+  const TARGET = targetStats.median;
+  console.log(`target median = ${TARGET} (from exposure ${ANCHOR_EXPOSURE} @ ${sunLabel(ANCHOR_SUN)})\n`);
+
+  const table = [];
+  for (const sun of SPEC.sunSweepSliderMinutes) {
+    await setSun(page, sun);
+    await setPose(page, SOLVE_POSE);
+    const el = await elevationDeg();
+    let lo = 0.2, hi = 3.5, exposure = ANCHOR_EXPOSURE, stats;
+    for (let i = 0; i < 16; i++) {
+      exposure = (lo + hi) / 2;
+      stats = await medianAt(exposure);
+      if (Math.abs(stats.median - TARGET) <= TOL) break;
+      if (stats.median < TARGET) lo = exposure; else hi = exposure;
+    }
+    table.push({ minutes: sun, elevationDeg: +el.toFixed(2), exposure: +exposure.toFixed(3), median: stats.median, clipPct: stats.clipPct });
+    console.log(`${sunLabel(sun)}  el ${el.toFixed(1).padStart(5)}°  exposure ${exposure.toFixed(3)}  (median ${stats.median}, clip ${stats.clipPct}%)`);
+  }
+
+  const outFile = path.join(OUT_DIR, 'exposure-solve.json');
+  fs.mkdirSync(OUT_DIR, { recursive: true });
+  fs.writeFileSync(outFile, JSON.stringify({
+    solvedAt: new Date().toISOString(), theme, solvePose: SOLVE_POSE.id,
+    anchorSun: ANCHOR_SUN, anchorExposure: ANCHOR_EXPOSURE, targetMedian: TARGET, table,
+  }, null, 2));
+  console.log(`\nSolve table written: ${outFile}`);
+  await page.close();
+}
+
 // ── Metrics: display-referred relative luminance stats from raw pixels ────
 async function frameStats(pngBuffer) {
   const { data, info } = await sharp(pngBuffer).raw().toBuffer({ resolveWithObject: true });
@@ -183,38 +264,18 @@ async function buildSheet(theme, frames, outFile) {
     defaultViewport: { ...VIEW, deviceScaleFactor: 1 },
   });
 
+  if (hasFlag('solve')) {
+    try { await runSolve(browser, PORT); }
+    finally { await browser.close(); server.close(); }
+    return;
+  }
+
   const report = { startedAt: new Date().toISOString(), themes: {}, spec: { suns: SUNS, bounds: SPEC.provisionalBounds } };
-  const sunLabel = (m) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
 
   try {
     for (const theme of THEMES) {
       console.log(`\n━━ theme: ${theme} ━━`);
-      const page = await browser.newPage();
-      // Pin the theme BEFORE the app boots — a stray stored preference
-      // otherwise flips every measurement (observed in the wild). Same for the
-      // first-visit welcome modal: a fresh profile shows it over the canvas
-      // and it contaminates every frame until dismissed.
-      await page.evaluateOnNewDocument((t) => {
-        localStorage.setItem('nc_theme_id', t);
-        sessionStorage.setItem('nc_zoning_board_visited', 'true');
-      }, theme);
-      await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'domcontentloaded' });
-      await waitForScene(page);
-      // Calibration rule: overlays off. Shadows ON = real default condition.
-      // Also hide the UI panels that float over the canvas (legend + sun bar):
-      // element screenshots capture overlaying DOM, and those pixels would
-      // count toward the luminance stats. visibility:hidden keeps the sun
-      // slider responsive to programmatic input events.
-      await page.evaluate(() => {
-        NCZ.ThreeScene.setLayerVisibility('districts', false);
-        NCZ.ThreeScene.setLayerVisibility('pins', false);
-        NCZ.ThreeScene.setShadowsEnabled(true);
-        const style = document.createElement('style');
-        style.textContent = '#overlay-controls, #scene-controls, #sidebar, #sidebar-open { visibility: hidden !important; }';
-        document.head.appendChild(style);
-      });
-      const canvas = await page.$('#map-3d canvas');
-      if (!canvas) throw new Error('3D canvas not found — is the SCHEMA view active?');
+      const { page, canvas } = await setupPage(browser, theme, PORT);
 
       const frames = [];
       const themeDir = path.join(OUT_DIR, 'frames', theme);

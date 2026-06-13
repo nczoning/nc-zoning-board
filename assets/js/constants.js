@@ -284,7 +284,31 @@ NCZ.SHADOW_NORMAL_BIAS_TEXELS = 2.5; // receiver-sample offset along the surface
 // SUN/AMBIENT are still a capture-fit ratio (the exact engine lux awaits the
 // PIX light-accumulation pass — TODO(pix)). Sun + ambient COLOURS are exact
 // decoded envparam values (linear RGB).
-NCZ.SCENE_EXPOSURE     = 0.720;                     // renderer.toneMappingExposure — normalised gauge (keeps unlit overlays in range)
+NCZ.SCENE_EXPOSURE     = 0.720;                     // renderer.toneMappingExposure — init fallback + ?gamelight reference exposure (fixed for colour calibration)
+
+// Time-of-day exposure curve. Our sun is real SunCalc data, so scene
+// illuminance swings >10× sunrise→noon→sunset — no single exposure can keep
+// the map usable across that range (goal 3: never too dark / too bright). The
+// game sidesteps this with runtime auto-metering (ExposureAreaSettings); we
+// substitute a deterministic curve: exposure as a function of time, solved by
+// the metering harness (scripts/measure_lighting.js --solve) to hold the
+// default city view at a fixed target brightness (anchored to exposure 1.0 at
+// the 08:00 default load). Solved against the Game theme; applied to all
+// themes (exposure is a viewing-condition response, not a theme property).
+// exposure ≈ 0.40 / sin(elevation) for mid-high sun — the physical inverse-
+// illuminance law — plateauing near the horizon where hemisphere ambient
+// dominates. Keyed on Morro Bay PDT minutes (captures morning/evening azimuth
+// asymmetry); applySunTime() interpolates piecewise-linearly and clamps to the
+// endpoints. Regenerate with: node scripts/measure_lighting.js --solve
+NCZ.SCENE_EXPOSURE_CURVE = [
+  [355, 2.263],  // 05:55 sunrise, el  0.2°
+  [480, 0.973],  // 08:00 default,  el 24.0°
+  [600, 0.561],  // 10:00,          el 48.3°
+  [720, 0.432],  // 12:00 noon,     el 71.5°
+  [900, 0.458],  // 15:00,          el 62.5°
+  [1080, 0.819], // 18:00,          el 26.1°
+  [1210, 2.056], // 20:10 sunset,   el  1.3°
+];
 NCZ.SUN_COLOR_RGB      = [0.975, 0.869, 0.774];     // envparam LightAreaSettings.sunColor — warm white (linear)
 NCZ.SUN_INTENSITY      = 3.00;                      // envelope-fit (sun:ambient ratio + level tuned across V1/V2/V3/V4)
 NCZ.AMBIENT_SKY_RGB    = [0.796, 0.895, 1.0];       // envparam AmbientOverride — the 5 bright cube faces, cool white (linear)

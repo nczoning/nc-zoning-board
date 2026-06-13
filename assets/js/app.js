@@ -684,9 +684,29 @@ async function initMap() {
     date.setUTCHours((Math.floor(morroMinutes / 60) - PDT_OFFSET) % 24, morroMinutes % 60, 0, 0);
     const pos = SunCalc.getPosition(date, SUN_LAT, SUN_LNG);
     NCZ.ThreeScene.setSunPosition(pos.azimuth, pos.altitude);
+    // Time-of-day exposure (goal 3 — keep the map usable across the >10×
+    // sunrise→noon illuminance swing). See NCZ.SCENE_EXPOSURE_CURVE.
+    NCZ.ThreeScene?.setSceneExposure?.(exposureForMinutes(morroMinutes));
     const h = String(Math.floor(morroMinutes / 60)).padStart(2, '0');
     const m = String(morroMinutes % 60).padStart(2, '0');
     if (sunTimeDisplay) sunTimeDisplay.textContent = `${h}:${m}`;
+  }
+
+  // Piecewise-linear interpolation of the solved exposure curve, clamped to its
+  // endpoints. The table is sorted ascending by minutes (see constants.js).
+  function exposureForMinutes(minutes) {
+    const curve = NCZ.SCENE_EXPOSURE_CURVE;
+    if (!curve || !curve.length) return NCZ.SCENE_EXPOSURE;
+    if (minutes <= curve[0][0]) return curve[0][1];
+    if (minutes >= curve[curve.length - 1][0]) return curve[curve.length - 1][1];
+    for (let i = 1; i < curve.length; i++) {
+      const [m1, e1] = curve[i];
+      if (minutes <= m1) {
+        const [m0, e0] = curve[i - 1];
+        return e0 + (e1 - e0) * ((minutes - m0) / (m1 - m0));
+      }
+    }
+    return NCZ.SCENE_EXPOSURE;
   }
 
   if (sunSlider) {
