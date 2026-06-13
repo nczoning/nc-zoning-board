@@ -26,6 +26,7 @@
     "sharp": "^0.34.5"
   },
   "devDependencies": {
-    "gltfpack": "^1.1.0"
+    "gltfpack": "^1.1.0",
+    "puppeteer-core": "^25.1.0"
   }
 }
