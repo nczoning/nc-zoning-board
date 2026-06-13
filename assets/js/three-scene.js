@@ -103,7 +103,7 @@ const ThreeScene = (() => {
   }
   let _shadowsOn     = true;  // shadows on by default; checkbox reflects this via poll
   let _sunSphere     = null; // visible sun disc — shown during showcase only
-  let _sunAz = Math.PI * 0.25, _sunEl = Math.PI * 0.35; // last setSunPosition args
+  let _sunAz = Math.PI * 0.25, _sunEl = Math.PI * 0.35; // last *requested* setSunPosition args — placeholders only until the first call (the slider init in app.js), which may land before the lights exist
   let _terrainBox = null;     // THREE.Box3 of the terrain GLB; gates pan-bound clamp
                               // because the bound shouldn't activate before terrain loads
   let _introTween   = null;   // E5 intro fly-in tween, or null when idle
@@ -2700,9 +2700,16 @@ const ThreeScene = (() => {
   // GLB space axes: East = +X, South = +Z, West = -X, North = -Z, Up = +Y
   // So az=0 (south) → Z+; az=π/2 (west) → X-; az=-π/2 (east) → X+
   function setSunPosition(azimuthRad, altitudeRad) {
-    if (!_dirLight || !_hemiLight) return;
+    // Store the requested state BEFORE the lights-exist guard. getSunElevation()
+    // — and the app.js UI-sync poll that reverse-maps it onto the sun slider —
+    // must see what was requested even when this call lands before init() has
+    // built the lights (the slider's initial applySunTime fires that early).
+    // When the request was dropped here instead, the poll read the placeholder
+    // elevation (~63°), wrote it back onto the slider, and the post-terrain
+    // re-apply then locked the wrong sun in on every cold load.
     _sunAz = azimuthRad;
     _sunEl = altitudeRad;
+    if (!_dirLight || !_hemiLight) return;
     const el = altitudeRad;
     const az = azimuthRad;
 
