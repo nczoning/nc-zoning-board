@@ -84,6 +84,9 @@ NCZ.NEXUS_BATCH_SIZE = 50;
 // Data paths
 NCZ.DATA_MODS_PATH = "mods.json";
 NCZ.DATA_TAGS_PATH = "data/tags.json";
+// nexus_ids tagged "NCZoning" on Nexus but intentionally kept off the map
+// (mistaken/minor tags). Honoured by auto-discovery and the health monitor.
+NCZ.DATA_EXCLUDED_PATH = "data/excluded_mods.json";
 
 // 3D scene GLB source folder. The committed runtime path is "assets/glb-meshopt"
 // (gltfpack-compressed via EXT_meshopt_compression, decoded by MeshoptDecoder).
