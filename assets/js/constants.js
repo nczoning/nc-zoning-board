@@ -298,6 +298,17 @@ NCZ.BUILDING_EDGE_CAMDIST_K =  0.002; // game's camera-distance widening coeffic
 //   →   surface = 0.5·(0.8 + m) = 0.4 + 0.5·m
 NCZ.BUILDING_TEX_FLOOR      =   0.4;  // _m.dds brightness floor — game 0.5·0.8
 NCZ.BUILDING_TEX_RANGE      =   0.5;  // brightness range above the floor — game 0.5·m
+// Sloped-face guard for the _m planar sample (see buildBuildingMaterial):
+// world-normal Y thresholds for the smoothstep blend between the per-fragment
+// planar UV (flat roofs — exact decoded behaviour) and the instance-centre UV
+// (steep/oblique faces — the building's own roof texel, which can't paint a
+// 2-D image of the district map onto a slanted surface).
+// Thresholds are tight because a partially-blended UV still draws a (squashed)
+// image: a ~30°-pitched face at a mid blend re-rendered the artifact as smeared
+// streaks. 88% of instances are exactly axis-aligned (top normal.y = 1.0), so
+// near-flat-only planar sampling leaves them untouched.
+NCZ.BUILDING_TEX_SLOPE_FADE_START = 0.95;  // normal.y ≤ this (pitch ≥ ~18°) → fully centre-sampled
+NCZ.BUILDING_TEX_SLOPE_FADE_END   = 0.995; // normal.y ≥ this (pitch ≤ ~6°)  → fully planar
 
 // Terrain "graph-paper" grid — decoded from the game's 3d_map_terrain pixel
 // shader (PIX DXIL capture; see wiki/sources/terrain-grid-shader.md). Three
