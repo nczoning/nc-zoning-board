@@ -1,5 +1,5 @@
 {
-  "comment": "Envelope spec for the lighting metering harness (scripts/measure_lighting.js). Poses approved 2026-06-13. Camera states are ThreeScene.setCameraState() payloads; sun and theme are swept per pose. Bounds are PROVISIONAL until anchor frames are blessed (Phase 2).",
+  "comment": "Envelope spec for the lighting metering harness (scripts/measure_lighting.js). Poses approved 2026-06-13. Camera states are ThreeScene.setCameraState() payloads; sun and theme are swept per pose.",
   "sunSweepSliderMinutes": [355, 480, 600, 720, 900, 1080, 1210],
   "quickSunSweep": [480, 720],
   "themes": ["game", "night-corp"],
@@ -7,8 +7,9 @@
     "pose": "P1-city-default",
     "note": "colour-fidelity mode: load with ?gamelight (decoded az 107.12 / el 7, shadows+districts+pins stripped) and compare against the in-game PIX SDR capture"
   },
-  "provisionalBounds": {
-    "medianMin": 0.05,
+  "boundsNote": "Calibrated against the exposure-curve regression (2026-06-13). medianMin lowered 0.05 -> 0.035: deep-shadow dense-tower canyons (P3/P7 at mid-day) legitimately sit at median ~0.039-0.047 — dim but fully legible, 0% crushed. Maintainer ruled these acceptable rather than brighten (which would push the whole-city view past its exposure-1.0 anchor). 0.035 still catches a genuine regression (e.g. curve breakage -> dawn near-black ~0.015).",
+  "bounds": {
+    "medianMin": 0.035,
     "medianMax": 0.45,
     "clipMaxPct": 1.0,
     "blackMaxPct": 60

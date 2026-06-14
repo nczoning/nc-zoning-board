@@ -220,7 +220,7 @@ async function frameStats(pngBuffer) {
 }
 
 function boundFlags(s) {
-  const b = SPEC.provisionalBounds;
+  const b = (SPEC.bounds || SPEC.provisionalBounds);
   const flags = [];
   if (s.median < b.medianMin) flags.push('DARK');
   if (s.median > b.medianMax) flags.push('BRIGHT');
@@ -270,7 +270,7 @@ async function buildSheet(theme, frames, outFile) {
     return;
   }
 
-  const report = { startedAt: new Date().toISOString(), themes: {}, spec: { suns: SUNS, bounds: SPEC.provisionalBounds } };
+  const report = { startedAt: new Date().toISOString(), themes: {}, spec: { suns: SUNS, bounds: (SPEC.bounds || SPEC.provisionalBounds) } };
 
   try {
     for (const theme of THEMES) {
