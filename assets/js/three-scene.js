@@ -104,8 +104,7 @@ const ThreeScene = (() => {
   let _shadowsOn     = true;  // shadows on by default; checkbox reflects this via poll
   // Stored shadow strength — independent of the on/off toggle. Initialised from
   // the constant; the Shadows overlay multiplies by this when enabled, by 0 when
-  // off. The ?lighttune slider mutates this value so tuned shadow strength
-  // survives a Shadows toggle (instead of resetting to NCZ.SHADOW_INTENSITY).
+  // off (so the tuned strength survives a Shadows toggle).
   let _shadowIntensity = NCZ.SHADOW_INTENSITY;
   let _sunSphere     = null; // visible sun disc — shown during showcase only
   let _sunAz = Math.PI * 0.25, _sunEl = Math.PI * 0.35; // last *requested* setSunPosition args — placeholders only until the first call (the slider init in app.js), which may land before the lights exist
@@ -2922,17 +2921,9 @@ const ThreeScene = (() => {
   function getShadowsEnabled() { return _shadowsOn; }
   function getSunElevation() { return _sunEl; }
 
-  // Live light/exposure setters — used by the ?lighttune debug panel.
-  function setSunIntensity(v)     { if (_dirLight)  _dirLight.intensity  = v; requestRender(); }
-  function setAmbientIntensity(v) { if (_hemiLight) _hemiLight.intensity = v; requestRender(); }
+  // Exposure setter — driven by the time-of-day curve (applySunTime /
+  // updateFlyoverSun) and the metering harness.
   function setSceneExposure(v)    { if (renderer)   renderer.toneMappingExposure = v; requestRender(); }
-  function setShadowIntensity(v)  {
-    // Updates the *stored* shadow strength so it survives a Shadows toggle.
-    // The live light intensity tracks it only while shadows are on (off = 0).
-    _shadowIntensity = v;
-    if (_dirLight) _dirLight.shadow.intensity = _shadowsOn ? v : 0;
-    requestRender();
-  }
   function getLightingState() {
     return {
       sun:      _dirLight  ? _dirLight.intensity         : null,
@@ -3027,7 +3018,7 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSunIntensity, setAmbientIntensity, setSceneExposure, setShadowIntensity, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
+  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;
