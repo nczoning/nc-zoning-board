@@ -286,28 +286,32 @@ NCZ.SHADOW_NORMAL_BIAS_TEXELS = 2.5; // receiver-sample offset along the surface
 // decoded envparam values (linear RGB).
 NCZ.SCENE_EXPOSURE     = 0.720;                     // renderer.toneMappingExposure — init fallback + ?gamelight reference exposure (fixed for colour calibration)
 
-// Time-of-day exposure curve. Our sun is real SunCalc data, so scene
-// illuminance swings >10× sunrise→noon→sunset — no single exposure can keep
-// the map usable across that range (goal 3: never too dark / too bright). The
-// game sidesteps this with runtime auto-metering (ExposureAreaSettings); we
-// substitute a deterministic curve: exposure as a function of time, solved by
-// the metering harness (scripts/measure_lighting.js --solve) to hold the
-// default city view at a fixed target brightness (anchored to exposure 1.0 at
-// the 08:00 default load). Solved against the Game theme; applied to all
-// themes (exposure is a viewing-condition response, not a theme property).
-// exposure ≈ 0.40 / sin(elevation) for mid-high sun — the physical inverse-
-// illuminance law — plateauing near the horizon where hemisphere ambient
-// dominates. Keyed on Morro Bay PDT minutes (captures morning/evening azimuth
-// asymmetry); applySunTime() interpolates piecewise-linearly and clamps to the
-// endpoints. Regenerate with: node scripts/measure_lighting.js --solve
+// Time-of-day exposure curve, keyed on SUN ELEVATION (degrees above horizon).
+// Our sun is real SunCalc data, so without help the scene crushes to black at
+// dawn/dusk. But the goal is NOT constant brightness — the map should still
+// read like real-world light: bright midday, dim/atmospheric at sunrise &
+// sunset. So this is a gentle "floor the darkness" curve, not a normalise:
+// exposure stays at the calibrated midday value for most of the day (letting
+// the sun's own N·L falloff carry the natural variation), and only opens up
+// modestly near the horizon — CAPPED — so low sun stays dim without going
+// unusably black. (An earlier version held a fixed target brightness all day;
+// that flattened the day/night feel and over-exposed sunrise/sunset.)
+//
+// Keyed on elevation (not time) so BOTH the time-of-day slider (applySunTime)
+// and the showcase flyover (updateFlyoverSun) drive it from the same function
+// (NCZ.exposureForSunElevation in utils.js) — the flyover animates the sun via
+// setSunPosition directly, so it must apply exposure itself.
+//
+// [elevationDeg, exposure], ascending; interpolated piecewise-linear, clamped
+// to the endpoints. Tune the two ends: row 0 = horizon cap (dawn/dusk),
+// last row = midday base.
 NCZ.SCENE_EXPOSURE_CURVE = [
-  [355, 2.263],  // 05:55 sunrise, el  0.2°
-  [480, 0.973],  // 08:00 default,  el 24.0°
-  [600, 0.561],  // 10:00,          el 48.3°
-  [720, 0.432],  // 12:00 noon,     el 71.5°
-  [900, 0.458],  // 15:00,          el 62.5°
-  [1080, 0.819], // 18:00,          el 26.1°
-  [1210, 2.056], // 20:10 sunset,   el  1.3°
+  [0,  0.95],  // horizon (sunrise/sunset) — capped lift so it stays atmospheric, not daylight
+  [5,  0.80],
+  [15, 0.58],
+  [30, 0.49],
+  [50, 0.45],  // calibrated midday base — natural variation comes from the sun, not exposure
+  [90, 0.45],
 ];
 NCZ.SUN_COLOR_RGB      = [0.975, 0.869, 0.774];     // envparam LightAreaSettings.sunColor — warm white (linear)
 NCZ.SUN_INTENSITY      = 3.00;                      // envelope-fit (sun:ambient ratio + level tuned across V1/V2/V3/V4)

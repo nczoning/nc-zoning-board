@@ -199,6 +199,11 @@ const Flyover = (() => {
     const epochMs = _sunriseMs + (_sunsetMs - _sunriseMs) * t;
     const pos = SunCalc.getPosition(new Date(epochMs), MORRO_BAY.lat, MORRO_BAY.lng);
     NCZ.ThreeScene.setSunPosition(pos.azimuth, pos.altitude);
+    // Drive exposure off the same elevation curve as the slider — the flyover
+    // animates the sun directly (bypassing applySunTime), so without this the
+    // exposure froze at its pre-showcase value and the whole flyover rendered
+    // at one brightness. See NCZ.exposureForSunElevation.
+    NCZ.ThreeScene.setSceneExposure?.(NCZ.exposureForSunElevation(pos.altitude));
   }
 
   function triggerBeat() {

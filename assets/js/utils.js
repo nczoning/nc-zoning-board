@@ -55,6 +55,29 @@ NCZ.clamp = function (value, min, max) {
 };
 
 /**
+ * Tone-mapping exposure for a given sun elevation, from NCZ.SCENE_EXPOSURE_CURVE
+ * (piecewise-linear, clamped to the endpoints). Shared by the time-of-day
+ * slider (applySunTime) and the showcase flyover (updateFlyoverSun) so both
+ * drive exposure identically — see the curve comment in constants.js.
+ * @param {number} elevationRad sun elevation above the horizon, in radians
+ */
+NCZ.exposureForSunElevation = function (elevationRad) {
+  const curve = NCZ.SCENE_EXPOSURE_CURVE;
+  if (!curve || !curve.length) return NCZ.SCENE_EXPOSURE;
+  const deg = elevationRad * 180 / Math.PI;
+  if (deg <= curve[0][0]) return curve[0][1];
+  if (deg >= curve[curve.length - 1][0]) return curve[curve.length - 1][1];
+  for (let i = 1; i < curve.length; i++) {
+    const [d1, e1] = curve[i];
+    if (deg <= d1) {
+      const [d0, e0] = curve[i - 1];
+      return e0 + (e1 - e0) * ((deg - d0) / (d1 - d0));
+    }
+  }
+  return NCZ.SCENE_EXPOSURE;
+};
+
+/**
  * Chooses an anchor side and calculates a clamped box position + arrow anchor.
  * Consumers apply the returned values to their own DOM elements/styles.
  */
