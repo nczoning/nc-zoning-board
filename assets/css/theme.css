@@ -299,13 +299,14 @@ html.theme-synthwave {
     --category-other-glow: var(--gray-40);
 
     /* 3D scene mesh colors */
-    --scene-terrain:         #140828;
-    --scene-water:           #080418;
-    --scene-cliffs:          #140828;
-    --scene-buildings:       #6040a0;
-    --scene-landmarks:       #6040a0;
-    --scene-buildings-edge:  #00d4ff;
-    --scene-grid:            #6a3aa0;
+    --scene-terrain:         #3a1d5e;
+    --scene-water:           #241047;
+    --scene-cliffs:          #4a2570;
+    --scene-buildings:       #9d4edd;
+    --scene-landmarks:       #9d4edd;  /* = buildings (Preem is the only theme that splits them) */
+    --scene-buildings-edge:  #00e5ff;
+    --scene-grid:            #6e2750;  /* muted magenta — subtle, not dominant */
+    --scene-edge-glow:       0.3;  /* opt-in self-lit neon edge highlight — Synthwave only */
 
     /* Overlay colors — road borders are cyan for neon grid feel */
     --overlay-road-color:        #18102a;
@@ -420,6 +421,7 @@ html.theme-preem {
     --scene-landmarks:       #ff9fa7;  /* Game-theme building colour — Preem leaves monuments vanilla */
     --scene-buildings-edge:  #18ffec;  /* 3d_map_cubes.mt EdgeColor (used directly) */
     --scene-grid:            #1e2e36;  /* 3dmap_terrain.Material LinesColor (used directly) */
+    --scene-grade:           1;        /* map-replica theme — in-game colour grade + LUT on (like Game) */
 
     /* Overlay colors — additive. Roads/borders darkened from the raw Preem
        material (#c92917 / #ca654a) — full-strength additive blows them out;

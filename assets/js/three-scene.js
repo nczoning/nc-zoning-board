@@ -257,6 +257,24 @@ const ThreeScene = (() => {
     return parseFloat(raw) > 0;
   }
 
+  // Read a numeric theme custom property (e.g. an opt-in intensity gate),
+  // falling back when unset/unparseable. Same idea as themeGradeEnabled but
+  // returns the value, not a boolean.
+  function readThemeNumber(varName, fallback) {
+    const raw = getComputedStyle(document.documentElement)
+      .getPropertyValue(varName).trim();
+    const n = parseFloat(raw);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  // Effective colour-grade state. Each theme has a default (--scene-grade);
+  // the Settings "LUT" toggle can override it for the session. A theme switch
+  // resets the override back to the new theme's default (see updateMaterials).
+  let _gradeOn = false;
+  function applyGrade(on) { _gradeOn = !!on; setSceneGradeEnabled(_gradeOn); requestRender(); }
+  function setGradeEnabled(on) { applyGrade(on); }       // manual override (Settings toggle)
+  function getGradeEnabled() { return _gradeOn; }
+
   // Derive edge highlight colour from the building base colour.
 
   // ── Terrain "graph-paper" grid ─────────────────────────────────────────────
@@ -594,7 +612,7 @@ const ThreeScene = (() => {
     // active theme; updateMaterials() re-reads it on every theme switch.
     loadBraindanceLUT('assets/data/braindance-lut.bin')
       .catch(err => console.warn('[NCZ] braindance LUT load failed:', err));
-    setSceneGradeEnabled(themeGradeEnabled());
+    applyGrade(themeGradeEnabled());
     // Cap effective DPR — see NCZ.MAX_DEVICE_PIXEL_RATIO. The debug-dump
     // "Renderer DPR" line shows the capped value; "Display ... DPR" still shows
     // the raw window.devicePixelRatio, so the two diverge for capped users.
@@ -1640,8 +1658,14 @@ const ThreeScene = (() => {
     //                  the term is sub-pixel at map zoom regardless).
     const uEdgeSharpness = uniform(meta.edgeSharpness);
     const uEdgeCamCoeff = uniform(NCZ.BUILDING_EDGE_CAMDIST_K * meta.edgeThickness / meta.cubeSize);
-    // Only uEdgeColor needs runtime mutation (theme rewire / flyover tweens).
-    mat.userData.tslUniforms = { uEdgeColor };
+    // Opt-in per-theme edge "glow": intensity from the `--scene-edge-glow` CSS
+    // var (0 = off, the default for every theme). When >0 the edge highlight is
+    // also written to emissiveNode, so it stays lit regardless of sun/shadow —
+    // reads as neon, strongest at dawn/dusk. A true halo needs the bloom pass;
+    // this is the cheap self-lit approximation. See emissiveNode below.
+    const uEdgeGlow = uniform(readThemeNumber('--scene-edge-glow', 0));
+    // uEdgeColor + uEdgeGlow need runtime mutation (theme rewire / flyover tweens).
+    mat.userData.tslUniforms = { uEdgeColor, uEdgeGlow };
 
     // (0) Per-instance positioning + normals — explicit space transforms.
     //
@@ -1738,6 +1762,13 @@ const ThreeScene = (() => {
                      .add(materialColor.b.mul(0.114));
     const edgeTint = uEdgeColor.mul(baseLuma.mul(2));
     mat.colorNode  = mix(materialColor, edgeTint, edge).mul(modulation);
+
+    // Opt-in edge glow (gated by --scene-edge-glow, 0 by default → no-op for
+    // every theme that doesn't set it). Emissive = the same edge tint × coverage,
+    // self-lit so it doesn't dim in shadow / at low sun. uEdgeColor (not edgeTint)
+    // keeps the glow at the theme's pure edge hue rather than the luma-boosted
+    // albedo tint, so neon colour stays saturated.
+    mat.emissiveNode = uEdgeColor.mul(edge).mul(uEdgeGlow);
 
     return mat;
   }
@@ -2553,8 +2584,9 @@ const ThreeScene = (() => {
     scene.background = readThemeColor('--primary', '#0a192f');
 
     // Colour grade + braindance LUT follow the theme (--scene-grade): on for
-    // the Game / Preem map-replica themes, off for the stylised themes.
-    setSceneGradeEnabled(themeGradeEnabled());
+    // the Game / Preem map-replica themes, off for the stylised themes. A theme
+    // switch resets any manual Settings "LUT" override back to the theme default.
+    applyGrade(themeGradeEnabled());
 
     // Terrain/water/cliffs: base colour is material.color; the grid line
     // colour is the shared uGrid uniform stashed on each material.
@@ -2584,10 +2616,12 @@ const ThreeScene = (() => {
     if (buildingMaterials.length) {
       const base = readThemeColor('--scene-buildings', '#7a8fa0');
       const edge = readThemeColor('--scene-buildings-edge', '#ffffff');
+      const glow = readThemeNumber('--scene-edge-glow', 0);
       for (const mat of buildingMaterials) {
         mat.color.copy(base);
         const u = mat.userData.tslUniforms;
         if (u?.uEdgeColor) u.uEdgeColor.value.copy(edge);
+        if (u?.uEdgeGlow)  u.uEdgeGlow.value = glow;
       }
     }
     requestRender();
@@ -2993,7 +3027,7 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSunIntensity, setAmbientIntensity, setSceneExposure, setShadowIntensity, getLightingState, getSunElevation, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
+  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSunIntensity, setAmbientIntensity, setSceneExposure, setShadowIntensity, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;

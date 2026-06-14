@@ -155,6 +155,10 @@ document.addEventListener("DOMContentLoaded", () => {
     // Update Three.js scene materials and clear the 2D overlay tile cache
     // so both renderers pick up the new CSS custom properties immediately.
     NCZ.ThreeScene?.updateMaterials();
+    // A theme switch resets the LUT grade to the new theme's default — reflect
+    // that in the Settings toggle.
+    const lutToggle = document.getElementById('lut-grade-toggle');
+    if (lutToggle) lutToggle.checked = NCZ.ThreeScene?.getGradeEnabled?.() ?? false;
     NCZ._clearOverlayCache?.();
   }
 
@@ -611,6 +615,10 @@ async function initMap() {
           // 3D scene: drop the user onto the 2D Leaflet map instead.
           if (NCZ.ThreeScene.isWebGPUActive()) {
             NCZ.ThreeScene.startRenderLoop();
+            // Sync the Settings LUT toggle to the scene's grade state now that
+            // init() has applied the active theme's --scene-grade default.
+            const lt = document.getElementById('lut-grade-toggle');
+            if (lt) lt.checked = NCZ.ThreeScene.getGradeEnabled?.() ?? false;
             if (GAMELIGHT) applyGameLightRef();
           } else {
             forceSatFallback();
@@ -719,6 +727,16 @@ async function initMap() {
   document.getElementById("overlay-shadows")?.addEventListener("change", e => {
     NCZ.ThreeScene?.setShadowsEnabled?.(e.target.checked);
   });
+
+  // Settings → "Colour grade (LUT)" toggle. Overrides the active theme's
+  // --scene-grade default for the session; a theme switch resets it (see
+  // applyThemeById). Initial state synced from the scene once it's live.
+  const lutToggle = document.getElementById("lut-grade-toggle");
+  if (lutToggle) {
+    lutToggle.addEventListener("change", e => {
+      NCZ.ThreeScene?.setGradeEnabled?.(e.target.checked);
+    });
+  }
 
   // ?gamelight — apply the calibration reference state once the 3D scene is
   // live (called from switchView's schema branch). The sun is already pinned
