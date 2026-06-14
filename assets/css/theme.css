@@ -299,9 +299,9 @@ html.theme-synthwave {
     --category-other-glow: var(--gray-40);
 
     /* 3D scene mesh colors */
-    --scene-terrain:         #3a1d5e;
-    --scene-water:           #241047;
-    --scene-cliffs:          #4a2570;
+    --scene-terrain:         #241047;  /* deep indigo land */
+    --scene-water:           #3a1d5e;  /* lighter violet — bay reads brighter than land */
+    --scene-cliffs:          #241047;  /* match terrain */
     --scene-buildings:       #9d4edd;
     --scene-landmarks:       #9d4edd;  /* = buildings (Preem is the only theme that splits them) */
     --scene-buildings-edge:  #00e5ff;
