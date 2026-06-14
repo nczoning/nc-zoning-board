@@ -274,6 +274,24 @@ const ThreeScene = (() => {
   function setGradeEnabled(on) { applyGrade(on); }       // manual override (Settings toggle)
   function getGradeEnabled() { return _gradeOn; }
 
+  // Edge-glow on/off, same pattern as the grade. Binary: on → the building
+  // edge emissive uses the fixed NCZ.EDGE_GLOW_INTENSITY, off → 0. Each theme
+  // has a default (--scene-edge-glow > 0); the Settings toggle overrides it for
+  // the session; a theme switch resets to the new theme's default.
+  let _edgeGlowOn = false;
+  function applyEdgeGlow(on) {
+    _edgeGlowOn = !!on;
+    const v = _edgeGlowOn ? NCZ.EDGE_GLOW_INTENSITY : 0;
+    for (const mat of buildingMaterials) {
+      const u = mat.userData.tslUniforms;
+      if (u?.uEdgeGlow) u.uEdgeGlow.value = v;
+    }
+    requestRender();
+  }
+  function setEdgeGlowEnabled(on) { applyEdgeGlow(on); }
+  function getEdgeGlowEnabled() { return _edgeGlowOn; }
+  function themeEdgeGlowDefault() { return readThemeNumber('--scene-edge-glow', 0) > 0; }
+
   // Derive edge highlight colour from the building base colour.
 
   // ── Terrain "graph-paper" grid ─────────────────────────────────────────────
@@ -1074,7 +1092,14 @@ const ThreeScene = (() => {
       // Tier 2+3: start all concurrent tasks, hide loading only when all complete.
       // Add future loaders (loadLandmarks etc.) to this array.
       Promise.all([loadRoadsMetro(), loadDistricts(), loadBuildings(), loadLandmarks()])
-        .then(() => { hideLoading(); playIntro(); });
+        .then(() => {
+          // Buildings now exist — apply the active theme's edge-glow default to
+          // their uniforms (updateMaterials' early applyEdgeGlow ran before the
+          // materials were built; the grade has no such dependency).
+          applyEdgeGlow(themeEdgeGlowDefault());
+          hideLoading();
+          playIntro();
+        });
 
     } catch (err) {
       console.error('[NCZ] Terrain GLB load failed:', err);
@@ -1657,12 +1682,12 @@ const ThreeScene = (() => {
     //                  the term is sub-pixel at map zoom regardless).
     const uEdgeSharpness = uniform(meta.edgeSharpness);
     const uEdgeCamCoeff = uniform(NCZ.BUILDING_EDGE_CAMDIST_K * meta.edgeThickness / meta.cubeSize);
-    // Opt-in per-theme edge "glow": intensity from the `--scene-edge-glow` CSS
-    // var (0 = off, the default for every theme). When >0 the edge highlight is
-    // also written to emissiveNode, so it stays lit regardless of sun/shadow —
-    // reads as neon, strongest at dawn/dusk. A true halo needs the bloom pass;
-    // this is the cheap self-lit approximation. See emissiveNode below.
-    const uEdgeGlow = uniform(readThemeNumber('--scene-edge-glow', 0));
+    // Edge "glow": when on, the edge highlight is also written to emissiveNode
+    // so it stays lit regardless of sun/shadow — neon, strongest at dawn/dusk
+    // (a true halo needs the bloom pass; this is the cheap self-lit version).
+    // Binary on/off at the fixed NCZ.EDGE_GLOW_INTENSITY; per-theme default from
+    // --scene-edge-glow, overridable via the Settings toggle (_edgeGlowOn).
+    const uEdgeGlow = uniform(_edgeGlowOn ? NCZ.EDGE_GLOW_INTENSITY : 0);
     // uEdgeColor + uEdgeGlow need runtime mutation (theme rewire / flyover tweens).
     mat.userData.tslUniforms = { uEdgeColor, uEdgeGlow };
 
@@ -2586,6 +2611,8 @@ const ThreeScene = (() => {
     // the Game / Preem map-replica themes, off for the stylised themes. A theme
     // switch resets any manual Settings "LUT" override back to the theme default.
     applyGrade(themeGradeEnabled());
+    // Same for the edge-glow toggle (default-on for Synthwave only).
+    applyEdgeGlow(themeEdgeGlowDefault());
 
     // Terrain/water/cliffs: base colour is material.color; the grid line
     // colour is the shared uGrid uniform stashed on each material.
@@ -2615,13 +2642,13 @@ const ThreeScene = (() => {
     if (buildingMaterials.length) {
       const base = readThemeColor('--scene-buildings', '#7a8fa0');
       const edge = readThemeColor('--scene-buildings-edge', '#ffffff');
-      const glow = readThemeNumber('--scene-edge-glow', 0);
       for (const mat of buildingMaterials) {
         mat.color.copy(base);
         const u = mat.userData.tslUniforms;
         if (u?.uEdgeColor) u.uEdgeColor.value.copy(edge);
-        if (u?.uEdgeGlow)  u.uEdgeGlow.value = glow;
       }
+      // Edge-glow uniforms handled by applyEdgeGlow() above (theme default /
+      // Settings override) — uses the fixed intensity, not the raw CSS number.
     }
     requestRender();
   }
@@ -3018,7 +3045,7 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
+  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setEdgeGlowEnabled, getEdgeGlowEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;

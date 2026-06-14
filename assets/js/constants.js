@@ -313,6 +313,14 @@ NCZ.SCENE_EXPOSURE_CURVE = [
   [50, 0.45],  // calibrated midday base — natural variation comes from the sun, not exposure
   [90, 0.45],
 ];
+
+// Building edge "glow" — self-lit emissive on the decoded edge highlight, a
+// per-theme opt-in (see --scene-edge-glow). It's a binary on/off (no slider):
+// when on, the edge emissive uses this fixed intensity. The per-theme CSS var
+// is just the default on/off state; the Settings checkbox overrides it for the
+// session. Synthwave defaults on; every other theme off.
+NCZ.EDGE_GLOW_INTENSITY = 0.3;
+
 NCZ.SUN_COLOR_RGB      = [0.975, 0.869, 0.774];     // envparam LightAreaSettings.sunColor — warm white (linear)
 NCZ.SUN_INTENSITY      = 3.00;                      // envelope-fit (sun:ambient ratio + level tuned across V1/V2/V3/V4)
 NCZ.AMBIENT_SKY_RGB    = [0.796, 0.895, 1.0];       // envparam AmbientOverride — the 5 bright cube faces, cool white (linear)

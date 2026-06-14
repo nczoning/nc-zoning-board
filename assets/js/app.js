@@ -130,6 +130,19 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Reflect a theme's render-toggle defaults (--scene-grade / --scene-edge-glow)
+  // into the Settings checkboxes. Reads the CSS var directly so it's independent
+  // of the scene's async build timing (buildings — and thus glow — finish after
+  // init resolves). Called at initial load and on every theme switch, both of
+  // which reset the toggles to the active theme's default.
+  function syncRenderToggles() {
+    const flag = (v) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(v)) > 0;
+    const lut  = document.getElementById('lut-grade-toggle');
+    const glow = document.getElementById('edge-glow-toggle');
+    if (lut)  lut.checked  = flag('--scene-grade');
+    if (glow) glow.checked = flag('--scene-edge-glow');
+  }
+
   function applyThemeById(themeId, { persist = true } = {}) {
     const theme = findThemeById(themeId);
     const targetClass = theme.className || `theme-${theme.id}`;
@@ -155,10 +168,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Update Three.js scene materials and clear the 2D overlay tile cache
     // so both renderers pick up the new CSS custom properties immediately.
     NCZ.ThreeScene?.updateMaterials();
-    // A theme switch resets the LUT grade to the new theme's default — reflect
-    // that in the Settings toggle.
-    const lutToggle = document.getElementById('lut-grade-toggle');
-    if (lutToggle) lutToggle.checked = NCZ.ThreeScene?.getGradeEnabled?.() ?? false;
+    // A theme switch resets the LUT grade + edge glow to the new theme's
+    // defaults — reflect that in the Settings toggles.
+    syncRenderToggles();
     NCZ._clearOverlayCache?.();
   }
 
@@ -615,10 +627,8 @@ async function initMap() {
           // 3D scene: drop the user onto the 2D Leaflet map instead.
           if (NCZ.ThreeScene.isWebGPUActive()) {
             NCZ.ThreeScene.startRenderLoop();
-            // Sync the Settings LUT toggle to the scene's grade state now that
-            // init() has applied the active theme's --scene-grade default.
-            const lt = document.getElementById('lut-grade-toggle');
-            if (lt) lt.checked = NCZ.ThreeScene.getGradeEnabled?.() ?? false;
+            // Reflect the active theme's render-toggle defaults in Settings.
+            syncRenderToggles();
             if (GAMELIGHT) applyGameLightRef();
           } else {
             forceSatFallback();
@@ -735,6 +745,15 @@ async function initMap() {
   if (lutToggle) {
     lutToggle.addEventListener("change", e => {
       NCZ.ThreeScene?.setGradeEnabled?.(e.target.checked);
+    });
+  }
+
+  // Settings → "Edge glow" toggle — binary self-lit building edges. Same
+  // override-the-theme-default pattern as the LUT toggle above.
+  const glowToggle = document.getElementById("edge-glow-toggle");
+  if (glowToggle) {
+    glowToggle.addEventListener("change", e => {
+      NCZ.ThreeScene?.setEdgeGlowEnabled?.(e.target.checked);
     });
   }
 

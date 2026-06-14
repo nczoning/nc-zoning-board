@@ -306,7 +306,7 @@ html.theme-synthwave {
     --scene-landmarks:       #9d4edd;  /* = buildings (Preem is the only theme that splits them) */
     --scene-buildings-edge:  #00e5ff;
     --scene-grid:            #6e2750;  /* muted magenta — subtle, not dominant */
-    --scene-edge-glow:       0.3;  /* opt-in self-lit neon edge highlight — Synthwave only */
+    --scene-edge-glow:       1;    /* default-on for the edge-glow toggle (binary; intensity = NCZ.EDGE_GLOW_INTENSITY) */
 
     /* Overlay colors — road borders are cyan for neon grid feel */
     --overlay-road-color:        #18102a;
