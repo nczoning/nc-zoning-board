@@ -123,24 +123,49 @@ fit.
 ## Time-of-day exposure curve
 
 The in-game map's exposure is runtime auto-metered (`ExposureAreaSettings`) and
-its sun is a fixed artistic choice. Ours is **real SunCalc sun data**, so scene
-illuminance swings >10× from sunrise to noon — no single `toneMappingExposure`
-keeps the map usable across that range (too dark at dawn/dusk, or too bright at
-noon). We substitute a deterministic **`exposure(time)` curve**
-(`NCZ.SCENE_EXPOSURE_CURVE`, applied in `applySunTime`): exposure rises at low
-sun and falls at high sun, holding the map in a usable brightness band all day.
+its sun is a fixed artistic choice. Ours is **real SunCalc sun data**, so without
+help the scene crushes to black at dawn/dusk. But the goal is **not** constant
+brightness — the map should still read like real-world light (bright midday, dim
+and atmospheric at sunrise/sunset). So `NCZ.SCENE_EXPOSURE_CURVE` is a gentle
+**"floor the darkness"** curve, **keyed on sun elevation**: exposure holds at the
+calibrated midday base for most of the day (letting the sun's own N·L falloff
+carry the natural variation) and only opens up near the horizon — **capped** — so
+low sun stays atmospheric without going unusably black.
 
-The curve was **solved, not eyeballed**, by the metering harness (below): it
-holds the default whole-city view at a fixed target brightness (anchored to
-exposure `1.0` at the 08:00 default load) and reads off the exposure each sun
-time needs. The solved values recover the physical inverse-illuminance law
-(`exposure × sin(elevation) ≈ 0.40` for mid-to-high sun), plateauing near the
-horizon where hemisphere ambient dominates. Regenerate with
-`node scripts/measure_lighting.js --solve`.
+> An earlier version *solved* the curve to hold the default view at one fixed
+> brightness all day. It flattened the day/night feel and over-exposed
+> sunrise/sunset (dawn exposure ran to ~2.3×, washing low sun to daylight). The
+> floor model replaced it.
+
+The curve is `[elevationDeg, exposure]` rows, interpolated piecewise-linearly and
+clamped to the endpoints. Tune the two ends: the first row is the horizon cap
+(sunrise/sunset), the last is the midday base. Because it's keyed on elevation,
+**both** the time-of-day slider (`applySunTime`) and the showcase flyover
+(`updateFlyoverSun`) drive it through the same function,
+`NCZ.exposureForSunElevation` (in `utils.js`) — the flyover animates the sun
+directly, so it must apply exposure itself or it freezes at one brightness.
 
 `SCENE_EXPOSURE` survives as the init fallback and the fixed `?gamelight`
 reference exposure (held constant so the colour-fidelity reference frame can't
 drift).
+
+## Edge glow (opt-in, per theme)
+
+`--scene-edge-glow` (0 = off, the default for every theme) writes the building
+edge highlight to `emissiveNode` as well as the albedo, so the edge stays lit
+regardless of sun/shadow — a self-lit neon look (no bloom pass needed; a true
+soft halo would need bloom). A theme opts in by setting the var to an intensity;
+**Synthwave uses `0.3`**, all others leave it off. Read via `readThemeNumber()`
+and re-applied on theme switch in `updateMaterials`.
+
+## Colour grade (LUT) — default + runtime toggle
+
+The ACES grade + braindance LUT are gated per theme by `--scene-grade` (1 =
+on): **on for the Game and Preem map-replica themes, off for the stylised
+themes** by default. The Settings modal has a **"Colour grade (LUT)"** toggle
+(`setGradeEnabled` / `getGradeEnabled`) that overrides the active theme's default
+for the session so any theme can be previewed with the grade; switching themes
+resets the override to the new theme's default and the checkbox re-syncs.
 
 ## Metering harness — `scripts/measure_lighting.js`
 
@@ -149,13 +174,16 @@ across the envelope in `scripts/lighting-envelope.json` — 8 approved camera
 poses × 7 sun times × the 2 calibrated themes — screenshots the 3D canvas, and
 computes per-frame luminance stats (median / p5 / p95 / black% / clip%) with
 sharp. Flags frames outside the calibrated `bounds`; exits non-zero so it can
-gate lighting changes. `--solve` fits the exposure curve; `--quick` runs a
-smoke subset. Emits `report.json` + labelled contact sheets.
+gate lighting changes. `--quick` runs a smoke subset. Emits `report.json` +
+labelled contact sheets. (`--solve` exists from the earlier hold-constant
+exposure model and is no longer used to author the curve — the floor curve is
+hand-shaped at its two ends and verified by the sweep.)
 
 The `bounds.medianMin` floor is `0.035`: deep-shadow dense-tower canyons
 legitimately sit at median ~0.04 (dim but legible, 0% crushed) — accepted as
-correct rather than brightened, since exposure is one global lever per time and
-brightening them would push the whole-city view past its 1.0 anchor.
+correct rather than brightened. Note the floor is a *lower* guard against true
+black; with the floor exposure curve, dawn/dusk are intentionally dim, so some
+near-horizon terrain frames sit close to it by design.
 
 ## Not (yet) replicated
 
@@ -169,9 +197,11 @@ brightening them would push the whole-city view past its 1.0 anchor.
 | --- | --- |
 | `assets/js/aces-tonemap.js` | ACES SSTS tonemap + colour grade + braindance LUT |
 | `scripts/build_lut.js` | `.cube` → `assets/data/braindance-lut.bin` |
-| `assets/js/three-scene.js` | sun/ambient setup, tonemap registration, LUT load, `setSceneExposure` |
-| `assets/js/app.js` | `applySunTime` — sun direction + `exposureForMinutes` curve lookup |
+| `assets/js/three-scene.js` | sun/ambient setup, tonemap registration, LUT load, `setSceneExposure`, edge-glow + grade gates |
+| `assets/js/utils.js` | `NCZ.exposureForSunElevation` — the shared exposure-curve lookup |
+| `assets/js/app.js` | `applySunTime` (sun dir + exposure), Settings LUT toggle wiring |
+| `assets/js/flyover.js` | `updateFlyoverSun` — animates the sun + applies the exposure curve |
 | `assets/js/constants.js` | `SUN_*`, `AMBIENT_*`, `SCENE_EXPOSURE`, `SCENE_EXPOSURE_CURVE` |
-| `assets/css/theme.css` | per-theme `--scene-*` albedo + the `--scene-grade` gate |
+| `assets/css/theme.css` | per-theme `--scene-*` albedo, `--scene-grade`, `--scene-edge-glow` |
 | `scripts/measure_lighting.js` | metering harness — sweep, `--solve`, contact sheets |
 | `scripts/lighting-envelope.json` | approved poses, sun sweep, calibrated bounds |
