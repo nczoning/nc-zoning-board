@@ -111,13 +111,51 @@ engine-specific:
 | `AMBIENT_INTENSITY` | likewise — the ambient cube's `Alpha 2000` is a REDengine HDR unit |
 | `SCENE_TONEMAP_EXPOSURE` | the game's exposure is runtime auto-metered (`ExposureAreaSettings`) — no fixed value exists in any file |
 
-These three are **calibrated** against an SDR PIX capture of the in-game map —
-fitting our render's *terrain* (a clean, featureless reference) to the game's.
-Current values: sun `1.1`, ambient `0.42`, exposure `0.85`.
+`SUN_INTENSITY` and `AMBIENT_INTENSITY` are **calibrated** against the usage
+envelope (default load, whole-city, zoomed-out, tilted-close) — not a single
+frame. Current values: sun `3.0`, ambient `0.405` (sun:ambient ≈ 7.4:1).
+Exposure is no longer a single constant — see below.
 
 This is the only tuning in the pipeline: every colour, the tone curve, the
-grade and the LUT are exact decoded game data; only the engine-unit conversion
-of the three brightness scalars is fit.
+grade and the LUT are exact decoded game data; only the brightness scalars are
+fit.
+
+## Time-of-day exposure curve
+
+The in-game map's exposure is runtime auto-metered (`ExposureAreaSettings`) and
+its sun is a fixed artistic choice. Ours is **real SunCalc sun data**, so scene
+illuminance swings >10× from sunrise to noon — no single `toneMappingExposure`
+keeps the map usable across that range (too dark at dawn/dusk, or too bright at
+noon). We substitute a deterministic **`exposure(time)` curve**
+(`NCZ.SCENE_EXPOSURE_CURVE`, applied in `applySunTime`): exposure rises at low
+sun and falls at high sun, holding the map in a usable brightness band all day.
+
+The curve was **solved, not eyeballed**, by the metering harness (below): it
+holds the default whole-city view at a fixed target brightness (anchored to
+exposure `1.0` at the 08:00 default load) and reads off the exposure each sun
+time needs. The solved values recover the physical inverse-illuminance law
+(`exposure × sin(elevation) ≈ 0.40` for mid-to-high sun), plateauing near the
+horizon where hemisphere ambient dominates. Regenerate with
+`node scripts/measure_lighting.js --solve`.
+
+`SCENE_EXPOSURE` survives as the init fallback and the fixed `?gamelight`
+reference exposure (held constant so the colour-fidelity reference frame can't
+drift).
+
+## Metering harness — `scripts/measure_lighting.js`
+
+Automated brightness QA. Drives an installed Chrome (puppeteer-core, WebGPU)
+across the envelope in `scripts/lighting-envelope.json` — 8 approved camera
+poses × 7 sun times × the 2 calibrated themes — screenshots the 3D canvas, and
+computes per-frame luminance stats (median / p5 / p95 / black% / clip%) with
+sharp. Flags frames outside the calibrated `bounds`; exits non-zero so it can
+gate lighting changes. `--solve` fits the exposure curve; `--quick` runs a
+smoke subset. Emits `report.json` + labelled contact sheets.
+
+The `bounds.medianMin` floor is `0.035`: deep-shadow dense-tower canyons
+legitimately sit at median ~0.04 (dim but legible, 0% crushed) — accepted as
+correct rather than brightened, since exposure is one global lever per time and
+brightening them would push the whole-city view past its 1.0 anchor.
 
 ## Not (yet) replicated
 
@@ -131,6 +169,9 @@ of the three brightness scalars is fit.
 | --- | --- |
 | `assets/js/aces-tonemap.js` | ACES SSTS tonemap + colour grade + braindance LUT |
 | `scripts/build_lut.js` | `.cube` → `assets/data/braindance-lut.bin` |
-| `assets/js/three-scene.js` | sun/ambient setup, tonemap registration, LUT load |
-| `assets/js/constants.js` | `SUN_*`, `AMBIENT_*`, `SCENE_TONEMAP_EXPOSURE` |
+| `assets/js/three-scene.js` | sun/ambient setup, tonemap registration, LUT load, `setSceneExposure` |
+| `assets/js/app.js` | `applySunTime` — sun direction + `exposureForMinutes` curve lookup |
+| `assets/js/constants.js` | `SUN_*`, `AMBIENT_*`, `SCENE_EXPOSURE`, `SCENE_EXPOSURE_CURVE` |
 | `assets/css/theme.css` | per-theme `--scene-*` albedo + the `--scene-grade` gate |
+| `scripts/measure_lighting.js` | metering harness — sweep, `--solve`, contact sheets |
+| `scripts/lighting-envelope.json` | approved poses, sun sweep, calibrated bounds |
