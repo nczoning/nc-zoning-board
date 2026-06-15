@@ -1889,6 +1889,43 @@ body::before {
     gap: var(--space-sm);
 }
 
+/* Attribution block — "Asset & data credits" heading, CDPR Fan Content
+   disclaimer, then the per-asset credit list. Body reads at the modal text
+   size; heading reuses the .parameters-section-title idiom (Orbitron, accent,
+   uppercase) so it matches the Settings section headings. */
+.about-credits {
+    font-family: var(--font-body);
+    font-size: var(--text-lg);
+    line-height: 1.5;
+    color: var(--gray);
+
+    p {
+        margin-bottom: var(--space-xs);
+        line-height: 1.5;
+    }
+
+    .about-credits-heading {
+        margin: 0 0 var(--space-sm);
+        font-family: var(--font-heading);
+        font-size: var(--text-lg);
+        color: var(--secondary);
+        letter-spacing: 1px;
+        text-transform: uppercase;
+    }
+
+    .about-credits-list {
+        list-style: none;
+        padding-left: 0;
+        margin: 0;
+    }
+
+    a {
+        color: var(--secondary);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+}
+
 .terminal-link {
     display: block;
     color: var(--secondary);

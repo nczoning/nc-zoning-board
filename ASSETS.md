@@ -30,7 +30,7 @@ The following assets are extracted from **Cyberpunk 2077** and are **NOT** cover
 - Platform monetization (YouTube/Twitch) is permitted for community creators
 
 **Attribution Required**
-This project displays the following notice in the interface:
+This project displays the following notice in the Credits section of the in-app About panel:
 > *"This is an unofficial fan work and is not approved/endorsed by CD PROJEKT RED."*
 
 **Permitted Use**
