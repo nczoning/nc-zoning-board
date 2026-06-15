@@ -36,8 +36,8 @@
  * a *display-referred* mid value, so the grade runs in sRGB/display space
  * (the tonemap output is encoded to sRGB first). brightness/lift/offsets/hue
  * are all identity in the decoded data and omitted. The combination order
- * (contrast → gain → gamma) is the standard primary-correction order — the
- * *params* are exact, the formula is the conventional one.
+ * (contrast → gain → gamma → saturation) is the standard primary-correction
+ * order — the *params* are exact, the formula is the conventional one.
  *
  * ── 3. Braindance LUT ───────────────────────────────────────────────────────
  * The envparam `ldrLut` → `cube_cp_braindance_v001.xbm`, a 32³ RGBA-float 3D
@@ -78,6 +78,7 @@ const GRADE_CONTRAST       = 1.10000002;
 const GRADE_CONTRAST_PIVOT = 0.435000002;
 const GRADE_GAIN           = [1.0, 1.29999995, 1.29999995]; // R, G, B
 const GRADE_GAMMA_LUM      = 0.959999979;                   // luminance gamma
+const GRADE_SATURATION     = 1.10000002;                    // saturation about luma
 
 // ── ACES SSTS reference constants (ACESlib.SSTS.ctl, ACES 1.3) ──────────────
 const MIN_LUM_SDR = 0.02;   // SDR display black, cd/m²
@@ -268,7 +269,11 @@ function makeToneMappingFn() {
     const luma  = g.r.mul(REC709[0]).add(g.g.mul(REC709[1])).add(g.b.mul(REC709[2]));
     const lumaC = max(luma, float(1e-5));
     const scale = pow(lumaC, float(1 / GRADE_GAMMA_LUM)).div(lumaC);
-    return max(g.mul(scale), float(0));
+    const gamma = max(g.mul(scale), float(0));
+    // Saturation about luma — `desat + (colour − desat)·saturation`, written
+    // out (not the TSL `.mix()` method, which mis-orders operands).
+    const sLuma = vec3(gamma.r.mul(REC709[0]).add(gamma.g.mul(REC709[1])).add(gamma.b.mul(REC709[2])));
+    return max(sLuma.add(gamma.sub(sLuma).mul(float(GRADE_SATURATION))), float(0));
   };
 
   /** Sample the braindance 3D LUT. Input is sRGB-encoded; output is linear. */

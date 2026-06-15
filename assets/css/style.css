@@ -1980,6 +1980,23 @@ body::before {
     margin-top: 0;
 }
 
+/* Settings render toggles: match the Appearance section's control size
+   (the theme select is --text-md), with the hint a step smaller. Scoped to
+   the parameters modal so the overlay-panel toggles keep their own size. */
+.parameters-section .overlay-toggle {
+    font-size: var(--text-md);
+}
+
+/* Always-visible hint under a Settings checkbox (the toggles' hover-title made
+   visible, per request) — a bit smaller than the setting label. */
+.parameters-hint {
+    margin: 0 0 var(--space-xs) calc(var(--space-md) + var(--space-2xs));
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    line-height: 1.4;
+    color: var(--gray);
+}
+
 /* ── Nexus Auto Badge ─────────────────────────────────────────────── */
 .nexus-auto-badge {
     display: inline-block;
@@ -2413,3 +2430,4 @@ body::before {
         top: 18px;
     }
 }
+

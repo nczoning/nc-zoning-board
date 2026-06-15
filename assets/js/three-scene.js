@@ -102,6 +102,10 @@ const ThreeScene = (() => {
     }
   }
   let _shadowsOn     = true;  // shadows on by default; checkbox reflects this via poll
+  // Stored shadow strength — independent of the on/off toggle. Initialised from
+  // the constant; the Shadows overlay multiplies by this when enabled, by 0 when
+  // off (so the tuned strength survives a Shadows toggle).
+  let _shadowIntensity = NCZ.SHADOW_INTENSITY;
   let _sunSphere     = null; // visible sun disc — shown during showcase only
   let _sunAz = Math.PI * 0.25, _sunEl = Math.PI * 0.35; // last *requested* setSunPosition args — placeholders only until the first call (the slider init in app.js), which may land before the lights exist
   let _terrainBox = null;     // THREE.Box3 of the terrain GLB; gates pan-bound clamp
@@ -251,6 +255,42 @@ const ThreeScene = (() => {
       .getPropertyValue('--scene-grade').trim();
     return parseFloat(raw) > 0;
   }
+
+  // Read a numeric theme custom property (e.g. an opt-in intensity gate),
+  // falling back when unset/unparseable. Same idea as themeGradeEnabled but
+  // returns the value, not a boolean.
+  function readThemeNumber(varName, fallback) {
+    const raw = getComputedStyle(document.documentElement)
+      .getPropertyValue(varName).trim();
+    const n = parseFloat(raw);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  // Effective colour-grade state. Each theme has a default (--scene-grade);
+  // the Settings "LUT" toggle can override it for the session. A theme switch
+  // resets the override back to the new theme's default (see updateMaterials).
+  let _gradeOn = false;
+  function applyGrade(on) { _gradeOn = !!on; setSceneGradeEnabled(_gradeOn); requestRender(); }
+  function setGradeEnabled(on) { applyGrade(on); }       // manual override (Settings toggle)
+  function getGradeEnabled() { return _gradeOn; }
+
+  // Edge-glow on/off, same pattern as the grade. Binary: on → the building
+  // edge emissive uses the fixed NCZ.EDGE_GLOW_INTENSITY, off → 0. Each theme
+  // has a default (--scene-edge-glow > 0); the Settings toggle overrides it for
+  // the session; a theme switch resets to the new theme's default.
+  let _edgeGlowOn = false;
+  function applyEdgeGlow(on) {
+    _edgeGlowOn = !!on;
+    const v = _edgeGlowOn ? NCZ.EDGE_GLOW_INTENSITY : 0;
+    for (const mat of buildingMaterials) {
+      const u = mat.userData.tslUniforms;
+      if (u?.uEdgeGlow) u.uEdgeGlow.value = v;
+    }
+    requestRender();
+  }
+  function setEdgeGlowEnabled(on) { applyEdgeGlow(on); }
+  function getEdgeGlowEnabled() { return _edgeGlowOn; }
+  function themeEdgeGlowDefault() { return readThemeNumber('--scene-edge-glow', 0) > 0; }
 
   // Derive edge highlight colour from the building base colour.
 
@@ -574,9 +614,14 @@ const ThreeScene = (() => {
     // STonemappingACESParams and registers it as a custom WebGPU tone-mapping
     // function. This supersedes the interim NeutralToneMapping; Three's built-in
     // ACESFilmicToneMapping (the Narkowicz approximation — desaturates) is not used.
-    // Exposure is a calibration knob — tuned against the in-game map.
+    // Exposure (NCZ.SCENE_EXPOSURE) — a normalised gauge. The in-game map's
+    // physical camera decodes to exposure 0.000108, but that value can't be
+    // used literally: it's a global multiplier and would crush the unlit
+    // [0,1]-colour overlays (roads/metro/district lines) to black. So exposure
+    // stays in the overlay-friendly range and the lights are scaled to match.
+    // See the lighting block in constants.js.
     renderer.toneMapping         = registerCP2077ToneMapping(renderer);
-    renderer.toneMappingExposure = NCZ.SCENE_TONEMAP_EXPOSURE;
+    renderer.toneMappingExposure = NCZ.SCENE_EXPOSURE;
     // Load the braindance grading LUT — fire-and-forget; the texture binding is
     // stable so the data fill uploads transparently once the fetch lands. The
     // grade + LUT are gated per theme via the --scene-grade CSS var (Game/Preem
@@ -584,7 +629,7 @@ const ThreeScene = (() => {
     // active theme; updateMaterials() re-reads it on every theme switch.
     loadBraindanceLUT('assets/data/braindance-lut.bin')
       .catch(err => console.warn('[NCZ] braindance LUT load failed:', err));
-    setSceneGradeEnabled(themeGradeEnabled());
+    applyGrade(themeGradeEnabled());
     // Cap effective DPR — see NCZ.MAX_DEVICE_PIXEL_RATIO. The debug-dump
     // "Renderer DPR" line shows the capped value; "Display ... DPR" still shows
     // the raw window.devicePixelRatio, so the two diverge for capped users.
@@ -653,7 +698,7 @@ const ThreeScene = (() => {
     _dirLight.shadow.camera.name = 'sun-shadow-cam';
     _dirLight.shadow.bias        = NCZ.SHADOW_BIAS;        // 0 — native depth32float + reverse-Z need no depth cushion
     // normalBias is set per-frame by updateShadowCamera (scaled with the footprint).
-    _dirLight.shadow.intensity   = _shadowsOn ? 1 : 0;
+    _dirLight.shadow.intensity   = _shadowsOn ? _shadowIntensity : 0;
     _dirLight.target.name = 'sun-target';
     // Position the light + target are set by updateShadowCamera (it centres the
     // shadow on the visible ground); seed them at the world centre so the first
@@ -1047,7 +1092,14 @@ const ThreeScene = (() => {
       // Tier 2+3: start all concurrent tasks, hide loading only when all complete.
       // Add future loaders (loadLandmarks etc.) to this array.
       Promise.all([loadRoadsMetro(), loadDistricts(), loadBuildings(), loadLandmarks()])
-        .then(() => { hideLoading(); playIntro(); });
+        .then(() => {
+          // Buildings now exist — apply the active theme's edge-glow default to
+          // their uniforms (updateMaterials' early applyEdgeGlow ran before the
+          // materials were built; the grade has no such dependency).
+          applyEdgeGlow(themeEdgeGlowDefault());
+          hideLoading();
+          playIntro();
+        });
 
     } catch (err) {
       console.error('[NCZ] Terrain GLB load failed:', err);
@@ -1630,8 +1682,14 @@ const ThreeScene = (() => {
     //                  the term is sub-pixel at map zoom regardless).
     const uEdgeSharpness = uniform(meta.edgeSharpness);
     const uEdgeCamCoeff = uniform(NCZ.BUILDING_EDGE_CAMDIST_K * meta.edgeThickness / meta.cubeSize);
-    // Only uEdgeColor needs runtime mutation (theme rewire / flyover tweens).
-    mat.userData.tslUniforms = { uEdgeColor };
+    // Edge "glow": when on, the edge highlight is also written to emissiveNode
+    // so it stays lit regardless of sun/shadow — neon, strongest at dawn/dusk
+    // (a true halo needs the bloom pass; this is the cheap self-lit version).
+    // Binary on/off at the fixed NCZ.EDGE_GLOW_INTENSITY; per-theme default from
+    // --scene-edge-glow, overridable via the Settings toggle (_edgeGlowOn).
+    const uEdgeGlow = uniform(_edgeGlowOn ? NCZ.EDGE_GLOW_INTENSITY : 0);
+    // uEdgeColor + uEdgeGlow need runtime mutation (theme rewire / flyover tweens).
+    mat.userData.tslUniforms = { uEdgeColor, uEdgeGlow };
 
     // (0) Per-instance positioning + normals — explicit space transforms.
     //
@@ -1728,6 +1786,13 @@ const ThreeScene = (() => {
                      .add(materialColor.b.mul(0.114));
     const edgeTint = uEdgeColor.mul(baseLuma.mul(2));
     mat.colorNode  = mix(materialColor, edgeTint, edge).mul(modulation);
+
+    // Opt-in edge glow (gated by --scene-edge-glow, 0 by default → no-op for
+    // every theme that doesn't set it). Emissive = the same edge tint × coverage,
+    // self-lit so it doesn't dim in shadow / at low sun. uEdgeColor (not edgeTint)
+    // keeps the glow at the theme's pure edge hue rather than the luma-boosted
+    // albedo tint, so neon colour stays saturated.
+    mat.emissiveNode = uEdgeColor.mul(edge).mul(uEdgeGlow);
 
     return mat;
   }
@@ -2543,8 +2608,11 @@ const ThreeScene = (() => {
     scene.background = readThemeColor('--primary', '#0a192f');
 
     // Colour grade + braindance LUT follow the theme (--scene-grade): on for
-    // the Game / Preem map-replica themes, off for the stylised themes.
-    setSceneGradeEnabled(themeGradeEnabled());
+    // the Game / Preem map-replica themes, off for the stylised themes. A theme
+    // switch resets any manual Settings "LUT" override back to the theme default.
+    applyGrade(themeGradeEnabled());
+    // Same for the edge-glow toggle (default-on for Synthwave only).
+    applyEdgeGlow(themeEdgeGlowDefault());
 
     // Terrain/water/cliffs: base colour is material.color; the grid line
     // colour is the shared uGrid uniform stashed on each material.
@@ -2579,6 +2647,8 @@ const ThreeScene = (() => {
         const u = mat.userData.tslUniforms;
         if (u?.uEdgeColor) u.uEdgeColor.value.copy(edge);
       }
+      // Edge-glow uniforms handled by applyEdgeGlow() above (theme default /
+      // Settings override) — uses the fixed intensity, not the raw CSS number.
     }
     requestRender();
   }
@@ -2870,12 +2940,27 @@ const ThreeScene = (() => {
     // reads it via a live `reference` node, so it applies next render with no
     // recompile. (The shadow pass still runs at intensity 0 — a visual switch,
     // not a perf one; disabling the pass safely under WebGPU is deferred.)
-    if (_dirLight) _dirLight.shadow.intensity = enabled ? 1 : 0;
+    // Multiply the *stored* strength (which the tuner may have changed) by 1 or 0.
+    if (_dirLight) _dirLight.shadow.intensity = enabled ? _shadowIntensity : 0;
     requestRender();
   }
 
   function getShadowsEnabled() { return _shadowsOn; }
   function getSunElevation() { return _sunEl; }
+
+  // Exposure setter — driven by the time-of-day curve (applySunTime /
+  // updateFlyoverSun) and the metering harness.
+  function setSceneExposure(v)    { if (renderer)   renderer.toneMappingExposure = v; requestRender(); }
+  function getLightingState() {
+    return {
+      sun:      _dirLight  ? _dirLight.intensity         : null,
+      ambient:  _hemiLight ? _hemiLight.intensity        : null,
+      exposure: renderer   ? renderer.toneMappingExposure : null,
+      // Stored, not live — the live value goes to 0 when the Shadows overlay
+      // is off; this returns the tuned strength regardless of on/off state.
+      shadow:   _shadowIntensity,
+    };
+  }
 
   // Comprehensive shadow + lighting state snapshot for the `__shadowTrace`
   // debug logger (set NCZ.__shadowTrace = true to enable per-frame logging
@@ -2960,7 +3045,7 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, getSunElevation, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
+  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setEdgeGlowEnabled, getEdgeGlowEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;

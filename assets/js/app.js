@@ -130,6 +130,19 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // Reflect a theme's render-toggle defaults (--scene-grade / --scene-edge-glow)
+  // into the Settings checkboxes. Reads the CSS var directly so it's independent
+  // of the scene's async build timing (buildings — and thus glow — finish after
+  // init resolves). Called at initial load and on every theme switch, both of
+  // which reset the toggles to the active theme's default.
+  function syncRenderToggles() {
+    const flag = (v) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(v)) > 0;
+    const lut  = document.getElementById('lut-grade-toggle');
+    const glow = document.getElementById('edge-glow-toggle');
+    if (lut)  lut.checked  = flag('--scene-grade');
+    if (glow) glow.checked = flag('--scene-edge-glow');
+  }
+
   function applyThemeById(themeId, { persist = true } = {}) {
     const theme = findThemeById(themeId);
     const targetClass = theme.className || `theme-${theme.id}`;
@@ -155,6 +168,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Update Three.js scene materials and clear the 2D overlay tile cache
     // so both renderers pick up the new CSS custom properties immediately.
     NCZ.ThreeScene?.updateMaterials();
+    // A theme switch resets the LUT grade + edge glow to the new theme's
+    // defaults — reflect that in the Settings toggles.
+    syncRenderToggles();
     NCZ._clearOverlayCache?.();
   }
 
@@ -578,6 +594,14 @@ async function initMap() {
   // re-entry into the broken 3D view — deep link, keyboard, stray call.
   let threeDAvailable = true;
   let webgpuFallbackDone = false;
+  // ?gamelight — calibration reference mode. Pins the 3D scene to the decoded
+  // in-game 3D-map lighting state: sun fixed at the 3dmap.envparam
+  // GlobalLightOverride (azimuth 107.12°, elevation 7°), time-of-day slider
+  // frozen, and the Districts/Pins overlays stripped so the terrain/buildings
+  // can be colour-matched against the in-game SDR capture without obstruction.
+  // A reproducible reference frame — same URL always yields the identical
+  // lighting state. Debug/calibration only; not linked from the UI.
+  const GAMELIGHT = new URLSearchParams(window.location.search).has('gamelight');
   function switchView(viewName) {
     if (viewName === "schema" && !threeDAvailable) return;
     document.querySelectorAll(".map-view-btn").forEach(btn => {
@@ -603,6 +627,7 @@ async function initMap() {
           // 3D scene: drop the user onto the 2D Leaflet map instead.
           if (NCZ.ThreeScene.isWebGPUActive()) {
             NCZ.ThreeScene.startRenderLoop();
+            if (GAMELIGHT) applyGameLightRef();
           } else {
             forceSatFallback();
           }
@@ -654,7 +679,20 @@ async function initMap() {
   const sunSlider      = document.getElementById("scene-sun-slider");
   const sunTimeDisplay = document.getElementById("scene-sun-time");
 
+  // The decoded 3dmap.envparam GlobalLightOverride sun — fixed, no time of day.
+  const GAMELIGHT_SUN_AZIMUTH   = 107.121956 * Math.PI / 180;
+  const GAMELIGHT_SUN_ELEVATION = 7 * Math.PI / 180;
+
   function applySunTime(morroMinutes) {
+    // ?gamelight — pin to the decoded reference sun, ignore the slider value.
+    // Gating here (not just at the call sites) means every path that drives the
+    // sun — slider setup, terrain-loaded apply, the UI-sync poll — keeps it
+    // pinned, so the reference frame can't drift.
+    if (GAMELIGHT) {
+      NCZ.ThreeScene?.setSunPosition?.(GAMELIGHT_SUN_AZIMUTH, GAMELIGHT_SUN_ELEVATION);
+      if (sunTimeDisplay) sunTimeDisplay.textContent = 'REF';
+      return;
+    }
     // morroMinutes = Morro Bay PDT (e.g. 600 = 10:00 AM PDT)
     if (typeof SunCalc === 'undefined' || !NCZ.ThreeScene?.setSunPosition) return;
     const date = new Date(SOLSTICE);
@@ -662,6 +700,10 @@ async function initMap() {
     date.setUTCHours((Math.floor(morroMinutes / 60) - PDT_OFFSET) % 24, morroMinutes % 60, 0, 0);
     const pos = SunCalc.getPosition(date, SUN_LAT, SUN_LNG);
     NCZ.ThreeScene.setSunPosition(pos.azimuth, pos.altitude);
+    // Time-of-day exposure — floor the dark ends without flattening the natural
+    // day/night variation. Keyed on elevation so the flyover shares it. See
+    // NCZ.SCENE_EXPOSURE_CURVE + NCZ.exposureForSunElevation.
+    NCZ.ThreeScene?.setSceneExposure?.(NCZ.exposureForSunElevation(pos.altitude));
     const h = String(Math.floor(morroMinutes / 60)).padStart(2, '0');
     const m = String(morroMinutes % 60).padStart(2, '0');
     if (sunTimeDisplay) sunTimeDisplay.textContent = `${h}:${m}`;
@@ -681,8 +723,10 @@ async function initMap() {
       sunSlider.max = 1216;
     }
 
-    // Default: 10:00 AM PDT — sun ~45° elevation from ENE, good hillshading contrast
-    const DEFAULT_SUN_MINUTES = 600;
+    // Default: 8:00 AM PDT — sun ~24° elevation from the east. The high-noon
+    // default (10am, el 48°) over-lights building tops under the new photometric
+    // lighting; a moderate morning sun reads as 3D-massed city without blasting.
+    const DEFAULT_SUN_MINUTES = 480;
     sunSlider.value = DEFAULT_SUN_MINUTES;
     applySunTime(DEFAULT_SUN_MINUTES);
   }
@@ -691,6 +735,46 @@ async function initMap() {
   document.getElementById("overlay-shadows")?.addEventListener("change", e => {
     NCZ.ThreeScene?.setShadowsEnabled?.(e.target.checked);
   });
+
+  // Settings → "Colour grade (LUT)" toggle. Overrides the active theme's
+  // --scene-grade default for the session; a theme switch resets it (see
+  // applyThemeById). Initial state synced from the scene once it's live.
+  const lutToggle = document.getElementById("lut-grade-toggle");
+  if (lutToggle) {
+    lutToggle.addEventListener("change", e => {
+      NCZ.ThreeScene?.setGradeEnabled?.(e.target.checked);
+    });
+  }
+
+  // Settings → "Edge glow" toggle — binary self-lit building edges. Same
+  // override-the-theme-default pattern as the LUT toggle above.
+  const glowToggle = document.getElementById("edge-glow-toggle");
+  if (glowToggle) {
+    glowToggle.addEventListener("change", e => {
+      NCZ.ThreeScene?.setEdgeGlowEnabled?.(e.target.checked);
+    });
+  }
+
+  // ?gamelight — apply the calibration reference state once the 3D scene is
+  // live (called from switchView's schema branch). The sun is already pinned
+  // by applySunTime()'s GAMELIGHT gate; here we freeze the slider and strip the
+  // Districts/Pins overlays so they don't obscure the surfaces being matched
+  // against the in-game capture. Shadows default off, so no action needed there.
+  function applyGameLightRef() {
+    applySunTime(0); // GAMELIGHT-gated → pins the decoded reference sun
+    if (sunSlider) {
+      sunSlider.disabled = true;
+      sunSlider.title = '?gamelight — sun pinned to the decoded in-game reference';
+    }
+    document.querySelectorAll('[data-overlay]').forEach(cb => {
+      const overlay = cb.dataset.overlay;
+      if ((overlay === 'districts' || overlay === 'pins') && cb.checked) {
+        cb.checked = false;
+        cb.dispatchEvent(new Event('change'));
+      }
+    });
+    console.info('[NCZ] ?gamelight — calibration reference: sun az 107.12°/el 7°, overlays stripped.');
+  }
 
   const flyoverBtn = document.getElementById("scene-flyover-btn");
   // Elements to hide during showcase. We save each one's inline display value
@@ -869,6 +953,20 @@ async function initMap() {
   let _lastPolledSunEl = null;
   setInterval(() => {
     if (!NCZ.ThreeScene?.getLayerVisibility) return;
+
+    // ?gamelight — hold the calibration reference state. Districts and the
+    // shadow pass initialise asynchronously (after terrain load), so the
+    // one-shot applyGameLightRef() can't catch them; re-assert here. The
+    // checkbox sync below then unticks them to match. Guarded so it's a no-op
+    // once settled (no per-tick shadow-map invalidation).
+    if (GAMELIGHT) {
+      if (NCZ.ThreeScene.getLayerVisibility('districts')) {
+        NCZ.ThreeScene.setLayerVisibility('districts', false);
+      }
+      if (NCZ.ThreeScene.getShadowsEnabled?.()) {
+        NCZ.ThreeScene.setShadowsEnabled(false);
+      }
+    }
 
     // Overlay checkboxes
     document.querySelectorAll("[data-overlay]").forEach(cb => {

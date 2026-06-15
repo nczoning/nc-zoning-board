@@ -170,6 +170,30 @@ const Flyover = (() => {
     return _beatColors;
   }
 
+  // Per-theme render-toggle defaults (--scene-grade / --scene-edge-glow), read
+  // from CSS the same way as the colours. Lets the beat cycle apply each
+  // theme's LUT-grade + edge-glow defaults as it sweeps palettes — otherwise
+  // those gates (which live in updateMaterials, bypassed by the colour-tween
+  // path) would freeze at the opening theme's state for the whole showcase.
+  let _beatToggles = null;
+  function getBeatToggles() {
+    if (!_beatToggles) {
+      const html = document.documentElement;
+      const prevCls = Array.from(html.classList).filter(c => c.startsWith('theme-'));
+      _beatToggles = NCZ.THEMES.map(t => {
+        prevCls.forEach(c => html.classList.remove(c));
+        html.classList.add(`theme-${t.id}`);
+        const s = getComputedStyle(html);
+        const flag = v => parseFloat(s.getPropertyValue(v)) > 0;
+        const r = { grade: flag('--scene-grade'), glow: flag('--scene-edge-glow') };
+        html.classList.remove(`theme-${t.id}`);
+        return r;
+      });
+      prevCls.forEach(c => html.classList.add(c));
+    }
+    return _beatToggles;
+  }
+
   let _beatColorIndex = 0; // which palette fires next (continues across loops)
   let _lastBeatIndex  = 0; // which timestamp we've last checked (resets each loop)
   let _audio          = null;
@@ -199,15 +223,27 @@ const Flyover = (() => {
     const epochMs = _sunriseMs + (_sunsetMs - _sunriseMs) * t;
     const pos = SunCalc.getPosition(new Date(epochMs), MORRO_BAY.lat, MORRO_BAY.lng);
     NCZ.ThreeScene.setSunPosition(pos.azimuth, pos.altitude);
+    // Drive exposure off the same elevation curve as the slider — the flyover
+    // animates the sun directly (bypassing applySunTime), so without this the
+    // exposure froze at its pre-showcase value and the whole flyover rendered
+    // at one brightness. See NCZ.exposureForSunElevation.
+    NCZ.ThreeScene.setSceneExposure?.(NCZ.exposureForSunElevation(pos.altitude));
   }
 
   function triggerBeat() {
     if (!NCZ.ThreeScene?.captureColors || !NCZ.ThreeScene?.transitionToColors) return;
-    const from = NCZ.ThreeScene.captureColors();
+    const from   = NCZ.ThreeScene.captureColors();
     const colors = getBeatColors();
-    const to     = colors[_beatColorIndex % colors.length];
+    const idx    = _beatColorIndex % colors.length;
+    const to     = colors[idx];
     _beatColorIndex++;
     NCZ.ThreeScene.transitionToColors(from, to, FLYOVER_BEAT_DISSOLVE);
+    // Apply this theme's grade + edge-glow defaults so the cycle honours each
+    // palette's render toggles (binary — they snap on the beat; the colours
+    // cross-dissolve). The user's pre-showcase toggle choices are restored on stop.
+    const tog = getBeatToggles()[idx];
+    NCZ.ThreeScene.setGradeEnabled?.(tog.grade);
+    NCZ.ThreeScene.setEdgeGlowEnabled?.(tog.glow);
   }
 
   function checkBeats() {
@@ -405,13 +441,17 @@ const Flyover = (() => {
     // recompute that restores the normal clustered state.
     if (_runOpts.showPins) NCZ.ThreeMarkers?.setUnclusteredMode?.(true);
 
-    // Save active theme + all overlay checkbox states + sun slider value
+    // Save active theme + all overlay checkbox states + sun slider value +
+    // the render-toggle overrides (LUT grade / edge glow), so the user's manual
+    // choices survive the showcase (it changes them as it cycles palettes).
     _savedTheme = Array.from(document.documentElement.classList)
       .find(c => c.startsWith('theme-'))?.replace('theme-', '') ?? 'night-corp';
     _savedState = {
       sunSlider: document.getElementById('scene-sun-slider')?.value ?? null,
       overlays:  Array.from(document.querySelectorAll('[data-overlay]'))
                    .map(cb => ({ cb, checked: cb.checked })),
+      grade:     NCZ.ThreeScene?.getGradeEnabled?.() ?? null,
+      glow:      NCZ.ThreeScene?.getEdgeGlowEnabled?.() ?? null,
     };
 
     // Start audio — beats and sun position are driven by audio.currentTime each frame.
@@ -520,6 +560,16 @@ const Flyover = (() => {
           slider.value = _savedState.sunSlider;
           slider.dispatchEvent(new Event('input'));
         }
+        // Restore the render-toggle overrides over the theme default that
+        // applyThemeSmooth() just re-applied — set the checkbox + dispatch
+        // change so the app.js handler re-applies to the scene (matches the
+        // overlay restore pattern). Keeps the user's pre-showcase choices.
+        const restoreToggle = (id, val) => {
+          const el = document.getElementById(id);
+          if (el && val !== null) { el.checked = val; el.dispatchEvent(new Event('change')); }
+        };
+        restoreToggle('lut-grade-toggle', _savedState.grade);
+        restoreToggle('edge-glow-toggle', _savedState.glow);
         _savedState = null;
       }
     };
