@@ -627,8 +627,6 @@ async function initMap() {
           // 3D scene: drop the user onto the 2D Leaflet map instead.
           if (NCZ.ThreeScene.isWebGPUActive()) {
             NCZ.ThreeScene.startRenderLoop();
-            // Reflect the active theme's render-toggle defaults in Settings.
-            syncRenderToggles();
             if (GAMELIGHT) applyGameLightRef();
           } else {
             forceSatFallback();
