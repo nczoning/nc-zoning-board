@@ -43,7 +43,7 @@ DISTRICT_STRUCTURE = [
     {
         "id": "city_center", "name": "City Center", "trigger": "city_center_trigger",
         "subdistricts": [
-            {"id": "corpo_plaza", "name": "Corporate Plaza", "trigger": "corpo_plaza_trigger"},
+            {"id": "corpo_plaza", "name": "Corpo Plaza", "trigger": "corpo_plaza_trigger"},
             {"id": "downtown", "name": "Downtown", "trigger": "downtown_trigger"},
         ]
     },

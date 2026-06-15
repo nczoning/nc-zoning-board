@@ -72,7 +72,7 @@ Legend:
 ### Night City Districts
 
 #### **City Center** `[Q]` — UiState: CityCenter (Yellow #ffd741)
-- Corporate Plaza `[Q]`
+- Corpo Plaza `[Q]`
   - Arasaka Tower Atrium
   - Arasaka Tower CEO Floor
   - Arasaka Tower Jenkins Office
