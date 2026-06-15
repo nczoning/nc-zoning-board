@@ -240,7 +240,7 @@ const Flyover = (() => {
     NCZ.ThreeScene.transitionToColors(from, to, FLYOVER_BEAT_DISSOLVE);
     // Apply this theme's grade + edge-glow defaults so the cycle honours each
     // palette's render toggles (binary — they snap on the beat; the colours
-    // cross-dissolve). Restored to the user's theme default at showcase end.
+    // cross-dissolve). The user's pre-showcase toggle choices are restored on stop.
     const tog = getBeatToggles()[idx];
     NCZ.ThreeScene.setGradeEnabled?.(tog.grade);
     NCZ.ThreeScene.setEdgeGlowEnabled?.(tog.glow);
