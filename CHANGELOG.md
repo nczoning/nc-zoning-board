@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### 3D World Map Fixed building assets
+
+- The 3D map can now render [malgalad's *3D World Map Fixed*](https://www.nexusmods.com/cyberpunk2077/mods/26500) building data, correcting misaligned/missing buildings (e.g. the Corpo Plaza cluster) and returning the Watson "ugly building". Toggle in **Settings → Map data → Fixed building assets** (on by default); the base-game layout stays available.
+- New maintainer docs: [`docs/3dmap-fixed-assets.md`](docs/3dmap-fixed-assets.md) (mod structure + update procedure, validated by `scripts/validate_3dmap_assets.js`) and [`docs/url-parameters.md`](docs/url-parameters.md) (URL query catalogue, incl. the new `?only=<district>` debug aid).
+
 #### Time-of-day exposure curve
 
 - Scene exposure now follows a time-of-day curve instead of one fixed value: midday holds the calibrated brightness while sunrise/sunset open up but stay dim and atmospheric — readable across the whole day, never crushed-black or washed-out. Shared by the time-of-day slider and the showcase, which fixes the showcase rendering at a single frozen brightness.

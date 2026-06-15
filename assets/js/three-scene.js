@@ -216,6 +216,11 @@ const ThreeScene = (() => {
 
   // District metadata — sourced directly from 3dmap_triangle_soup.Material.json.
   // dataDds: _data.dds (DXGI_FORMAT_R16G16B16A16_UNORM — raw 16-bit RGBA instance data)
+  // dataDdsFixed: optional alignment-fixed _data from malgalad's "3D World Map
+  //   Fixed" mod (Nexus #26500). Same dimensions/transforms as the vanilla
+  //   dataDds (texel placement corrected), so it's a straight texture swap when
+  //   the Fixed asset set is selected. ep1_spaceport has no fixed version → it
+  //   stays on dataDds in both sets. See docs/3dmap-fixed-assets.md.
   // mDds:    _m.dds   (DXGI_FORMAT_R8_UNORM — 8-bit greyscale surface detail, 10 mips)
   // transMin/transMax: district-local CET XYZ bounds (before district offset)
   // offset: world XY offset applied to decoded positions (no Z offset)
@@ -225,14 +230,26 @@ const ThreeScene = (() => {
   //   wiki/sources/building-edge-shader.md). edgeSharpness sets the visible
   //   band width; edgeThickness only feeds the sub-pixel camera-distance term.
   const DISTRICT_META = [
-    { name: 'westbrook',     dataDds: 'assets/dds/westbrook_data.dds',    mDds: 'assets/dds/westbrook_m.dds',    cubeSize: 197.0,        transMin: [-1078.94739, -1148.69434, -18.4205875],  transMax: [1155.12,      1562.87903,  507.894714],  offset: [  -97.209,    590.849], edgeThickness: 0.0001, edgeSharpness: 30 },
-    { name: 'city_center',   dataDds: 'assets/dds/city_center_data.dds',  mDds: 'assets/dds/city_center_m.dds',  cubeSize: 168.289993,   transMin: [ -770.609192, -530.549133, -40.6581497],  transMax: [1316.82483,    649.75531,  642.893127],  offset: [-2116.637,    106.508], edgeThickness: 0.0001, edgeSharpness: 30 },
-    { name: 'heywood',       dataDds: 'assets/dds/heywood_data.dds',      mDds: 'assets/dds/heywood_m.dds',      cubeSize: 197.236832,   transMin: [-1080.35107,  -418.153046, -38.4002304],  transMax: [1136.94556,   1372.15979,  374.181305],  offset: [-1576.732,  -1002.811], edgeThickness: 0.0005, edgeSharpness: 50 },
-    { name: 'pacifica',      dataDds: 'assets/dds/pacifica_data.dds',     mDds: 'assets/dds/pacifica_m.dds',     cubeSize: 305.600006,   transMin: [-4008.396,   -4575.14941, -51.9539986],  transMax: [8258.31641,   7254.10059,  264.306946],  offset: [-2422.441,  -2368.156], edgeThickness: 0.0005, edgeSharpness: 50 },
-    { name: 'santo_domingo', dataDds: 'assets/dds/santo_domingo_data.dds',mDds: 'assets/dds/santo_domingo_m.dds',cubeSize: 139.342102,   transMin: [-1328.95288, -1880.02502, -37.5960007],  transMax: [1555.26318,   1369.01294,  332.348328],  offset: [  -15.944,  -1610.080], edgeThickness: 0.0001, edgeSharpness: 30 },
-    { name: 'watson',        dataDds: 'assets/dds/watson_data.dds',       mDds: 'assets/dds/watson_m.dds',       cubeSize: 237.175003,   transMin: [-1254.46997, -1258.68469, -24.7028503],  transMax: [1988.5448,    2032.52405,  475.268005],  offset: [-1979.372,   1873.951], edgeThickness: 0.0005, edgeSharpness: 50 },
-    { name: 'ep1_dogtown',   dataDds: 'assets/dds/dogtown_data.dds',      mDds: 'assets/dds/dogtown_m.dds',      cubeSize: 198.020691,   transMin: [-2650.0,     -3126.6084,   -0.750015974], transMax: [-1025.51855, -1803.58118,  493.576111],  offset: [    0.0,        0.0  ], edgeThickness: 0.0005, edgeSharpness: 50 },
+    { name: 'westbrook',     dataDds: 'assets/dds/westbrook_data.dds',    dataDdsFixed: 'assets/dds/fixed/westbrook_data.dds',    mDds: 'assets/dds/westbrook_m.dds',    cubeSize: 197.0,        transMin: [-1078.94739, -1148.69434, -18.4205875],  transMax: [1155.12,      1562.87903,  507.894714],  offset: [  -97.209,    590.849], edgeThickness: 0.0001, edgeSharpness: 30 },
+    { name: 'city_center',   dataDds: 'assets/dds/city_center_data.dds',  dataDdsFixed: 'assets/dds/fixed/city_center_data.dds',  mDds: 'assets/dds/city_center_m.dds',  cubeSize: 168.289993,   transMin: [ -770.609192, -530.549133, -40.6581497],  transMax: [1316.82483,    649.75531,  642.893127],  offset: [-2116.637,    106.508], edgeThickness: 0.0001, edgeSharpness: 30 },
+    { name: 'heywood',       dataDds: 'assets/dds/heywood_data.dds',      dataDdsFixed: 'assets/dds/fixed/heywood_data.dds',      mDds: 'assets/dds/heywood_m.dds',      cubeSize: 197.236832,   transMin: [-1080.35107,  -418.153046, -38.4002304],  transMax: [1136.94556,   1372.15979,  374.181305],  offset: [-1576.732,  -1002.811], edgeThickness: 0.0005, edgeSharpness: 50 },
+    { name: 'pacifica',      dataDds: 'assets/dds/pacifica_data.dds',     dataDdsFixed: 'assets/dds/fixed/pacifica_data.dds',     mDds: 'assets/dds/pacifica_m.dds',     cubeSize: 305.600006,   transMin: [-4008.396,   -4575.14941, -51.9539986],  transMax: [8258.31641,   7254.10059,  264.306946],  offset: [-2422.441,  -2368.156], edgeThickness: 0.0005, edgeSharpness: 50 },
+    { name: 'santo_domingo', dataDds: 'assets/dds/santo_domingo_data.dds',dataDdsFixed: 'assets/dds/fixed/santo_domingo_data.dds',mDds: 'assets/dds/santo_domingo_m.dds',cubeSize: 139.342102,   transMin: [-1328.95288, -1880.02502, -37.5960007],  transMax: [1555.26318,   1369.01294,  332.348328],  offset: [  -15.944,  -1610.080], edgeThickness: 0.0001, edgeSharpness: 30 },
+    { name: 'watson',        dataDds: 'assets/dds/watson_data.dds',       dataDdsFixed: 'assets/dds/fixed/watson_data.dds',       mDds: 'assets/dds/watson_m.dds',       cubeSize: 237.175003,   transMin: [-1254.46997, -1258.68469, -24.7028503],  transMax: [1988.5448,    2032.52405,  475.268005],  offset: [-1979.372,   1873.951], edgeThickness: 0.0005, edgeSharpness: 50 },
+    { name: 'ep1_dogtown',   dataDds: 'assets/dds/dogtown_data.dds',      dataDdsFixed: 'assets/dds/fixed/dogtown_data.dds',      mDds: 'assets/dds/dogtown_m.dds',      cubeSize: 198.020691,   transMin: [-2650.0,     -3126.6084,   -0.750015974], transMax: [-1025.51855, -1803.58118,  493.576111],  offset: [    0.0,        0.0  ], edgeThickness: 0.0005, edgeSharpness: 50 },
     { name: 'ep1_spaceport', dataDds: 'assets/dds/spaceport_data.dds',    mDds: 'assets/dds/spaceport_m.dds',    cubeSize: 115.298218,   transMin: [-1168.5874,   -765.104614, -41.4592323],  transMax: [1219.45483,   1018.70129,  296.498138],  offset: [-4200.000,    200.000], edgeThickness: 0.0005, edgeSharpness: 50 },
+    // Fixed-only "corrections overlay" — malgalad's combined my_district cloud
+    // (world-space, offset 0). The per-district fixed textures remove the game's
+    // broken blocks but don't replace them; my_district fills those gaps (e.g.
+    // the Corpo Plaza building cluster). Only loaded with the Fixed asset set;
+    // reuses the game's Pacifica surface (pacifica_m) that malgalad's material
+    // points at — c_pacifica_m is byte-identical. See
+    // docs/3dmap-fixed-assets.md.
+    { name: 'my_district',   dataDds: 'assets/dds/fixed/my_district_data.dds', mDds: 'assets/dds/pacifica_m.dds', cubeSize: 200, transMin: [-2766, -5399, -50], transMax: [2960, 4254, 650], offset: [-828, -531], edgeThickness: 0.0005, edgeSharpness: 50, fixedOnly: true },
+    // Fixed-only "ugly building" add-on (malgalad's optional download that returns
+    // the building to Watson). Tiny standalone cloud; offset is its entity's
+    // world position (FixedPoint-decoded). Same Pacifica surface as my_district.
+    { name: 'ugly_building',  dataDds: 'assets/dds/fixed/ugly_building_data.dds', mDds: 'assets/dds/pacifica_m.dds', cubeSize: 200, transMin: [-578, -849, -50], transMax: [578, 849, 650], offset: [-1630, 1404], edgeThickness: 0.0005, edgeSharpness: 50, fixedOnly: true },
   ];
 
   // ── Helpers ────────────────────────────────────────────────────────────
@@ -1435,11 +1452,27 @@ const ThreeScene = (() => {
       group.name = 'buildings';
       const dummy   = new THREE.Object3D();
 
+      // Asset set (user preference): 'fixed' uses malgalad's alignment-fixed
+      // textures where available (meta.dataDdsFixed), 'cdpr' uses the base-game
+      // textures. Districts without a fixed variant (ep1_spaceport) fall back to
+      // dataDds in either set. Read once per (re)load.
+      const assetSet = (typeof localStorage !== 'undefined' && localStorage.getItem(NCZ.ASSET_SET_KEY)) || NCZ.ASSET_SET_DEFAULT;
+
+      // Debug aid: ?only=<district> renders only that DISTRICT_META entry by
+      // name (e.g. ?only=my_district, ?only=ugly_building) — isolates a single
+      // building cloud for diagnosing placement/content. Sibling of ?debug /
+      // ?gamelight / ?webgpuprobe.
+      const _only = new URLSearchParams(location.search).get('only');
       for (const meta of DISTRICT_META) {
+        if (_only && meta.name !== _only) continue;
+        // Fixed-only entries (e.g. the my_district corrections overlay) exist
+        // only in the Fixed asset set — skip them entirely in CDPR mode.
+        if (meta.fixedOnly && assetSet !== 'fixed') continue;
         setLoadingText(`Loading buildings [${meta.name}]…`);
 
         // ── _data.dds → CPU decode → packed Float32Array of mat4s ─────
-        const { pixels, width: texW, height: texH } = await loadDataDds(meta.dataDds);
+        const dataDdsPath = (assetSet === 'fixed' && meta.dataDdsFixed) ? meta.dataDdsFixed : meta.dataDds;
+        const { pixels, width: texW, height: texH } = await loadDataDds(dataDdsPath);
         const blockW = Math.floor(texW / 3);
         const blockH = Math.min(texH, blockW);
 
@@ -1455,7 +1488,16 @@ const ThreeScene = (() => {
             const ri = (y * texW + x + blockW)  * 4;   // rotation block
             const si = (y * texW + x + 2*blockW)* 4;   // scale block
 
-            if (pixels[pi + 3] < NCZ.DDS_ALPHA_THRESH) continue;  // alpha < ~1% → invalid slot
+            // Empty-cell detection — two encodings exist. Base-game textures
+            // mark empties with near-zero position-block ALPHA; malgalad's
+            // "3D World Map Fixed" textures keep alpha full and mark empties
+            // with ZERO SCALE instead (see docs/3dmap-fixed-assets.md).
+            // Skip on either; on base-game data the two sets coincide, so this
+            // is a no-op there.
+            const scaleEmpty = pixels[si + 0] < NCZ.DDS_ALPHA_THRESH
+                            && pixels[si + 1] < NCZ.DDS_ALPHA_THRESH
+                            && pixels[si + 2] < NCZ.DDS_ALPHA_THRESH;
+            if (pixels[pi + 3] < NCZ.DDS_ALPHA_THRESH || scaleEmpty) continue;
 
             // Decode position → CET world space
             const pr = pixels[pi+0] / NCZ.UINT16_MAX, pg = pixels[pi+1] / NCZ.UINT16_MAX, pb = pixels[pi+2] / NCZ.UINT16_MAX;
