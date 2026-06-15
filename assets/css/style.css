@@ -1889,6 +1889,40 @@ body::before {
     gap: var(--space-sm);
 }
 
+/* Low-contrast attribution block — CDPR Fan Content disclaimer + asset credits.
+   Deliberately quieter than .about-links (gray, smaller) so it reads as fine
+   print, not a call to action. */
+.about-credits {
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    color: var(--gray);
+
+    p {
+        margin-bottom: var(--space-xs);
+        line-height: 1.5;
+    }
+
+    .about-credits-label {
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        opacity: 0.7;
+        margin-bottom: var(--space-2xs);
+    }
+
+    .about-credits-list {
+        list-style: none;
+        padding-left: 0;
+        margin: 0;
+    }
+
+    a {
+        color: var(--secondary);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+}
+
 .terminal-link {
     display: block;
     color: var(--secondary);
