@@ -211,7 +211,7 @@
       "subdistricts": [
         {
           "id": "corpo_plaza",
-          "name": "Corporate Plaza",
+          "name": "Corpo Plaza",
           "trigger": "corpo_plaza_trigger",
           "polygon": [
             [

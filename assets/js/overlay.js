@@ -34,9 +34,17 @@ NCZ.Overlay = (() => {
   // district's area (point-in-polygon, not a thin-line hit). Each entry knows
   // its tier so we only test outlines currently on the map. The 250 ms fade is
   // a CSS transition on the pane's paths (see .district-outline-pane in style.css).
-  const _hoverFeatures = []; // { ring:[[lat,lng]], area, layer, tier }
-  let _hovered = null;       // the currently brightened feature layer
-  const _tierLayers = {};    // tier name → L.geoJSON layer (for hasLayer checks)
+  const _hoverFeatures = []; // { ring:[[lat,lng]], area, layer, labelTip, tier }
+  let _hoveredFeature = null; // the currently brightened feature entry
+  let _badlandsLabel = null;  // standalone tooltip (no polygon to bind to)
+  const _tierLayers = {};     // tier name → L.geoJSON layer (for hasLayer checks)
+
+  // Resolve a feature's name-label element (the inner .district-label span)
+  // from its bound/standalone tooltip, if it's currently on the map.
+  function labelElOf(f) {
+    const tip = f.labelTip || f.layer?.getTooltip?.();
+    return tip?.getElement?.()?.querySelector('.district-label') || null;
+  }
 
   const styleFeature = f => ({
     color:   f.properties.color,
@@ -64,11 +72,17 @@ NCZ.Overlay = (() => {
       if (!_map.hasLayer(_tierLayers[f.tier])) continue;
       if (NCZ.pointInPolygon(pt, f.ring) && (!best || f.area < best.area)) best = f;
     }
-    const layer = best ? best.layer : null;
-    if (layer === _hovered) return;
-    if (_hovered) _hovered.setStyle({ opacity: NCZ.DISTRICT_LINE_OPACITY });
-    if (layer)    layer.setStyle({ opacity: NCZ.DISTRICT_LINE_OPACITY_HOVER });
-    _hovered = layer;
+    if (best === _hoveredFeature) return;
+    if (_hoveredFeature) {
+      _hoveredFeature.layer?.setStyle({ opacity: NCZ.DISTRICT_LINE_OPACITY });
+      labelElOf(_hoveredFeature)?.classList.remove('district-label-hover');
+    }
+    if (best) {
+      best.layer?.setStyle({ opacity: NCZ.DISTRICT_LINE_OPACITY_HOVER });
+      best.layer?.bringToFront?.(); // mirror the 3D renderOrder bump (draw on top)
+      labelElOf(best)?.classList.add('district-label-hover');
+    }
+    _hoveredFeature = best;
   }
 
   function init(map) {
@@ -78,6 +92,14 @@ NCZ.Overlay = (() => {
     map.getPane("districtPane").style.zIndex = 460;
     // Tag the pane so its SVG paths get the 250 ms stroke-opacity transition.
     map.getPane("districtPane").classList.add("district-outline-pane");
+
+    // Name labels live just above the outlines but BELOW the markerPane (600),
+    // so pins always render on top of labels — matching the 3D view. Leaflet's
+    // default tooltipPane (650) would put them above the pins. pointer-events:
+    // none so the pane never intercepts map/pin interaction.
+    map.createPane("districtLabelPane");
+    map.getPane("districtLabelPane").style.zIndex = 465;
+    map.getPane("districtLabelPane").style.pointerEvents = "none";
 
     fetch("data/subdistricts.json")
       .then(r => r.json())
@@ -123,10 +145,19 @@ NCZ.Overlay = (() => {
             style: styleFeature,
             pane: "districtPane",
             onEachFeature: (feature, layer) => {
+              const p = feature.properties;
+              const level = p.level === "district" ? "district" : "subdistrict";
+              // Permanent centre tooltip = the name label. Bound to the outline,
+              // so it shows/hides automatically with the layer's tier gating.
+              layer.bindTooltip(
+                `<span class="district-label district-label-${level}" style="--label-color:${p.color}">${NCZ.escapeHtml(p.name)}</span>`,
+                { permanent: true, direction: "center", className: "district-label-tooltip", interactive: false, pane: "districtLabelPane" }
+              );
               _hoverFeatures.push({
-                ring: feature.properties.ring,
-                area: ringArea(feature.properties.ring),
+                ring: p.ring,
+                area: ringArea(p.ring),
                 layer,
+                labelTip: layer.getTooltip(),
                 tier,
               });
             },
@@ -140,6 +171,24 @@ NCZ.Overlay = (() => {
         _tierLayers.outer  = outerLayer;
         _tierLayers.sub    = subLayer;
 
+        // Badlands has no polygon to bind a tooltip to → standalone label at the
+        // hand-placed spot, shown at the district tier. Hovering its area (any
+        // badlands sub ring, registered as label-only "outer" entries) emphasises
+        // it, mirroring the 3D label-only hover region.
+        const bl = data.districts.find(d => d.id === "badlands");
+        if (bl && NCZ.BADLANDS_LABEL_CET) {
+          const blPos = NCZ.cetToLeaflet(NCZ.BADLANDS_LABEL_CET[0], NCZ.BADLANDS_LABEL_CET[1]);
+          const blColor = NCZ.DISTRICT_COLORS.badlands || "#ffffff";
+          _badlandsLabel = L.tooltip({ permanent: true, direction: "center", className: "district-label-tooltip", interactive: false, pane: "districtLabelPane" })
+            .setLatLng(blPos)
+            .setContent(`<span class="district-label district-label-district" style="--label-color:${blColor}">${NCZ.escapeHtml(bl.name)}</span>`);
+          for (const sub of bl.subdistricts || []) {
+            if (!sub.polygon?.length) continue;
+            const ring = sub.polygon.map(pt => NCZ.cetToLeaflet(pt[0], pt[1]));
+            _hoverFeatures.push({ ring, area: ringArea(ring), layer: null, labelTip: _badlandsLabel, tier: "outer" });
+          }
+        }
+
         map.on("zoomend", updateZoom);
         map.on("mousemove", onMapMouseMove);
         if (districtsVisible) updateZoom();
@@ -150,8 +199,11 @@ NCZ.Overlay = (() => {
   // Drop the brightened state — a feature hidden mid-hover (zoom tier swap or
   // districts toggled off) would otherwise stay bright when it re-appears.
   function clearHover() {
-    if (_hovered) _hovered.setStyle({ opacity: NCZ.DISTRICT_LINE_OPACITY });
-    _hovered = null;
+    if (_hoveredFeature) {
+      _hoveredFeature.layer?.setStyle({ opacity: NCZ.DISTRICT_LINE_OPACITY });
+      labelElOf(_hoveredFeature)?.classList.remove('district-label-hover');
+    }
+    _hoveredFeature = null;
   }
 
   function updateZoom() {
@@ -170,6 +222,12 @@ NCZ.Overlay = (() => {
       if (!_map.hasLayer(outerLayer)) outerLayer.addTo(_map);
       if (_map.hasLayer(subLayer))    _map.removeLayer(subLayer);
     }
+
+    // Badlands name shows at the district tier only (mirrors outerLayer).
+    if (_badlandsLabel) {
+      if (!zoomedIn && !_map.hasLayer(_badlandsLabel)) _badlandsLabel.addTo(_map);
+      else if (zoomedIn && _map.hasLayer(_badlandsLabel)) _map.removeLayer(_badlandsLabel);
+    }
   }
 
   function setDistricts(visible) {
@@ -182,6 +240,7 @@ NCZ.Overlay = (() => {
       [alwaysLayer, outerLayer, subLayer].forEach(l => {
         if (l && _map.hasLayer(l)) _map.removeLayer(l);
       });
+      if (_badlandsLabel && _map.hasLayer(_badlandsLabel)) _map.removeLayer(_badlandsLabel);
     }
   }
 
