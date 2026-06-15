@@ -3182,6 +3182,55 @@ const ThreeScene = (() => {
     return layers[name]?.visible ?? null;
   }
 
+  // Has init() run? app.js uses this to let the E5 intro own the *first* SCHEMA
+  // entry (skip view-sync) while syncing on every later toggle.
+  function isInitialized() {
+    return initialized;
+  }
+
+  // ── View-sync with the 2D Leaflet map ──────────────────────────────────
+  // Read the current camera as an equivalent Leaflet centre + zoom (for the
+  // SCHEMA→SAT switch). Ground target → CET → Leaflet; distance → zoom via the
+  // shared horizontal-extent transform. Returns null if the scene isn't built.
+  function getLeafletView({ leafletPxW }) {
+    if (!controls || !camera) return null;
+    const cetX = controls.target.x;
+    const cetY = -controls.target.z;          // inverse of cetToThree
+    const distance = camera.position.distanceTo(controls.target);
+    const { lat, lng, zoom } = NCZ.cameraExtentToLeafletView({
+      cetX, cetY, distance, aspect3d: camera.aspect, fov: camera.fov, leafletPxW,
+    });
+    return { center: [lat, lng], zoom };
+  }
+
+  // Frame a Leaflet centre + zoom in the 3D camera (for the SAT→SCHEMA switch).
+  // Preserves the user's current azimuth/tilt — only the ground target and the
+  // along-view distance move, so heading/tilt carry across the switch. Kept
+  // separate from setCameraState (which restores an absolute stored pose +
+  // sun state); this *derives* the pose from preserved θ/φ + computed distance.
+  function frameLeafletView({ center, zoom, leafletPxW }) {
+    if (!controls || !camera) return;
+    const { cetX, cetY, distance } = NCZ.leafletViewToCameraExtent({
+      centerLat: center[0], centerLng: center[1], zoom,
+      leafletPxW, aspect3d: camera.aspect, fov: camera.fov,
+    });
+    const d = NCZ.clamp(distance, controls.minDistance, controls.maxDistance);
+    const theta = controls.getAzimuthalAngle();
+    const phi   = controls.getPolarAngle();
+    const target = new THREE.Vector3(cetX, 0, -cetY);
+    const position = new THREE.Vector3(
+      target.x + d * Math.sin(phi) * Math.sin(theta),
+      target.y + d * Math.cos(phi),
+      target.z + d * Math.sin(phi) * Math.cos(theta),
+    );
+    // Cancel any in-flight intro fly-in so it doesn't fight the framing.
+    if (_introTween) { _introTween = null; setContinuousRender(false); }
+    controls.target.copy(target);
+    camera.position.copy(position);
+    controls.update();
+    requestRender();
+  }
+
   function getCameraState() {
     if (!controls || !camera) return null;
     return {
@@ -3210,7 +3259,7 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setEdgeGlowEnabled, getEdgeGlowEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
+  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setEdgeGlowEnabled, getEdgeGlowEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, isInitialized, getLeafletView, frameLeafletView, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;

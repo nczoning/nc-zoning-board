@@ -49,6 +49,42 @@ NCZ.leafletDistanceMeters = function (a, b) {
   return distanceCetUnits / NCZ.CET_UNITS_PER_METER;
 };
 
+// Inverse: Leaflet [lat, lng] → CET (x, y). Exact inverse of cetToLeaflet.
+NCZ.leafletToCet = function (lat, lng) {
+  const cetX = NCZ.WORLD_MIN_X + (lng / 256) * (NCZ.WORLD_MAX_X - NCZ.WORLD_MIN_X);
+  const cetY = NCZ.WORLD_MAX_Y + (lat / 256) * (NCZ.WORLD_MAX_Y - NCZ.WORLD_MIN_Y);
+  return [cetX, cetY];
+};
+
+// View-sync bridge between the 2D Leaflet map and the 3D perspective camera.
+// Both directions match the *horizontal* visible CET width at screen centre —
+// exact at any camera tilt, since the camera's right vector stays in world XZ
+// (same reasoning as updateScaleBar()). The look-direction extent foreshortens
+// when tilted, so the vertical match is approximate by design; we preserve the
+// user's heading/tilt rather than snapping top-down.
+//   Leaflet horizontal CET width @ zoom z = pxW · RX / (256 · 2^z)
+//   Three  horizontal CET width @ dist d  = 2 · d · tan(fovY/2) · aspect
+// `fov` is the camera's vertical FOV in degrees (THREE.PerspectiveCamera.fov).
+NCZ.leafletViewToCameraExtent = function ({ centerLat, centerLng, zoom, leafletPxW, aspect3d, fov }) {
+  const rangeX = NCZ.WORLD_MAX_X - NCZ.WORLD_MIN_X;
+  const [cetX, cetY] = NCZ.leafletToCet(centerLat, centerLng);
+  const widthCet = (leafletPxW * rangeX) / (256 * Math.pow(2, zoom));
+  const halfFovY = (fov * Math.PI) / 360;
+  const distance = widthCet / (2 * Math.tan(halfFovY) * aspect3d);
+  return { cetX, cetY, distance };
+};
+
+// Inverse of leafletViewToCameraExtent: 3D camera ground target + distance → a
+// Leaflet centre + (fractional) zoom. Caller clamps/rounds zoom to its range.
+NCZ.cameraExtentToLeafletView = function ({ cetX, cetY, distance, aspect3d, fov, leafletPxW }) {
+  const rangeX = NCZ.WORLD_MAX_X - NCZ.WORLD_MIN_X;
+  const [lat, lng] = NCZ.cetToLeaflet(cetX, cetY);
+  const halfFovY = (fov * Math.PI) / 360;
+  const widthCet = 2 * distance * Math.tan(halfFovY) * aspect3d;
+  const zoom = Math.log2((leafletPxW * rangeX) / (256 * widthCet));
+  return { lat, lng, zoom };
+};
+
 
 NCZ.clamp = function (value, min, max) {
   return Math.min(Math.max(value, min), max);

@@ -614,6 +614,13 @@ async function initMap() {
     });
 
     if (viewName === "schema") {
+      // Capture the Leaflet viewport BEFORE hiding #map — getCenter()/getSize()
+      // only read true while the container is laid out. On the *first* SCHEMA
+      // entry the scene isn't built yet, so the E5 intro owns the framing; on
+      // later toggles we carry the 2D viewport across.
+      const wasInit  = NCZ.ThreeScene.isInitialized();
+      const leafletView = { center: [map.getCenter().lat, map.getCenter().lng], zoom: map.getZoom() };
+      const leafletPxW  = map.getSize().x;
       mapEl.style.display   = "none";
       map3dEl.style.display = "block";
       // ThreeScene.init() is async under WebGPURenderer (await renderer.init()).
@@ -628,15 +635,28 @@ async function initMap() {
           if (NCZ.ThreeScene.isWebGPUActive()) {
             NCZ.ThreeScene.startRenderLoop();
             if (GAMELIGHT) applyGameLightRef();
+            // Sync the 2D viewport into the 3D camera — but only once the scene
+            // already exists, so the first-entry intro fly-in isn't stomped.
+            if (wasInit) NCZ.ThreeScene.frameLeafletView({ ...leafletView, leafletPxW });
           } else {
             forceSatFallback();
           }
         });
     } else {
+      // Carry the 3D camera's viewport back to the Leaflet map. Capture from the
+      // canvas (Leaflet-independent) before showing #map; round zoom to an
+      // integer for tile crispness, clamp to the map's range. Use the *visible*
+      // 3D container's width for the px basis — map.getSize() reads 0 while #map
+      // is still display:none, which would collapse the derived zoom.
+      const view = NCZ.ThreeScene.getLeafletView?.({ leafletPxW: map3dEl.clientWidth });
       map3dEl.style.display = "none";
       mapEl.style.display   = "block";
       NCZ.ThreeScene.stopRenderLoop();
       map.invalidateSize();
+      if (view) {
+        const zoom = NCZ.clamp(Math.round(view.zoom), map.getMinZoom(), map.getMaxZoom());
+        map.setView(view.center, zoom, { animate: false });
+      }
     }
     onViewSwitched?.(viewName);
   }
