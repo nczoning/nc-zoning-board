@@ -335,7 +335,19 @@ NCZ.SUN_SPHERE_RADIUS  =   600;  // CET units — ≈1.7° apparent diameter at 
 // Each pixel encodes one building instance across three horizontal blocks: position | rotation | scale.
 NCZ.DDS_PIXEL_OFFSET  = 148;      // byte offset to pixel data: 128-byte standard DDS header + 20-byte DX10 extension
 NCZ.UINT16_MAX        = 65535.0;  // normalisation denominator — pixel channels are 0–65535
-NCZ.DDS_ALPHA_THRESH  = 655;      // 0.01 × UINT16_MAX — position alpha below this marks an empty/invalid slot
+// 0.01 × UINT16_MAX — the "empty slot" cutoff. Used two ways in loadBuildings:
+// base-game textures mark empties with near-zero position ALPHA below this;
+// malgalad's "3D World Map Fixed" textures keep alpha full and mark empties by
+// zeroing the SCALE block instead (see wiki/entities/3d-world-map-fixed-mod.md).
+// Same 1% threshold serves both tests.
+NCZ.DDS_ALPHA_THRESH  = 655;
+
+// 3D-map building asset set: 'fixed' = malgalad's "3D World Map Fixed" textures
+// (DISTRICT_META.dataDdsFixed); 'cdpr' = base-game textures (DISTRICT_META.dataDds).
+// Persisted as a user preference (NOT theme-scoped) — selected in the Settings
+// modal; loadBuildings reads it at load time. Fixed is the default.
+NCZ.ASSET_SET_KEY     = 'ncz-asset-set';
+NCZ.ASSET_SET_DEFAULT = 'fixed';
 
 // Building edge highlight — decoded from the game's 3d_map_cubes.mt gbuffer
 // pixel shader (PIX capture; see wiki/sources/building-edge-shader.md).

@@ -2032,6 +2032,12 @@ body::before {
     font-size: var(--text-sm);
     line-height: 1.4;
     color: var(--gray);
+
+    a {
+        color: var(--secondary);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
 }
 
 /* ── Nexus Auto Badge ─────────────────────────────────────────────── */

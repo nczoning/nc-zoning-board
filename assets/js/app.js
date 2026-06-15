@@ -755,6 +755,22 @@ async function initMap() {
     });
   }
 
+  // Settings → "Fixed building assets" toggle — selects the 3D-map building
+  // asset set: checked = malgalad's alignment-fixed textures, unchecked =
+  // base-game. Unlike the render toggles above, this is a PERSISTED user
+  // preference (localStorage, not theme-scoped). The building data is CPU-
+  // decoded once at scene init (loadBuildings reads the set at load time), so
+  // switching reloads the page rather than rebuilding the instanced meshes live.
+  const assetToggle = document.getElementById("asset-set-toggle");
+  if (assetToggle) {
+    const current = localStorage.getItem(NCZ.ASSET_SET_KEY) || NCZ.ASSET_SET_DEFAULT;
+    assetToggle.checked = current === "fixed";
+    assetToggle.addEventListener("change", e => {
+      localStorage.setItem(NCZ.ASSET_SET_KEY, e.target.checked ? "fixed" : "cdpr");
+      location.reload();
+    });
+  }
+
   // ?gamelight — apply the calibration reference state once the 3D scene is
   // live (called from switchView's schema branch). The sun is already pinned
   // by applySunTime()'s GAMELIGHT gate; here we freeze the slider and strip the
