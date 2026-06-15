@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Fixed: viewport now carries across the 2D ↔ 3D switch
+
+- Toggling between the SAT (2D) and SCHEMA (3D) views keeps your place — centre and zoom carry across in both directions, instead of each view holding its own independent camera. The 3D view preserves your current heading/tilt rather than snapping top-down. The first-load cinematic intro is unaffected.
+
 #### District outlines: faint baseline + hover-brighten
 
 - District/subdistrict outlines now sit faint (5%) by default and brighten over 250 ms when the cursor enters a district's area, matching the in-game world map. Works in both the 3D (SCHEMA) and 2D (SAT) views.
