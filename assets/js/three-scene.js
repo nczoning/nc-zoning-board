@@ -789,6 +789,12 @@ const ThreeScene = (() => {
         _sceneControls.addEventListener(evt, (e) => e.stopPropagation());
       }
     }
+    // District hover-brighten: cursor over a district's area fades its outline
+    // up. Listener on the container so moves over the CSS2D pin overlay still
+    // reach it (events bubble; pointer capture is no-op'd above). passive — we
+    // never preventDefault, so the camera drag path is untouched.
+    _orbitDom.addEventListener('mousemove', onSceneMouseMove, { passive: true });
+    _orbitDom.addEventListener('mouseleave', () => setHoveredDistrict(null), { passive: true });
     controls.mouseButtons = {
       LEFT:   THREE.MOUSE.PAN,
       MIDDLE: THREE.MOUSE.DOLLY,
@@ -977,6 +983,110 @@ const ThreeScene = (() => {
     _districtOuter.visible = distance >= NCZ.DISTRICT_DISTANCE_3D;
     _districtSub.visible   = distance >= NCZ.SUBDISTRICT_DISTANCE_3D && distance < NCZ.DISTRICT_DISTANCE_3D;
     if (_districtAlways) _districtAlways.visible = distance >= NCZ.SUBDISTRICT_DISTANCE_3D;
+  }
+
+  // ── District hover-brighten ─────────────────────────────────────────────
+  // In-game parity: outlines sit at NCZ.DISTRICT_LINE_OPACITY (5%) and brighten
+  // to ~full over 250 ms when the cursor enters the district's area. No pick
+  // geometry — the rings are flat on Y=0, so we intersect the cursor ray with
+  // the ground plane and run a CPU point-in-polygon over the in-memory rings.
+  // One registry entry per outline; `group` is its visibility tier so we only
+  // test (and brighten) outlines that are actually drawn at the current zoom.
+  const _districtHover = []; // { ring, line, material, group, area, target }
+  let _hoveredEntry = null;
+  // Draw the hovered outline last so it paints on top of any coincident faint
+  // neighbour. Outlines have depthTest:false (depth ignored), so the only thing
+  // that decides which of two coplanar coincident lines wins a pixel is paint
+  // order — and the transparent back-to-front sort is unstable for equal-
+  // distance lines. A high renderOrder forces the hovered line last; > metro (2)
+  // so a highlighted district reads above roads/metro too. Reset to 0 on exit.
+  const DISTRICT_HOVER_RENDER_ORDER = 10;
+  let _hoverFading  = false; // true while any material.opacity != its target
+  let _hoverLastT   = 0;
+  const _hoverRay    = new THREE.Raycaster();
+  const _hoverPlane  = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // y = 0
+  const _hoverNdc    = new THREE.Vector2();
+  const _hoverWorld  = new THREE.Vector3();
+
+  // Shoelace area (absolute) — used to prefer the smallest matching ring when a
+  // point sits inside nested outlines (e.g. the casino sub inside Westbrook).
+  function polygonArea(ring) {
+    let a = 0;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      a += (ring[j][0] + ring[i][0]) * (ring[j][1] - ring[i][1]);
+    }
+    return Math.abs(a) / 2;
+  }
+
+  function registerDistrictHover(ring, line, group) {
+    if (!ring || ring.length < 3 || !line?.material) return;
+    _districtHover.push({
+      ring,
+      line,
+      material: line.material,
+      group,
+      area: polygonArea(ring),
+      target: NCZ.DISTRICT_LINE_OPACITY,
+    });
+  }
+
+  // Map a client-space cursor position to the district outline under it (or
+  // null). Only considers outlines whose tier group is currently visible.
+  function pickDistrictAt(clientX, clientY) {
+    if (!_districtHover.length || !layers.districts?.visible) return null;
+    const rect = renderer.domElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    _hoverNdc.set(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -(((clientY - rect.top) / rect.height) * 2 - 1)
+    );
+    _hoverRay.setFromCamera(_hoverNdc, camera);
+    // Near-horizontal rays barely graze Y=0 — bail rather than pick a point
+    // kilometres off (cf. ray-to-ground-thit-explodes-near-horizontal). Outlines
+    // only show when zoomed out/steep, so this never costs a real hover.
+    if (Math.abs(_hoverRay.ray.direction.y) < 1e-3) return null;
+    if (!_hoverRay.ray.intersectPlane(_hoverPlane, _hoverWorld)) return null;
+    const pt = [_hoverWorld.x, -_hoverWorld.z]; // world (x,z) → ring (cetX, cetY)
+    let best = null;
+    for (const e of _districtHover) {
+      if (!e.group.visible) continue;
+      if (NCZ.pointInPolygon(pt, e.ring) && (!best || e.area < best.area)) best = e;
+    }
+    return best;
+  }
+
+  function setHoveredDistrict(entry) {
+    if (entry === _hoveredEntry) return;
+    if (_hoveredEntry) { _hoveredEntry.target = NCZ.DISTRICT_LINE_OPACITY; _hoveredEntry.line.renderOrder = 0; }
+    if (entry)         { entry.target         = NCZ.DISTRICT_LINE_OPACITY_HOVER; entry.line.renderOrder = DISTRICT_HOVER_RENDER_ORDER; }
+    _hoveredEntry = entry;
+    if (!_hoverFading) { _hoverFading = true; _hoverLastT = performance.now(); setContinuousRender(true); }
+  }
+
+  function onSceneMouseMove(e) {
+    setHoveredDistrict(pickDistrictAt(e.clientX, e.clientY));
+  }
+
+  // Advance every outline material toward its target opacity. Linear over
+  // NCZ.DISTRICT_HOVER_FADE_MS for the full 0.05↔1.0 range; releases the
+  // continuous-render hold once all materials have settled.
+  function stepDistrictHoverFade(now) {
+    if (!_hoverFading) return;
+    const dt = Math.max(0, now - _hoverLastT);
+    _hoverLastT = now;
+    const range = NCZ.DISTRICT_LINE_OPACITY_HOVER - NCZ.DISTRICT_LINE_OPACITY;
+    const maxStep = range * (dt / NCZ.DISTRICT_HOVER_FADE_MS);
+    let active = false;
+    for (const e of _districtHover) {
+      const diff = e.target - e.material.opacity;
+      if (Math.abs(diff) <= maxStep || maxStep === 0) {
+        if (e.material.opacity !== e.target) e.material.opacity = e.target;
+      } else {
+        e.material.opacity += Math.sign(diff) * maxStep;
+        active = true;
+      }
+    }
+    if (!active) { _hoverFading = false; setContinuousRender(false); }
   }
 
   // ── Scale bar ───────────────────────────────────────────────────────
@@ -1324,18 +1434,19 @@ const ThreeScene = (() => {
         if (dist.polygon?.length) {
           const line = buildLine(dist.polygon, color, window.NCZ.DISTRICT_LINE_WIDTH);
           line.name = `district-outline-${dist.id}`;
-          (hasSubs ? outerGroup : alwaysGroup).add(line);
+          const group = hasSubs ? outerGroup : alwaysGroup;
+          group.add(line);
+          registerDistrictHover(dist.polygon, line, group);
         }
 
         for (const sub of dist.subdistricts || []) {
           if (!sub.polygon?.length) continue;
           const line = buildLine(sub.polygon, color, window.NCZ.SUBDISTRICT_LINE_WIDTH);
           line.name = `subdistrict-outline-${dist.id}/${sub.id}`;
-          if (sub.canonical === false) {
-            alwaysGroup.add(line); // casino etc — always visible
-          } else {
-            subGroup.add(line);    // zoom-gated
-          }
+          // canonical:false (casino etc) — always visible; otherwise zoom-gated.
+          const group = sub.canonical === false ? alwaysGroup : subGroup;
+          group.add(line);
+          registerDistrictHover(sub.polygon, line, group);
         }
       }
 
@@ -1881,7 +1992,15 @@ const ThreeScene = (() => {
   }
 
   // Build a Line2 (fat line) from CET [x, y] ring points.
-  // depthTest:false means lines always render over terrain, matching the game's UI overlay approach.
+  // depthTest:false means lines always render over terrain/buildings, matching
+  // the game's UI overlay approach (depth is ignored entirely, so a brightened
+  // outline shows through even tall downtown towers). Adjacent districts/
+  // subdistricts share exact border vertices, so their outlines are coincident
+  // at Y=0; with no depth test the renderer's back-to-front transparent sort is
+  // unstable for equal-distance coplanar lines, so the hovered (bright) line is
+  // not guaranteed to paint last and a faint 0.05 neighbour can overdraw its
+  // edges. The hover code promotes the hovered line's renderOrder to force it
+  // last — see setHoveredDistrict / DISTRICT_HOVER_RENDER_ORDER.
   function buildLine(ring, color, lineWidth) {
     const cleaned = dedupRing(ring);
     if (cleaned.length < 3) {
@@ -2089,6 +2208,7 @@ const ThreeScene = (() => {
     animationId = null;
     if (stats) stats.begin();
     updateIntroTween();   // E5 intro fly-in — mutate the camera before controls.update() reconciles
+    stepDistrictHoverFade(performance.now()); // district outline opacity tween
     const dampingActive = controls.update();
     // Phase 2B: dispatch per-district reset+cull computes BEFORE render.
     // Each district's `reset` clears its indirect.instanceCount to 0; `cull`

@@ -252,6 +252,25 @@ NCZ.cetToThree = function (cetX, cetY, cetZ) {
   return [cetX, cetZ || 0, -cetY];
 };
 
+// Ray-casting point-in-polygon test. Generic over coordinate space — `point`
+// and `ring` vertices are both [a, b] pairs in the SAME space (3D passes world
+// [x, -z]; 2D passes [lat, lng]). `ring` is the polygon's vertex list; the
+// closing edge back to ring[0] is handled implicitly. Returns true if the point
+// is inside (odd crossing count).
+NCZ.pointInPolygon = function (point, ring) {
+  if (!ring || ring.length < 3) return false;
+  const [px, py] = point;
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    const intersects = (yi > py) !== (yj > py) &&
+      px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+};
+
 // Builds the full popup HTML string for a mod.
 // View-agnostic: both Leaflet (marker.bindPopup) and Three.js (CSS2DObject) call this.
 NCZ.buildPopupHtml = function (mod, catStyle, nexusThumbs, tagsDict) {

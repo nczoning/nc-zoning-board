@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### District outlines: faint baseline + hover-brighten
+
+- District/subdistrict outlines now sit faint (5%) by default and brighten over 250 ms when the cursor enters a district's area, matching the in-game world map. Works in both the 3D (SCHEMA) and 2D (SAT) views.
+- Fixed dropped outline edges on hover: coincident borders of adjacent districts no longer fight over pixels — the hovered outline is forced to draw on top.
+
 #### 3D World Map Fixed building assets
 
 - The 3D map can now render [malgalad's *3D World Map Fixed*](https://www.nexusmods.com/cyberpunk2077/mods/26500) building data, correcting misaligned/missing buildings (e.g. the Corpo Plaza cluster) and returning the Watson "ugly building". Toggle in **Settings → Map data → Fixed building assets** (on by default); the base-game layout stays available.
