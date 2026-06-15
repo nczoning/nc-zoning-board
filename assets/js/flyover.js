@@ -441,13 +441,17 @@ const Flyover = (() => {
     // recompute that restores the normal clustered state.
     if (_runOpts.showPins) NCZ.ThreeMarkers?.setUnclusteredMode?.(true);
 
-    // Save active theme + all overlay checkbox states + sun slider value
+    // Save active theme + all overlay checkbox states + sun slider value +
+    // the render-toggle overrides (LUT grade / edge glow), so the user's manual
+    // choices survive the showcase (it changes them as it cycles palettes).
     _savedTheme = Array.from(document.documentElement.classList)
       .find(c => c.startsWith('theme-'))?.replace('theme-', '') ?? 'night-corp';
     _savedState = {
       sunSlider: document.getElementById('scene-sun-slider')?.value ?? null,
       overlays:  Array.from(document.querySelectorAll('[data-overlay]'))
                    .map(cb => ({ cb, checked: cb.checked })),
+      grade:     NCZ.ThreeScene?.getGradeEnabled?.() ?? null,
+      glow:      NCZ.ThreeScene?.getEdgeGlowEnabled?.() ?? null,
     };
 
     // Start audio — beats and sun position are driven by audio.currentTime each frame.
@@ -556,6 +560,16 @@ const Flyover = (() => {
           slider.value = _savedState.sunSlider;
           slider.dispatchEvent(new Event('input'));
         }
+        // Restore the render-toggle overrides over the theme default that
+        // applyThemeSmooth() just re-applied — set the checkbox + dispatch
+        // change so the app.js handler re-applies to the scene (matches the
+        // overlay restore pattern). Keeps the user's pre-showcase choices.
+        const restoreToggle = (id, val) => {
+          const el = document.getElementById(id);
+          if (el && val !== null) { el.checked = val; el.dispatchEvent(new Event('change')); }
+        };
+        restoreToggle('lut-grade-toggle', _savedState.grade);
+        restoreToggle('edge-glow-toggle', _savedState.glow);
         _savedState = null;
       }
     };
