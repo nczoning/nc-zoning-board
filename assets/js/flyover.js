@@ -170,6 +170,30 @@ const Flyover = (() => {
     return _beatColors;
   }
 
+  // Per-theme render-toggle defaults (--scene-grade / --scene-edge-glow), read
+  // from CSS the same way as the colours. Lets the beat cycle apply each
+  // theme's LUT-grade + edge-glow defaults as it sweeps palettes — otherwise
+  // those gates (which live in updateMaterials, bypassed by the colour-tween
+  // path) would freeze at the opening theme's state for the whole showcase.
+  let _beatToggles = null;
+  function getBeatToggles() {
+    if (!_beatToggles) {
+      const html = document.documentElement;
+      const prevCls = Array.from(html.classList).filter(c => c.startsWith('theme-'));
+      _beatToggles = NCZ.THEMES.map(t => {
+        prevCls.forEach(c => html.classList.remove(c));
+        html.classList.add(`theme-${t.id}`);
+        const s = getComputedStyle(html);
+        const flag = v => parseFloat(s.getPropertyValue(v)) > 0;
+        const r = { grade: flag('--scene-grade'), glow: flag('--scene-edge-glow') };
+        html.classList.remove(`theme-${t.id}`);
+        return r;
+      });
+      prevCls.forEach(c => html.classList.add(c));
+    }
+    return _beatToggles;
+  }
+
   let _beatColorIndex = 0; // which palette fires next (continues across loops)
   let _lastBeatIndex  = 0; // which timestamp we've last checked (resets each loop)
   let _audio          = null;
@@ -208,11 +232,18 @@ const Flyover = (() => {
 
   function triggerBeat() {
     if (!NCZ.ThreeScene?.captureColors || !NCZ.ThreeScene?.transitionToColors) return;
-    const from = NCZ.ThreeScene.captureColors();
+    const from   = NCZ.ThreeScene.captureColors();
     const colors = getBeatColors();
-    const to     = colors[_beatColorIndex % colors.length];
+    const idx    = _beatColorIndex % colors.length;
+    const to     = colors[idx];
     _beatColorIndex++;
     NCZ.ThreeScene.transitionToColors(from, to, FLYOVER_BEAT_DISSOLVE);
+    // Apply this theme's grade + edge-glow defaults so the cycle honours each
+    // palette's render toggles (binary — they snap on the beat; the colours
+    // cross-dissolve). Restored to the user's theme default at showcase end.
+    const tog = getBeatToggles()[idx];
+    NCZ.ThreeScene.setGradeEnabled?.(tog.grade);
+    NCZ.ThreeScene.setEdgeGlowEnabled?.(tog.glow);
   }
 
   function checkBeats() {
