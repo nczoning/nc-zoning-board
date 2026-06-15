@@ -317,8 +317,7 @@ html.theme-synthwave {
 html.theme-game {
     /* Cyberpunk 2077 in-game world-map palette. Every value is extracted
        verbatim from WolvenKit material/inkstyle exports — this is the one
-       theme that keeps the raw game colours instead of restyling them.
-       See wiki/sources/game-theme-colors.md for the full derivation. */
+       theme that keeps the raw game colours instead of restyling them. */
     --primary: #0e0e17;       /* MainColors.Fullscreen_PrimaryBackgroundDarkest */
     --secondary: #ff6159;     /* MainColors.Red (HDR clamped) */
     --tertiary: #5ef6ff;      /* MainColors.Blue (HDR clamped) */

@@ -214,7 +214,7 @@ The 3D scene now has interactive mod pins matching the Leaflet view's behaviour.
 - **Distance scale bar in 3D** — bottom-right of the scene, between the view-toggle and controls strip. Picks "nice" 1/2/5 × 10ⁿ-metre rounded lengths closest to ~100 px wide, recomputed on every `controls.change` and on resize. Shares the `.leaflet-control-scale-line` skin with the SAT scale bar — single CSS source of truth, both views render identically.
 - **Cross-view popup state sync** — opening a popup in either view updates `?mod=` in the URL. Switching SAT ↔ SCHEMA re-opens the same pin in the new view.
 - **Popup chrome unified** — `.ncz-dynamic-popup` is now the single source of truth for popup background gradient, arrows, and category colours. Both `.leaflet-popup-content-wrapper` (2D) and `.three-popup` (3D) target the same shared rules; only Leaflet's structural reset and the 3D anchor positioning are view-specific. Removed ~100 lines of duplicated CSS in the process.
-- **Coordinate-system finding (retraction)** — the previous "elevation gap" claim between CET Z and terrain GLB Y (7–23m) was sampling bias from readings taken on top of platforms. In-game teleport experiment to five terrain-only locations confirmed the two are in the same coordinate space (±6m noise from player height + LOD smoothing). See `wiki/learnings/cet-z-equals-terrain-y.md`.
+- **Coordinate-system finding (retraction)** — the previous "elevation gap" claim between CET Z and terrain GLB Y (7–23m) was sampling bias from readings taken on top of platforms. In-game teleport experiment to five terrain-only locations confirmed the two are in the same coordinate space (±6m noise from player height + LOD smoothing).
 
 New constants in [`constants.js`](assets/js/constants.js):
 
@@ -270,7 +270,7 @@ New helper script: [`scripts/query_terrain_heights.py`](scripts/query_terrain_he
 - Decoded at runtime by `MeshoptDecoder` (bundled with three.js examples, ~30 KB WASM, single fetch). Decoded geometry preserves vertex/index ordering, so GPU vertex cache stays warm
 - New build command: `npm run encode-meshopt`
 - **Side benefit:** gltfpack also merges sub-meshes per material → halved draw calls (67 → 33) and geometries (46 → 23). Replaces the legacy `strip_glb_attributes.js` step entirely
-- **Measured perf on Radeon 840M iGPU (external 1440p, AA on, full shadows):** idle FPS 44 → 63 (+43%) vs uncompressed; +31% over the considered Draco alternative (#617, closed). Full three-way comparison in `wiki/decisions/meshopt-over-draco.md`
+- **Measured perf on Radeon 840M iGPU (external 1440p, AA on, full shadows):** idle FPS 44 → 63 (+43%) vs uncompressed; +31% over the considered Draco alternative (#617, closed)
 - **Bug fixed during integration:** `loadLandmarks()` was creating new `THREE.Mesh` objects from only `geometry + material`, discarding the source mesh's `position`/`scale` — fine for uncompressed GLBs (identity transform) but broke `KHR_mesh_quantization` dequantization (vertices rendered at raw int16 scale, ~4× too large). Now copies position/quaternion/scale to mirror the existing `makeSeeThrough()` pattern
 - **Repo size reduction:** `assets/glb/` removed from version control (was 18.5 MB of dead weight; WolvenKit is the canonical source). Local re-encoding workflow: copy WKit exports to `assets/glb-source/`, run `npm run encode-meshopt`
 

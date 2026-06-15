@@ -226,9 +226,9 @@ const ThreeScene = (() => {
   // offset: world XY offset applied to decoded positions (no Z offset)
   // cubeSize: half-extent multiplier (from CubeSize shader parameter)
   // edgeThickness / edgeSharpness: EdgeThickness / EdgeSharpnessPower from
-  //   3d_map_cubes.mt — drive the building edge highlight (see
-  //   wiki/sources/building-edge-shader.md). edgeSharpness sets the visible
-  //   band width; edgeThickness only feeds the sub-pixel camera-distance term.
+  //   3d_map_cubes.mt — drive the building edge highlight. edgeSharpness sets
+  //   the visible band width; edgeThickness only feeds the sub-pixel
+  //   camera-distance term.
   const DISTRICT_META = [
     { name: 'westbrook',     dataDds: 'assets/dds/westbrook_data.dds',    dataDdsFixed: 'assets/dds/fixed/westbrook_data.dds',    mDds: 'assets/dds/westbrook_m.dds',    cubeSize: 197.0,        transMin: [-1078.94739, -1148.69434, -18.4205875],  transMax: [1155.12,      1562.87903,  507.894714],  offset: [  -97.209,    590.849], edgeThickness: 0.0001, edgeSharpness: 30 },
     { name: 'city_center',   dataDds: 'assets/dds/city_center_data.dds',  dataDdsFixed: 'assets/dds/fixed/city_center_data.dds',  mDds: 'assets/dds/city_center_m.dds',  cubeSize: 168.289993,   transMin: [ -770.609192, -530.549133, -40.6581497],  transMax: [1316.82483,    649.75531,  642.893127],  offset: [-2116.637,    106.508], edgeThickness: 0.0001, edgeSharpness: 30 },
@@ -312,10 +312,9 @@ const ThreeScene = (() => {
   // Derive edge highlight colour from the building base colour.
 
   // ── Terrain "graph-paper" grid ─────────────────────────────────────────────
-  // Decoded from the game's 3d_map_terrain pixel shader (PIX DXIL capture —
-  // see wiki/sources/terrain-grid-shader.md). In-game, terrain, water AND
-  // cliffs all use that one material template, so every hillshade material
-  // below carries the grid.
+  // Decoded from the game's 3d_map_terrain pixel shader (PIX DXIL capture).
+  // In-game, terrain, water AND cliffs all use that one material template, so
+  // every hillshade material below carries the grid.
 
   // Continuous anti-aliased grid-line coverage. The game's original formula
   // (round() + min(frac()·N,1), integrated over the pixel footprint) has hard
@@ -354,8 +353,8 @@ const ThreeScene = (() => {
   }
 
   // ── Building edge highlight ────────────────────────────────────────────────
-  // Decoded from the game's 3d_map_cubes.mt gbuffer pixel shader (PIX capture —
-  // see wiki/sources/building-edge-shader.md). The game computes
+  // Decoded from the game's 3d_map_cubes.mt gbuffer pixel shader (PIX capture).
+  // The game computes
   //   X    = max(|1-2u|, |1-2v|) + camDist·0.002·EdgeThickness / faceSize
   //   edge = saturate(pow(X, EdgeSharpnessPower))
   // `pow(X, power)` is NOT a step — it is a GRADIENT: ~0 across the inner face,
@@ -753,9 +752,9 @@ const ThreeScene = (() => {
     // map's drag handler lives on the container element above the marker
     // layer. Combined with the pointer-capture defeat below, this lets
     // OrbitControls see drag/zoom gestures that start on a pin while the
-    // pin's own `click` event still fires naturally on mouseup. See
-    // wiki/learnings about the prior synthetic-event approach failing
-    // because pointer capture redirected pointerup off the pin.
+    // pin's own `click` event still fires naturally on mouseup. (A prior
+    // synthetic-event approach failed because pointer capture redirected
+    // pointerup off the pin.)
     const _orbitDom = renderer.domElement.parentElement;
     controls = new OrbitControls(camera, _orbitDom);
     // Defeat OrbitControls' setPointerCapture — Leaflet doesn't use pointer
@@ -1194,8 +1193,8 @@ const ThreeScene = (() => {
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       });
-      // Metro LOD — decoded from 3d_map_metro.mt's pixel shader (PIX capture;
-      // see wiki/sources/metro-lod-shader.md). The metro mesh carries three
+      // Metro LOD — decoded from 3d_map_metro.mt's pixel shader (PIX capture).
+      // The metro mesh carries three
       // tiers in COLOR_0 (R dotted / G thin / B wide), one channel per vertex.
       // Each tier is fully on below its distance threshold and crossfades out
       // over METRO_LOD_TRANSITION — the game dissolves tiers, it doesn't snap.
@@ -1698,7 +1697,7 @@ const ThreeScene = (() => {
   //
   //   2. Edge highlight (pre-lighting, via `colorNode`)
   //      The game's gbuffer shader lerps EdgeColor into the ALBEDO before
-  //      lighting (decoded — wiki/sources/building-edge-shader.md), so the
+  //      lighting (decoded from a PIX capture), so the
   //      edge is a recoloured lit surface, not an emissive overlay. We mix on
   //      `colorNode` for the same result. See `buildingEdgeCoverage`.
   //
@@ -1790,7 +1789,7 @@ const ThreeScene = (() => {
     // sample _m at the instance's own centre instead — each building's walls
     // and slopes carry their own roof texel, which cannot image — blended by
     // the world normal's up-ness so flat roofs keep the exact decoded planar
-    // sample. See wiki/learnings/planar-detail-texture-images-on-tilted-instances.md.
+    // sample.
     const instCenter4 = instMatrix.mul(vec4(0, 0, 0, 1)); // unit-cube origin = box centre
     const centerUv = vec2(
       instCenter4.x.sub(uOffset.x).sub(uTransMin.x).div(uTransMax.x.sub(uTransMin.x)),
@@ -1804,9 +1803,9 @@ const ThreeScene = (() => {
     const mUv = mix(centerUv, planarUv, upness);
 
     // (1) Diffuse modulation — sample _m, scale base colour. The game's
-    // gbuffer shader applies `surface = 0.4 + 0.5·m` to the albedo (decoded —
-    // wiki/sources/building-edge-shader.md; the shader's vertical-AO term is
-    // disabled by the default DebugScaleOffset, so it collapses to floor+range).
+    // gbuffer shader applies `surface = 0.4 + 0.5·m` to the albedo (decoded from
+    // a PIX capture; the shader's vertical-AO term is disabled by the default
+    // DebugScaleOffset, so it collapses to floor+range).
     const mVal = texture(mTex, mUv.clamp(0, 1)).r;
     const modulation = float(NCZ.BUILDING_TEX_FLOOR).add(mVal.mul(NCZ.BUILDING_TEX_RANGE));
 

@@ -16,8 +16,6 @@ decoded from WolvenKit exports:
 | `base/weather/24h_basic/luts/cube_cp_braindance_v001.xbm` | the colour-grading LUT |
 | `base/materials/3d_map_*.mt` + per-asset `*.Material.json` | material albedo (`BaseColorScale`) |
 
-Full decode notes: `wiki/sources/3dmap-envparam-lighting.md`.
-
 ## The pipeline
 
 ```
