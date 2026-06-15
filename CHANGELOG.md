@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Time-of-day exposure curve
+
+- Scene exposure now follows a time-of-day curve instead of one fixed value: midday holds the calibrated brightness while sunrise/sunset open up but stay dim and atmospheric — readable across the whole day, never crushed-black or washed-out. Shared by the time-of-day slider and the showcase, which fixes the showcase rendering at a single frozen brightness.
+
+#### Settings: Colour grade (LUT) + Edge glow toggles
+
+- New Settings checkboxes toggle the in-game colour grade (LUT) and a self-lit neon building-edge glow on any theme. Defaults: LUT on for the Game & Preem map themes, edge glow on for Synthwave. The showcase cycle applies each theme's defaults as it sweeps palettes and restores your manual choices when it ends.
+
+#### Synthwave theme refresh
+
+- Rebuilt the Synthwave 3D-scene palette for the recalibrated lighting (the old colours read near-black): deep-indigo land, lighter-violet bay, vibrant purple buildings, muted magenta grid, neon cyan edges.
+
+#### Removed
+
+- The `?lighttune` debug slider panel — superseded by the time-of-day exposure curve and the lighting metering harness.
+
 #### Fixed: `_m` roof detail imaged onto sloped building faces
 
 - Tilted building instances (~12.5% of the 255k boxes have oblique rotations) no longer show a ghostly 2-D patch of the district map on their slanted faces. The top-down `_m.dds` planar projection now applies only to near-flat tops; steeper faces sample the building's own centre texel instead.
