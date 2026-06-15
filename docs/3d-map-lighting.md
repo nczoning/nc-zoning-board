@@ -149,14 +149,25 @@ directly, so it must apply exposure itself or it freezes at one brightness.
 reference exposure (held constant so the colour-fidelity reference frame can't
 drift).
 
-## Edge glow (opt-in, per theme)
+## Edge glow (Settings toggle + per-theme default)
 
-`--scene-edge-glow` (0 = off, the default for every theme) writes the building
-edge highlight to `emissiveNode` as well as the albedo, so the edge stays lit
-regardless of sun/shadow — a self-lit neon look (no bloom pass needed; a true
-soft halo would need bloom). A theme opts in by setting the var to an intensity;
-**Synthwave uses `0.3`**, all others leave it off. Read via `readThemeNumber()`
-and re-applied on theme switch in `updateMaterials`.
+When on, the building edge highlight is also written to `emissiveNode`, so it
+stays lit regardless of sun/shadow — a self-lit neon look (no bloom pass needed;
+a true soft halo would need bloom). It's **binary** (no intensity slider): the
+on-value is the fixed `NCZ.EDGE_GLOW_INTENSITY` (`0.3`).
+
+`--scene-edge-glow` (`>0` = on) is the per-theme **default** — **Synthwave is
+the only theme on**. The Settings modal has an **"Edge glow"** toggle
+(`setEdgeGlowEnabled` / `getEdgeGlowEnabled`) that overrides the default for the
+session; a theme switch resets it. Because the building materials load *after*
+`init()` resolves, the default is applied in the buildings-load `.then()`, and
+the Settings checkbox is synced from the CSS default (timing-independent), not
+from scene state.
+
+**Showcase:** in `cycle` mode the beat path tweens colours directly (bypassing
+`updateMaterials`), so it applies each beat-theme's edge-glow **and** grade
+defaults explicitly via `getBeatToggles()` — otherwise the gates would freeze at
+the opening theme for the whole showcase.
 
 ## Colour grade (LUT) — default + runtime toggle
 
