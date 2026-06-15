@@ -398,7 +398,11 @@ const ThreeScene = (() => {
   function makeHillshadeMaterial(colorVar, fallback, extra = {}, brightness = 1) {
     const mat = new THREE.MeshLambertNodeMaterial({
       color: readThemeColor(colorVar, fallback),
-      flatShading: true,
+      // Smooth (interpolated vertex) normals — the terrain/water/cliffs GLBs
+      // ship NORMAL data, so the hillshade reads as smooth slopes. `flatShading`
+      // here discarded those normals for per-face ones; harmless while the scene
+      // was lit near-flat, but the decoded directional-sun pipeline (#694) made
+      // every triangle facet visible. "Hillshade" wants smooth shading.
       side: THREE.DoubleSide,
       ...extra,
     });
