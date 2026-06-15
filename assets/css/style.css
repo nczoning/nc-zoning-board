@@ -1889,12 +1889,13 @@ body::before {
     gap: var(--space-sm);
 }
 
-/* Low-contrast attribution block — CDPR Fan Content disclaimer + asset credits.
-   Deliberately quieter than .about-links (gray, smaller) so it reads as fine
-   print, not a call to action. */
+/* Attribution block — "Asset & data credits" heading, CDPR Fan Content
+   disclaimer, then the per-asset credit list. Body reads at the modal text
+   size; heading reuses the .parameters-section-title idiom (Orbitron, accent,
+   uppercase) so it matches the Settings section headings. */
 .about-credits {
     font-family: var(--font-body);
-    font-size: var(--text-sm);
+    font-size: var(--text-lg);
     line-height: 1.5;
     color: var(--gray);
 
@@ -1903,11 +1904,13 @@ body::before {
         line-height: 1.5;
     }
 
-    .about-credits-label {
+    .about-credits-heading {
+        margin: 0 0 var(--space-sm);
+        font-family: var(--font-heading);
+        font-size: var(--text-lg);
+        color: var(--secondary);
+        letter-spacing: 1px;
         text-transform: uppercase;
-        letter-spacing: 0.08em;
-        opacity: 0.7;
-        margin-bottom: var(--space-2xs);
     }
 
     .about-credits-list {
