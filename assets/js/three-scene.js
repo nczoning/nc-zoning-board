@@ -36,6 +36,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Line2 } from 'three/addons/lines/webgpu/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
+import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import Stats from 'three/addons/libs/stats.module.js';
 // The exact in-game 3D-map colour pipeline (decoded from 3dmap.envparam):
 // ACES tonemap + colour grade + braindance LUT — see assets/js/aces-tonemap.js.
@@ -950,10 +951,25 @@ const ThreeScene = (() => {
   let _districtSub    = null; // canonical subdistricts — visible at the subs band (7000 ≤ d < 11000)
   let _districtAlways = null; // no-sub districts (Dogtown / Morro Rock) + non-canonical subs (Casino) — visible whenever EITHER outline tier is
 
+  // Name labels: { css: CSS2DObject, group } — `group` is the outline tier the
+  // label belongs to, so the label is shown exactly when that tier is.
+  const _districtLabels = [];
+
+  // Gate each label per-leaf (CSS2D `visible` doesn't cascade from a parent
+  // group). A label shows when the Districts overlay is on AND its outline
+  // tier's group is currently visible — so district names appear at the
+  // district zoom band, subdistrict names at the subdistrict band.
+  function updateDistrictLabelVisibility() {
+    if (!_districtLabels.length) return;
+    const districtsOn = layers.districts ? layers.districts.visible : true;
+    for (const { css, group } of _districtLabels) css.visible = districtsOn && group.visible;
+  }
+
   function setLayerVisibility(name, visible) {
     if (name === 'districts') {
       if (layers.districts) layers.districts.visible = visible;
       if (visible) updateDistrictZoom();
+      updateDistrictLabelVisibility();
       requestRender();
       return;
     }
@@ -983,6 +999,7 @@ const ThreeScene = (() => {
     _districtOuter.visible = distance >= NCZ.DISTRICT_DISTANCE_3D;
     _districtSub.visible   = distance >= NCZ.SUBDISTRICT_DISTANCE_3D && distance < NCZ.DISTRICT_DISTANCE_3D;
     if (_districtAlways) _districtAlways.visible = distance >= NCZ.SUBDISTRICT_DISTANCE_3D;
+    updateDistrictLabelVisibility();
   }
 
   // ── District hover-brighten ─────────────────────────────────────────────
@@ -1018,13 +1035,16 @@ const ThreeScene = (() => {
     return Math.abs(a) / 2;
   }
 
-  function registerDistrictHover(ring, line, group) {
-    if (!ring || ring.length < 3 || !line?.material) return;
+  // line may be null for a label-only hover region (Badlands has no outline but
+  // still wants its name to emphasise when the cursor is over its area).
+  function registerDistrictHover(ring, line, group, labelEl) {
+    if (!ring || ring.length < 3) return;
     _districtHover.push({
       ring,
-      line,
-      material: line.material,
+      line: line || null,
+      material: line?.material || null,
       group,
+      labelEl: labelEl || null, // matched name label, emphasised in sync on hover
       area: polygonArea(ring),
       target: NCZ.DISTRICT_LINE_OPACITY,
     });
@@ -1057,8 +1077,18 @@ const ThreeScene = (() => {
 
   function setHoveredDistrict(entry) {
     if (entry === _hoveredEntry) return;
-    if (_hoveredEntry) { _hoveredEntry.target = NCZ.DISTRICT_LINE_OPACITY; _hoveredEntry.line.renderOrder = 0; }
-    if (entry)         { entry.target         = NCZ.DISTRICT_LINE_OPACITY_HOVER; entry.line.renderOrder = DISTRICT_HOVER_RENDER_ORDER; }
+    if (_hoveredEntry) {
+      _hoveredEntry.target = NCZ.DISTRICT_LINE_OPACITY;
+      if (_hoveredEntry.line) _hoveredEntry.line.renderOrder = 0;
+      _hoveredEntry.labelEl?.classList.remove('district-label-hover');
+    }
+    if (entry) {
+      entry.target = NCZ.DISTRICT_LINE_OPACITY_HOVER;
+      // line is null for label-only entries (Badlands has no outline).
+      if (entry.line) entry.line.renderOrder = DISTRICT_HOVER_RENDER_ORDER;
+      // Emphasise the matching name label in sync with the outline brighten.
+      entry.labelEl?.classList.add('district-label-hover');
+    }
     _hoveredEntry = entry;
     if (!_hoverFading) { _hoverFading = true; _hoverLastT = performance.now(); setContinuousRender(true); }
   }
@@ -1078,6 +1108,7 @@ const ThreeScene = (() => {
     const maxStep = range * (dt / NCZ.DISTRICT_HOVER_FADE_MS);
     let active = false;
     for (const e of _districtHover) {
+      if (!e.material) continue; // label-only entry (Badlands) — no outline to tween
       const diff = e.target - e.material.opacity;
       if (Math.abs(diff) <= maxStep || maxStep === 0) {
         if (e.material.opacity !== e.target) e.material.opacity = e.target;
@@ -1425,18 +1456,62 @@ const ThreeScene = (() => {
       alwaysGroup.name = 'districts-always';
       subGroup.name    = 'subdistricts';
 
+      // Name labels (CSS2DObject) live in their own group, rendered for free by
+      // ThreeMarkers' CSS2DRenderer pass (it traverses the whole scene). Each
+      // label is tagged with the visibility GROUP of its outline, so the label
+      // shows exactly when its outline tier does (handled in
+      // updateDistrictLabelVisibility — CSS2D visible doesn't cascade, so we set
+      // it per-leaf). Default layer 0 → labels aren't gated by the Pins toggle.
+      const labelGroup = new THREE.Group();
+      labelGroup.name = 'district-labels';
+      const addLabel = (name, posCet, colorHex, group, level) => {
+        if (!name || !posCet) return null;
+        // Anchor is what CSS2DRenderer positions (it overwrites the element's
+        // inline transform each frame). The inner .district-label is free to
+        // scale/glow on hover without fighting that transform.
+        const anchor = document.createElement('div');
+        anchor.className = 'district-label-anchor';
+        const el = document.createElement('div');
+        el.className = `district-label district-label-${level}`;
+        el.textContent = name;
+        el.style.setProperty('--label-color', colorHex);
+        anchor.appendChild(el);
+        const css = new CSS2DObject(anchor);
+        css.position.set(posCet[0], 0, -posCet[1]); // CET (x,y) → world (x,0,-y)
+        css.name = `district-label-${level}-${name}`;
+        labelGroup.add(css);
+        _districtLabels.push({ css, group });
+        return el; // returned so the outline hover can emphasise its label in sync
+      };
+
       for (const dist of data.districts) {
-        const color = new THREE.Color(window.NCZ.DISTRICT_COLORS[dist.id] || '#ffffff');
+        const colorHex = window.NCZ.DISTRICT_COLORS[dist.id] || '#ffffff';
+        const color = new THREE.Color(colorHex);
         const canonicalSubs = (dist.subdistricts || []).filter(s => s.canonical !== false);
         const hasSubs = canonicalSubs.length > 0;
+        const distGroup = hasSubs ? outerGroup : alwaysGroup;
 
         // District outline — always group if no canonical subs, outer group otherwise
         if (dist.polygon?.length) {
           const line = buildLine(dist.polygon, color, window.NCZ.DISTRICT_LINE_WIDTH);
           line.name = `district-outline-${dist.id}`;
-          const group = hasSubs ? outerGroup : alwaysGroup;
-          group.add(line);
-          registerDistrictHover(dist.polygon, line, group);
+          distGroup.add(line);
+          const labelEl = addLabel(dist.name, NCZ.polygonCentroid(dist.polygon), colorHex, distGroup, 'district');
+          registerDistrictHover(dist.polygon, line, distGroup, labelEl);
+        } else if (hasSubs) {
+          // Badlands has no district polygon (and no in-game district icon). The
+          // mean of its subdistrict centroids lands in a cramped/built-up spot;
+          // the maintainer picked this open patch of the badlands instead.
+          const pos = NCZ.BADLANDS_LABEL_CET || null;
+          if (pos) {
+            const labelEl = addLabel(dist.name, pos, colorHex, distGroup, 'district');
+            // No outline to hover, so register each subdistrict polygon as a
+            // district-tier, label-only hover region pointing at the Badlands
+            // label — hovering the badlands area emphasises the name.
+            for (const sub of dist.subdistricts || []) {
+              if (sub.polygon?.length) registerDistrictHover(sub.polygon, null, distGroup, labelEl);
+            }
+          }
         }
 
         for (const sub of dist.subdistricts || []) {
@@ -1446,7 +1521,8 @@ const ThreeScene = (() => {
           // canonical:false (casino etc) — always visible; otherwise zoom-gated.
           const group = sub.canonical === false ? alwaysGroup : subGroup;
           group.add(line);
-          registerDistrictHover(sub.polygon, line, group);
+          const labelEl = addLabel(sub.name, NCZ.polygonCentroid(sub.polygon), colorHex, group, 'subdistrict');
+          registerDistrictHover(sub.polygon, line, group, labelEl);
         }
       }
 
@@ -1462,6 +1538,9 @@ const ThreeScene = (() => {
       _districtAlways = alwaysGroup;
       layers.districts = parent;
       scene.add(parent);
+      scene.add(labelGroup);
+      layers.districtLabels = labelGroup;
+      updateDistrictLabelVisibility();
       requestRender();
       freezeStatic(parent);
       stepProgress(); // districts done

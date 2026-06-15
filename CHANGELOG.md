@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - District/subdistrict outlines now sit faint (5%) by default and brighten over 250 ms when the cursor enters a district's area, matching the in-game world map. Works in both the 3D (SCHEMA) and 2D (SAT) views.
 - Fixed dropped outline edges on hover: coincident borders of adjacent districts no longer fight over pixels — the hovered outline is forced to draw on top.
 
+#### District / subdistrict name labels
+
+- District and subdistrict names now render at their centroids in both views — district names zoomed out, subdistrict names zoomed in. Faint by default, fading in with an emphasis when the district is hovered (paired with the outline brighten). Badlands (no polygon) gets a hand-placed name with its own hover region.
+- On the satellite view the names carry a dark text-casing so they stay legible over the imagery; pins always render above labels.
+
 #### 3D World Map Fixed building assets
 
 - The 3D map can now render [malgalad's *3D World Map Fixed*](https://www.nexusmods.com/cyberpunk2077/mods/26500) building data, correcting misaligned/missing buildings (e.g. the Corpo Plaza cluster) and returning the Watson "ugly building". Toggle in **Settings → Map data → Fixed building assets** (on by default); the base-game layout stays available.

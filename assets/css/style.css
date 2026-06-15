@@ -2414,6 +2414,100 @@ body::before {
     cursor: pointer;
 }
 
+/* District / subdistrict name labels (CSS2DObject at the polygon centroid).
+   Colour comes per-label from --label-color (the district's palette colour).
+   pointer-events:none so labels never intercept the outline hover or pins.
+   The .district-label-anchor is what CSS2DRenderer positions (it owns the inline
+   transform); the inner .district-label scales/glows on hover independently. */
+.district-label-anchor {
+    pointer-events: none;
+}
+
+.district-label {
+    pointer-events: none;
+    font-family: var(--font-heading);
+    color: var(--label-color, var(--white));
+    text-transform: uppercase;
+    white-space: nowrap;
+    text-align: center;
+    font-weight: 600;
+    /* Dark halo keeps the name legible over the busy map without a filled plate. */
+    text-shadow:
+        0 0 4px var(--surface-tooltip-95, rgba(2, 8, 20, 0.95)),
+        0 1px 3px rgba(0, 0, 0, 0.9);
+    user-select: none;
+    /* Faint by default (like the outlines), brightening only on hover. Roughly
+       half the previous baseline so names stay readable but recede; the hover
+       state lifts the focused one to full. 250 ms matches the outline brighten. */
+    opacity: 0.5;
+    transition: opacity 0.25s ease, transform 0.25s ease, text-shadow 0.25s ease;
+}
+
+.district-label-district {
+    font-size: var(--text-sm);
+    letter-spacing: 0.14em;
+}
+
+.district-label-subdistrict {
+    font-size: var(--text-xs);
+    letter-spacing: 0.1em;
+    opacity: 0.45;
+}
+
+/* Outline-hover emphasis: the hovered district/subdistrict's label pops to full
+   opacity, scales up slightly, and gains a colour glow — paired with the
+   outline brighten in setHoveredDistrict (3D) / onMapMouseMove (2D). */
+.district-label.district-label-hover {
+    opacity: 1;
+    transform: scale(1.18);
+    text-shadow:
+        0 0 6px var(--label-color, #fff),
+        0 0 12px var(--surface-tooltip-95, rgba(2, 8, 20, 0.95)),
+        0 1px 3px rgba(0, 0, 0, 0.95);
+}
+
+/* 2D (Leaflet) labels reuse the .district-label skin via a permanent centre
+   tooltip; strip Leaflet's bubble/arrow so only the text shows. Leaflet
+   positions this root, leaving the inner .district-label free to scale on hover
+   (same trick as the 3D .district-label-anchor). */
+.leaflet-tooltip.district-label-tooltip {
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.leaflet-tooltip.district-label-tooltip::before {
+    display: none; /* no arrow */
+}
+
+/* The satellite imagery is bright and busy, so the 3D schematic's soft halo
+   isn't enough — give the SAT labels a solid dark text-casing (1px outline in
+   all four diagonals + glow) and a heavier weight / more present baseline so the
+   names stay legible over any tile. Scoped to the Leaflet tooltip so the 3D
+   labels keep their faint look. Higher specificity than the shared hover rule,
+   so the hover override below must match it (4 classes) to still win. */
+.leaflet-tooltip.district-label-tooltip .district-label {
+    /* Faded baseline (so the fade + hover-emphasis still read) but kept legible
+       by the solid dark casing below — the outline carries contrast even at low
+       fill opacity, where the old soft halo couldn't. */
+    opacity: 0.6;
+    font-weight: 700;
+    text-shadow:
+        -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000,
+        0 0 4px #000, 0 0 7px rgba(0, 0, 0, 0.9);
+}
+
+.leaflet-tooltip.district-label-tooltip .district-label.district-label-hover {
+    opacity: 1;
+    /* keep the dark casing under the colour glow on hover */
+    text-shadow:
+        -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000,
+        0 0 6px var(--label-color, #fff), 0 0 12px #000;
+}
+
 /* 3D tooltip anchor — wraps the shared `.pin-tooltip` skin (defined above).
    CSS2DRenderer projects the anchor to the pin's world position; the inner
    .pin-tooltip is then offset upward in screen space so the arrow points

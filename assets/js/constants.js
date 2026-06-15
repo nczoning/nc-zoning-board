@@ -182,6 +182,11 @@ NCZ.DISTRICT_COLORS = {
   badlands:       "#c882ff",  // Bright violet
 };
 
+// Badlands has no district polygon, so its name label has no centroid to sit at.
+// Hand-placed CET [x, y] in an open patch of the badlands (maintainer-chosen);
+// world (x,0,-y) in the 3D scene. Note y is negated from the three-space target.
+NCZ.BADLANDS_LABEL_CET = [2957.33, -691.04];
+
 // Overlay zoom thresholds (Leaflet zoom levels)
 NCZ.DISTRICT_ZOOM_THRESHOLD = 3;  // below = districts only, above = subdistricts
 

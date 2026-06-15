@@ -252,6 +252,29 @@ NCZ.cetToThree = function (cetX, cetY, cetZ) {
   return [cetX, cetZ || 0, -cetY];
 };
 
+// Area-weighted polygon centroid (shoelace) for a ring of [x, y] vertices.
+// Center of mass, so it handles non-convex rings far better than a plain vertex
+// average (which drifts toward dense corners). Returns [cx, cy] in the ring's
+// own space. Falls back to the vertex average for a degenerate (zero-area) ring.
+// Matches scripts/preview_district_borders.py's Shapely centroid.
+NCZ.polygonCentroid = function (ring) {
+  if (!ring || ring.length === 0) return null;
+  let a = 0, cx = 0, cy = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const cross = ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+    a += cross;
+    cx += (ring[j][0] + ring[i][0]) * cross;
+    cy += (ring[j][1] + ring[i][1]) * cross;
+  }
+  a *= 0.5;
+  if (Math.abs(a) < 1e-6) {
+    let sx = 0, sy = 0;
+    for (const p of ring) { sx += p[0]; sy += p[1]; }
+    return [sx / ring.length, sy / ring.length];
+  }
+  return [cx / (6 * a), cy / (6 * a)];
+};
+
 // Ray-casting point-in-polygon test. Generic over coordinate space — `point`
 // and `ring` vertices are both [a, b] pairs in the SAME space (3D passes world
 // [x, -z]; 2D passes [lat, lng]). `ring` is the polygon's vertex list; the
