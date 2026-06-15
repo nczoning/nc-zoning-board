@@ -2317,6 +2317,13 @@ body::before {
 	transition: stroke-dashoffset 0.3s ease-out, stroke-opacity 0.3s ease-in;
 }
 
+/* District outline hover-brighten: NCZ.Overlay flips the path's stroke-opacity
+   between the faint baseline and the hover value; this animates the 250 ms fade
+   to match the SCHEMA (Three.js) tween. Pane class added in overlay.js init(). */
+.district-outline-pane path {
+	transition: stroke-opacity 0.25s ease;
+}
+
 .marker-cluster-step {
     --cluster-hue: 120;
 	background-color: hsl(

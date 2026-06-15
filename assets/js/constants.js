@@ -188,7 +188,12 @@ NCZ.DISTRICT_ZOOM_THRESHOLD = 3;  // below = districts only, above = subdistrict
 // District border appearance — shared between SAT (Leaflet) and SCHEMA (Three.js)
 NCZ.DISTRICT_LINE_WIDTH     = 4;  // px — main district borders
 NCZ.SUBDISTRICT_LINE_WIDTH  = 3;  // px — subdistrict borders
-NCZ.DISTRICT_LINE_OPACITY   = 0.85;
+// Faint baseline matches the in-game inkLinePatternWidget.opacity (5%); the
+// hover-brighten state fades to ~full over 250 ms. See
+// wiki/sources/district-outline-widget.md.
+NCZ.DISTRICT_LINE_OPACITY        = 0.05;
+NCZ.DISTRICT_LINE_OPACITY_HOVER  = 1.0;
+NCZ.DISTRICT_HOVER_FADE_MS       = 250;
 
 // ── Three.js 3D scene ──────────────────────────────────────────────────────────
 
