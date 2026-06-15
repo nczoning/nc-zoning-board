@@ -136,8 +136,7 @@ Single persistent `CSS2DObject` created at attach time. On pin `mouseenter`, pos
 
 ## Clustering
 
-Detailed page on the wiki ([three-markers-clustering.md](../wiki/sources/three-markers-clustering.md), Obsidian-only).
-TL;DR: **world-space XZ proximity grouping** (not screen-space — switched 2026-05 after Aki's UX feedback). Cluster radius is `PIN_3D_CLUSTER_RADIUS_PX` (40) converted to world units at current zoom, so clusters dissolve as the user zooms in (matching Leaflet's behaviour) but stay invariant to camera tilt and rotation (unlike the original screen-space approach which mis-clustered visually-close-but-far-apart pins at high tilt). Greedy O(N²) on filter-visible pins, recomputed on **zoom change** or filter change only — pan and tilt leave clusters intact. Cluster bubbles use `.marker-cluster` class + Leaflet's existing colour ramp. Pool of CSS2DObjects reused across recomputes.
+**world-space XZ proximity grouping** (not screen-space — switched 2026-05 after Aki's UX feedback). Cluster radius is `PIN_3D_CLUSTER_RADIUS_PX` (40) converted to world units at current zoom, so clusters dissolve as the user zooms in (matching Leaflet's behaviour) but stay invariant to camera tilt and rotation (unlike the original screen-space approach which mis-clustered visually-close-but-far-apart pins at high tilt). Greedy O(N²) on filter-visible pins, recomputed on **zoom change** or filter change only — pan and tilt leave clusters intact. Cluster bubbles use `.marker-cluster` class + Leaflet's existing colour ramp. Pool of CSS2DObjects reused across recomputes.
 
 ## Cluster panel integration
 

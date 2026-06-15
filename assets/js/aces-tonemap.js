@@ -2,8 +2,7 @@
  * NC Zoning Board — CP2077 3D-map colour pipeline (ACES tonemap + grade + LUT)
  *
  * Reproduces the in-game 3D world map's full colour pipeline, decoded from
- * `base/weather/24h_basic/3dmap.envparam` (see wiki/sources/
- * 3dmap-envparam-lighting). The map renders:
+ * `base/weather/24h_basic/3dmap.envparam`. The map renders:
  *
  *     HDR scene  →  ACES tonemap  →  colour grade  →  braindance LUT  →  display
  *

@@ -3,7 +3,7 @@
  *
  * The CP2077 world map render-to-texture scene applies a colour grade whose
  * LDR LUT is `base/weather/24h_basic/luts/cube_cp_braindance_v001.xbm`
- * (decoded from `3dmap.envparam` — see wiki/sources/3dmap-envparam-lighting).
+ * (decoded from `3dmap.envparam`).
  * That `.xbm` is a 32×32×32 RGBA-float 3D colour cube.
  *
  * Source format — a `.cube` (Adobe Cube LUT): export the `.xbm` from WolvenKit

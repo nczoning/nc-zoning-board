@@ -350,12 +350,12 @@ NCZ.ASSET_SET_KEY     = 'ncz-asset-set';
 NCZ.ASSET_SET_DEFAULT = 'fixed';
 
 // Building edge highlight — decoded from the game's 3d_map_cubes.mt gbuffer
-// pixel shader (PIX capture; see wiki/sources/building-edge-shader.md).
+// pixel shader (PIX capture).
 // Per-district EdgeThickness / EdgeSharpnessPower live in DISTRICT_META
 // (three-scene.js) alongside the other per-district game constants.
 NCZ.BUILDING_EDGE_CAMDIST_K =  0.002; // game's camera-distance widening coefficient: k = camDist × this × EdgeThickness
 // _m surface modulation, decoded from the 3d_map_cubes.mt gbuffer shader
-// (PIX capture; see wiki/sources/building-edge-shader.md). Game formula:
+// (PIX capture). Game formula:
 //   surface = 0.5·(0.05 + 0.75·ao + m)   →   ao = 1 (the vertical-AO term is
 // gated by DebugScaleOffset, which ships at a default that disables it)
 //   →   surface = 0.5·(0.8 + m) = 0.4 + 0.5·m
@@ -374,7 +374,7 @@ NCZ.BUILDING_TEX_SLOPE_FADE_START = 0.95;  // normal.y ≤ this (pitch ≥ ~18°
 NCZ.BUILDING_TEX_SLOPE_FADE_END   = 0.995; // normal.y ≥ this (pitch ≤ ~6°)  → fully planar
 
 // Terrain "graph-paper" grid — decoded from the game's 3d_map_terrain pixel
-// shader (PIX DXIL capture; see wiki/sources/terrain-grid-shader.md). Three
+// shader (PIX DXIL capture). Three
 // nested anti-aliased line grids on world XZ, combined into one line factor.
 // Every value below is the game's exact decoded value — the "game:" note in
 // each comment keeps the original recoverable if a value is later tuned.
@@ -397,7 +397,7 @@ NCZ.DISTRICT_DISTANCE_3D    = 11000;
 NCZ.SUBDISTRICT_DISTANCE_3D =  7000;
 
 // Metro LOD — decoded from the game's 3d_map_metro.mt pixel shader (PIX
-// capture; see wiki/sources/metro-lod-shader.md). The metro mesh carries
+// capture). The metro mesh carries
 // three LOD tiers in COLOR_0, one channel per vertex:
 //   R = dotted (closest)   G = thin solid (medium)   B = wide solid (far)
 // Each tier is fully visible below its distance threshold and crossfades
