@@ -220,7 +220,7 @@ const ThreeScene = (() => {
   //   Fixed" mod (Nexus #26500). Same dimensions/transforms as the vanilla
   //   dataDds (texel placement corrected), so it's a straight texture swap when
   //   the Fixed asset set is selected. ep1_spaceport has no fixed version → it
-  //   stays on dataDds in both sets. See wiki/entities/3d-world-map-fixed-mod.md.
+  //   stays on dataDds in both sets. See docs/3dmap-fixed-assets.md.
   // mDds:    _m.dds   (DXGI_FORMAT_R8_UNORM — 8-bit greyscale surface detail, 10 mips)
   // transMin/transMax: district-local CET XYZ bounds (before district offset)
   // offset: world XY offset applied to decoded positions (no Z offset)
@@ -244,7 +244,7 @@ const ThreeScene = (() => {
     // the Corpo Plaza building cluster). Only loaded with the Fixed asset set;
     // reuses the game's Pacifica surface (pacifica_m) that malgalad's material
     // points at — c_pacifica_m is byte-identical. See
-    // wiki/entities/3d-world-map-fixed-mod.md.
+    // docs/3dmap-fixed-assets.md.
     { name: 'my_district',   dataDds: 'assets/dds/fixed/my_district_data.dds', mDds: 'assets/dds/pacifica_m.dds', cubeSize: 200, transMin: [-2766, -5399, -50], transMax: [2960, 4254, 650], offset: [-828, -531], edgeThickness: 0.0005, edgeSharpness: 50, fixedOnly: true },
     // Fixed-only "ugly building" add-on (malgalad's optional download that returns
     // the building to Watson). Tiny standalone cloud; offset is its entity's
@@ -1491,7 +1491,7 @@ const ThreeScene = (() => {
             // Empty-cell detection — two encodings exist. Base-game textures
             // mark empties with near-zero position-block ALPHA; malgalad's
             // "3D World Map Fixed" textures keep alpha full and mark empties
-            // with ZERO SCALE instead (see wiki/entities/3d-world-map-fixed-mod).
+            // with ZERO SCALE instead (see docs/3dmap-fixed-assets.md).
             // Skip on either; on base-game data the two sets coincide, so this
             // is a no-op there.
             const scaleEmpty = pixels[si + 0] < NCZ.DDS_ALPHA_THRESH

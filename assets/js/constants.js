@@ -338,7 +338,7 @@ NCZ.UINT16_MAX        = 65535.0;  // normalisation denominator — pixel channel
 // 0.01 × UINT16_MAX — the "empty slot" cutoff. Used two ways in loadBuildings:
 // base-game textures mark empties with near-zero position ALPHA below this;
 // malgalad's "3D World Map Fixed" textures keep alpha full and mark empties by
-// zeroing the SCALE block instead (see wiki/entities/3d-world-map-fixed-mod.md).
+// zeroing the SCALE block instead (see docs/3dmap-fixed-assets.md).
 // Same 1% threshold serves both tests.
 NCZ.DDS_ALPHA_THRESH  = 655;
 

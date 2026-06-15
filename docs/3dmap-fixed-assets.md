@@ -84,7 +84,8 @@ The mod is in active development (more districts / fixes planned). To refresh:
 
 1. Open the updated `.archive` in WolvenKit; export the changed
    `*_data.xbm` as **DDS** (16-bit, default settings — see
-   `wiki/entities/wolvenkit.md`).
+   [`docs/3dmap-asset-reference.md`](3dmap-asset-reference.md) for the building
+   texture format).
 2. Copy into `assets/dds/fixed/` (per-district keeps the repo basename, e.g.
    `ep1_dogtown_data.xbm` → `dogtown_data.dds`).
 3. Run the validator: `node scripts/validate_3dmap_assets.js` — checks each
