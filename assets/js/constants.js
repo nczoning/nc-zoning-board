@@ -182,6 +182,30 @@ NCZ.DISTRICT_COLORS = {
   badlands:       "#c882ff",  // Bright violet
 };
 
+// District icon atlas (district_icons.png, 1192×256) — UV rects (Left/Top/
+// Right/Bottom) for the `_large` icon of each district, extracted from
+// district_icons.inkatlas. The icons are pre-coloured per district (Watson red,
+// etc.), so they render as-is. Used by the hover info panel (NCZ.DistrictInfo).
+NCZ.DISTRICT_ICON_ATLAS = {
+  src: "assets/img/district_icons.png",
+  w: 1192,
+  h: 256,
+  parts: {
+    city_center:    { l: 0.45302, t: 0.40234, r: 0.54614, b: 0.76563 }, // ico_district_center_large
+    watson:         { l: 0.43121, t: 0.00391, r: 0.51342, b: 0.38672 }, // ico_district_watson_large
+    westbrook:      { l: 0.06711, t: 0.00391, r: 0.16443, b: 0.45703 }, // ico_district_westbrook_large
+    heywood:        { l: 0.00084, t: 0.48438, r: 0.09815, b: 0.93750 }, // ico_district_heywood_large
+    santo_domingo:  { l: 0.25671, t: 0.00391, r: 0.34060, b: 0.39453 }, // ico_district_domingo_large
+    pacifica:       { l: 0.34396, t: 0.00391, r: 0.42785, b: 0.39453 }, // ico_district_pacifica_large
+    dogtown:        { l: 0.54950, t: 0.35547, r: 0.64262, b: 0.71875 }, // ico_district_dogtown_large
+    ncx_morro_rock: { l: 0.27852, t: 0.41016, r: 0.36242, b: 0.80078 }, // ico_district_morro_rock_large
+    badlands:       { l: 0.19128, t: 0.41016, r: 0.27517, b: 0.80078 }, // ico_district_badlands_large
+  },
+};
+// (The atlas also has north/south badlands icons, but in TweakDB all of our
+//  badlands subdistricts belong to the central Districts.Badlands, so we only
+//  use the central badlands icon — see the district-info panel.)
+
 // Badlands has no district polygon, so its name label has no centroid to sit at.
 // Hand-placed CET [x, y] in an open patch of the badlands (maintainer-chosen);
 // world (x,0,-y) in the 3D scene. Note y is negated from the three-space target.

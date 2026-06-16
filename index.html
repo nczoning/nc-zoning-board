@@ -246,6 +246,23 @@
             <button class="map-view-btn active" data-view="schema" title="3D schematic view">SCHEMA</button>
             <button class="map-view-btn" data-view="sat" title="Satellite tile view">SAT</button>
         </div>
+        <!-- Hover info panel — district readout (parity with the in-game map's
+             bottom-right panel). Populated by NCZ.DistrictInfo on district hover. -->
+        <div id="district-info-panel" aria-hidden="true">
+            <div class="di-head">
+                <div class="di-names">
+                    <span class="di-district"></span>
+                    <span class="di-sub"></span>
+                </div>
+                <span class="di-icon" aria-hidden="true"></span>
+            </div>
+            <div class="di-stats">
+                <span class="di-count"></span>
+                <span class="di-breakdown"></span>
+                <span class="di-share"></span>
+                <span class="di-recent"></span>
+            </div>
+        </div>
         <div id="map" style="display: none;"></div>
         <div id="map-3d">
             <div class="scene-loading">
@@ -612,6 +629,7 @@
 
     <!-- App Logic -->
     <script src="assets/js/utils.js"></script>
+    <script src="assets/js/district-info.js"></script>
     <script src="assets/js/services.js"></script>
     <script src="assets/js/overlay.js"></script>
     <!-- SunCalc — real sun position by date/time/location (by Vladimir Agafonkin, Leaflet author) -->

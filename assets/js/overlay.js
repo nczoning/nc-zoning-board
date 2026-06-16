@@ -83,6 +83,13 @@ NCZ.Overlay = (() => {
       labelElOf(best)?.classList.add('district-label-hover');
     }
     _hoveredFeature = best;
+    // Info panel resolves the subdistrict under the cursor at any tier (even when
+    // only district outlines are drawn), so it reports the sub like the game does.
+    // Stats follow the drawn tier: district total when district outlines show,
+    // subdistrict total when subdistrict outlines show.
+    const cet = NCZ.leafletToCet(e.latlng.lat, e.latlng.lng);
+    const statsLevel = _map.getZoom() > NCZ.DISTRICT_ZOOM_THRESHOLD ? "sub" : "district";
+    NCZ.DistrictInfo?.showAt?.(cet[0], cet[1], statsLevel);
   }
 
   function init(map) {
@@ -119,7 +126,7 @@ NCZ.Overlay = (() => {
             const feature = {
               type: "Feature",
               // `ring` ([lat,lng]) is carried for the hover point-in-polygon test.
-              properties: { color, name: dist.name, level: "district", ring: coords },
+              properties: { color, name: dist.name, level: "district", ring: coords, districtId: dist.id },
               geometry: { type: "Polygon", coordinates: [coords.map(c => [c[1], c[0]])] },
             };
             (hasSubs ? outerFeatures : alwaysFeatures).push(feature);
@@ -131,7 +138,7 @@ NCZ.Overlay = (() => {
             const coords = sub.polygon.map(pt => NCZ.cetToLeaflet(pt[0], pt[1]));
             const feature = {
               type: "Feature",
-              properties: { color, name: sub.name, level: "subdistrict", ring: coords },
+              properties: { color, name: sub.name, level: "subdistrict", ring: coords, districtId: dist.id, subId: sub.id },
               geometry: { type: "Polygon", coordinates: [coords.map(c => [c[1], c[0]])] },
             };
             // canonical:false (casino etc) — always visible
@@ -158,6 +165,8 @@ NCZ.Overlay = (() => {
                 area: ringArea(p.ring),
                 layer,
                 labelTip: layer.getTooltip(),
+                districtId: p.districtId || null,
+                subId: p.subId || null,
                 tier,
               });
             },
@@ -185,12 +194,13 @@ NCZ.Overlay = (() => {
           for (const sub of bl.subdistricts || []) {
             if (!sub.polygon?.length) continue;
             const ring = sub.polygon.map(pt => NCZ.cetToLeaflet(pt[0], pt[1]));
-            _hoverFeatures.push({ ring, area: ringArea(ring), layer: null, labelTip: _badlandsLabel, tier: "outer" });
+            _hoverFeatures.push({ ring, area: ringArea(ring), layer: null, labelTip: _badlandsLabel, districtId: bl.id, subId: null, tier: "outer" });
           }
         }
 
         map.on("zoomend", updateZoom);
         map.on("mousemove", onMapMouseMove);
+        map.on("mouseout", () => NCZ.DistrictInfo?.hide?.()); // cursor left the map
         if (districtsVisible) updateZoom();
       })
       .catch(err => console.error("[NCZ] Failed to load subdistricts.json:", err));
@@ -204,6 +214,7 @@ NCZ.Overlay = (() => {
       labelElOf(_hoveredFeature)?.classList.remove('district-label-hover');
     }
     _hoveredFeature = null;
+    NCZ.DistrictInfo?.hide?.();
   }
 
   function updateZoom() {
