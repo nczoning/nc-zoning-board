@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### District hover info panel
+
+- Hovering a district shows a readout in the top-right (parity with the in-game world map): district icon + name, the subdistrict under the cursor, and location stats for that area — count, category breakdown, share of all locations, and how many were recently updated. Works in both the 3D (SCHEMA) and 2D (SAT) views.
+- Like the game, the subdistrict name resolves at any zoom; the stats reflect the district total when district outlines are shown and the subdistrict total when subdistrict outlines are shown.
+
 #### Fixed: viewport now carries across the 2D ↔ 3D switch
 
 - Toggling between the SAT (2D) and SCHEMA (3D) views keeps your place — centre and zoom carry across in both directions, instead of each view holding its own independent camera. The 3D view preserves your current heading/tilt rather than snapping top-down. The first-load cinematic intro is unaffected.

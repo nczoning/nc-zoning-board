@@ -40,6 +40,111 @@
 }
 
 /* Overlay toggles — floats over the map, above the view toggle */
+/* District hover info panel — top-right under the header, right-aligned with the
+   icon on the right (parity with the in-game bottom-right readout; bottom-right
+   here is taken by the overlay controls). --di-color is set per-district by
+   NCZ.DistrictInfo. pointer-events:none so it never blocks the map. */
+#district-info-panel {
+    position: absolute;
+    top: var(--space-md);
+    right: var(--space-md);
+    /* Below the cluster panel (1000) so it slides in over this readout, but
+       above the map. */
+    z-index: 900;
+    max-width: 360px;
+    text-align: right;
+    pointer-events: none;
+    /* Text-only (no plate). A solid four-direction dark casing (like the map
+       labels) keeps it legible over bright satellite imagery as well as the dark
+       schematic — a soft blur alone washed out over the rooftops. */
+    text-shadow:
+        -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000,
+        0 0 4px rgba(0, 0, 0, 0.9),
+        0 0 8px rgba(0, 0, 0, 0.7);
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+#district-info-panel.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Two-column header (matches the in-game readout): column 1 stacks the district
+   name over the subdistrict, column 2 is the icon spanning both rows. */
+.di-head {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+}
+
+.di-names {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.di-district {
+    font-family: var(--font-heading);
+    font-size: var(--text-lg);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--di-color, var(--white));
+    line-height: 1.05;
+}
+
+.di-sub {
+    display: block;
+    font-family: var(--font-body);
+    font-size: var(--text-md);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--di-color, var(--white)); /* subdistrict shares the district colour */
+    opacity: 0.9;
+    margin-top: 1px;
+}
+
+.di-icon {
+    flex: none;
+    /* Box size (exact icon dimensions) + background crop set per-district by
+       NCZ.DistrictInfo. A drop shadow keeps the icon legible over bright
+       satellite imagery, matching the text casing. */
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9));
+}
+
+.di-stats {
+    margin-top: var(--space-xs);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.di-count {
+    font-family: var(--font-heading);
+    font-size: var(--text-lg);
+    color: var(--white);
+}
+
+.di-breakdown {
+    font-size: var(--text-md);
+}
+
+.di-dot {
+    margin: 0 4px;
+    color: var(--white);
+    opacity: 0.7;
+}
+
+.di-share,
+.di-recent {
+    font-size: var(--text-md);
+    color: var(--white);
+}
+
 #overlay-controls {
     position: absolute;
     bottom: 120px;

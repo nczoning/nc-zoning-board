@@ -39,6 +39,14 @@ NCZ.cetToLeaflet = function (cetX, cetY) {
   return [lat, lng];
 };
 
+// Inverse of cetToLeaflet: Leaflet [lat, lng] → CET [x, y]. Used to resolve the
+// district/subdistrict under the 2D cursor against the CET polygons.
+NCZ.leafletToCet = function (lat, lng) {
+  const cetX = lng / 256 * (NCZ.WORLD_MAX_X - NCZ.WORLD_MIN_X) + NCZ.WORLD_MIN_X;
+  const cetY = lat / 256 * (NCZ.WORLD_MAX_Y - NCZ.WORLD_MIN_Y) + NCZ.WORLD_MAX_Y;
+  return [cetX, cetY];
+};
+
 // Leaflet lat/lng distance converted to calibrated meters via the CET transform.
 NCZ.leafletDistanceMeters = function (a, b) {
   const deltaLng = b.lng - a.lng;

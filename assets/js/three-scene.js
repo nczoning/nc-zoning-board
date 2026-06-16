@@ -795,7 +795,7 @@ const ThreeScene = (() => {
     // reach it (events bubble; pointer capture is no-op'd above). passive — we
     // never preventDefault, so the camera drag path is untouched.
     _orbitDom.addEventListener('mousemove', onSceneMouseMove, { passive: true });
-    _orbitDom.addEventListener('mouseleave', () => setHoveredDistrict(null), { passive: true });
+    _orbitDom.addEventListener('mouseleave', () => { setHoveredDistrict(null); NCZ.DistrictInfo?.hide?.(); }, { passive: true });
     controls.mouseButtons = {
       LEFT:   THREE.MOUSE.PAN,
       MIDDLE: THREE.MOUSE.DOLLY,
@@ -1037,7 +1037,7 @@ const ThreeScene = (() => {
 
   // line may be null for a label-only hover region (Badlands has no outline but
   // still wants its name to emphasise when the cursor is over its area).
-  function registerDistrictHover(ring, line, group, labelEl) {
+  function registerDistrictHover(ring, line, group, labelEl, districtId, subId) {
     if (!ring || ring.length < 3) return;
     _districtHover.push({
       ring,
@@ -1045,15 +1045,15 @@ const ThreeScene = (() => {
       material: line?.material || null,
       group,
       labelEl: labelEl || null, // matched name label, emphasised in sync on hover
+      districtId: districtId || null, // for the info panel
+      subId: subId || null,
       area: polygonArea(ring),
       target: NCZ.DISTRICT_LINE_OPACITY,
     });
   }
 
-  // Map a client-space cursor position to the district outline under it (or
-  // null). Only considers outlines whose tier group is currently visible.
-  function pickDistrictAt(clientX, clientY) {
-    if (!_districtHover.length || !layers.districts?.visible) return null;
+  // Intersect the cursor ray with the Y=0 ground plane → CET [x, y], or null.
+  function groundPointAt(clientX, clientY) {
     const rect = renderer.domElement.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
     _hoverNdc.set(
@@ -1066,11 +1066,18 @@ const ThreeScene = (() => {
     // only show when zoomed out/steep, so this never costs a real hover.
     if (Math.abs(_hoverRay.ray.direction.y) < 1e-3) return null;
     if (!_hoverRay.ray.intersectPlane(_hoverPlane, _hoverWorld)) return null;
-    const pt = [_hoverWorld.x, -_hoverWorld.z]; // world (x,z) → ring (cetX, cetY)
+    return [_hoverWorld.x, -_hoverWorld.z]; // world (x,z) → ring (cetX, cetY)
+  }
+
+  // The visible outline under a CET ground point (or null) — only outlines whose
+  // tier group is currently drawn, smallest-area first. Drives the brighten;
+  // the info panel resolves the subdistrict separately (all tiers).
+  function pickDistrictAt(gp) {
+    if (!gp || !_districtHover.length || !layers.districts?.visible) return null;
     let best = null;
     for (const e of _districtHover) {
       if (!e.group.visible) continue;
-      if (NCZ.pointInPolygon(pt, e.ring) && (!best || e.area < best.area)) best = e;
+      if (NCZ.pointInPolygon(gp, e.ring) && (!best || e.area < best.area)) best = e;
     }
     return best;
   }
@@ -1094,7 +1101,15 @@ const ThreeScene = (() => {
   }
 
   function onSceneMouseMove(e) {
-    setHoveredDistrict(pickDistrictAt(e.clientX, e.clientY));
+    const gp = groundPointAt(e.clientX, e.clientY);
+    setHoveredDistrict(pickDistrictAt(gp)); // outline/label brighten (tier-gated)
+    // Info panel resolves the subdistrict under the cursor at any tier; stats
+    // reflect the whole district at the district tier, the sub below it.
+    if (gp && layers.districts?.visible) {
+      const distance = camera.position.distanceTo(controls.target);
+      const statsLevel = distance >= NCZ.DISTRICT_DISTANCE_3D ? 'district' : 'sub';
+      NCZ.DistrictInfo?.showAt?.(gp[0], gp[1], statsLevel);
+    } else NCZ.DistrictInfo?.hide?.();
   }
 
   // Advance every outline material toward its target opacity. Linear over
@@ -1497,7 +1512,7 @@ const ThreeScene = (() => {
           line.name = `district-outline-${dist.id}`;
           distGroup.add(line);
           const labelEl = addLabel(dist.name, NCZ.polygonCentroid(dist.polygon), colorHex, distGroup, 'district');
-          registerDistrictHover(dist.polygon, line, distGroup, labelEl);
+          registerDistrictHover(dist.polygon, line, distGroup, labelEl, dist.id, null);
         } else if (hasSubs) {
           // Badlands has no district polygon (and no in-game district icon). The
           // mean of its subdistrict centroids lands in a cramped/built-up spot;
@@ -1509,7 +1524,7 @@ const ThreeScene = (() => {
             // district-tier, label-only hover region pointing at the Badlands
             // label — hovering the badlands area emphasises the name.
             for (const sub of dist.subdistricts || []) {
-              if (sub.polygon?.length) registerDistrictHover(sub.polygon, null, distGroup, labelEl);
+              if (sub.polygon?.length) registerDistrictHover(sub.polygon, null, distGroup, labelEl, dist.id, null);
             }
           }
         }
@@ -1522,7 +1537,7 @@ const ThreeScene = (() => {
           const group = sub.canonical === false ? alwaysGroup : subGroup;
           group.add(line);
           const labelEl = addLabel(sub.name, NCZ.polygonCentroid(sub.polygon), colorHex, group, 'subdistrict');
-          registerDistrictHover(sub.polygon, line, group, labelEl);
+          registerDistrictHover(sub.polygon, line, group, labelEl, dist.id, sub.id);
         }
       }
 

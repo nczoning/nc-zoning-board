@@ -584,6 +584,9 @@ async function initMap() {
   // Initialise SAT district overlay
   NCZ.Overlay.init(map);
 
+  // District hover info panel (shared by both views; stats filled once mods load)
+  NCZ.DistrictInfo?.init?.();
+
   // View switching (SAT ↔ SCHEMA)
   const mapEl   = document.getElementById("map");
   const map3dEl = document.getElementById("map-3d");
@@ -1810,6 +1813,8 @@ async function initMap() {
     // is initialised (first switch to SCHEMA), but the call is safe before that and the
     // data is held internally so the layer can build pins on attach.
     NCZ.ThreeMarkers?.setMods?.(sortedMods, nexusThumbs, tagsDict);
+    // District info panel stats — attribute each mod to its district/subdistrict.
+    NCZ.DistrictInfo?.setMods?.(sortedMods);
 
     // Cluster panel wiring — both views call the same populateClusterPanel
     // helper. Registered here (inside the try block) so each handler's
