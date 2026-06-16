@@ -138,7 +138,8 @@ NCZ.DistrictInfo = (() => {
       const n = bucket.cat[key];
       if (!n) continue;
       const style = NCZ.CATEGORY_STYLES[key];
-      parts.push(`<span class="di-cat" style="color:${style.color}">${n} ${NCZ.escapeHtml(style.label)}</span>`);
+      const label = n === 1 ? style.label : `${style.label}s`; // New Locations / Overhauls / Others
+      parts.push(`<span class="di-cat" style="color:${style.color}">${n} ${NCZ.escapeHtml(label)}</span>`);
     }
     return parts.join('<span class="di-dot">·</span>');
   }
