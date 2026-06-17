@@ -357,6 +357,8 @@ const Flyover = (() => {
   let flyFrameId      = null;
   let flySeg          = 0;
   let flySegStart     = 0;
+  let _paused         = false; // spacebar pause — freezes camera + audio, keeps pins clickable
+  let _pausedSegElapsed = 0;   // ms into the current segment when paused (restored on resume)
   let _savedTheme     = null; // theme ID active when showcase started
   let _savedState     = null; // overlay checkbox + sun slider state to restore on exit
   let _onAudioEnded   = null; // reference kept so we can remove it on early exit
@@ -392,6 +394,68 @@ const Flyover = (() => {
   });
 
   function smoothstep(t) { return t * t * (3 - 2 * t); }
+
+  // ── Pause ───────────────────────────────────────────────────────────────
+  // Spacebar freezes the flyover on the current frame: camera + audio stop, but
+  // the render loop keeps re-drawing the held pose so pins stay on-screen and
+  // clickable (open a popup to read which mod a pin is). Press Space again to
+  // resume from exactly where it left off. A debugging aid as much as a feature
+  // — lets you stop on a suspect frame and identify pins directly.
+
+  let _pauseHintEl = null;
+
+  function showPauseHint(show) {
+    if (show) {
+      if (!_pauseHintEl) {
+        const map3d = document.getElementById('map-3d');
+        if (!map3d) return;
+        _pauseHintEl = document.createElement('div');
+        _pauseHintEl.textContent = '❚❚ PAUSED — click a pin to inspect · Space to resume';
+        Object.assign(_pauseHintEl.style, {
+          position: 'absolute', top: '16px', left: '50%', transform: 'translateX(-50%)',
+          padding: '6px 14px', font: '600 13px/1 Rajdhani, sans-serif', letterSpacing: '0.08em',
+          color: 'var(--white, #e6f1ff)', background: 'rgba(10,25,47,0.78)',
+          border: '1px solid var(--primary, #00f0ff)', borderRadius: '3px',
+          pointerEvents: 'none', zIndex: '11', textTransform: 'uppercase',
+        });
+        map3d.appendChild(_pauseHintEl);
+      }
+      _pauseHintEl.style.display = '';
+    } else if (_pauseHintEl) {
+      _pauseHintEl.style.display = 'none';
+    }
+  }
+
+  function removePauseHint() {
+    if (_pauseHintEl) { _pauseHintEl.remove(); _pauseHintEl = null; }
+  }
+
+  function togglePause() {
+    if (!flyActive) return;
+    _paused = !_paused;
+    if (_paused) {
+      _pausedSegElapsed = performance.now() - flySegStart;
+      if (_audio) _audio.pause();
+      showPauseHint(true);
+    } else {
+      // Shift the segment clock forward by the time spent paused so the path
+      // continues from the exact frame it stopped on (segment progress is
+      // performance.now()-based, independent of audio time).
+      flySegStart = performance.now() - _pausedSegElapsed;
+      if (_audio) _audio.play().catch(() => {}); // muted when audio:false; still drives beats/sun clock
+      showPauseHint(false);
+    }
+  }
+
+  // Spacebar toggles pause. The shadow-trace marker logger (above) also binds
+  // Space, but only fires when NCZ.__shadowTrace is on — guard here so the two
+  // never both act on one keypress.
+  window.addEventListener('keydown', (e) => {
+    if (!flyActive || NCZ.__shadowTrace) return;
+    if (e.code !== 'Space' && e.key !== ' ') return;
+    e.preventDefault();
+    togglePause();
+  });
 
   // ── Public API ────────────────────────────────────────────────────────────
 
@@ -503,6 +567,7 @@ const Flyover = (() => {
 
     flySeg      = 0;
     flySegStart = performance.now();
+    _paused     = false;
     flyoverLoop();
   }
 
@@ -531,6 +596,8 @@ const Flyover = (() => {
       // is active).
       NCZ.ThreeMarkers?.setActiveCamera?.(null);
       clearLayerReveal();
+      _paused = false;
+      removePauseHint();
       if (_audio) {
         _audio.pause();
         _audio.currentTime = 0;
@@ -599,6 +666,18 @@ const Flyover = (() => {
   function flyoverLoop() {
     if (!flyActive) return;
     flyFrameId = requestAnimationFrame(flyoverLoop);
+
+    // Paused: hold the current pose. Re-render every frame so pins stay drawn
+    // and clickable (popup placement tracks the frozen camera), but advance
+    // nothing — no waypoint progression, no sun/beat updates.
+    if (_paused) {
+      flyCamera.position.copy(_flyPos);
+      flyCamera.up.set(0, 1, 0);
+      flyCamera.lookAt(_flyTar);
+      NCZ.ThreeScene.renderFrame(flyCamera);
+      NCZ.ThreeMarkers?.render?.();
+      return;
+    }
 
     const now     = performance.now();
     const nextSeg = flySeg + 1;
@@ -678,7 +757,7 @@ const Flyover = (() => {
     flyCamera.updateProjectionMatrix();
   });
 
-  return { startFlyover, stopFlyover };
+  return { startFlyover, stopFlyover, togglePause };
 
 })();
 
