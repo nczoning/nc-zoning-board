@@ -198,6 +198,15 @@ const ThreeScene = (() => {
   // startRenderLoop) automatically refresh the union-cull's second frustum.
   function updateShadowFrustumUniforms() {
     if (!_dirLight) return;
+    if (!_shadowsOn) {
+      // Shadows off → no off-screen caster needs to survive the cull for shadow
+      // reasons. Poison the shadow frustum with a degenerate plane: `dot(plane.xyz,
+      // center) + plane.w` = -1e30, so the cull's `dist >= -radius` test fails for
+      // every instance → `shadowVisible` is always false and only camera-visible
+      // instances draw. Pure uniform write; the compiled cullFn is untouched.
+      _shadowFrustumPlaneUniforms[0].value.set(0, 0, 0, -1e30);
+      return;
+    }
     const shadowCam = _dirLight.shadow.camera;
     shadowCam.position.copy(_dirLight.position);
     shadowCam.lookAt(_dirLight.target.position);
@@ -661,11 +670,15 @@ const ThreeScene = (() => {
     renderer.setSize(container.clientWidth, container.clientHeight, false);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
-    // Render-on-demand already decides *whether* a frame renders; this decides
-    // whether the shadow map re-renders within a frame. updateShadowCamera()
-    // (camera moved) and setSunPosition() (sun moved) raise needsUpdate; renders
-    // that change nothing geometric (theme tweens, pin hover) skip the shadow pass.
-    renderer.shadowMap.autoUpdate = false;
+    // Shadow render-on-demand is driven on the LIGHT, not here. Under
+    // WebGPURenderer the shadow pass is gated by
+    // `light.shadow.needsUpdate || light.shadow.autoUpdate`, and
+    // renderer.shadowMap.autoUpdate/needsUpdate are inert (the WebGPU
+    // renderer.shadowMap object only carries { enabled, transmitted, type }).
+    // We hold _dirLight.shadow.autoUpdate = false (set just after the light is
+    // created) and flag re-renders via flagShadowUpdate(), so the 4096² depth
+    // pass only re-renders when a caster or the sun/shadow-camera actually moves —
+    // theme tweens, pin hovers and other non-geometric frames skip it.
     // Take the canvas out of document flow so its pixel-buffer dimensions
     // can never push or displace surrounding layout elements.
     // inset:0 stretches it to fill #map-3d on all four sides — no explicit
@@ -721,6 +734,10 @@ const ThreeScene = (() => {
     _dirLight.shadow.camera.far  = NCZ.SHADOW_CAM_FAR; // orthographic ⇒ a wide range costs no precision
     _dirLight.shadow.camera.name = 'sun-shadow-cam';
     _dirLight.shadow.bias        = NCZ.SHADOW_BIAS;        // 0 — native depth32float + reverse-Z need no depth cushion
+    // The real WebGPU shadow-pass gate: hold autoUpdate off and re-render only when
+    // flagShadowUpdate() raises needsUpdate (caster/sun/shadow-cam moved). While the
+    // Shadows overlay is off, flagShadowUpdate() no-ops → the depth pass never runs.
+    _dirLight.shadow.autoUpdate  = false;
     // normalBias is set per-frame by updateShadowCamera (scaled with the footprint).
     _dirLight.shadow.intensity   = _shadowsOn ? _shadowIntensity : 0;
     _dirLight.target.name = 'sun-target';
@@ -1641,6 +1658,7 @@ const ThreeScene = (() => {
 
       layers.landmarks = group;
       scene.add(group);
+      flagShadowUpdate();   // new shadow casters → re-render the depth map (loads after the post-terrain refit, so nothing else flags it)
       requestRender();
       freezeStatic(group);
       console.log(`[NCZ] Landmarks: ${LANDMARK_META.length} placed`);
@@ -1875,6 +1893,7 @@ const ThreeScene = (() => {
 
       layers.buildings = group;
       scene.add(group);
+      flagShadowUpdate();   // new shadow casters → re-render the depth map (loads after the post-terrain refit, so nothing else flags it)
       requestRender();
       freezeStatic(group);
       console.log(`[NCZ] Buildings: ${DISTRICT_META.length} districts loaded`);
@@ -3053,7 +3072,7 @@ const ThreeScene = (() => {
     // target = visible-ground centre; here we just keep the light up the sun ray
     // from it). Orthographic ⇒ only the direction matters for shading.
     _dirLight.position.copy(_dirLight.target.position).addScaledVector(_sunDir, NCZ.SUN_DIST);
-    if (renderer) renderer.shadowMap.needsUpdate = true;   // sun moved ⇒ re-render the shadow map
+    flagShadowUpdate();   // sun moved ⇒ re-render the shadow depth map next frame (no-op while shadows off)
 
     // Sun + ambient colour and intensity are fixed (calibrated to 3dmap.envparam,
     // set once at light construction) — the in-game map has no time-of-day
@@ -3190,20 +3209,48 @@ const ThreeScene = (() => {
     // building indirect-draw buffer so their shadows land in view.
     updateShadowFrustumUniforms();
 
-    if (renderer) renderer.shadowMap.needsUpdate = true;  // shadowMap.autoUpdate is off
+    flagShadowUpdate();  // shadow camera/footprint moved ⇒ re-render the depth map next frame (no-op while shadows off)
+  }
+
+  // Single chokepoint for "the shadow silhouette changed — re-render the depth map
+  // next frame." Under WebGPURenderer the shadow pass is gated by
+  // light.shadow.needsUpdate (autoUpdate is held false at init), so this is the only
+  // thing that schedules a shadow render. Gated on _shadowsOn: while the Shadows
+  // overlay is off we never flag, so ShadowNode.updateBefore() early-returns and the
+  // 4096² depth pass is skipped entirely. Call it wherever a shadow CASTER or the
+  // sun/shadow-camera moves — updateShadowCamera (camera/resize/terrain/flyover/
+  // re-enable), setSunPosition, async caster loads (buildings, landmarks). NOT on
+  // theme/colour changes: shadow depth is geometry-only, so those frames skip it.
+  function flagShadowUpdate() {
+    if (_shadowsOn && _dirLight) _dirLight.shadow.needsUpdate = true;
   }
 
   function setShadowsEnabled(enabled) {
     _shadowsOn = enabled;
-    // Toggle shadow *intensity*, not castShadow or renderer.shadowMap.enabled —
-    // either of those tears the shadow depth texture down mid-frame and crashes
-    // WebGPURenderer ("Cannot read properties of null (reading 'depthTexture')").
-    // intensity 0 keeps the texture alive but contributes no darkening; ShadowNode
-    // reads it via a live `reference` node, so it applies next render with no
-    // recompile. (The shadow pass still runs at intensity 0 — a visual switch,
-    // not a perf one; disabling the pass safely under WebGPU is deferred.)
-    // Multiply the *stored* strength (which the tuner may have changed) by 1 or 0.
-    if (_dirLight) _dirLight.shadow.intensity = enabled ? _shadowIntensity : 0;
+    // Genuinely SKIP the shadow depth pass when off — not just dim it — without
+    // tearing down the depth texture (toggling castShadow / renderer.shadowMap.
+    // enabled does that and crashes WebGPURenderer: "Cannot read properties of
+    // null (reading 'depthTexture')").
+    //
+    // We hold _dirLight.shadow.autoUpdate = false permanently (init) and drive
+    // re-renders through flagShadowUpdate(), which no-ops while _shadowsOn is false.
+    // So turning shadows off is just "stop flagging + drop any pending flag":
+    // ShadowNode.updateBefore() then early-returns every frame and updateShadow()
+    // never runs. The depthTexture stays intact (sampled at intensity 0 → no visual,
+    // no recompile, no crash).
+    //
+    // Two more savings while off: intensity 0 zeroes residual sampling so the look is
+    // correct immediately, and updateShadowFrustumUniforms poisons the cull's shadow
+    // frustum so off-screen casters stop being drawn into the main pass.
+    if (_dirLight) {
+      _dirLight.shadow.intensity = enabled ? _shadowIntensity : 0;
+      if (!enabled) _dirLight.shadow.needsUpdate = false;  // drop any pending re-render so the pass truly stops
+    }
+    if (enabled && renderer) {
+      updateShadowCamera();          // refit + restore the real shadow frustum (un-poison) + flagShadowUpdate → renders next frame
+    } else {
+      updateShadowFrustumUniforms(); // poison the cull frustum now, don't wait for a camera move
+    }
     requestRender();
   }
 
@@ -3261,9 +3308,12 @@ const ThreeScene = (() => {
       },
       rend: {
         smEnabled:    renderer.shadowMap.enabled,
-        smAutoUpdate: renderer.shadowMap.autoUpdate,
-        smNeedsUpd:   renderer.shadowMap.needsUpdate,
         smType:       renderer.shadowMap.type,
+        // Real WebGPU shadow-pass gate lives on the light, not renderer.shadowMap
+        // (whose autoUpdate/needsUpdate are inert here). autoUpdate is held false;
+        // needsUpdate true means a re-render is queued for the next frame.
+        lightAutoUpd:  _dirLight.shadow.autoUpdate,
+        lightNeedsUpd: _dirLight.shadow.needsUpdate,
       },
       hemi: _hemiLight ? {
         intens: +_hemiLight.intensity.toFixed(2),
