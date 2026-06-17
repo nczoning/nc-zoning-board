@@ -399,11 +399,14 @@ const ThreeScene = (() => {
   function makeHillshadeMaterial(colorVar, fallback, extra = {}, brightness = 1) {
     const mat = new THREE.MeshLambertNodeMaterial({
       color: readThemeColor(colorVar, fallback),
-      // Smooth (interpolated vertex) normals — the terrain/water/cliffs GLBs
-      // ship NORMAL data, so the hillshade reads as smooth slopes. `flatShading`
-      // here discarded those normals for per-face ones; harmless while the scene
-      // was lit near-flat, but the decoded directional-sun pipeline (#694) made
-      // every triangle facet visible. "Hillshade" wants smooth shading.
+      // INTENTIONAL faceted look — do NOT "fix" this. `flatShading` discards
+      // the GLBs' (present) smooth vertex normals for per-face ones, so the
+      // directional sun (#694) renders the terrain/cliffs as crisp triangle
+      // facets. PR #741 removed this for "correct" smooth hillshading; a 12–3
+      // community vote (2–2 among the core team) preferred the faceted version,
+      // so it was restored as the deliberate style. Smooth shading is the
+      // one-line opposite (drop this flag) if the call is ever revisited.
+      flatShading: true,
       side: THREE.DoubleSide,
       ...extra,
     });
