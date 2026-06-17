@@ -39,8 +39,8 @@ NCZ.cetToLeaflet = function (cetX, cetY) {
   return [lat, lng];
 };
 
-// Inverse of cetToLeaflet: Leaflet [lat, lng] → CET [x, y]. Used to resolve the
-// district/subdistrict under the 2D cursor against the CET polygons.
+// Exact inverse of cetToLeaflet: Leaflet [lat, lng] → CET [x, y]. Used to
+// resolve the district/subdistrict under the 2D cursor against the CET polygons.
 NCZ.leafletToCet = function (lat, lng) {
   const cetX = lng / 256 * (NCZ.WORLD_MAX_X - NCZ.WORLD_MIN_X) + NCZ.WORLD_MIN_X;
   const cetY = lat / 256 * (NCZ.WORLD_MAX_Y - NCZ.WORLD_MIN_Y) + NCZ.WORLD_MAX_Y;
@@ -55,13 +55,6 @@ NCZ.leafletDistanceMeters = function (a, b) {
   const deltaCetY = deltaLat / NCZ.CET_TO_LEAFLET_Y_SCALE;
   const distanceCetUnits = Math.hypot(deltaCetX, deltaCetY);
   return distanceCetUnits / NCZ.CET_UNITS_PER_METER;
-};
-
-// Inverse: Leaflet [lat, lng] → CET (x, y). Exact inverse of cetToLeaflet.
-NCZ.leafletToCet = function (lat, lng) {
-  const cetX = NCZ.WORLD_MIN_X + (lng / 256) * (NCZ.WORLD_MAX_X - NCZ.WORLD_MIN_X);
-  const cetY = NCZ.WORLD_MAX_Y + (lat / 256) * (NCZ.WORLD_MAX_Y - NCZ.WORLD_MIN_Y);
-  return [cetX, cetY];
 };
 
 // View-sync bridge between the 2D Leaflet map and the 3D perspective camera.
