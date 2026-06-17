@@ -2434,7 +2434,9 @@ const ThreeScene = (() => {
       lines:      renderer.info.render.lines,
       geometries: renderer.info.memory.geometries,
       textures:   renderer.info.memory.textures,
-      programs:   renderer.info.programs ? renderer.info.programs.length : 0,
+      // WebGPU tracks compiled pipelines as a count on info.memory.programs;
+      // the WebGL2-era info.programs array doesn't exist on this backend.
+      programs:   renderer.info.memory.programs ?? 0,
     };
   }
 
@@ -2566,9 +2568,9 @@ const ThreeScene = (() => {
         // Indirect-storage-buffer bytes — confirms Phase 2B's draw buffers
         // (5 u32s × 8 districts = 160 bytes minimum) are allocated.
         indirectBufferBytes: renderer.info.memory.indirectStorageAttributesSize ?? 0,
-        // `info.programs` is a WebGL2-only array; WebGPU compiles pipelines
-        // lazily and doesn't expose a comparable count.
-        programs:     renderer.info.programs ? renderer.info.programs.length : null,
+        // WebGPU exposes the compiled-pipeline count at info.memory.programs
+        // (the WebGL2-era info.programs array doesn't exist on this backend).
+        programs:     renderer.info.memory.programs ?? null,
       } : null,
       rendererSettings: renderer ? {
         pixelRatio:     renderer.getPixelRatio(),
