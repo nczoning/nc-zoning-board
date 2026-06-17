@@ -54,6 +54,8 @@ const ThreeMarkers = (() => {
   let _clusterLayer = null;
   const _clusterPool = [];          // CSS2DObject[] — reused across recomputes
   let _filterVisibleIds = new Set();
+  let _unclusteredMode = false;     // showcase: every filter-visible pin shown
+                                    // individually, cluster bubbles suppressed
   let _recomputeFrame = null;
   let _onClusterClick = null;       // cluster-click callback (set by app.js)
   let _onClustersChanged = null;    // recompute-fired callback (set by app.js)
@@ -388,6 +390,17 @@ const ThreeMarkers = (() => {
     if (!_clusterLayer || !_schemaCamera || !container || !controls) return;
     const w = container.clientWidth;
     if (!w) return;
+
+    // Showcase (unclustered) mode: keep every filter-visible pin individual and
+    // bubbles hidden. Synchronous recompute callers — notably openPopup /
+    // closePopup on a pin click — must NOT rebuild clusters here, or clicking a
+    // pin mid-cinematic snaps the scene back into number badges.
+    if (_unclusteredMode) {
+      pins.forEach((pin, id) => { pin.visible = _filterVisibleIds.has(id); });
+      for (const c of _clusterPool) c.visible = false;
+      _redraw();
+      return;
+    }
 
     // Convert "PIN_3D_CLUSTER_RADIUS_PX equivalent at current camera distance"
     // into world units. Perspective worldPerPixel at the *centre of screen*
@@ -796,10 +809,39 @@ const ThreeMarkers = (() => {
     card.classList.toggle('ncz-popup-bottom', flip);
   }
 
+  // CSS2DRenderer culls a marker when its projected point falls outside the
+  // NDC depth range (`z >= -1 && z <= 1`) — a test that assumes a STANDARD
+  // forward projection. Our WebGPU renderer runs with `reversedDepthBuffer:true`,
+  // so the renderer rebuilds `camera.projectionMatrix` with reversed Z; under
+  // it, behind-camera points land at z≈[-1,0) and slip through the test, getting
+  // mirror-projected into view as phantom "pins in the sky" (worst in the
+  // showcase's wide, low, away-facing sweeps where much of the city sits behind
+  // the camera). Reversed-Z only rewrites the projection's z row, never x/y, so
+  // we hand CSS2DRenderer a standard-projection clone for its depth-less pass:
+  // on-screen pin positions are byte-identical, but the behind-camera cull works.
+  // Same reversed-Z family as the Line2.trimSegment near-plane bug.
+  const _stdProj = new THREE.Matrix4();
+  function standardProjectionFor(cam) {
+    const near = cam.near, far = cam.far;
+    const top    = near * Math.tan((Math.PI / 360) * cam.fov) / (cam.zoom || 1);
+    const height = 2 * top;
+    const width  = cam.aspect * height;
+    const left   = -0.5 * width;
+    return _stdProj.makePerspective(
+      left, left + width, top, top - height, near, far, THREE.WebGLCoordinateSystem,
+    );
+  }
+
   function render() {
     if (!cssRenderer || !scene || !_schemaCamera) return;
     updateFlyTween();
-    cssRenderer.render(scene, getCam());
+    const cam = getCam();
+    // Swap in a standard projection for the CSS2D pass, then restore the
+    // renderer's reversed-Z matrix so nothing else sees the substitution.
+    const savedProj = cam.projectionMatrix;
+    cam.projectionMatrix = standardProjectionFor(cam);
+    cssRenderer.render(scene, cam);
+    cam.projectionMatrix = savedProj;
     if (popup) updatePopupPlacement();
   }
 
@@ -848,6 +890,7 @@ const ThreeMarkers = (() => {
   // (typically issued by setActiveCamera(null) on showcase exit), which
   // rebuilds the correct visible/clustered state from scratch.
   function setUnclusteredMode(active) {
+    _unclusteredMode = active;
     if (active) {
       pins.forEach((pin, modId) => { pin.visible = _filterVisibleIds.has(modId); });
       if (_clusterLayer) _clusterLayer.children.forEach(c => { c.visible = false; });

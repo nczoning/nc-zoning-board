@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Three.js 3D Schematic Map (in progress — dev branch)
 
+#### Fixed: showcase pins floating in the sky
+
+- During the showcase with pins enabled, pins behind the camera (e.g. the city while a low sweep faces away from it) no longer ghost into the sky. CSS2DRenderer's behind-camera cull assumed a standard projection and broke under the renderer's reversed-Z depth; the marker pass now uses a standard-projection clone of the camera so culling is correct (on-screen pin positions unchanged).
+- Clicking a pin during the showcase no longer re-enables clustering — it stays in individual-pin mode.
+
 #### District hover info panel
 
 - Hovering a district shows a readout in the top-right (parity with the in-game world map): district icon + name, the subdistrict under the cursor, and location stats for that area — count, category breakdown, share of all locations, and how many were recently updated. Works in both the 3D (SCHEMA) and 2D (SAT) views.
