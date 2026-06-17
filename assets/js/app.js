@@ -664,6 +664,28 @@ async function initMap() {
     onViewSwitched?.(viewName);
   }
 
+  // Frame the 2D map at the view equivalent to the *default* 3D framing (the E5
+  // intro rest pose). Used by the WebGPU fallback, where the 3D camera never
+  // gets built — without this the map sits at its init fitBounds(mapBounds)
+  // (the whole 16k image, framing nothing). Runs the intro rest constants
+  // through the same horizontal-extent transform a real SCHEMA→SAT switch uses,
+  // so the fallback lands exactly where switching to 2D from the default 3D view
+  // would. Must be called while #map is visible (getSize() reads 0 otherwise).
+  function applyDefaultSatView() {
+    const size = map.getSize();
+    if (!size.x || !size.y) return;
+    const [cetX, cetY] = NCZ.SCHEMA_INTRO_REST_CENTER;
+    const { lat, lng, zoom } = NCZ.cameraExtentToLeafletView({
+      cetX, cetY,
+      distance: NCZ.SCHEMA_INTRO_REST_DISTANCE,
+      aspect3d: size.x / size.y,
+      fov: NCZ.SCHEMA_CAMERA_FOV,
+      leafletPxW: size.x,
+    });
+    const z = NCZ.clamp(Math.round(zoom), map.getMinZoom(), map.getMaxZoom());
+    map.setView([lat, lng], z, { animate: false });
+  }
+
   // WebGPU unavailable → the 3D view can't render correctly. Lock it off and
   // present the fully-functional 2D Leaflet map plus a one-time notice.
   // Idempotent: only the first call does anything.
@@ -672,6 +694,10 @@ async function initMap() {
     webgpuFallbackDone = true;
     threeDAvailable = false;
     switchView("sat");
+    // switchView's SAT branch can't carry a view across (no 3D camera exists on
+    // the fallback), so it leaves the init fitBounds in place — override it with
+    // the default 3D-equivalent framing now that #map is laid out.
+    applyDefaultSatView();
     const schemaBtn = document.querySelector('.map-view-btn[data-view="schema"]');
     if (schemaBtn) {
       schemaBtn.disabled = true;
@@ -2116,14 +2142,11 @@ async function initMap() {
         modListEl.appendChild(li);
       });
 
-    // Fit map to plotted pins
-    const pinBounds = L.latLngBounds(
-      mods.map((mod) => NCZ.cetToLeaflet(mod.coordinates[0], mod.coordinates[1])),
-    );
-    if (pinBounds.isValid()) {
-      map.invalidateSize();
-      map.fitBounds(pinBounds, { padding: [50, 50], maxZoom: 5 });
-    }
+    // (No initial fit-to-pins here.) The 2D map starts hidden under the 3D view;
+    // its visible framing comes from view-sync on a SCHEMA→SAT switch, or from
+    // applyDefaultSatView() on the WebGPU fallback. A fit-to-all-pins default
+    // squashed the city into a corner (badlands outliers stretch the bounds) and
+    // only ever showed on the fallback — superseded by the 3D-equivalent default.
 
     // Deep-link: open pin if ?mod= is in the URL
     const deepLinkParam = new URLSearchParams(window.location.search).get(NCZ.URL_PARAM_MOD);
