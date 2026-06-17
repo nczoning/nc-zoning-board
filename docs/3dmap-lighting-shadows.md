@@ -41,6 +41,34 @@ _dirLight.shadow.bias         = NCZ.SHADOW_BIAS;       // -0.0005
 _dirLight.shadow.normalBias   = NCZ.SHADOW_NORMAL_BIAS; // 0.01
 ```
 
+### Shadow render-on-demand (WebGPU) — the gate is on the *light*
+
+> ⚠️ Under `WebGPURenderer`, `renderer.shadowMap` only carries `{ enabled, transmitted,
+> type }`. **`renderer.shadowMap.autoUpdate` and `.needsUpdate` are inert** (silent no-ops).
+> The per-light shadow pass is gated inside `ShadowNode.updateBefore()` by
+> `light.shadow.needsUpdate || light.shadow.autoUpdate`.
+
+So shadow render-on-demand is driven on the light:
+
+```javascript
+_dirLight.shadow.autoUpdate = false;            // permanent — the real WebGPU gate
+
+function flagShadowUpdate() {                    // single chokepoint
+  if (_shadowsOn && _dirLight) _dirLight.shadow.needsUpdate = true;
+}
+```
+
+`flagShadowUpdate()` is called only when the shadow silhouette actually changes —
+`setSunPosition()` (sun moved), `updateShadowCamera()` (camera/resize/terrain/flyover/
+re-enable), and **the async caster loads** (`loadBuildings`, `loadLandmarks` — they finish
+after the post-terrain refit, so nothing else flags them). It is **not** called on
+theme/colour transitions (shadow depth is geometry-only). The result: the 4096² depth pass
+re-renders only on shadow-relevant frames, and the **Shadows toggle off** simply stops
+flagging → `updateBefore()` early-returns → the pass is skipped (depth texture left intact,
+no `castShadow`/`enabled` teardown → no `depthTexture` crash). See the wiki learning
+*renderer.shadowMap flags inert under WebGPU* and decision *render-on-demand shadows on the
+light* for the full rationale and trigger audit.
+
 ### Dynamic shadow frustum
 
 The shadow frustum is not fixed — it resizes every time the camera changes to concentrate the shadow map on the visible area. This gives dramatically sharper shadows when zoomed in.
