@@ -37,3 +37,12 @@ The value must match a `DISTRICT_META` entry name in `assets/js/three-scene.js`:
 
 `my_district` / `ugly_building` only render when the **Fixed** asset set is
 active (Settings → Map data). See [`3dmap-fixed-assets.md`](3dmap-fixed-assets.md).
+
+## Other debug aids (not URL flags)
+
+Not query params, but the same family of developer/diagnostic tools — catalogued
+here so they're easy to find.
+
+| Aid | How | What it does | Read in |
+| --- | --- | --- | --- |
+| Showcase pause | `Space` during the showcase | Freezes the flyover on the current frame (camera + audio stop) while keeping pins clickable — open a pin's popup to identify which mod it is on a suspect frame. `Space` again resumes from the same point. No on-screen UI advertises it; intended for the maintainer or "screenshot this frame for me" requests. | `flyover.js` |
