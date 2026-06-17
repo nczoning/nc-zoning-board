@@ -2,25 +2,54 @@
 
 Reference for the sun/shadow/lighting system in the Three.js schematic view.
 
+> **Renderer:** this scene runs on `WebGPURenderer` (three r184) with TSL node
+> materials. There is **no `onBeforeCompile` / GLSL-chunk injection** and no
+> `MeshLambertMaterial` — every material is a `*NodeMaterial`. Shadow state lives on
+> the **light** (`light.shadow.*`), not on `renderer.shadowMap` (which under WebGPU
+> only carries `{ enabled, transmitted, type }`).
+
 ---
 
 ## Sun and Ambient Light
 
-The scene uses a single `DirectionalLight` (sun) and an `AmbientLight`.
+Lighting is calibrated to the in-game 3D map's environment file
+(`base/weather/24h_basic/3dmap.envparam`), which lights the world map with a fixed
+low sun + a 6-direction ambient cube through an ACES tonemap. We reproduce that with
+**one `DirectionalLight` (sun) + one `HemisphereLight` (ambient)**, both at fixed,
+calibrated colour and intensity — the in-game map has no time-of-day variation.
 
 ```javascript
-_dirLight = new THREE.DirectionalLight(0xffffff, 1.0 - NCZ.AMBIENT_INTENSITY);
-_ambLight = new THREE.AmbientLight(0xffffff, NCZ.AMBIENT_INTENSITY);
+// Sun — warm white, fixed intensity (envparam LightAreaSettings.sunColor)
+_dirLight = new THREE.DirectionalLight(0xffffff, NCZ.SUN_INTENSITY); // 3.00
+_dirLight.color.setRGB(...NCZ.SUN_COLOR_RGB, THREE.LinearSRGBColorSpace); // [0.975, 0.869, 0.774]
+
+// Ambient — the envparam ambient cube collapses to a hemisphere:
+// 5 bright cool-white faces (sky+sides) over 1 dim blue face (ground)
+_hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, NCZ.AMBIENT_INTENSITY); // 0.405
+_hemiLight.color.setRGB(...NCZ.AMBIENT_SKY_RGB, THREE.LinearSRGBColorSpace);    // [0.796, 0.895, 1.0]
+_hemiLight.groundColor.setRGB(...NCZ.AMBIENT_GROUND_RGB, THREE.LinearSRGBColorSpace); // [0.566, 0.766, 1.0]
 ```
+
+Sun : ambient ≈ 7.4 : 1 (envelope-fit). Cast shadows are layered on top as an
+intentional artistic choice — the in-game map has them disabled.
 
 ### Updating sun position
 
-`NCZ.ThreeScene.setSunPosition(azimuthRad, altitudeRad)` repositions the light and updates:
+`NCZ.ThreeScene.setSunPosition(azimuthRad, altitudeRad)` moves **only the sun's
+direction** — colour and intensity are fixed at construction. The slider/showcase
+sweep the direction so shadows move and faces relight; the look stays calibrated.
 
-- Light position and intensity (dims near horizon, full above ~30°)
-- Light colour (warm orange at horizon → neutral white above ~20°)
-- `_dirLight.castShadow` (disabled below 5° elevation to avoid degenerate shadow projections)
-- Current azimuth/altitude stored in `_sunAz` / `_sunEl` for `getCameraState()`
+It:
+
+- Stores the requested az/el in `_sunAz` / `_sunEl` **before** the lights-exist guard
+  (so an early call before `init()` still propagates to the UI-sync poll — see
+  PR #733, the cold-load sun-init race)
+- Recomputes `_sunDir` and re-places the light `SUN_DIST` up the sun ray from the
+  shadow camera's target (orthographic ⇒ only direction matters for shading)
+- **Floors the sun direction's Y at ~6° elevation** (`Math.max(0.1, sin(el))`) so the
+  shadow camera's `lookAt` never goes degenerate-horizontal. The visible sun *sphere*
+  (showcase only) uses the unclamped elevation so it still sets at the horizon.
+- Calls `flagShadowUpdate()` (sun moved ⇒ re-render the depth map next frame)
 
 The showcase flyover drives `setSunPosition()` automatically during its animation.
 
@@ -28,18 +57,25 @@ The showcase flyover drives `setSunPosition()` automatically during its animatio
 
 ## Shadow Map Setup
 
-**Shadows are enabled by default.** The UI checkbox reflects and controls the state via `setLayerVisibility('shadows', true/false)`.
+**Shadows are enabled by default.** The UI checkbox controls the state via
+`setLayerVisibility('shadows', true/false)` → `setShadowsEnabled()`.
 
 ```javascript
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
 
+_dirLight.castShadow         = true;
 _dirLight.shadow.mapSize.set(NCZ.SHADOW_MAP_SIZE, NCZ.SHADOW_MAP_SIZE); // 4096²
-_dirLight.shadow.camera.near  = NCZ.SHADOW_CAM_NEAR;  //    10
-_dirLight.shadow.camera.far   = NCZ.SHADOW_CAM_FAR;   // 25000
-_dirLight.shadow.bias         = NCZ.SHADOW_BIAS;       // -0.0005
-_dirLight.shadow.normalBias   = NCZ.SHADOW_NORMAL_BIAS; // 0.01
+_dirLight.shadow.camera.near = NCZ.SHADOW_CAM_NEAR;  //     1
+_dirLight.shadow.camera.far  = NCZ.SHADOW_CAM_FAR;   // 40000
+_dirLight.shadow.bias        = NCZ.SHADOW_BIAS;      //     0
+// normalBias is set per-frame by updateShadowCamera (scaled with the footprint)
 ```
+
+`SHADOW_BIAS` is **0**: the native `depth32float` shadow map + reverse-Z buffer have
+ample depth precision, so the old WebGL RGBA8-packed-depth cushion (`-0.0005`) is no
+longer needed. The geometric self-shadow (a shadow texel covering a depth range) is
+handled entirely by the **normal bias** instead.
 
 ### Shadow render-on-demand (WebGPU) — the gate is on the *light*
 
@@ -65,35 +101,47 @@ after the post-terrain refit, so nothing else flags them). It is **not** called 
 theme/colour transitions (shadow depth is geometry-only). The result: the 4096² depth pass
 re-renders only on shadow-relevant frames, and the **Shadows toggle off** simply stops
 flagging → `updateBefore()` early-returns → the pass is skipped (depth texture left intact,
-no `castShadow`/`enabled` teardown → no `depthTexture` crash). See the wiki learning
-*renderer.shadowMap flags inert under WebGPU* and decision *render-on-demand shadows on the
-light* for the full rationale and trigger audit.
+no `castShadow`/`enabled` teardown → no `depthTexture` crash; see `setShadowsEnabled()`).
+Off also sets `shadow.intensity = 0` and poisons the cull's shadow frustum so off-screen
+casters stop being drawn into the main pass. (PR #751.)
 
-### Dynamic shadow frustum
+### Dynamic shadow camera
 
-The shadow frustum is not fixed — it resizes every time the camera changes to concentrate the shadow map on the visible area. This gives dramatically sharper shadows when zoomed in.
+The single shadow camera (an `OrthographicCamera`) is **re-fitted every camera change**
+in `updateShadowCamera(renderCam = camera)` to concentrate the 4096² map on exactly the
+visible-ground footprint — far sharper shadows when zoomed in. Two fit paths, because the
+camera shapes differ too much to share one:
+
+- **Schema cam** (interactive top-down perspective): **rect-fit** — ray-cast the view's
+  NDC corners to the `Y=0` ground plane, take the bbox. Tight and sharp; always succeeds
+  because `controls` constrain tilt below horizontal.
+- **Showcase fly cam** (cinematic, often near-horizontal): **fixed-size box** centred
+  where the camera's forward ray meets the ground, with `tHit` capped. Constant size →
+  no per-frame "shadow box pop" as the cinematic camera crosses the horizon.
 
 ```javascript
-function updateShadowFrustum() {
-  // Scale to visible area + tilt margin
-  const visibleHalf = Math.max(camera.right, camera.top) / camera.zoom;
-  const tilt = controls.getPolarAngle();
-  const tiltFactor = Math.max(1, 1 / Math.max(0.2, Math.cos(tilt)));
-  const frustum = Math.max(NCZ.SHADOW_FRUSTUM_MIN, visibleHalf * 3.0 * tiltFactor);
+function updateShadowCamera(renderCam = camera) {
+  // half = min(0.5 * hypot(W, D), SHADOW_MAX_DISTANCE) + SHADOW_GROUND_MARGIN  (schema)
+  //      = SHADOW_MAX_DISTANCE + SHADOW_GROUND_MARGIN                          (fly cam)
+  // center is clamped to world bounds (the scene is finite; a centre past the
+  // edge would waste half the map on empty void)
+  shadowCam.left = -half; shadowCam.right = half;
+  shadowCam.top  =  half; shadowCam.bottom = -half;
+  shadowCam.near = NCZ.SHADOW_CAM_NEAR;
+  shadowCam.far  = NCZ.SHADOW_CAM_FAR;
+  shadowCam.updateProjectionMatrix();
 
-  // Update shadow camera frustum
-  _dirLight.shadow.camera.[left/right/top/bottom] = ±frustum;
-  _dirLight.shadow.camera.updateProjectionMatrix();
+  // normalBias in WORLD units = N texels × (2·half / mapSize) — constant texel
+  // offset at every zoom (a constant world bias is too small zoomed out → acne,
+  // too large zoomed in → shadows detach)
+  _dirLight.shadow.normalBias = NCZ.SHADOW_NORMAL_BIAS_TEXELS * (2 * half / NCZ.SHADOW_MAP_SIZE);
 
-  // Track camera pan target (moves light + target together to preserve sun direction)
-  const delta = controls.target - _dirLight.target.position;
-  _dirLight.position += delta;
-  _dirLight.target.position.copy(controls.target);
+  // Keep the sun light + target SUN_DIST up the sun ray from the footprint centre
+  _dirLight.target.position.copy(center);
+  _dirLight.position.copy(center).addScaledVector(_sunDir, NCZ.SUN_DIST);
 
-  // Scale bias with frustum to reduce peter panning at high zoom
-  const biasScale = min(1, frustum / NCZ.SHADOW_FRUSTUM);
-  _dirLight.shadow.bias       = NCZ.SHADOW_BIAS       * biasScale;
-  _dirLight.shadow.normalBias = NCZ.SHADOW_NORMAL_BIAS * biasScale;
+  updateShadowFrustumUniforms(); // refresh the planes the building union-cull reads
+  flagShadowUpdate();            // footprint moved ⇒ re-render next frame (no-op while off)
 }
 ```
 
@@ -102,40 +150,65 @@ Key constants:
 | Constant | Value | Purpose |
 | --- | --- | --- |
 | `SHADOW_MAP_SIZE` | 4096 | Shadow map resolution (4096² texels) |
-| `SHADOW_FRUSTUM` | 7000 | Max frustum radius at full zoom-out |
-| `SHADOW_FRUSTUM_MIN` | 400 | Minimum frustum radius (prevents over-concentration) |
-| `SHADOW_BIAS` | -0.0005 | Base depth bias (scales down at high zoom) |
-| `SHADOW_NORMAL_BIAS` | 0.01 | Normal-direction bias (scales down at high zoom) |
+| `SHADOW_MAX_DISTANCE` | 8600 | Cap on the footprint half-side (≈ world half-diagonal; nothing renders past the world bounds) |
+| `SHADOW_GROUND_MARGIN` | 600 | Footprint extends this far past the visible ground (building heights + a sliver of off-screen casters) |
+| `SHADOW_CAM_NEAR` | 1 | Shadow camera near clip |
+| `SHADOW_CAM_FAR` | 40000 | Far clip — the camera sits `SUN_DIST` up the sun ray, so this must reach the far edge even at a low sun (orthographic ⇒ wide range is free) |
+| `SHADOW_BIAS` | 0 | Depth bias — native `depth32float` + reverse-Z need none |
+| `SHADOW_NORMAL_BIAS_TEXELS` | 2.5 | Receiver-sample offset along the surface normal, in shadow-texel widths (→ world units per-frame) |
+| `SUN_DIST` | 22000 | How far up the sun ray the light + shadow camera sit from the footprint centre |
 
 ### Which objects cast and receive shadows
 
 | Object | castShadow | receiveShadow | Material | Notes |
 | --- | --- | --- | --- | --- |
-| Terrain | ✓ | ✓ | `MeshLambertMaterial` + flatShading | `frustumCulled=false` |
-| Water | — | ✓ | `MeshLambertMaterial` | Receives terrain shadows |
-| Cliffs | ✓ | ✓ | `MeshLambertMaterial` + flatShading | `frustumCulled=false` |
-| Landmarks | ✓ | ✓ | `MeshLambertMaterial` + flatShading | Dogtown structures etc. |
-| Buildings | ✓ | ✓ | `MeshLambertMaterial` + `onBeforeCompile` | Instanced; stencil=1 |
-| Roads | — | — | `MeshBasicMaterial` | Overlay layer; no shadow |
-| Metro | — | — | `MeshBasicMaterial` | Overlay layer; no shadow |
+| Terrain | — | ✓ | `MeshLambertNodeMaterial` + `flatShading` | `frustumCulled=false`; faceted look is intentional (community vote — see PR #748) |
+| Water | — | ✓ | `MeshLambertNodeMaterial` (terrain material, brightness 0.7) | Receives terrain shadows |
+| Cliffs | ✓ | ✓ | `MeshLambertNodeMaterial` + `flatShading` | `frustumCulled=false` |
+| Landmarks | ✓ | ✓ | `MeshLambertNodeMaterial` | Dogtown structures etc. |
+| Buildings | ✓ | ✓ | `MeshLambertNodeMaterial` + TSL nodes | Instanced; stencil=1 |
+| Roads | — | — | `MeshBasicNodeMaterial` (additive) | Overlay layer; no shadow |
+| Metro | — | — | `MeshBasicNodeMaterial` (additive) | Overlay layer; no shadow |
 
-**Note on `frustumCulled=false`:** Terrain and cliffs have `frustumCulled=false` to ensure they are always included in the shadow pass regardless of the dynamic shadow camera position.
+**Note on `frustumCulled=false`:** terrain and cliffs are always included in the shadow
+pass regardless of the dynamic shadow camera position.
 
-**Note on GLB normals:** Terrain, cliffs, water, and landmarks retain the `NORMAL` vertex attribute after stripping (all other attributes removed). Normals are required for Three.js's `shadow.normalBias` computation. Roads/metro use `MeshBasicMaterial` and don't need normals.
+**Note on GLB normals:** terrain, cliffs, water, and landmarks retain the `NORMAL` vertex
+attribute after stripping (all other attributes removed). Normals are required for the
+`shadow.normalBias` receiver offset. Roads/metro use `MeshBasicNodeMaterial` and don't
+need them.
 
 ---
 
 ## Building Lighting and Shadows
 
-Buildings use `MeshLambertMaterial` with `onBeforeCompile` patches. Standard Three.js handles shadow casting (`castShadow = true`) and receiving (`receiveShadow = true`) automatically via the default `MeshDepthMaterial` — no `customDepthMaterial` needed.
+Buildings use `MeshLambertNodeMaterial` driven by **TSL nodes** (no `onBeforeCompile`).
+Standard Three.js handles shadow casting/receiving (`castShadow`/`receiveShadow = true`)
+via the engine's depth pass — no `customDepthMaterial` needed. Per-district values that
+the WebGL build passed as `onBeforeCompile` uniforms are now plain TSL `uniform()` nodes.
 
-The `onBeforeCompile` patches add:
+The material wires three nodes:
 
-1. **World-space planar UV** — computed from `instanceMatrix * vertex` world position in the `project_vertex` chunk, sent as `vMUv` to the fragment shader
-2. **`_m.dds` surface modulation** — `diffuseColor.rgb *= 0.3 + mVal * 0.7` in `color_fragment`, applied before Lambert lighting
-3. **Edge highlight** — injected via `outgoingLight` string replacement (before `#include <opaque_fragment>`) using `vLocalUv` (BoxGeometry face UV) and `uEdgeColor / uEdgeThickness / uEdgeSharpness / uEdgeIntensity` uniforms
+1. **`normalNode`** — per-instance view-space normals. The instance matrix is applied to
+   the local normal (inverse-transpose form, for non-uniform building scale) → world, then
+   `transformNormalToView()` → view. `NodeMaterial.setupNormal()` consumes `normalNode`
+   *directly* for lighting, so it must already be in view space.
+2. **`colorNode`** — `_m.dds` surface modulation (`0.4 + 0.5·m`, the decoded
+   `3d_map_cubes.mt` value) applied to the albedo, plus the procedural **edge highlight**
+   (`saturate(pow(max(|1-2u|,|1-2v|), EdgeSharpnessPower))` over a synthesised per-face UV,
+   `lerp`'d onto albedo pre-lighting) with `fwidth` anti-aliasing.
+3. **`emissiveNode`** (optional) — when **edge glow** is on, the edge term is also written
+   to emissive so it stays self-lit regardless of sun/shadow. Binary on/off at
+   `NCZ.EDGE_GLOW_INTENSITY`; per-theme default from `--scene-edge-glow`, overridable in
+   Settings.
 
-Building materials also **write stencil=1** (`AlwaysStencilFunc, ReplaceStencilOp`) so the SeeThrough road pass can test against them.
+Per-district uniforms: `uTransMin`/`uTransMax`/`uOffset` (instance-texel decode + multi-
+district composition), `uEdgeColor`, `uEdgeSharpness`, `uEdgeCamCoeff`, `uEdgeGlow`.
+`uEdgeColor` + `uEdgeGlow` are mutated at runtime (theme rewire / flyover tweens) via
+`mat.userData.tslUniforms`.
+
+Building materials also **write stencil=1** so the SeeThrough road pass can test against
+them.
 
 ---
 
@@ -152,6 +225,16 @@ NCZ.ThreeScene.setCameraState(JSON.parse('...'));
 
 ---
 
-## Historical: Gen 2 RawShaderMaterial (replaced)
+## Historical: WebGL → WebGPU material migration
 
-The previous GPU instancing approach used `RawShaderMaterial` with `gl_InstanceID` + `texelFetch()`. It required `customDepthMaterial`, identity matrices for bounding sphere, `frustumCulled=false`, and exact `packDepthToRGBA` matching Three.js's `modf`-based implementation. All eliminated by the DDS + CPU matrix + `MeshLambertMaterial` pipeline.
+Two generations preceded the current pipeline:
+
+- **Gen 2 — `RawShaderMaterial`** (`gl_InstanceID` + `texelFetch()`): required
+  `customDepthMaterial`, identity matrices for the bounding sphere, `frustumCulled=false`,
+  and exact `packDepthToRGBA` matching Three.js's `modf`-based implementation. Replaced by
+  the DDS + CPU-matrix instancing pipeline.
+- **Gen 3 (WebGL/r170) — `MeshLambertMaterial` + `onBeforeCompile`**: the planar UV,
+  `_m` modulation and edge highlight were injected as GLSL chunk replacements
+  (`project_vertex`, `color_fragment`, `outgoingLight`). The WebGPU migration ported all
+  of these to TSL `colorNode`/`normalNode`/`emissiveNode` on `MeshLambertNodeMaterial`;
+  the GLSL injection is gone.
