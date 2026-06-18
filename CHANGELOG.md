@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Turning **Shadows** off now stops rendering the shadow depth map entirely (and drops off-screen shadow casters from the draw), instead of just hiding the shadows — a real performance gain on lower-end hardware.
 - Shadows also stop re-rendering on frames that don't change geometry (theme/colour changes, hovering), so they're cheaper even when left on.
 
+#### Fixed: shadow edges no longer swim when moving the camera
+
+- Shadow edges stay put as you pan, rotate, and tilt the 3D map instead of crawling/shimmering — the sun's shadow box is now fitted, sized, and centred so its texel grid lands on the same world positions every frame.
+- Showcase shadow edges are softened slightly so the moving sun's shimmer is less noticeable.
+
 #### Fixed: showcase pins floating in the sky
 
 - During the showcase with pins enabled, pins behind the camera (e.g. the city while a low sweep faces away from it) no longer ghost into the sky. CSS2DRenderer's behind-camera cull assumed a standard projection and broke under the renderer's reversed-Z depth; the marker pass now uses a standard-projection clone of the camera so culling is correct (on-screen pin positions unchanged).
