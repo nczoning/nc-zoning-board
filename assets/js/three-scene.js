@@ -65,6 +65,13 @@ const ThreeScene = (() => {
   let _hemiLight     = null; // sky/ground fill (replaces a flat AmbientLight)
   let _sunDir        = SUN_DIR.clone(); // unit, ground→sun; updated by setSunPosition, consumed by updateShadowCamera
   let _shadowScratchV = new THREE.Vector3();     // reused by updateShadowCamera so it doesn't allocate per camera move
+  // Light-space basis + up vector for the shadow texel-snap (see updateShadowCamera).
+  // _SHADOW_UP matches Three's default OrthographicCamera up, so the basis we build
+  // here is the same one DirectionalLightShadow uses when it aims the depth camera.
+  const _SHADOW_UP = new THREE.Vector3(0, 1, 0);
+  const _snapX = new THREE.Vector3();
+  const _snapY = new THREE.Vector3();
+  const _snapZ = new THREE.Vector3();
   // Last computed shadow fit (half + center) captured by updateShadowCamera —
   // exposed via getShadowSnapshot() for the `__shadowTrace` debug logger.
   // `fallback` true means rect was degenerate and we used the world-centered
@@ -101,6 +108,47 @@ const ThreeScene = (() => {
       if (gz < _groundRectMin.z) _groundRectMin.z = gz;
       if (gz > _groundRectMax.z) _groundRectMax.z = gz;
     }
+  }
+
+  // Bounding sphere (centroid + enclosing radius) of the visible-ground footprint.
+  // Same four corner ray-casts as _computeVisibleGroundRect, but the sphere — unlike
+  // the AABB — is invariant under camera azimuth: rotating the view yields a congruent
+  // ground footprint, so its corners' pairwise distances (hence the radius) don't
+  // change and the centroid only translates. updateShadowCamera fits the sun's ortho
+  // box to this so the shadow texel size stays constant as you pan/rotate, which is the
+  // precondition for the texel snap to actually hold. Mutates the _groundSphere* state.
+  const _groundSphereCenter = new THREE.Vector3();
+  const _groundSphereCorners = [
+    new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(),
+  ];
+  let _groundSphereRadius = 0;
+  let _groundSphereValid  = false;
+  function _computeVisibleGroundSphere(cam) {
+    let n = 0;
+    _groundSphereCenter.set(0, 0, 0);
+    for (const [nx, ny] of _GROUND_RECT_NDC) {
+      _groundRectCorner.set(nx, ny, 0.5).unproject(cam);
+      const dy = _groundRectCorner.y - cam.position.y;
+      if (Math.abs(dy) < 1e-6) continue;           // ray parallel to ground
+      const t = -cam.position.y / dy;
+      if (t <= 0) continue;                         // ground is behind camera
+      const c = _groundSphereCorners[n++];
+      c.set(
+        cam.position.x + t * (_groundRectCorner.x - cam.position.x),
+        0,
+        cam.position.z + t * (_groundRectCorner.z - cam.position.z),
+      );
+      _groundSphereCenter.add(c);
+    }
+    _groundSphereValid = n > 0;
+    if (!_groundSphereValid) return;
+    _groundSphereCenter.multiplyScalar(1 / n);
+    let r2 = 0;
+    for (let i = 0; i < n; i++) {
+      const d2 = _groundSphereCenter.distanceToSquared(_groundSphereCorners[i]);
+      if (d2 > r2) r2 = d2;
+    }
+    _groundSphereRadius = Math.sqrt(r2);
   }
   let _shadowsOn     = true;  // shadows on by default; checkbox reflects this via poll
   // Stored shadow strength — independent of the on/off toggle. Initialised from
@@ -3115,11 +3163,13 @@ const ThreeScene = (() => {
 
     // Two fit paths — the camera shapes are too different to share one.
     //
-    // Schema cam (interactive top-down perspective with controls): rect-fit.
-    // Ray-cast NDC corners → Y=0 → bbox. Tight, sharp, matches the user's
-    // view. Always succeeds for the schema cam because controls constrain
-    // tilt below horizontal, so corners always hit ground at reasonable
-    // distances. This is the "shadows look good on schema map" path.
+    // Schema cam (interactive top-down perspective with controls): sphere-fit.
+    // Ray-cast NDC corners → Y=0 → bounding sphere (centroid + enclosing
+    // radius). Tight, sharp, matches the user's view, and — unlike the AABB —
+    // rotation-invariant, so the texel size below stays constant as you orbit
+    // and the texel snap holds. Always succeeds for the schema cam because
+    // controls constrain tilt below horizontal, so corners always hit ground at
+    // reasonable distances. This is the "shadows look good on schema map" path.
     //
     // Showcase fly cam (cinematic perspective, often near-horizontal):
     // fixed-size box centred where the camera's forward ray meets the
@@ -3135,17 +3185,11 @@ const ThreeScene = (() => {
     let half, center;
     let rectValid = false;
     if (renderCam === camera && controls) {
-      _computeVisibleGroundRect(renderCam);
-      rectValid = Number.isFinite(_groundRectMin.x);
+      _computeVisibleGroundSphere(renderCam);
+      rectValid = _groundSphereValid;
       if (rectValid) {
-        const W = _groundRectMax.x - _groundRectMin.x;
-        const D = _groundRectMax.z - _groundRectMin.z;
-        half = Math.min(0.5 * Math.hypot(W, D), NCZ.SHADOW_MAX_DISTANCE) + NCZ.SHADOW_GROUND_MARGIN;
-        center = _shadowScratchV.set(
-          (_groundRectMin.x + _groundRectMax.x) * 0.5,
-          0,
-          (_groundRectMin.z + _groundRectMax.z) * 0.5,
-        );
+        half = Math.min(_groundSphereRadius, NCZ.SHADOW_MAX_DISTANCE) + NCZ.SHADOW_GROUND_MARGIN;
+        center = _shadowScratchV.copy(_groundSphereCenter);
       } else {
         // Degenerate (shouldn't happen for the schema cam given controls.maxPolarAngle,
         // but the safety net stays). World-centered fallback at the cap.
@@ -3181,6 +3225,51 @@ const ThreeScene = (() => {
     // world Z range in three-space is [-WORLD_MAX_Y, -WORLD_MIN_Y].
     center.x = Math.max(NCZ.WORLD_MIN_X, Math.min(NCZ.WORLD_MAX_X, center.x));
     center.z = Math.max(-NCZ.WORLD_MAX_Y, Math.min(-NCZ.WORLD_MIN_Y, center.z));
+
+    // Stabilisation (quantise size + texel-snap centre) — SCHEMA CAM ONLY.
+    // Both steps assume a STATIC texel grid frame-to-frame: constant texelSize AND
+    // a constant light-space basis. The interactive schema cam satisfies that (the
+    // sun only moves on a slider drag). The showcase fly cam does NOT — flyover.js
+    // arcs the sun every frame (setSunPosition), so the snap basis (built from
+    // _sunDir) rotates continuously; combined with the fly cam's far forward-
+    // projected centre near the horizon, a tiny basis rotation swings center·snapX
+    // by several texels and the snapped centre jitters → worse flicker than no snap.
+    // The fly cam keeps its prior fixed-box behaviour (constant half, raw centre);
+    // its residual moving-sun shimmer is inherent aliasing (would want TAA), separate
+    // from the schema swim this fix targets.
+    if (renderCam === camera) {
+      // Quantise the box size to a multiplicative ladder so texelSize is
+      // piecewise-constant. The snap only cancels swim while texelSize holds; the
+      // sphere fit already keeps `half` constant under pan/azimuth (congruent
+      // footprint), but TILTING toward the horizon grows the footprint continuously
+      // — without this the grid rescales every frame and edges shimmer despite the
+      // snap. Rounding UP to the next rung holds the box across a slow tilt/zoom,
+      // trading continuous swim for the odd resolution step. Capped at the diagonal.
+      const rung = Math.log(half) / Math.log(NCZ.SHADOW_SIZE_QUANTUM);
+      half = Math.min(
+        Math.pow(NCZ.SHADOW_SIZE_QUANTUM, Math.ceil(rung)),
+        NCZ.SHADOW_MAX_DISTANCE + NCZ.SHADOW_GROUND_MARGIN,
+      );
+
+      // Texel-snap the footprint centre to the sun's depth-map grid. The ortho box
+      // covers 2·half world units across SHADOW_MAP_SIZE texels; if its centre
+      // drifts by a fraction of a texel between frames, the same geometry
+      // re-rasterises onto shifted texel centres and shadow edges crawl ("swim").
+      // Project the centre onto the light's right/up axes, round each to a whole
+      // texel, shift by the residual so the grid lands on the same world positions
+      // every frame. Build the basis the way Three aims the shadow camera:
+      //   z = (eye − target).normalize() = _sunDir,  x = (up × z)̂,  y = z × x.
+      const texelSize = (2 * half) / NCZ.SHADOW_MAP_SIZE;
+      _snapZ.copy(_sunDir);
+      _snapX.crossVectors(_SHADOW_UP, _snapZ);
+      if (_snapX.lengthSq() < 1e-8) _snapX.set(1, 0, 0); // sun ≈ straight up → degenerate basis
+      _snapX.normalize();
+      _snapY.crossVectors(_snapZ, _snapX).normalize();
+      const px = center.dot(_snapX), py = center.dot(_snapY);
+      center.addScaledVector(_snapX, Math.round(px / texelSize) * texelSize - px);
+      center.addScaledVector(_snapY, Math.round(py / texelSize) * texelSize - py);
+    }
+
     // Capture fit for getShadowSnapshot trace.
     _lastShadowFit.half = half;
     _lastShadowFit.cx = center.x;
@@ -3198,6 +3287,11 @@ const ThreeScene = (() => {
     // zoom (a constant world bias is too small zoomed out → grazing-sun acne
     // ["the wave" on flat terrain/water], too large zoomed in → shadows detach).
     _dirLight.shadow.normalBias = NCZ.SHADOW_NORMAL_BIAS_TEXELS * (2 * half / NCZ.SHADOW_MAP_SIZE);
+
+    // Soften the edge for the showcase fly cam. It can't texel-snap (arcing sun →
+    // no frame-coherent grid), so a wider PCF blur hides its moving-sun edge-crawl;
+    // the schema cam stays crisp. A uniform-width blur, not physical penumbra.
+    _dirLight.shadow.radius = (renderCam === camera) ? NCZ.SHADOW_RADIUS : NCZ.SHADOW_RADIUS_SHOWCASE;
 
     // Keep the sun light SUN_DIST up the sun ray from the footprint centre.
     // Orthographic ⇒ only the direction matters for shading; the distance just
