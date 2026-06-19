@@ -31,12 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Reproduces the in-game map's decoded colour pipeline — ACES tonemap, colour grade and the braindance grading LUT — from the game's environment data (#694).
 - **Time-of-day** lighting: the sun slider drives Night City's real (Morro Bay) sun position — spanning summer-solstice sunrise to sunset (the longest day, for the most daylight to play with); midday holds a calibrated brightness while sunrise/sunset stay dim and atmospheric, readable across the whole day (#737).
+- **Night-time** lighting: the time slider now runs a full day–night cycle. As the sun sets, a real moon — on its own lunar arc — lights the city with cool moonlight, with a smooth dusk/dawn transition and a cool night sky. The sun and moon are visible discs that rise and set along their real paths.
 
 #### Shadows
 
 - Real-time sun shadows on terrain, buildings, cliffs and landmarks — including casters just off-screen, so edge-of-view shadows don't pop in (#647, #651).
 - Shadow edges stay put as you pan, rotate and tilt instead of crawling/shimmering (#754).
 - The **Shadows** toggle now fully skips the shadow render when off (a real performance gain, not just hidden shadows), and shadows stop re-rendering on frames that don't change geometry (#751).
+- Shadows now fade out through dusk and are gone at night (moonlight casts none), and the shadow coverage no longer "boxes" or drifts when fully zoomed out.
 
 #### Themes
 

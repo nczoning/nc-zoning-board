@@ -221,8 +221,15 @@ const Flyover = (() => {
     if (!_sunriseMs || !_sunsetMs || !NCZ.ThreeScene?.setSunPosition) return;
     const t = Math.min(1, Math.max(0, audioCurrentTime / FLYOVER_DURATION_S));
     const epochMs = _sunriseMs + (_sunsetMs - _sunriseMs) * t;
-    const pos = SunCalc.getPosition(new Date(epochMs), MORRO_BAY.lat, MORRO_BAY.lng);
+    const when = new Date(epochMs);
+    const pos = SunCalc.getPosition(when, MORRO_BAY.lat, MORRO_BAY.lng);
     NCZ.ThreeScene.setSunPosition(pos.azimuth, pos.altitude);
+    // Drive the moon on its real arc too, so the twilight ends of the showcase
+    // (sunrise/sunset, where nightFactor is high) get the moon in the sky and the
+    // night lighting blend — matching the interactive map. Night lighting itself
+    // is automatic via nightFactor inside setSunPosition.
+    const moon = SunCalc.getMoonPosition(when, MORRO_BAY.lat, MORRO_BAY.lng);
+    NCZ.ThreeScene.setMoonPosition?.(moon.azimuth, moon.altitude);
     // Drive exposure off the same elevation curve as the slider — the flyover
     // animates the sun directly (bypassing applySunTime), so without this the
     // exposure froze at its pre-showcase value and the whole flyover rendered
@@ -552,7 +559,9 @@ const Flyover = (() => {
 
     initFlyoverSun();
     NCZ.ThreeScene.setShadowsEnabled?.(true);    // always on during showcase
-    NCZ.ThreeScene.setSunSphereVisible?.(true);  // show the sun in the sky
+    // Sun/moon discs are auto-shown by elevation (updateKeyLight); the flyover
+    // runs sunrise→sunset, so it opens and closes in twilight/night lighting
+    // with the moon up at the dusk end — no manual disc toggle needed.
     FLYOVER_EVENTS[0]();
     if (_runOpts.revealLayers) scheduleLayerReveal();
     // Create fade overlay, show title card, then fade the scene in from black
@@ -607,7 +616,8 @@ const Flyover = (() => {
       resetFade();
       NCZ.ThreeScene.setControlsEnabled(true);
       NCZ.ThreeScene.startRenderLoop();
-      NCZ.ThreeScene.setSunSphereVisible?.(false);
+      // Sun/moon disc visibility is auto-managed by elevation; the slider restore
+      // below re-applies the pre-showcase sun (and moon), correcting both discs.
 
       // Restore whichever theme the user had before showcase started
       if (_savedTheme) { applyThemeSmooth(_savedTheme); _savedTheme = null; }

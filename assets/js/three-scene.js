@@ -61,9 +61,12 @@ const ThreeScene = (() => {
   let loadingFillEl  = null;
   let loadStepsTotal = 0;
   let loadStepsDone  = 0;
-  let _dirLight      = null; // the sun (DirectionalLight + single fitted shadow camera)
+  let _dirLight      = null; // the SUN (DirectionalLight + single fitted shadow camera) — the only shadow caster
+  let _moonLight     = null; // the MOON (DirectionalLight, castShadow:false) — cool night fill, no shadows
   let _hemiLight     = null; // sky/ground fill (replaces a flat AmbientLight)
-  let _sunDir        = SUN_DIR.clone(); // unit, ground→sun; updated by setSunPosition, consumed by updateShadowCamera
+  let _sunDir        = SUN_DIR.clone(); // unit, ground→sun; updated by updateDayNightLighting, consumed by updateShadowCamera
+  let _moonDir       = new THREE.Vector3(); // unit, ground→moon; scratch for the moon light direction
+  let _sunShadowFade = 1;    // 0..1 shadow strength by sun elevation — fades shadows out as the sun sets (night/dusk ⇒ no caster ⇒ no shadow box)
   let _shadowScratchV = new THREE.Vector3();     // reused by updateShadowCamera so it doesn't allocate per camera move
   // Light-space basis + up vector for the shadow texel-snap (see updateShadowCamera).
   // _SHADOW_UP matches Three's default OrthographicCamera up, so the basis we build
@@ -155,8 +158,11 @@ const ThreeScene = (() => {
   // the constant; the Shadows overlay multiplies by this when enabled, by 0 when
   // off (so the tuned strength survives a Shadows toggle).
   let _shadowIntensity = NCZ.SHADOW_INTENSITY;
-  let _sunSphere     = null; // visible sun disc — shown during showcase only
+  let _sunSphere     = null; // visible sun disc — always present, traces the real solar arc (positionSkyBody); terrain occludes it at the horizon
+  let _moonSphere    = null; // visible moon disc — always present, traces the real lunar arc (incl. daytime); terrain occludes it at the horizon
   let _sunAz = Math.PI * 0.25, _sunEl = Math.PI * 0.35; // last *requested* setSunPosition args — placeholders only until the first call (the slider init in app.js), which may land before the lights exist
+  let _moonAz = 0, _moonEl = -Math.PI * 0.25; // last *requested* setMoonPosition args — seeded below the horizon so the moon is absent until app.js drives it
+  let _nightFactor = 0; // 0 = full day, 1 = full night; derived from sun elevation in updateDayNightLighting, read by getNightFactor (and later stages)
   let _terrainBox = null;     // THREE.Box3 of the terrain GLB; gates pan-bound clamp
                               // because the bound shouldn't activate before terrain loads
   let _introTween   = null;   // E5 intro fly-in tween, or null when idle
@@ -797,6 +803,20 @@ const ThreeScene = (() => {
     scene.add(_dirLight);
     scene.add(_dirLight.target);
 
+    // Moon light — a SECOND permanent directional light (cool), no shadows. The
+    // sun above is the only shadow caster; the moon just adds soft cool fill at
+    // night (intensity driven in updateDayNightLighting). castShadow:false is set
+    // once and never toggled — safe under WebGPURenderer. Direction comes from the
+    // real lunar arc; target sits at the world centre so only direction matters.
+    _moonLight = new THREE.DirectionalLight(0xffffff, 0);
+    _moonLight.color.setRGB(...NCZ.MOON_COLOR_RGB, THREE.LinearSRGBColorSpace);
+    _moonLight.castShadow = false;
+    _moonLight.name = 'moon';
+    _moonLight.target.name = 'moon-target';
+    _moonLight.target.position.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
+    scene.add(_moonLight);
+    scene.add(_moonLight.target);
+
     // Hemisphere ambient — the decoded envparam ambient cube collapses to a
     // hemisphere: 5 bright cool-white faces (sky + sides) over 1 dim blue face
     // (ground). Fixed colour + intensity, matching the game's fixed environment.
@@ -807,15 +827,28 @@ const ThreeScene = (() => {
     scene.add(_hemiLight);
     // Sun position is applied by app.js via the slider once terrain has loaded.
 
-    // Visible sun sphere — hidden by default, shown during showcase only.
+    // Visible sun sphere — always present, traces the real solar arc (map AND
+    // showcase use the same path). Seeded hidden for the one frame before the
+    // first applySunTime positions it; updateDayNightLighting then keeps it shown.
     // Radius NCZ.SUN_SPHERE_RADIUS units at NCZ.SUN_SPHERE_DIST distance ≈ 1.7° apparent diameter (≈3× real sun).
     _sunSphere = new THREE.Mesh(
       new THREE.SphereGeometry(NCZ.SUN_SPHERE_RADIUS, 16, 16),
-      new THREE.MeshBasicNodeMaterial({ color: 0xffcc44 })
+      new THREE.MeshBasicNodeMaterial({ color: 0xffcc44 })  // opaque — depth-tested so terrain at the horizon occludes it (the disc sets behind ridgelines)
     );
     _sunSphere.name = 'sun-sphere';
     _sunSphere.visible = false;
     scene.add(_sunSphere);
+
+    // Visible moon disc — always present, traces the real lunar arc (incl. daytime,
+    // same path as the sun disc). Flat cool-white sphere reads as a full moon at
+    // the default ~full phase; a phase terminator is a follow-up.
+    _moonSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(NCZ.MOON_SPHERE_RADIUS, 16, 16),
+      new THREE.MeshBasicNodeMaterial({ color: NCZ.MOON_SPHERE_COLOR })  // opaque — depth-tested so terrain at the horizon occludes it (the disc sets behind ridgelines)
+    );
+    _moonSphere.name = 'moon-sphere';
+    _moonSphere.visible = false;
+    scene.add(_moonSphere);
 
     // OrbitControls — left=pan, right=tilt, middle=zoom.
     //
@@ -3111,42 +3144,109 @@ const ThreeScene = (() => {
     _sunAz = azimuthRad;
     _sunEl = altitudeRad;
     if (!_dirLight || !_hemiLight) return;
-    const el = altitudeRad;
-    const az = azimuthRad;
-
-    // Sun direction (unit, ground→sun). Floor the Y at ~6° elevation so the
-    // shadow camera's lookAt never goes degenerate-horizontal; the visible sun
-    // sphere below uses the *unclamped* elevation so it still sets at the horizon.
-    _sunDir.set(-Math.cos(el) * Math.sin(az), Math.max(0.1, Math.sin(el)), Math.cos(el) * Math.cos(az)).normalize();
-    // Re-orient the light around its current target (updateShadowCamera owns the
-    // target = visible-ground centre; here we just keep the light up the sun ray
-    // from it). Orthographic ⇒ only the direction matters for shading.
-    _dirLight.position.copy(_dirLight.target.position).addScaledVector(_sunDir, NCZ.SUN_DIST);
-    flagShadowUpdate();   // sun moved ⇒ re-render the shadow depth map next frame (no-op while shadows off)
-
-    // Sun + ambient colour and intensity are fixed (calibrated to 3dmap.envparam,
-    // set once at light construction) — the in-game map has no time-of-day
-    // variation. The slider only moves the sun's direction, above.
-
-    // Move the visible sun sphere (shown during showcase only).
-    // Centred on Night City (WORLD_CX, 0, -WORLD_CY) so it hangs over the map.
-    if (_sunSphere) {
-      const SUN_SPHERE_DIST = NCZ.SUN_SPHERE_DIST;
-      const nx = -Math.cos(el) * Math.sin(az);
-      const ny =  Math.sin(el); // unclamped — terrain naturally occludes it at sunrise/sunset
-      const nz =  Math.cos(el) * Math.cos(az);
-      _sunSphere.position.set(
-        NCZ.WORLD_CX + nx * SUN_SPHERE_DIST,
-        ny * SUN_SPHERE_DIST,
-        -NCZ.WORLD_CY + nz * SUN_SPHERE_DIST,
-      );
-    }
+    // Move the visible sun sphere (showcase-only). Unclamped elevation so it
+    // sets at the horizon naturally. Centred on Night City so it hangs over the map.
+    if (_sunSphere) positionSkyBody(_sunSphere, azimuthRad, altitudeRad, NCZ.SUN_SPHERE_DIST);
+    updateDayNightLighting();
     requestRender();
   }
 
-  function setSunSphereVisible(visible) {
-    if (_sunSphere) _sunSphere.visible = visible;
+  // Night moon — its own real arc (SunCalc.getMoonPosition, driven from app.js).
+  // Same azimuth/elevation convention as setSunPosition.
+  function setMoonPosition(azimuthRad, altitudeRad) {
+    _moonAz = azimuthRad;
+    _moonEl = altitudeRad;
+    if (!_dirLight || !_moonLight || !_hemiLight) return;
+    if (_moonSphere) positionSkyBody(_moonSphere, azimuthRad, altitudeRad, NCZ.SUN_SPHERE_DIST);
+    updateDayNightLighting();
     requestRender();
+  }
+
+  // Position a sky-body mesh (sun/moon disc) on the sky shell over Night City,
+  // using the UNCLAMPED elevation so it rises/sets at the horizon.
+  function positionSkyBody(mesh, az, el, dist) {
+    mesh.position.set(
+      NCZ.WORLD_CX + (-Math.cos(el) * Math.sin(az)) * dist,
+       Math.sin(el) * dist,
+      -NCZ.WORLD_CY + ( Math.cos(el) * Math.cos(az)) * dist,
+    );
+  }
+
+  // Apply the effective sun-shadow strength: the user's Shadows toggle (_shadowsOn)
+  // gates it on/off; _sunShadowFade fades it with the sun's elevation. Changing
+  // shadow.intensity is a uniform tweak (no depth re-render needed).
+  function applyShadowIntensity() {
+    if (_dirLight) _dirLight.shadow.intensity = _shadowsOn ? _shadowIntensity * _sunShadowFade : 0;
+  }
+
+  // Day-night lighting. TWO permanent directional lights, each driven by its own
+  // real body — no morphing, no slerp, just a crossfade:
+  //   • SUN  — warm, casts shadows. castShadow stays ON permanently (never toggled
+  //     ⇒ no WebGPU depth-texture teardown crash); its shadow STRENGTH fades out
+  //     with elevation (_sunShadowFade). Intensity fades to 0 by nightFactor.
+  //   • MOON — cool, casts NO shadows; intensity by its own altitude × phase × nf.
+  // Net: night is soft moonlight + ambient with NO cast shadows. That's both
+  // physically right (moonlight shadows are imperceptible) and removes the shadow-
+  // box artifact at night/dusk — a low/absent caster has nothing to clip against
+  // the SHADOW_MAX_DISTANCE coverage cap. At nightFactor==0 (sun up) this is
+  // byte-identical to the original daytime lighting (sun = SUN_INTENSITY, moon 0).
+  // Called whenever the sun OR moon moves.
+  function updateDayNightLighting() {
+    if (!_dirLight || !_moonLight || !_hemiLight) return;
+    const nf = _nightFactor = NCZ.nightFactorForSunElevation(_sunEl);
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+
+    // ── Sun (the shadow caster) ── real direction, Y floored for shadow-camera
+    // safety; warm colour was set once at init. Intensity fades out by nightFactor.
+    _sunDir.set(-Math.cos(_sunEl) * Math.sin(_sunAz), Math.max(NCZ.KEY_LIGHT_MIN_DIR_Y, Math.sin(_sunEl)), Math.cos(_sunEl) * Math.cos(_sunAz)).normalize();
+    _dirLight.position.copy(_dirLight.target.position).addScaledVector(_sunDir, NCZ.SUN_DIST);
+    _dirLight.intensity = NCZ.SUN_INTENSITY * (1 - nf);
+
+    // Shadow strength fades with the sun's real elevation: full when high, gone by
+    // the time it nears the horizon — so dusk softens shadows out and night (sun
+    // below horizon) has none. No caster ⇒ no shadow-box cut-out.
+    _sunShadowFade = smooth(NCZ.SUN_SHADOW_FADE_OFF_DEG, NCZ.SUN_SHADOW_FADE_FULL_DEG, _sunEl * 180 / Math.PI);
+    applyShadowIntensity();
+
+    // ── Moon (no shadows) ── real direction; cool colour set once at init.
+    // Intensity gated by the moon's own altitude (0 below the horizon ⇒ a moonless
+    // night is just ambient) and by nightFactor (off during the day).
+    const moonUp = Math.max(0, Math.min(1, Math.sin(_moonEl) / Math.sin(10 * Math.PI / 180)));
+    _moonDir.set(-Math.cos(_moonEl) * Math.sin(_moonAz), Math.sin(_moonEl), Math.cos(_moonEl) * Math.cos(_moonAz)).normalize();
+    _moonLight.position.copy(_moonLight.target.position).addScaledVector(_moonDir, NCZ.SUN_DIST);
+    _moonLight.intensity = NCZ.MOON_INTENSITY * NCZ.MOON_PHASE * moonUp * nf;
+
+    // ── Ambient ── day sky/ground cube → night skyglow cube by nightFactor.
+    _hemiLight.color.setRGB(
+      lerp(NCZ.AMBIENT_SKY_RGB[0], NCZ.AMBIENT_SKY_RGB_NIGHT[0], nf),
+      lerp(NCZ.AMBIENT_SKY_RGB[1], NCZ.AMBIENT_SKY_RGB_NIGHT[1], nf),
+      lerp(NCZ.AMBIENT_SKY_RGB[2], NCZ.AMBIENT_SKY_RGB_NIGHT[2], nf),
+      THREE.LinearSRGBColorSpace,
+    );
+    _hemiLight.groundColor.setRGB(
+      lerp(NCZ.AMBIENT_GROUND_RGB[0], NCZ.AMBIENT_GROUND_RGB_NIGHT[0], nf),
+      lerp(NCZ.AMBIENT_GROUND_RGB[1], NCZ.AMBIENT_GROUND_RGB_NIGHT[1], nf),
+      lerp(NCZ.AMBIENT_GROUND_RGB[2], NCZ.AMBIENT_GROUND_RGB_NIGHT[2], nf),
+      THREE.LinearSRGBColorSpace,
+    );
+    // Night ambient intensity: base when the moon is up (let moonlight dominate),
+    // boosted toward the moonless level as the moon sets — so a moonless deep
+    // night stays legible without washing out the moonlit hours (both are nf==1).
+    const nightAmbient = lerp(NCZ.AMBIENT_INTENSITY_NIGHT_MOONLESS, NCZ.AMBIENT_INTENSITY_NIGHT, moonUp);
+    _hemiLight.intensity = lerp(NCZ.AMBIENT_INTENSITY, nightAmbient, nf);
+
+    // Sky discs trace their full real arcs (positionSkyBody already uses the true
+    // unclamped elevation, so they descend below the horizon as the body sets).
+    // No visibility gate or opacity fade — celestial bodies don't blink out; they
+    // follow a continuous path. Below the horizon the disc is simply below the
+    // ground plane and naturally out of a top-down view.
+    if (_sunSphere)  _sunSphere.visible  = true;
+    if (_moonSphere) _moonSphere.visible = true;
+
+    // Re-render the shadow depth map only when the sun actually casts (fade > 0);
+    // at night the faded-out sun isn't worth a depth pass.
+    if (_sunShadowFade > 0) flagShadowUpdate();
   }
 
   // Re-fit the single shadow camera (the OrthographicCamera that renders the
@@ -3171,24 +3271,37 @@ const ThreeScene = (() => {
     // controls constrain tilt below horizontal, so corners always hit ground at
     // reasonable distances. This is the "shadows look good on schema map" path.
     //
-    // Showcase fly cam (cinematic perspective, often near-horizontal):
-    // fixed-size box centred where the camera's forward ray meets the
-    // ground. Half-side is the cap (`SHADOW_MAX_DISTANCE + GROUND_MARGIN`),
-    // size never changes per frame. Box translates smoothly with the
-    // cinematic camera — no per-frame size discontinuities, no visible
-    // "shadow box pop" at camera-tilt transitions. Coarser texels than the
-    // schema cam, but cinematic motion masks that and consistency matters
-    // more than peak sharpness here. (Trace analysis on this branch showed
-    // rect-fit on the fly cam produced 11000-wu single-frame `half` jumps
-    // at every WP that crossed the horizon line, regardless of maxT
-    // clamping — see shadow_trace_2.json analysis.)
+    // Showcase fly cam (cinematic perspective, often near-horizontal) AND the
+    // schema cam when zoomed out past the cap: a WORLD-LOCKED cap-sized box (half =
+    // `SHADOW_MAX_DISTANCE + GROUND_MARGIN`) centred on the world. Since that box
+    // already spans the whole ~12 km world, there's no texel-density gain from
+    // following the camera — and a camera-following centre clamps toward a world
+    // edge (leaving the far side unshadowed) and crawls. World-locking gives full
+    // coverage and a static centre every frame; only the moving-sun crawl remains,
+    // masked by the wider showcase PCF blur (`SHADOW_RADIUS_SHOWCASE`). Coarser
+    // texels than the tight schema fit, but cinematic motion masks that.
+    // (History: the fly cam previously used a forward-ray-to-ground + tHit-cap
+    // fit to avoid the "shadow box pop" rect-fit caused at horizon-crossing
+    // waypoints — see shadow_trace_2/3.json; world-locking subsumes that.)
     let half, center;
     let rectValid = false;
     if (renderCam === camera && controls) {
       _computeVisibleGroundSphere(renderCam);
       rectValid = _groundSphereValid;
-      if (rectValid) {
-        half = Math.min(_groundSphereRadius, NCZ.SHADOW_MAX_DISTANCE) + NCZ.SHADOW_GROUND_MARGIN;
+      if (rectValid && _groundSphereRadius > NCZ.SHADOW_MAX_DISTANCE) {
+        // View is larger than the shadow map can cover (zoomed out). Capping a box
+        // centred on the visible footprint turns it into a camera-tracking slice
+        // that leaves the rest of the world unshadowed — the "moving shadow box":
+        // the footprint centroid even clamps to a world corner at extreme tilt.
+        // Instead, cover the WHOLE WORLD from its centre. The world half-diagonal
+        // (~8564 wu) is ≤ cap+margin, so a cap-sized box centred here reaches every
+        // corner, and a fixed centre means it no longer tracks the camera.
+        half = NCZ.SHADOW_MAX_DISTANCE + NCZ.SHADOW_GROUND_MARGIN;
+        center = _shadowScratchV.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
+      } else if (rectValid) {
+        // View fits inside the cap (zoomed in): tight camera-fit, sharp + tracks
+        // exactly what you see.
+        half = _groundSphereRadius + NCZ.SHADOW_GROUND_MARGIN;
         center = _shadowScratchV.copy(_groundSphereCenter);
       } else {
         // Degenerate (shouldn't happen for the schema cam given controls.maxPolarAngle,
@@ -3197,27 +3310,16 @@ const ThreeScene = (() => {
         center = _shadowScratchV.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
       }
     } else {
-      // External cam (showcase fly cam) — fixed-size box, ray-to-ground centre,
-      // with tHit capped. Without the cap, a camera looking near-horizontal
-      // (dy just below -1e-4, e.g. -0.003) produces tHit ≈ cam.y / |dy| = tens
-      // of thousands of wu, sending the box centre far outside the world and
-      // making shadows vanish (trace shadow_trace_3.json: M#2 had centre at
-      // [-14213, -81284] when cam was at +617). Cap keeps the centre within
-      // a reasonable distance in the camera-forward direction; for cameras
-      // looking up or horizontal (dy >= threshold) we project the same cap
-      // distance forward so the centre stays near what's framed.
+      // External cam (showcase fly cam) — world-locked box, same as the schema
+      // zoomed-out case above. The box is already cap-sized (half ≈ 9200 wu),
+      // which spans the whole ~12 km world, so centring it on the camera buys no
+      // texel-density gain — it only risks clamping toward a world edge (leaving
+      // the far side unshadowed) and crawling as the cam moves. World-locking
+      // gives full coverage every frame and a static centre (only the moving-sun
+      // crawl remains, masked by SHADOW_RADIUS_SHOWCASE). This replaces the old
+      // forward-ray-to-ground + tHit-cap fit, now redundant.
       half = NCZ.SHADOW_MAX_DISTANCE + NCZ.SHADOW_GROUND_MARGIN;
-      const dir = _shadowScratchV.set(0, 0, -1).applyQuaternion(renderCam.quaternion);
-      const dy  = dir.y;
-      const MAX_T_HIT = NCZ.SHADOW_MAX_DISTANCE * 0.6;   // ≈ 7200 wu — covers world half-diagonal (~8.5km) without ballooning
-      const tHit = (dy < -1e-4)
-        ? Math.min(-renderCam.position.y / dy, MAX_T_HIT) // ground in front — clamp far hits
-        : MAX_T_HIT;                                       // looking up / horizontal — project forward by cap
-      center = _shadowScratchV.set(
-        renderCam.position.x + dir.x * tHit,
-        0,
-        renderCam.position.z + dir.z * tHit,
-      );
+      center = _shadowScratchV.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
     }
     // Clamp the centre to world bounds. The scene is finite (~12km × 12km);
     // nothing is rendered outside it, so a centre past the world edge wastes
@@ -3339,7 +3441,7 @@ const ThreeScene = (() => {
     // correct immediately, and updateShadowFrustumUniforms poisons the cull's shadow
     // frustum so off-screen casters stop being drawn into the main pass.
     if (_dirLight) {
-      _dirLight.shadow.intensity = enabled ? _shadowIntensity : 0;
+      applyShadowIntensity();   // enabled ? _shadowIntensity × _sunShadowFade : 0
       if (!enabled) _dirLight.shadow.needsUpdate = false;  // drop any pending re-render so the pass truly stops
     }
     if (enabled && renderer) {
@@ -3352,6 +3454,9 @@ const ThreeScene = (() => {
 
   function getShadowsEnabled() { return _shadowsOn; }
   function getSunElevation() { return _sunEl; }
+  // 0 = full day, 1 = full night (smoothstep on sun elevation). Read by later
+  // stages (district glow, lit windows, bloom) so they share one night ramp.
+  function getNightFactor() { return _nightFactor; }
 
   // Exposure setter — driven by the time-of-day curve (applySunTime /
   // updateFlyoverSun) and the metering harness.
@@ -3502,7 +3607,7 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setEdgeGlowEnabled, getEdgeGlowEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, isInitialized, getLeafletView, frameLeafletView, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
+  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setMoonPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, getNightFactor, setGradeEnabled, getGradeEnabled, setEdgeGlowEnabled, getEdgeGlowEnabled, getShadowSnapshot, getCameraState, setCameraState, isInitialized, getLeafletView, frameLeafletView, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;

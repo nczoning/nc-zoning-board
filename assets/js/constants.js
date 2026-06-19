@@ -288,7 +288,7 @@ NCZ.CAMERA_ROTATE_SPEED = 0.6;            // rotateSpeed     (Three.js default: 
 // for now; a CSM revisit is queued — the original "no cascades because schema
 // is ortho" rationale no longer holds since the schema camera moved to perspective
 // (FOV 25°, TweakDB-aligned), see [[align-schematic-camera-to-game]].
-NCZ.SHADOW_MAP_SIZE      = 4096;  // px² — ~3 u/texel at a whole-city zoom; razor-sharp zoomed in (the footprint shrinks with zoom)
+NCZ.SHADOW_MAP_SIZE      = 8192;  // px² — ~1.5 u/texel at a whole-city zoom, razor-sharp zoomed in. Always-on (interactive + showcase): the fine texels keep the showcase's fast sun from shimmering. One fixed size, not resized per-mode (maintainer call).
 NCZ.SHADOW_MAX_DISTANCE  =  8600; // CET units — cap on the footprint half-side. Matches the world half-diagonal (sqrt((WORLD_MAX_X-WORLD_MIN_X)² + (WORLD_MAX_Y-WORLD_MIN_Y)²) / 2 ≈ 8565 wu) with tiny headroom: nothing renders past the world bounds, so a larger cap just stretches texels over empty void. Trace data on PR #656 showed `half` pinned at the cap (12600 = 12000 cap + 600 margin) every showcase frame; reducing the cap shrinks the box uniformly → ~1.4× sharper texels for free at no performance cost.
 NCZ.SHADOW_GROUND_MARGIN =   600; // CET units the footprint extends past the visible ground — covers building heights / terrain relief + a sliver of just-off-screen casters. Wider off-screen-caster coverage waits on the union-frustum cull (a follow-up).
 NCZ.SHADOW_SIZE_QUANTUM  =  1.10; // multiplicative ladder the ortho box half-side snaps UP to, so texel size is piecewise-constant. The texel snap (updateShadowCamera) only cancels swim while texelSize holds frame-to-frame; pan/azimuth already keep `half` constant (sphere fit), but tilt + zoom change it continuously. Quantising holds the box on one rung across a slow tilt, trading continuous edge shimmer for an occasional ~10% resolution step. Smaller (→1.0) = sharper/adaptive but reintroduces swim; larger = more stable but coarser/poppier.
@@ -340,15 +340,22 @@ NCZ.SCENE_EXPOSURE     = 0.720;                     // renderer.toneMappingExpos
 // setSunPosition directly, so it must apply exposure itself.
 //
 // [elevationDeg, exposure], ascending; interpolated piecewise-linear, clamped
-// to the endpoints. Tune the two ends: row 0 = horizon cap (dawn/dusk),
-// last row = midday base.
+// to the endpoints. Tune the two ends: row 0 = deep-night floor, the [0,…] row
+// = horizon cap (dawn/dusk), last row = midday base.
+//
+// Below the horizon (negative elevation) the night lighting takes over — a dim
+// cool moon key + warm skyglow ambient (see MOON_* / AMBIENT_*_NIGHT). Exposure
+// backs OFF from the dawn/dusk peak so the (already much dimmer) night radiance
+// reads dark-but-readable rather than being lifted into a washed-out "day".
 NCZ.SCENE_EXPOSURE_CURVE = [
-  [0,  0.95],  // horizon (sunrise/sunset) — capped lift so it stays atmospheric, not daylight
-  [5,  0.80],
-  [15, 0.58],
-  [30, 0.49],
-  [50, 0.45],  // calibrated midday base — natural variation comes from the sun, not exposure
-  [90, 0.45],
+  [-18, 0.68],  // astronomical night — dark but readable (lifted a touch for moonless-night legibility; calibrate live with ?night)
+  [-6,  0.78],  // civil/nautical twilight transition
+  [0,   0.95],  // horizon (sunrise/sunset) — capped lift so it stays atmospheric, not daylight
+  [5,   0.80],
+  [15,  0.58],
+  [30,  0.49],
+  [50,  0.45],  // calibrated midday base — natural variation comes from the sun, not exposure
+  [90,  0.45],
 ];
 
 // Building edge "glow" — self-lit emissive on the decoded edge highlight, a
@@ -367,6 +374,37 @@ NCZ.SHADOW_INTENSITY   = 0.60;                      // cast-shadow strength when
 NCZ.SUN_DIST           = 22000;  // CET units the sun light (and its shadow camera) sits up the sun ray from the visible-ground centre — only the direction matters for shading; large enough that the whole footprint stays in front of the shadow camera even at a low sun
 NCZ.SUN_SPHERE_DIST    = 20000;  // visible sun disc distance from world centre
 NCZ.SUN_SPHERE_RADIUS  =   600;  // CET units — ≈1.7° apparent diameter at SUN_SPHERE_DIST (≈3× real sun)
+
+// ── Night lighting (Stage 1 — moonlight foundation) ─────────────────────────
+// Day-night runs on TWO permanent directional lights that crossfade by
+// nightFactor (smoothstep on SUN elevation; see NCZ.nightFactorForSunElevation):
+// a warm SUN that casts shadows (its shadow strength fades out as it sets — see
+// SUN_SHADOW_FADE_* below) and a cool MOON that casts NONE. Moonlight shadows are
+// physically imperceptible, and dropping them removes the night/dusk "shadow box"
+// cut-out entirely (no caster ⇒ nothing to clip against the coverage cap). Crisp
+// moon shadows at any zoom would need CSM (queued). castShadow is never toggled on
+// either light (only shadow.intensity is faded) ⇒ no WebGPURenderer teardown crash.
+// All values are first-cut, calibrated live with ?night + overlays off. Colours
+// are linear RGB, matching the SUN/AMBIENT block.
+NCZ.MOON_COLOR_RGB         = [0.62, 0.74, 1.00]; // cool moonlight (linear)
+NCZ.MOON_INTENSITY         = 0.50;               // key intensity at full night & full phase, moon at zenith (vs SUN_INTENSITY 3.0)
+NCZ.MOON_PHASE             = 0.85;               // illuminated fraction 0=new→1=full; tunable (real getMoonIllumination ignored so we never land on a dark new moon). Scales moonlight; disc-phase terminator is a follow-up.
+NCZ.AMBIENT_SKY_RGB_NIGHT  = [0.12, 0.16, 0.28]; // dark blue from above at night
+NCZ.AMBIENT_GROUND_RGB_NIGHT = [0.17, 0.18, 0.22]; // cool near-neutral fill from below — was a warm orange "light-pollution" bounce, but at the high moonless ambient it read sun-warm; deliberate neon/city underglow belongs in the theme-driven Stage 2, not the baseline
+NCZ.AMBIENT_INTENSITY_NIGHT = 0.50;              // night ambient when the MOON IS UP — kept low so directional moonlight dominates
+NCZ.AMBIENT_INTENSITY_NIGHT_MOONLESS = 0.85;     // night ambient when the moon is BELOW the horizon — skyglow/starlight fill so a moonless night stays legible (scaled in by 1−moonAlt; never washes out moonlit nights)
+NCZ.KEY_LIGHT_MIN_DIR_Y    = 0.10;               // floor on the SUN direction's Y (~5.7°) — shadow-camera safety so its lookAt can't degenerate near/below the horizon. Kept at 0.10: a lower floor lets a low sun graze further, lengthening dawn/dusk shadows until they overrun the SHADOW_MAX_DISTANCE coverage cap and cut out. Less critical now that SUN_SHADOW_FADE_* fades low-sun shadows out, but still the degeneracy guard.
+// Sun-shadow strength fades with the sun's real elevation (deg): full at/above
+// FULL, zero at/below OFF. Fades shadows out through dusk and kills them at night
+// (sun below horizon) so there's no caster to clip against the coverage cap.
+NCZ.SUN_SHADOW_FADE_OFF_DEG  =  3;               // sun elevation at/below which cast shadows are fully off
+NCZ.SUN_SHADOW_FADE_FULL_DEG = 12;               // sun elevation at/above which cast shadows are at full strength
+// nightFactor ramp, in SUN-elevation degrees: 0 (full day) at/above DAY, 1 (full
+// night) at/below NIGHT. The ramp band roughly spans civil twilight.
+NCZ.NIGHT_FACTOR_DAY_DEG   =  8;                 // sun elevation at/above which nightFactor = 0
+NCZ.NIGHT_FACTOR_NIGHT_DEG = -4;                 // sun elevation at/below which nightFactor = 1
+NCZ.MOON_SPHERE_RADIUS     = 360;                // visible moon disc — ~0.6× the sun disc (SUN_SPHERE_RADIUS 600); rule-of-cool, not to true scale
+NCZ.MOON_SPHERE_COLOR      = 0xdfe8ff;           // cool-white disc (sRGB hex for MeshBasicNodeMaterial)
 
 // Building instance decode — DDS _data.dds (DXGI_FORMAT_R16G16B16A16_UNORM, DX10 header)
 // Each pixel encodes one building instance across three horizontal blocks: position | rotation | scale.
