@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Real-time sun shadows on terrain, buildings, cliffs and landmarks — including casters just off-screen, so edge-of-view shadows don't pop in (#647, #651).
 - Shadow edges stay put as you pan, rotate and tilt instead of crawling/shimmering (#754).
+- Zoomed all the way out (and during the showcase fly-over), shadows now cover the whole city instead of a box that tracked the camera and left the far side unlit (#756).
 - The **Shadows** toggle now fully skips the shadow render when off (a real performance gain, not just hidden shadows), and shadows stop re-rendering on frames that don't change geometry (#751).
 
 #### Themes

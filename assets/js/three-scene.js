@@ -3171,24 +3171,37 @@ const ThreeScene = (() => {
     // controls constrain tilt below horizontal, so corners always hit ground at
     // reasonable distances. This is the "shadows look good on schema map" path.
     //
-    // Showcase fly cam (cinematic perspective, often near-horizontal):
-    // fixed-size box centred where the camera's forward ray meets the
-    // ground. Half-side is the cap (`SHADOW_MAX_DISTANCE + GROUND_MARGIN`),
-    // size never changes per frame. Box translates smoothly with the
-    // cinematic camera — no per-frame size discontinuities, no visible
-    // "shadow box pop" at camera-tilt transitions. Coarser texels than the
-    // schema cam, but cinematic motion masks that and consistency matters
-    // more than peak sharpness here. (Trace analysis on this branch showed
-    // rect-fit on the fly cam produced 11000-wu single-frame `half` jumps
-    // at every WP that crossed the horizon line, regardless of maxT
-    // clamping — see shadow_trace_2.json analysis.)
+    // Showcase fly cam (cinematic perspective, often near-horizontal) AND the
+    // schema cam when zoomed out past the cap: a WORLD-LOCKED cap-sized box (half =
+    // `SHADOW_MAX_DISTANCE + GROUND_MARGIN`) centred on the world. Since that box
+    // already spans the whole ~12 km world, there's no texel-density gain from
+    // following the camera — and a camera-following centre clamps toward a world
+    // edge (leaving the far side unshadowed) and crawls. World-locking gives full
+    // coverage and a static centre every frame; only the moving-sun crawl remains,
+    // masked by the wider showcase PCF blur (`SHADOW_RADIUS_SHOWCASE`). Coarser
+    // texels than the tight schema fit, but cinematic motion masks that.
+    // (History: the fly cam previously used a forward-ray-to-ground + tHit-cap
+    // fit to avoid the "shadow box pop" rect-fit caused at horizon-crossing
+    // waypoints — see shadow_trace_2/3.json; world-locking subsumes that.)
     let half, center;
     let rectValid = false;
     if (renderCam === camera && controls) {
       _computeVisibleGroundSphere(renderCam);
       rectValid = _groundSphereValid;
-      if (rectValid) {
-        half = Math.min(_groundSphereRadius, NCZ.SHADOW_MAX_DISTANCE) + NCZ.SHADOW_GROUND_MARGIN;
+      if (rectValid && _groundSphereRadius > NCZ.SHADOW_MAX_DISTANCE) {
+        // View is larger than the shadow map can cover (zoomed out). Capping a box
+        // centred on the visible footprint turns it into a camera-tracking slice
+        // that leaves the rest of the world unshadowed — the "moving shadow box":
+        // the footprint centroid even clamps to a world corner at extreme tilt.
+        // Instead, cover the WHOLE WORLD from its centre. The world half-diagonal
+        // (~8564 wu) is ≤ cap+margin, so a cap-sized box centred here reaches every
+        // corner, and a fixed centre means it no longer tracks the camera.
+        half = NCZ.SHADOW_MAX_DISTANCE + NCZ.SHADOW_GROUND_MARGIN;
+        center = _shadowScratchV.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
+      } else if (rectValid) {
+        // View fits inside the cap (zoomed in): tight camera-fit, sharp + tracks
+        // exactly what you see.
+        half = _groundSphereRadius + NCZ.SHADOW_GROUND_MARGIN;
         center = _shadowScratchV.copy(_groundSphereCenter);
       } else {
         // Degenerate (shouldn't happen for the schema cam given controls.maxPolarAngle,
@@ -3197,27 +3210,16 @@ const ThreeScene = (() => {
         center = _shadowScratchV.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
       }
     } else {
-      // External cam (showcase fly cam) — fixed-size box, ray-to-ground centre,
-      // with tHit capped. Without the cap, a camera looking near-horizontal
-      // (dy just below -1e-4, e.g. -0.003) produces tHit ≈ cam.y / |dy| = tens
-      // of thousands of wu, sending the box centre far outside the world and
-      // making shadows vanish (trace shadow_trace_3.json: M#2 had centre at
-      // [-14213, -81284] when cam was at +617). Cap keeps the centre within
-      // a reasonable distance in the camera-forward direction; for cameras
-      // looking up or horizontal (dy >= threshold) we project the same cap
-      // distance forward so the centre stays near what's framed.
+      // External cam (showcase fly cam) — world-locked box, same as the schema
+      // zoomed-out case above. The box is already cap-sized (half ≈ 9200 wu),
+      // which spans the whole ~12 km world, so centring it on the camera buys no
+      // texel-density gain — it only risks clamping toward a world edge (leaving
+      // the far side unshadowed) and crawling as the cam moves. World-locking
+      // gives full coverage every frame and a static centre (only the moving-sun
+      // crawl remains, masked by SHADOW_RADIUS_SHOWCASE). This replaces the old
+      // forward-ray-to-ground + tHit-cap fit, now redundant.
       half = NCZ.SHADOW_MAX_DISTANCE + NCZ.SHADOW_GROUND_MARGIN;
-      const dir = _shadowScratchV.set(0, 0, -1).applyQuaternion(renderCam.quaternion);
-      const dy  = dir.y;
-      const MAX_T_HIT = NCZ.SHADOW_MAX_DISTANCE * 0.6;   // ≈ 7200 wu — covers world half-diagonal (~8.5km) without ballooning
-      const tHit = (dy < -1e-4)
-        ? Math.min(-renderCam.position.y / dy, MAX_T_HIT) // ground in front — clamp far hits
-        : MAX_T_HIT;                                       // looking up / horizontal — project forward by cap
-      center = _shadowScratchV.set(
-        renderCam.position.x + dir.x * tHit,
-        0,
-        renderCam.position.z + dir.z * tHit,
-      );
+      center = _shadowScratchV.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
     }
     // Clamp the centre to world bounds. The scene is finite (~12km × 12km);
     // nothing is rendered outside it, so a centre past the world edge wastes
