@@ -1,0 +1,21 @@
+{
+    "id": "94e99030-7dc1-4057-804f-c8a703dd2276",
+    "name": "Silicon Mirage Villa",
+    "authors": [
+        "AikoHayashi"
+    ],
+    "credits": "",
+    "coordinates": [
+        506.8265,
+        -2754.2583,
+        191.118
+    ],
+    "nexus_id": "30702",
+    "description": "Enjoy your small oasis with a view of the Night City.",
+    "category": "new-location",
+    "tags": [
+        "apartment",
+        "house"
+    ],
+    "yaw": -3.6511
+}
