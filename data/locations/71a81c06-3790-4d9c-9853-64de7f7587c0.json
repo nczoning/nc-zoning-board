@@ -1,0 +1,22 @@
+{
+    "id": "71a81c06-3790-4d9c-9853-64de7f7587c0",
+    "name": "Dogtown Highland Apartment",
+    "authors": [
+        "Mazamp"
+    ],
+    "credits": "",
+    "coordinates": [
+        -2158.5708,
+        -2797.9546,
+        47.089
+    ],
+    "nexus_id": "30907",
+    "description": "In the forgotten backstreets of dogtown, there is this one shack made of shipping crates that stil resembles a home",
+    "category": "new-location",
+    "tags": [
+        "apartment",
+        "entropism",
+        "house"
+    ],
+    "yaw": -76.3647
+}
