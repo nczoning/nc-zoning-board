@@ -7,64 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-> **The headline of this release is the new 3D Schematic Map.** Night City's flat
-> schematic is replaced by a live, navigable 3D recreation of the in-game world map —
-> terrain, hundreds of thousands of buildings, roads, the metro, district borders and
-> landmarks, lit and shaded like the game's own map. Everything below is part of this
-> update and ships together.
+> **Headline: the flat schematic is now a live 3D map.** A navigable 3D recreation of Cyberpunk 2077's in-game world map: terrain, hundreds of thousands of buildings, roads, the metro, district borders and landmarks, lit and shaded like the game. Everything below ships together as one update.
 
 ### 3D Schematic Map
 
-#### The city in 3D — new default view
+#### The city in 3D (new default view)
 
-- SCHEMA (3D) is now the landing view, with a SAT (2D satellite) toggle. Your place — centre, zoom, and in 3D your heading/tilt — carries across when you switch views (#744).
-- Renders terrain, water and cliffs, every district's buildings, roads, the metro network, district/subdistrict borders, and 8 landmark monuments (The Needle, Heavy Hearts Club, the De-votion statue, both ferris wheels, and more).
+- SCHEMA (3D) is now the landing view, with a SAT (2D satellite) toggle. Your place carries across when you switch: centre, zoom, and in 3D your heading and tilt (#744).
+- Renders terrain, water and cliffs, every district's buildings, roads, the metro network, district and subdistrict borders, and 8 landmark monuments (The Needle, Heavy Hearts Club, the De-votion statue, both ferris wheels, and more).
 - Left-drag to pan, right-drag to tilt (up to ~70°), scroll to zoom. Opens with a brief cinematic fly-in to a whole-city framing (#689).
 
 #### Buildings
 
-- The full skyline — ~254k instanced building cubes per district, decoded from the game's own map data with correct position, height and rotation (#595, #605).
-- Faces carry the game's centre-dark → edge-light gradient and surface shading, decoded from the in-game `3d_map_cubes` shader (#686, #692, #687).
-- Buildings use malgalad's **3D World Map Fixed** data by default, correcting misaligned/missing buildings — e.g. the Corpo Plaza cluster. The game's default (uncorrected) layout is available by turning off **Settings → Map data → Fixed building assets** (#739).
+- The full skyline: ~254k instanced building cubes per district, decoded from the game's own map data with correct position, height and rotation (#595, #605).
+- Faces carry the game's centre-dark to edge-light gradient and surface shading, decoded from the in-game `3d_map_cubes` shader (#686, #692, #687).
+- Buildings use malgalad's **3D World Map Fixed** data by default, correcting misaligned and missing buildings such as the Corpo Plaza cluster. The game's uncorrected layout is available by turning off **Settings → Map data → Fixed building assets** (#739).
 
 #### Lighting & colour
 
-- Reproduces the in-game map's decoded colour pipeline — ACES tonemap, colour grade and the braindance grading LUT — from the game's environment data (#694).
-- **Time-of-day** lighting: the sun slider drives Night City's real (Morro Bay) sun position — spanning summer-solstice sunrise to sunset (the longest day, for the most daylight to play with); midday holds a calibrated brightness while sunrise/sunset stay dim and atmospheric, readable across the whole day (#737).
+- Reproduces the in-game map's decoded colour pipeline: ACES tonemap, colour grade and the braindance grading LUT, all from the game's environment data (#694).
+- **Time-of-day** lighting: the sun slider drives Night City's real (Morro Bay) sun position, spanning summer-solstice sunrise to sunset (the longest day, for the most daylight to play with). Midday holds a calibrated brightness while sunrise and sunset stay dim and atmospheric, readable across the whole day (#737).
 
 #### Shadows
 
-- Real-time sun shadows on terrain, buildings, cliffs and landmarks — including casters just off-screen, so edge-of-view shadows don't pop in (#647, #651).
-- Shadow edges stay put as you pan, rotate and tilt instead of crawling/shimmering (#754).
-- Zoomed all the way out (and during the showcase fly-over), shadows now cover the whole city instead of a box that tracked the camera and left the far side unlit (#756).
+- Real-time sun shadows on terrain, buildings, cliffs and landmarks, including casters just off-screen so edge-of-view shadows don't pop in (#647, #651).
+- Shadow edges stay put as you pan, rotate and tilt instead of crawling or shimmering (#754).
+- Zoomed all the way out (and during the showcase fly-over), shadows now cover the whole city instead of a camera-tracking box that left the far side unlit (#756).
 - The **Shadows** toggle now fully skips the shadow render when off (a real performance gain, not just hidden shadows), and shadows stop re-rendering on frames that don't change geometry (#751).
 
 #### Themes
 
-- New **Game** theme — matches Cyberpunk 2077's in-game world-map palette (UI, 3D scene, roads/metro) with the decoded additive road/metro blend (#690).
-- New **Preem Map** theme — based on CyanideX's Preem Map mod (used with permission); landmark monuments are coloured independently of buildings (#691).
-- New **Synthwave** theme — deep-indigo land, lighter-violet bay, vibrant purple buildings, neon cyan edges (#737).
-- The four themes that shipped with the 2D map — Night Corp (default), Arasaka, Militech, and Aldecaldos — were extended with per-layer 3D scene colours, so each one now styles the full 3D city and not just the 2D UI.
+- New **Game** theme: matches Cyberpunk 2077's in-game world-map palette (UI, 3D scene, roads and metro) with the decoded additive road/metro blend (#690).
+- New **Preem Map** theme, based on CyanideX's Preem Map mod (used with permission); landmark monuments are coloured independently of the buildings (#691).
+- New **Synthwave** theme: deep-indigo land, lighter-violet bay, vibrant purple buildings, neon cyan edges (#737).
+- The four themes that shipped with the 2D map (Night Corp, Arasaka, Militech and Aldecaldos) were extended with per-layer 3D scene colours, so each one now styles the full 3D city and not just the 2D UI.
 - Each 3D layer (buildings, terrain, water, cliffs, roads, metro, grid) is themed independently, and themes switch instantly with no page reload.
-- New **Settings** toggles for any theme: in-game **Colour grade (LUT)** and a self-lit neon **Edge glow** (defaults: LUT on for Game & Preem, edge glow on for Synthwave) (#737).
+- New **Settings** toggles for any theme: the in-game **Colour grade (LUT)** and a self-lit neon **Edge glow** (defaults: LUT on for Game and Preem, edge glow on for Synthwave) (#737).
 
-#### Map overlays — roads, metro, districts
+#### Map overlays: roads, metro, districts
 
-- Roads, road borders and the metro network with the game's additive blend; the Pacifica underwater tunnel shows through the bay while staying hidden through terrain (#606, #648).
-- **Metro LOD** (dotted / thin / wide lines) crossfades by zoom, decoded from the game's metro shader (#688).
+- Roads, road borders and the metro network with the game's additive blend. The Pacifica underwater tunnel shows through the bay while staying hidden through terrain (#606, #648).
+- **Metro LOD** (dotted, thin and wide lines) crossfades by zoom, decoded from the game's metro shader (#688).
 - The game's procedural "graph-paper" terrain grid on terrain, water and cliffs (#685).
-- District & subdistrict **borders** match the game: districts zoomed out, subdistricts mid-zoom, neither up close. Outlines sit faint and brighten when your cursor enters a district (#655, #742).
-- District & subdistrict **name labels** at their centroids — faint by default, emphasised on hover, and legible over the satellite imagery in 2D (#743).
+- District and subdistrict **borders** match the game: districts when zoomed out, subdistricts mid-zoom, neither up close. Outlines sit faint and brighten when your cursor enters a district (#655, #742).
+- District and subdistrict **name labels** at their centroids: faint by default, emphasised on hover, and legible over the satellite imagery in 2D (#743).
 
 #### District info panel
 
-- Hovering a district shows an in-game-style readout, top-right: district icon + name, the subdistrict under the cursor, and location stats (count, category breakdown, share of all locations, recently-updated count). Works in both views (#745).
+- Hovering a district shows an in-game-style readout, top-right: district icon and name, the subdistrict under the cursor, and location stats (count, category breakdown, share of all locations, recently-updated count). Works in both views (#745).
 
 #### Mod pins in 3D
 
 - Interactive mod pins, popups, tooltips, clustering and the Discover button all work in the 3D view, driven by the same sidebar and filters as 2D (#621).
-- Clustering groups pins by real-world distance (not screen pixels), so tilting the camera doesn't reshuffle clusters; the shared cluster panel and active-cluster highlight work across both views (#621, #659).
-- Pins are a toggleable overlay, and pan/zoom/tilt gestures pass cleanly through pins, clusters and on-canvas controls to the camera (#634, #658, #668).
+- Clustering groups pins by real-world distance, not screen pixels, so tilting the camera doesn't reshuffle clusters. The shared cluster panel and active-cluster highlight work across both views (#621, #659).
+- A distance scale bar in the 3D view, plus pin share-links (`?mod=`) that reopen the pin whether you land in 2D or 3D (#621).
+- Pins are a toggleable overlay, and pan, zoom and tilt gestures pass cleanly through pins, clusters and on-canvas controls to the camera (#634, #658, #668).
 
 #### Showcase flyover
 
@@ -73,24 +70,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Performance & loading
 
-- **3D payload cut ~88%** (18.5 MB → 2.18 MB) via meshopt-compressed assets — much faster first load (#622).
-- **Render-on-demand** — the scene only redraws when something actually changes, so an idle map costs near-zero GPU/CPU and saves battery (#641).
+- **3D payload cut ~88%** (18.5 MB down to 2.18 MB) via meshopt-compressed assets, for a much faster first load (#622).
+- **Render-on-demand**: the scene only redraws when something actually changes, so an idle map costs near-zero GPU/CPU and saves battery (#641).
 - Renderer pixel ratio capped at 1.5 (saves ~44% GPU work on Retina/4K), and pins stay aligned to buildings on fractional-DPR displays (#640).
 
 #### Renderer: WebGPU (under the hood)
 
-- The 3D scene renders through **WebGPU** with native depth, lighting and GPU-compute building culling. It falls back to the existing 2D map (with a notice) when WebGPU is unavailable, and works on Firefox (#644–#650, #666, #667).
+- The 3D scene renders through **WebGPU** with native depth, lighting and GPU-compute building culling. It falls back to the existing 2D map (with a notice) when WebGPU is unavailable, and works on Firefox (#644-#650, #666, #667).
 
 #### For developers
 
-- `?debug=1` stats panel + "Copy debug info" snapshot, plus `?webgpuprobe`, `?gamelight`, `?only=<district>` and other URL flags catalogued in [docs/url-parameters.md](docs/url-parameters.md) (#618, #619, #665).
+- `?debug=1` stats panel plus a "Copy debug info" snapshot, and the `?webgpuprobe`, `?gamelight` and `?only=<district>` URL flags catalogued in [docs/url-parameters.md](docs/url-parameters.md) (#618, #619, #665).
 - Every Object3D is named for Needle Inspector legibility (#635). New maintainer docs: [docs/3dmap-fixed-assets.md](docs/3dmap-fixed-assets.md) and [docs/3d-map-lighting.md](docs/3d-map-lighting.md).
-- About modal gained a **Credits** section (CDPR Fan Content disclaimer + CyanideX / Malgalad) (#738).
+- The About modal gained a **Credits** section (CDPR Fan Content disclaimer plus CyanideX and Malgalad) (#738).
 
 #### Fixes
 
 - The 2D fallback (no WebGPU) now opens framed on the city instead of a zoomed-out fit-to-all-pins (#749).
-- The default sun time now actually applies on cold load — it was being overridden by an init race (#733).
+- The default sun time now actually applies on cold load; it was being overridden by an init race (#733).
 - `_m` roof detail no longer paints onto the sloped faces of tilted buildings (#734).
 - Showcase pins no longer ghost into the sky on low or away-facing sweeps (#746).
 - Removed the `?lighttune` debug panel, superseded by the time-of-day lighting curve (#737).
