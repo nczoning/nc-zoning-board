@@ -1,0 +1,27 @@
+{
+  "comment": "Envelope spec for the lighting metering harness (scripts/measure_lighting.js). Poses approved 2026-06-13. Camera states are ThreeScene.setCameraState() payloads; sun and theme are swept per pose.",
+  "sunSweepSliderMinutes": [355, 480, 600, 720, 900, 1080, 1210],
+  "quickSunSweep": [480, 720],
+  "themes": ["game", "night-corp"],
+  "gamelightReference": {
+    "pose": "P1-city-default",
+    "note": "colour-fidelity mode: load with ?gamelight (decoded az 107.12 / el 7, shadows+districts+pins stripped) and compare against the in-game PIX SDR capture"
+  },
+  "boundsNote": "Calibrated against the exposure-curve regression (2026-06-13). medianMin lowered 0.05 -> 0.035: deep-shadow dense-tower canyons (P3/P7 at mid-day) legitimately sit at median ~0.039-0.047 — dim but fully legible, 0% crushed. Maintainer ruled these acceptable rather than brighten (which would push the whole-city view past its exposure-1.0 anchor). 0.035 still catches a genuine regression (e.g. curve breakage -> dawn near-black ~0.015).",
+  "bounds": {
+    "medianMin": 0.035,
+    "medianMax": 0.45,
+    "clipMaxPct": 1.0,
+    "blackMaxPct": 60
+  },
+  "poses": [
+    { "id": "P1-city-default",     "target": [-800, 0, 500],        "position": [-800, 11975.85, 2827.87], "why": "intro rest pose — first impression; doubles as gamelight colour-fidelity + near-max-zoom frame" },
+    { "id": "P2-canyon-westCC",    "target": [-2199.07, 0, -133.1], "position": [-2741.45, 732.08, 92.94], "why": "deep backlit street canyon — 'never too dark' floor; watches the _m slope-fix region" },
+    { "id": "P3-corpo-plaza",      "target": [-1446, 100, 51],      "position": [-1480, 600, 1200],        "why": "densest towers + landmarks — deepest shadow pools, SHADOW_INTENSITY readout" },
+    { "id": "P4-pacifica-bay",     "target": [-4300, 0, 3300],      "position": [-3300, 700, 2900],        "why": "open water — largest uniform surface, first to clip; exposure ceiling" },
+    { "id": "P5-badlands-terrain", "target": [2500, 0, 2500],       "position": [3400, 1800, 3800],        "why": "bare terrain + grid — the docs' clean calibration reference surface" },
+    { "id": "P6-watson-midzoom",   "target": [-700, 0, -1700],      "position": [-300, 1100, -700],        "why": "typical browsing altitude — mixed heights, roads/metro/water in one frame" },
+    { "id": "P7-close-street",     "target": [-2199, 40, -133],     "position": [-2480, 260, 180],         "why": "pin-popup working distance at strong tilt — _m detail + edge highlight at full scale" },
+    { "id": "P8-dogtown",          "target": [-1837, 0, 2465],      "position": [-1300, 900, 3300],        "why": "separate district material constants (edge sharpness 50) — calibration generalisation check" }
+  ]
+}

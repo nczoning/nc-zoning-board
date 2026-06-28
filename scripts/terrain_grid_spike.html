@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CP2077 3D-Map Terrain Grid — decoded shader</title>
+<!--
+  Standalone calibration demo for the in-game world-map terrain grid.
+  The grid is procedural: decoded 2026-05-20 from a PIX GPU capture of
+  Cyberpunk 2077 (pixel shader hash 8538a550680120453ca108b5628a9b1f).
+
+  This runs the EXACT decoded algorithm on a flat plane spanning the
+  terrain's world bounds (+/-8000). Lighting is omitted (flat plane);
+  the grid pattern, colours and edge-fade are the calibration target.
+  Load an in-game screenshot via the panel to compare side-by-side.
+-->
+<style>
+  html,body{margin:0;height:100%;background:#05080f;overflow:hidden;
+            font-family:'Segoe UI',Tahoma,sans-serif;}
+  #c{position:fixed;inset:0;display:block;}
+  #overlay{position:fixed;inset:0;width:100%;height:100%;object-fit:contain;
+           pointer-events:none;opacity:0;}
+  #panel{position:fixed;top:10px;left:10px;width:264px;max-height:95vh;
+         overflow:auto;background:rgba(10,16,28,.93);border:1px solid #1e3a4a;
+         border-radius:6px;padding:10px 12px;color:#cfe;font-size:12px;
+         box-shadow:0 4px 18px rgba(0,0,0,.5);}
+  #panel h1{font-size:13px;margin:0 0 2px;color:#5ef6ff;}
+  #panel h2{font-size:10px;margin:11px 0 4px;color:#7fdac0;
+            text-transform:uppercase;letter-spacing:.6px;}
+  .row{display:flex;align-items:center;gap:7px;margin:4px 0;}
+  .row label{flex:0 0 92px;color:#aebed0;}
+  .row input[type=range]{flex:1;min-width:0;}
+  .row input[type=color]{flex:1;height:20px;padding:0;border:0;background:none;}
+  .row input[type=file]{flex:1;min-width:0;font-size:10px;color:#aebed0;}
+  .row .val{flex:0 0 44px;text-align:right;color:#fff;
+            font-variant-numeric:tabular-nums;}
+  button{background:#15485a;color:#dff;border:1px solid #2a8f9a;
+         border-radius:4px;padding:5px 8px;cursor:pointer;width:100%;margin-top:9px;}
+  button:hover{background:#1d6377;}
+  .note{color:#6b7d92;font-size:10px;margin-top:8px;line-height:1.45;}
+  code{color:#9fe;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<img id="overlay" alt="">
+<div id="panel">
+  <h1>3D-Map Terrain Grid</h1>
+  <div class="note">Decoded from PIX capture — shader <code>8538a550…</code>.
+    Defaults are the exact game values. Drag to orbit, scroll to zoom.</div>
+  <div id="controls"></div>
+</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+/* ── decoded game defaults ───────────────────────────────────────────────
+   Three nested grids on world XZ. Cell sizes are 1/scale from the DXIL:
+   layer A scale 0.0125 → 80 wu,  B 0.125 → 8 wu,  C 0.0025 → 400 wu.
+   N = line-width factor (line ≈ cell/N wide). Colours from cbuffer cb4. */
+const GAME = {
+  cellA: 80,  nA: 20,  enA: true,
+  cellB: 8,   nB: 2,   offB: 1423.6, enB: true,
+  cellC: 400, nC: 75,  enC: true,
+  baseColor: '#566c88',          // BaseColorScale  rgb(86,108,136)
+  linesColor:'#6d8ab0',          // LinesColor      rgb(109,138,176)
+  darkEdge: 4500,                // DarkEdgeWidth
+  bright: 1.0,                   // Brightness
+};
+const state = { ...GAME };
+
+/* ── three.js scene ──────────────────────────────────────────────────── */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x05080f);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(35, innerWidth/innerHeight, 10, 300000);
+camera.position.set(6000, 22000, 15000);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0, 0);
+controls.minDistance = 2000;
+controls.maxDistance = 120000;
+
+const uniforms = {
+  uBaseColor:    { value: new THREE.Color(state.baseColor) },
+  uLinesColor:   { value: new THREE.Color(state.linesColor) },
+  uDarkEdgeWidth:{ value: state.darkEdge },
+  uBrightness:   { value: state.bright },
+  uCellSize:     { value: new THREE.Vector3(state.cellA, state.cellB, state.cellC) },
+  uLineN:        { value: new THREE.Vector3(state.nA, state.nB, state.nC) },
+  uLayerBOffset: { value: state.offB },
+  uLayerEnable:  { value: new THREE.Vector3(1, 1, 1) },
+  uMapHalf:      { value: 8000 },
+};
+
+const vertexShader = /* glsl */`
+  out vec2 vWorldXZ;
+  void main() {
+    vec4 wp = modelMatrix * vec4(position, 1.0);
+    vWorldXZ = wp.xz;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+/* Faithful port of the decoded pixel shader. gridCoverage() is the
+   analytic anti-aliased grid-line integral: round(c) + min(frac(c)*N,1)
+   is the antiderivative of the line pulse train, evaluated across the
+   pixel footprint c ± fwidth/2. */
+const fragmentShader = /* glsl */`
+  in vec2 vWorldXZ;
+  out vec4 outColor;
+  uniform vec3  uBaseColor, uLinesColor, uCellSize, uLineN, uLayerEnable;
+  uniform float uDarkEdgeWidth, uBrightness, uLayerBOffset, uMapHalf;
+
+  float gridCoverage(vec2 c, float N) {
+    vec2 w   = max(abs(dFdx(c)), abs(dFdy(c)));   // pixel footprint
+    vec2 up  = c + w * 0.5;
+    vec2 dn  = c - w * 0.5;
+    vec2 Fup = round(up) + min(fract(up) * N, 1.0);
+    vec2 Fdn = round(dn) + min(fract(dn) * N, 1.0);
+    vec2 cov = (Fup - Fdn) / (w * N);
+    return clamp(max(cov.x, cov.y), 0.0, 1.0);    // line in X or Y
+  }
+
+  void main() {
+    vec2 P = vWorldXZ;
+    float A = gridCoverage(P / uCellSize.x, uLineN.x) * uLayerEnable.x;
+    float B = gridCoverage(P / uCellSize.y + uLayerBOffset, uLineN.y) * uLayerEnable.y;
+    float C = gridCoverage(P / uCellSize.z, uLineN.z) * uLayerEnable.z;
+
+    float g = clamp((1.0 + 50.0 * C) * (0.65 * A - B), 0.0, 1.0);
+    vec3 col = mix(uBaseColor, uLinesColor, g) * uBrightness;
+
+    float edge = clamp((uMapHalf - max(abs(P.x), abs(P.y))) / uDarkEdgeWidth, 0.0, 1.0);
+    edge = edge * edge * (3.0 - 2.0 * edge);      // smoothstep
+    outColor = vec4(max(col * edge, 0.0), 1.0);
+  }
+`;
+
+const material = new THREE.ShaderMaterial({
+  uniforms, vertexShader, fragmentShader,
+  glslVersion: THREE.GLSL3, side: THREE.DoubleSide,
+});
+
+const plane = new THREE.PlaneGeometry(16000, 16000);
+plane.rotateX(-Math.PI / 2);                       // lie flat in world XZ
+scene.add(new THREE.Mesh(plane, material));
+
+function syncUniforms() {
+  uniforms.uBaseColor.value.set(state.baseColor);
+  uniforms.uLinesColor.value.set(state.linesColor);
+  uniforms.uDarkEdgeWidth.value = state.darkEdge;
+  uniforms.uBrightness.value = state.bright;
+  uniforms.uCellSize.value.set(state.cellA, state.cellB, state.cellC);
+  uniforms.uLineN.value.set(state.nA, state.nB, state.nC);
+  uniforms.uLayerBOffset.value = state.offB;
+  uniforms.uLayerEnable.value.set(+state.enA, +state.enB, +state.enC);
+}
+
+/* ── control panel ───────────────────────────────────────────────────── */
+const CONFIG = [
+  { sec: 'Layer A — 80-unit grid' },
+  { k:'cellA', label:'cell size', min:5, max:400, step:1 },
+  { k:'nA',    label:'line N',    min:1, max:120, step:1 },
+  { k:'enA',   label:'enabled',   chk:true },
+  { sec: 'Layer B — 8-unit grid' },
+  { k:'cellB', label:'cell size', min:1, max:200, step:1 },
+  { k:'nB',    label:'line N',    min:1, max:60,  step:0.5 },
+  { k:'offB',  label:'phase',     min:0, max:2000,step:0.1 },
+  { k:'enB',   label:'enabled',   chk:true },
+  { sec: 'Layer C — 400-unit grid' },
+  { k:'cellC', label:'cell size', min:50, max:1600, step:5 },
+  { k:'nC',    label:'line N',    min:1,  max:200,  step:1 },
+  { k:'enC',   label:'enabled',   chk:true },
+  { sec: 'Appearance' },
+  { k:'baseColor',  label:'terrain fill', color:true },
+  { k:'linesColor', label:'grid lines',   color:true },
+  { k:'darkEdge',   label:'edge fade',    min:0, max:8000, step:50 },
+  { k:'bright',     label:'brightness',   min:0, max:3,    step:0.05 },
+];
+
+const host = document.getElementById('controls');
+const refs = {};
+
+for (const item of CONFIG) {
+  if (item.sec) {
+    const h = document.createElement('h2');
+    h.textContent = item.sec;
+    host.appendChild(h);
+    continue;
+  }
+  const row = document.createElement('div');
+  row.className = 'row';
+  const lab = document.createElement('label');
+  lab.textContent = item.label;
+  row.appendChild(lab);
+
+  if (item.color) {
+    const inp = document.createElement('input');
+    inp.type = 'color'; inp.value = state[item.k];
+    inp.oninput = () => { state[item.k] = inp.value; syncUniforms(); };
+    row.appendChild(inp);
+  } else if (item.chk) {
+    const inp = document.createElement('input');
+    inp.type = 'checkbox'; inp.checked = state[item.k];
+    inp.style.flex = '1';
+    inp.onchange = () => { state[item.k] = inp.checked; syncUniforms(); };
+    row.appendChild(inp);
+  } else {
+    const inp = document.createElement('input');
+    inp.type = 'range';
+    inp.min = item.min; inp.max = item.max; inp.step = item.step;
+    inp.value = state[item.k];
+    const val = document.createElement('span');
+    val.className = 'val'; val.textContent = state[item.k];
+    inp.oninput = () => {
+      state[item.k] = parseFloat(inp.value);
+      val.textContent = state[item.k];
+      syncUniforms();
+    };
+    row.appendChild(inp); row.appendChild(val);
+    refs[item.k] = { inp, val };
+  }
+  host.appendChild(row);
+}
+
+// reset button
+const reset = document.createElement('button');
+reset.textContent = 'Reset to game values';
+reset.onclick = () => {
+  Object.assign(state, GAME);
+  for (const item of CONFIG) {
+    if (item.sec) continue;
+    if (refs[item.k]) {
+      refs[item.k].inp.value = state[item.k];
+      refs[item.k].val.textContent = state[item.k];
+    }
+  }
+  // re-sync color/checkbox inputs
+  host.querySelectorAll('input[type=color]').forEach((inp, i) => {
+    inp.value = i === 0 ? state.baseColor : state.linesColor;
+  });
+  host.querySelectorAll('input[type=checkbox]').forEach((inp, i) => {
+    inp.checked = [state.enA, state.enB, state.enC][i];
+  });
+  syncUniforms();
+};
+host.appendChild(reset);
+
+// compare-with-screenshot section
+const cmp = document.createElement('h2');
+cmp.textContent = 'Compare with screenshot';
+host.appendChild(cmp);
+
+const overlay = document.getElementById('overlay');
+const fileRow = document.createElement('div');
+fileRow.className = 'row';
+const fileLab = document.createElement('label');
+fileLab.textContent = 'load image';
+const fileInp = document.createElement('input');
+fileInp.type = 'file'; fileInp.accept = 'image/*';
+fileInp.onchange = () => {
+  if (fileInp.files[0]) overlay.src = URL.createObjectURL(fileInp.files[0]);
+};
+fileRow.appendChild(fileLab); fileRow.appendChild(fileInp);
+host.appendChild(fileRow);
+
+const opRow = document.createElement('div');
+opRow.className = 'row';
+const opLab = document.createElement('label');
+opLab.textContent = 'overlay opacity';
+const opInp = document.createElement('input');
+opInp.type = 'range'; opInp.min = 0; opInp.max = 1; opInp.step = 0.02; opInp.value = 0;
+opInp.oninput = () => { overlay.style.opacity = opInp.value; };
+opRow.appendChild(opLab); opRow.appendChild(opInp);
+host.appendChild(opRow);
+
+const note = document.createElement('div');
+note.className = 'note';
+note.textContent = 'Lighting is omitted — this is a flat plane; the real ' +
+  'terrain normals drive the in-game shading. Grid pattern, colours and ' +
+  'edge-fade match 1:1.';
+host.appendChild(note);
+
+/* ── render loop ─────────────────────────────────────────────────────── */
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+renderer.setSize(innerWidth, innerHeight);
+
+renderer.setAnimationLoop(() => {
+  controls.update();
+  renderer.render(scene, camera);
+});
+</script>
+</body>
+</html>

@@ -38,7 +38,7 @@ The NC Zoning Board is an interactive map and coordinate registry for Cyberpunk 
 ### In Progress
 
 - 🔄 **Building / road / metro overlays** — extracting game geometry and aligning to CET coordinate space
-- 🔄 **District overlays** — semi-transparent coloured district boundaries, toggleable as SVG layers
+- 🔄 **District overlays** — district and subdistrict boundary outlines rendered as GeoJSON layers, zoom-switchable
 
 ## Planned Features
 
@@ -55,6 +55,9 @@ The NC Zoning Board is an interactive map and coordinate registry for Cyberpunk 
 - [ ] **New theme: Netrunner**
 - [ ] **New theme: Blade Runner**
 - [ ] **New theme: Deus Ex**
+- [ ] **Showcase editor** — GUI tool for creating custom flyover sequences (very low priority)
+- [ ] **Theme editor** — GUI tool for creating and customising themes (very low priority)
+- [ ] **Multiple coordinate sets** — support `coords`, `additional_coords`, `nav_coords` on a single mod entry
 
 ### Blocked
 

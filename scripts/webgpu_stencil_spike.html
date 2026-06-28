@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Phase 0 Spike #1 — Stencil Parity</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #1a1a1a; color: #ddd;
+               font: 14px/1.4 system-ui, sans-serif; }
+  #info { position: fixed; top: 8px; left: 8px; right: 8px; padding: 10px 14px;
+          background: rgba(0, 0, 0, 0.78); border: 1px solid #444; border-radius: 6px;
+          z-index: 1; pointer-events: none; }
+  #info h1 { margin: 0 0 6px; font-size: 15px; color: #00f0ff; }
+  #info p  { margin: 4px 0; }
+  #info .pass { color: #6f6; font-weight: bold; }
+  #info .fail { color: #f66; font-weight: bold; }
+  #info .pending { color: #fc6; font-weight: bold; }
+  canvas { display: block; }
+  kbd { background: #333; border: 1px solid #555; padding: 1px 6px; border-radius: 3px;
+        font-family: monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+<div id="info">
+  <h1>Phase 0 Spike #1 — Material-level stencil flags under WebGPU</h1>
+  <p><b>Setup:</b> ground plane writes stencil=2 (water), 9 cubes write stencil=1 (buildings).
+     Top plane reads stencil==2 only (SeeThrough roads).</p>
+  <p><b>PASS criteria:</b> the cyan road strip is visible only between the cubes (where water
+     wrote stencil=2). It must NOT show on top of the cubes.</p>
+  <p><b>Status:</b> <span id="status" class="pending">initializing renderer…</span></p>
+  <p><kbd>Drag</kbd> orbit · <kbd>Scroll</kbd> zoom — visually verify the strip shows water-only.</p>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.184.0/build/three.webgpu.min.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.184.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const status = document.getElementById('status');
+const setStatus = (text, cls = 'pending') => {
+  status.className = cls; status.textContent = text;
+};
+
+try {
+  const renderer = new THREE.WebGPURenderer({
+    stencil: true,
+    antialias: true,
+    reversedDepthBuffer: true,
+  });
+  await renderer.init();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  const scene  = new THREE.Scene();
+  scene.background = new THREE.Color(0x1a1a1a);
+  const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 200);
+  camera.position.set(8, 10, 14);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 0, 0);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+  sun.position.set(8, 12, 6);
+  scene.add(sun);
+
+  // ── Stage 1: water plane writes stencil = 2 ────────────────────────
+  // Mirrors three-scene.js:508–511 (water material)
+  const waterMat = new THREE.MeshBasicNodeMaterial({
+    color: 0x3c4c5f,
+    transparent: true,
+    opacity: 0.6,
+    stencilWrite: true,
+    stencilRef:   2,
+    stencilFunc:  THREE.AlwaysStencilFunc,
+    stencilZPass: THREE.ReplaceStencilOp,
+  });
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), waterMat);
+  water.rotation.x = -Math.PI / 2;
+  water.position.y = 0;
+  scene.add(water);
+
+  // ── Stage 2: 9 cubes write stencil = 1 (buildings) ─────────────────
+  // Mirrors three-scene.js:897–901 (building stencil-write)
+  const buildingMat = new THREE.MeshLambertNodeMaterial({
+    color: 0x556677,
+    stencilWrite: true,
+    stencilRef:   1,
+    stencilFunc:  THREE.AlwaysStencilFunc,
+    stencilZPass: THREE.ReplaceStencilOp,
+  });
+  const cubeGeo = new THREE.BoxGeometry(1.5, 2, 1.5);
+  for (let i = -1; i <= 1; i++) {
+    for (let j = -1; j <= 1; j++) {
+      const cube = new THREE.Mesh(cubeGeo, buildingMat);
+      cube.position.set(i * 4, 1, j * 4);
+      scene.add(cube);
+    }
+  }
+
+  // ── Stage 3: SeeThrough road reads stencil == 2 only ───────────────
+  // Mirrors three-scene.js:656–663 (road SeeThrough material)
+  const roadMat = new THREE.MeshBasicNodeMaterial({
+    color: 0x1cb3bf,
+    transparent: true,
+    opacity: 0.85,
+    depthTest:    false,        // SeeThrough renders even where occluded
+    stencilWrite: true,
+    stencilWriteMask: 0x00,     // read-only — don't modify stencil
+    stencilFunc:      THREE.EqualStencilFunc,
+    stencilRef:       2,
+    stencilFuncMask:  0xff,
+    stencilFail:      THREE.KeepStencilOp,
+    stencilZFail:     THREE.KeepStencilOp,
+    stencilZPass:     THREE.KeepStencilOp,
+  });
+  const road = new THREE.Mesh(new THREE.PlaneGeometry(16, 2), roadMat);
+  road.rotation.x = -Math.PI / 2;
+  road.position.y = 3;          // above the cubes
+  road.renderOrder = 10;        // ensure it draws after stencil writers
+  scene.add(road);
+
+  // Adapter info for the status line
+  const adapterInfo = renderer.backend?.adapter
+    ? await renderer.backend.adapter.requestAdapterInfo?.().catch(() => null)
+    : null;
+  const gpuName = adapterInfo?.description || adapterInfo?.vendor || '(unknown GPU)';
+
+  setStatus(`renderer ready · backend=${renderer.isWebGPURenderer ? 'WebGPU' : 'WebGL2 fallback'} · GPU=${gpuName} · visually verify the cyan strip vs. cubes`, 'pass');
+
+  function loop() {
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  renderer.setAnimationLoop(loop);
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+} catch (err) {
+  console.error(err);
+  setStatus(`FAIL — ${err.message}`, 'fail');
+}
+</script>
+</body>
+</html>

@@ -93,16 +93,27 @@ nc-zoning-board/
 
 ### JavaScript Architecture
 
-Frontend JS is split into four files loaded via `<script>` tags (no ES modules, no bundler). All shared symbols live on the `window.NCZ` namespace.
+The core frontend JS is four files loaded via `<script>` tags (no ES modules, no bundler). All shared symbols live on the `window.NCZ` namespace.
 
 | File | Role |
 | --- | --- |
-| `constants.js` | All config values — category styles, API endpoints, cache keys, UI sizing |
-| `utils.js` | Pure functions — `escapeHtml`, `cetToLeaflet`, `clamp`, positioning algorithm, BBCode parser |
+| `constants.js` | All config values — category styles, API endpoints, cache keys, UI sizing, 3D scene constants |
+| `utils.js` | Pure functions — `escapeHtml`, `cetToLeaflet`, `cetToThree`, positioning algorithm, BBCode parser |
 | `services.js` | Fetch functions — Nexus thumbnail API, auto-discovery, `fetchModData()` |
-| `app.js` | DOM logic — map init, sidebar, cluster panel, modals, image gallery |
+| `app.js` | DOM logic — map init, sidebar, cluster panel, modals, image gallery, view switching |
 
-Load order (linear dependency chain, no circular refs): `constants.js` → `utils.js` → `services.js` → `app.js`
+Load order on `main`: `constants.js` → `utils.js` → `services.js` → `app.js`
+
+**Three.js migration** (in progress on `dev` branch) adds four more files:
+
+| File | Role |
+| --- | --- |
+| `overlay.js` | District/subdistrict GeoJSON border overlays for the satellite view |
+| `three-scene.js` | Three.js scene: renderer, camera, GLBs, buildings, sun/shadows (`NCZ.ThreeScene`) |
+| `three-markers.js` | 3D pin/popup/tooltip/cluster layer — interactive parity with Leaflet (`NCZ.ThreeMarkers`). See [three-markers.md](three-markers.md) for the full architecture. |
+| `flyover.js` | Optional cinematic flyover showcase — include/exclude via `<script>` tag |
+
+Load order on `dev`/feature branches: `constants.js` → `utils.js` → `services.js` → `overlay.js` → `three-scene.js` (module) → `three-markers.js` (module) → `app.js` → `[flyover.js optional]`
 
 ### Map Layer (`app.js`)
 
@@ -114,7 +125,8 @@ Load order (linear dependency chain, no circular refs): `constants.js` → `util
 ### Coordinate Transform (`utils.js`)
 
 - `NCZ.cetToLeaflet(x, y)` — converts CET game coordinates to Leaflet `[lat, lng]`
-- Simple linear mapping derived from a grid calibration
+- Exact linear mapping derived from `NCZ.WORLD_MIN/MAX_X/Y` constants (from the Realistic Map mod terrain quad UV mapping) — not a calibrated approximation
+- `NCZ.cetToThree(x, y, z)` — converts CET coordinates to Three.js scene space (`[x, z||0, -y]`)
 - See [Coordinate System](coordinate-system.md) for full details
 
 ### Mod Data (`data/locations/*.json`)

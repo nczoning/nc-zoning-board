@@ -21,6 +21,435 @@
     height: 100%;
 }
 
+#map-3d {
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+/* Force the WebGLRenderer canvas to fill its container.
+   Three.js is initialised with `setSize(w, h, false)` (updateStyle:false), so
+   it never writes inline width/height onto <canvas>. Without this rule, the
+   canvas — a replaced element — falls back to its intrinsic dimensions (the
+   drawingBuffer pixel size, = clientSize × devicePixelRatio), which overflows
+   the container on any DPR > 1.0 and shifts the WebGL scene off the CSS2D pin
+   overlay. See three-scene.js:225 for the renderer setup. */
+#map-3d > canvas {
+    width: 100%;
+    height: 100%;
+}
+
+/* Overlay toggles — floats over the map, above the view toggle */
+/* District hover info panel — top-right under the header, right-aligned with the
+   icon on the right (parity with the in-game bottom-right readout; bottom-right
+   here is taken by the overlay controls). --di-color is set per-district by
+   NCZ.DistrictInfo. pointer-events:none so it never blocks the map. */
+#district-info-panel {
+    position: absolute;
+    top: var(--space-md);
+    right: var(--space-md);
+    /* Below the cluster panel (1000) so it slides in over this readout, but
+       above the map. */
+    z-index: 900;
+    max-width: 360px;
+    text-align: right;
+    pointer-events: none;
+    /* Text-only (no plate). A solid four-direction dark casing (like the map
+       labels) keeps it legible over bright satellite imagery as well as the dark
+       schematic — a soft blur alone washed out over the rooftops. */
+    text-shadow:
+        -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000,
+        0 0 4px rgba(0, 0, 0, 0.9),
+        0 0 8px rgba(0, 0, 0, 0.7);
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+#district-info-panel.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Two-column header (matches the in-game readout): column 1 stacks the district
+   name over the subdistrict, column 2 is the icon spanning both rows. */
+.di-head {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-sm);
+}
+
+.di-names {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.di-district {
+    font-family: var(--font-heading);
+    font-size: var(--text-lg);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--di-color, var(--white));
+    line-height: 1.05;
+}
+
+.di-sub {
+    display: block;
+    font-family: var(--font-body);
+    font-size: var(--text-md);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--di-color, var(--white)); /* subdistrict shares the district colour */
+    opacity: 0.9;
+    margin-top: 1px;
+}
+
+.di-icon {
+    flex: none;
+    /* Box size (exact icon dimensions) + background crop set per-district by
+       NCZ.DistrictInfo. A drop shadow keeps the icon legible over bright
+       satellite imagery, matching the text casing. */
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.9));
+}
+
+.di-stats {
+    margin-top: var(--space-xs);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.di-count {
+    font-family: var(--font-heading);
+    font-size: var(--text-lg);
+    color: var(--white);
+}
+
+.di-breakdown {
+    font-size: var(--text-md);
+}
+
+.di-dot {
+    margin: 0 4px;
+    color: var(--white);
+    opacity: 0.7;
+}
+
+.di-share,
+.di-recent {
+    font-size: var(--text-md);
+    color: var(--white);
+}
+
+#overlay-controls {
+    position: absolute;
+    bottom: 120px;
+    right: var(--space-sm);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+    background: var(--surface-panel);
+    border: var(--ui-border-thin) solid var(--secondary-20);
+    padding: var(--space-xs) var(--space-md);
+}
+
+.overlay-controls-label {
+    font-family: var(--font-heading);
+    font-size: var(--text-2xs);
+    color: var(--gray);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.overlay-perf-warn {
+    font-size: var(--text-2xs);
+    color: var(--tertiary);
+    opacity: 0.7;
+    margin-left: 2px;
+    cursor: help;
+}
+
+.overlay-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    color: var(--white);
+    cursor: pointer;
+    user-select: none;
+
+    &.schema-only.sat-active {
+        opacity: 0.35;
+        pointer-events: none;
+    }
+}
+
+/* View toggle (SAT | SCHEMA) — floats over the map in the bottom-right */
+#map-view-toggle {
+    position: absolute;
+    bottom: 80px; /* above Leaflet zoom controls */
+    right: var(--space-sm);
+    z-index: 1000;
+    display: flex;
+    gap: 2px;
+    background: var(--surface-panel);
+    border: var(--ui-border-thin) solid var(--secondary);
+    padding: 2px;
+}
+
+.map-view-btn {
+    background: transparent;
+    border: none;
+    color: var(--gray);
+    font-family: var(--font-heading);
+    font-size: var(--text-xs);
+    padding: var(--space-2xs) var(--space-sm);
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: var(--transition-fast);
+
+    &:hover {
+        color: var(--white);
+    }
+
+    &.active {
+        background: var(--secondary);
+        color: var(--primary);
+    }
+}
+
+/* Controls reference + reset — bottom-left of #map-3d */
+#scene-controls {
+    position: absolute;
+    bottom: var(--space-sm);
+    right: var(--space-sm);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    background: var(--surface-panel);
+    border: var(--ui-border-thin) solid var(--secondary-20);
+    padding: var(--space-xs) var(--space-md);
+    pointer-events: auto;
+}
+
+.scene-controls-hint {
+    display: flex;
+    gap: var(--space-md);
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    color: var(--gray);
+
+    & kbd {
+        font-family: var(--font-body);
+        color: var(--white);
+        background: none;
+        border: none;
+        padding: 0;
+    }
+}
+
+/* Sun / time-of-day slider */
+#scene-sun-control {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    cursor: pointer;
+}
+
+#scene-sun-icon {
+    font-size: var(--text-sm);
+    line-height: 1;
+    color: var(--tertiary);
+}
+
+#scene-sun-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 90px;
+    height: 2px;
+    background: var(--secondary-30);
+    border-radius: 1px;
+    cursor: pointer;
+    outline: none;
+
+    &::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--tertiary);
+        cursor: pointer;
+    }
+
+    &::-moz-range-thumb {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--tertiary);
+        border: none;
+        cursor: pointer;
+    }
+}
+
+#scene-sun-time {
+    font-family: var(--font-heading);
+    font-size: var(--text-xs);
+    color: var(--tertiary);
+    min-width: 2.8rem;
+    letter-spacing: 0.05em;
+}
+
+#scene-flyover-btn {
+    background: transparent;
+    border: var(--ui-border-thin) solid var(--secondary-30);
+    color: var(--secondary);
+    font-family: var(--font-heading);
+    font-size: var(--text-xs);
+    padding: var(--space-2xs) var(--space-sm);
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: var(--transition-fast);
+    white-space: nowrap;
+
+    &:hover {
+        background: var(--secondary);
+        color: var(--primary);
+        border-color: var(--secondary);
+    }
+
+    &.active {
+        background: var(--secondary);
+        color: var(--primary);
+        border-color: var(--secondary);
+    }
+}
+
+#scene-reset-btn {
+    background: transparent;
+    border: var(--ui-border-thin) solid var(--secondary-30);
+    color: var(--secondary);
+    font-family: var(--font-heading);
+    font-size: var(--text-xs);
+    padding: var(--space-2xs) var(--space-sm);
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: var(--transition-fast);
+    white-space: nowrap;
+
+    &:hover {
+        background: var(--secondary);
+        color: var(--primary);
+        border-color: var(--secondary);
+    }
+}
+
+/* Loading indicator inside #map-3d */
+.scene-loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    width: 280px;
+    padding: var(--space-lg) var(--space-lg) var(--space-md);
+    background: var(--surface-panel);
+    border: 1px solid var(--secondary-20);
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+.scene-loading__text {
+    color: var(--secondary);
+    font-family: var(--font-heading);
+    font-size: var(--text-sm);
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.scene-loading__track {
+    height: 2px;
+    background: var(--secondary-20);
+    width: 100%;
+}
+.scene-loading__fill {
+    height: 100%;
+    background: var(--secondary);
+    width: 0%;
+    transition: width 200ms ease;
+}
+
+
+/* Showcase fullscreen — applied directly to #map-3d, no ancestor cascade needed */
+#map-3d.showcase-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+    width: 100vw;
+    height: 100vh;
+}
+
+
+/* Flyover start-screen — opening title card */
+#flyover-start-screen {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    pointer-events: none;
+    z-index: 10;
+    animation: flyover-fade 3s ease forwards;
+
+    &.hidden {
+        display: none;
+    }
+}
+
+@keyframes flyover-fade {
+    0%   { opacity: 0; }
+    15%  { opacity: 1; }
+    70%  { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+.flyover-title {
+    font-family: var(--font-heading);
+    font-size: var(--text-2xl);
+    letter-spacing: 0.15em;
+    color: var(--white);
+    text-transform: uppercase;
+}
+
+.flyover-subtitle {
+    font-family: var(--font-heading);
+    font-size: var(--text-sm);
+    letter-spacing: 0.2em;
+    color: var(--gray);
+    text-transform: uppercase;
+}
+
+.flyover-esc-hint {
+    font-family: var(--font-heading);
+    font-size: var(--text-2xs);
+    letter-spacing: 0.15em;
+    color: var(--gray);
+    opacity: 0.5;
+    margin-top: 1.5rem;
+    text-transform: uppercase;
+}
+
 /* Sidebar Styling */
 #sidebar {
     position: absolute;
@@ -644,28 +1073,48 @@ body.cluster-panel-resizing * {
         line-height: var(--lh-zoom-control) !important;
     }
 
-    /* Leaflet Scale Control Override */
+    /* Leaflet Scale Control — placement only. Visual styling lives below
+       so the 3D view's #scene-scale can wear the same skin. */
     .leaflet-control-scale {
         margin-bottom: var(--space-md);
         pointer-events: none;
-
-        .leaflet-control-scale-line {
-            border: var(--ui-border-thin) solid var(--secondary);
-            border-top: none;
-            border-width: 2px;
-            background: var(--primary-60);
-            color: var(--secondary);
-            font-family: var(--font-heading);
-            font-size: var(--text-xs);
-            letter-spacing: 0.5px;
-            text-shadow: none;
-            box-shadow: 0 0 var(--space-md) var(--secondary-20);
-
-            &:not(:first-child) {
-                border-top: var(--ui-border-thin) solid var(--secondary);
-            }
-        }
     }
+}
+
+/* Distance scale bar — shared by Leaflet (.leaflet-control-scale at
+   bottom-right of the SAT view) and ThreeMarkers (#scene-scale at bottom-
+   right of the SCHEMA view). Both wear the same .leaflet-control-scale-line
+   skin so 2D and 3D distance bars render identically. */
+.leaflet-control-scale-line {
+    border: var(--ui-border-thin) solid var(--secondary);
+    border-top: none;
+    border-width: 2px;
+    background: var(--primary-60);
+    color: var(--secondary);
+    font-family: var(--font-heading);
+    font-size: var(--text-xs);
+    letter-spacing: 0.5px;
+    text-shadow: none;
+    box-shadow: 0 0 var(--space-md) var(--secondary-20);
+
+    &:not(:first-child) {
+        border-top: var(--ui-border-thin) solid var(--secondary);
+    }
+}
+
+/* 3D-specific placement — floats above the bottom controls strip, below the
+   #map-view-toggle. Kept out of #scene-controls so the strip's flex row
+   doesn't shift width every time the bar relabels at a new zoom level.
+   Bottom value sits in the gap between scene-controls top (~44px) and
+   map-view-toggle bottom (80px). */
+#scene-scale {
+    position: absolute;
+    right: var(--space-sm);
+    bottom: 56px;
+    pointer-events: none;
+    z-index: 1000;
+    margin: 0;
+    line-height: 1;
 }
 
 .leaflet-popup-content-wrapper {
@@ -712,90 +1161,95 @@ body.cluster-panel-resizing * {
     background-color: var(--secondary) !important;
 }
 
-.leaflet-popup.ncz-dynamic-popup {
+/* ── Popup chrome — shared by Leaflet (2D) and ThreeMarkers (3D) ──────────
+   Leaflet renders the popup inside `.leaflet-popup.ncz-dynamic-popup >
+   .leaflet-popup-content-wrapper`. ThreeMarkers renders it as
+   `.three-popup.ncz-dynamic-popup` directly (no auto-generated wrapper).
+   Both views get the same styled card via the shared selectors below. */
+
+/* Default + per-category border colour. Applies to either view because
+   `.popup-cat-*` is on the same element as `.ncz-dynamic-popup`. */
+.ncz-dynamic-popup {
     --popup-border-color: var(--secondary);
+
+    &.popup-cat-location-overhaul { --popup-border-color: var(--category-location-overhaul); }
+    &.popup-cat-new-location      { --popup-border-color: var(--category-new-location); }
+    &.popup-cat-other             { --popup-border-color: var(--category-other); }
+}
+
+/* Leaflet-only structural reset — strip Leaflet's default close button, tip,
+   and outer wrapper margins so our chrome can render cleanly. */
+.leaflet-popup.ncz-dynamic-popup {
     margin: 0 !important;
 
-    .leaflet-popup-content {
-        margin: 0 !important;
-    }
+    .leaflet-popup-content       { margin: 0 !important; }
+    .leaflet-popup-close-button  { display: none !important; }
+    .leaflet-popup-tip-container { display: none !important; }
+}
 
-    .leaflet-popup-close-button {
-        display: none !important;
-    }
+/* The styled card — Leaflet's content-wrapper or 3D's .three-popup. */
+.leaflet-popup.ncz-dynamic-popup .leaflet-popup-content-wrapper,
+.three-popup.ncz-dynamic-popup {
+    position: relative;
+    overflow: visible;
+    border: 1px solid transparent;
+    border-color: transparent;
+    background:
+        linear-gradient(var(--primary), var(--primary)) padding-box,
+        linear-gradient(
+            180deg,
+            var(--popup-border-color) var(--ncz-popup-gradient-top-stop, 220px),
+            var(--secondary) var(--ncz-popup-gradient-bottom-stop, 240px)
+        ) border-box;
 
-    .leaflet-popup-tip-container {
-        display: none !important;
-    }
-
-    .leaflet-popup-content-wrapper {
-        position: relative;
-        overflow: visible;
-        border-color: transparent;
-        background:
-            linear-gradient(var(--primary), var(--primary)) padding-box,
-            linear-gradient(
-                180deg,
-                var(--popup-border-color) var(--ncz-popup-gradient-top-stop, 220px),
-                var(--secondary) var(--ncz-popup-gradient-bottom-stop, 240px)
-            ) border-box;
-
-        &::after {
-            content: "";
-            position: absolute;
-            width: 0;
-            height: 0;
-            pointer-events: none;
-        }
-    }
-
-    &.ncz-popup-top .leaflet-popup-content-wrapper::after {
-        top: 100%;
-        left: var(--ncz-popup-arrow-x, 50%);
-        transform: translateX(-50%);
-        border-left: var(--space-md) solid transparent;
-        border-right: var(--space-md) solid transparent;
-        border-top: var(--space-md) solid var(--secondary);
-    }
-
-    &.ncz-popup-bottom .leaflet-popup-content-wrapper::after {
-        bottom: 100%;
-        left: var(--ncz-popup-arrow-x, 50%);
-        transform: translateX(-50%);
-        border-left: var(--space-md) solid transparent;
-        border-right: var(--space-md) solid transparent;
-        border-bottom: var(--space-md) solid var(--popup-border-color);
-    }
-
-    &.ncz-popup-left .leaflet-popup-content-wrapper::after {
-        left: 100%;
-        top: var(--ncz-popup-arrow-y, 50%);
-        transform: translateY(-50%);
-        border-top: var(--space-md) solid transparent;
-        border-bottom: var(--space-md) solid transparent;
-        border-left: var(--space-md) solid var(--popup-border-color);
-    }
-
-    &.ncz-popup-right .leaflet-popup-content-wrapper::after {
-        right: 100%;
-        top: var(--ncz-popup-arrow-y, 50%);
-        transform: translateY(-50%);
-        border-top: var(--space-md) solid transparent;
-        border-bottom: var(--space-md) solid transparent;
-        border-right: var(--space-md) solid var(--popup-border-color);
+    &::after {
+        content: "";
+        position: absolute;
+        width: 0;
+        height: 0;
+        pointer-events: none;
     }
 }
 
-.leaflet-popup.ncz-dynamic-popup.popup-cat-location-overhaul {
-    --popup-border-color: var(--category-location-overhaul);
+/* Direction classes — ncz-popup-top = popup is above pin (arrow at popup
+   bottom pointing down). ncz-popup-bottom = popup below pin (arrow at top
+   pointing up). top/bottom work for both views; left/right are Leaflet-only. */
+.leaflet-popup.ncz-dynamic-popup.ncz-popup-top .leaflet-popup-content-wrapper::after,
+.three-popup.ncz-dynamic-popup.ncz-popup-top::after {
+    top: 100%;
+    left: var(--ncz-popup-arrow-x, 50%);
+    transform: translateX(-50%);
+    border-left: var(--space-md) solid transparent;
+    border-right: var(--space-md) solid transparent;
+    border-top: var(--space-md) solid var(--secondary);
 }
 
-.leaflet-popup.ncz-dynamic-popup.popup-cat-new-location {
-    --popup-border-color: var(--category-new-location);
+.leaflet-popup.ncz-dynamic-popup.ncz-popup-bottom .leaflet-popup-content-wrapper::after,
+.three-popup.ncz-dynamic-popup.ncz-popup-bottom::after {
+    bottom: 100%;
+    left: var(--ncz-popup-arrow-x, 50%);
+    transform: translateX(-50%);
+    border-left: var(--space-md) solid transparent;
+    border-right: var(--space-md) solid transparent;
+    border-bottom: var(--space-md) solid var(--popup-border-color);
 }
 
-.leaflet-popup.ncz-dynamic-popup.popup-cat-other {
-    --popup-border-color: var(--category-other);
+.leaflet-popup.ncz-dynamic-popup.ncz-popup-left .leaflet-popup-content-wrapper::after {
+    left: 100%;
+    top: var(--ncz-popup-arrow-y, 50%);
+    transform: translateY(-50%);
+    border-top: var(--space-md) solid transparent;
+    border-bottom: var(--space-md) solid transparent;
+    border-left: var(--space-md) solid var(--popup-border-color);
+}
+
+.leaflet-popup.ncz-dynamic-popup.ncz-popup-right .leaflet-popup-content-wrapper::after {
+    right: 100%;
+    top: var(--ncz-popup-arrow-y, 50%);
+    transform: translateY(-50%);
+    border-top: var(--space-md) solid transparent;
+    border-bottom: var(--space-md) solid transparent;
+    border-right: var(--space-md) solid var(--popup-border-color);
 }
 
 /* Global link/button components */
@@ -1540,6 +1994,43 @@ body::before {
     gap: var(--space-sm);
 }
 
+/* Attribution block — "Asset & data credits" heading, CDPR Fan Content
+   disclaimer, then the per-asset credit list. Body reads at the modal text
+   size; heading reuses the .parameters-section-title idiom (Orbitron, accent,
+   uppercase) so it matches the Settings section headings. */
+.about-credits {
+    font-family: var(--font-body);
+    font-size: var(--text-lg);
+    line-height: 1.5;
+    color: var(--gray);
+
+    p {
+        margin-bottom: var(--space-xs);
+        line-height: 1.5;
+    }
+
+    .about-credits-heading {
+        margin: 0 0 var(--space-sm);
+        font-family: var(--font-heading);
+        font-size: var(--text-lg);
+        color: var(--secondary);
+        letter-spacing: 1px;
+        text-transform: uppercase;
+    }
+
+    .about-credits-list {
+        list-style: none;
+        padding-left: 0;
+        margin: 0;
+    }
+
+    a {
+        color: var(--secondary);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+}
+
 .terminal-link {
     display: block;
     color: var(--secondary);
@@ -1567,9 +2058,32 @@ body::before {
 }
 
 /* ── BBCode Header Button ─────────────────────────────────────────── */
-.parameters-modal-content {
+.parameters-modal-content,
+.showcase-modal-content {
     max-width: 420px;
     width: 95%;
+}
+
+.showcase-modal-actions {
+    display: flex;
+    gap: 8px;
+
+    & > .terminal-btn {
+        white-space: nowrap;
+        padding-left: var(--space-sm);
+        padding-right: var(--space-sm);
+    }
+}
+
+.showcase-modal-actions > #showcase-start-btn {
+    flex: 3;
+}
+
+.showcase-modal-actions > #showcase-reset-btn,
+.showcase-modal-actions > #close-showcase-modal {
+    flex: 1;
+    border-color: var(--gray);
+    color: var(--gray);
 }
 
 .parameters-modal-body {
@@ -1606,6 +2120,29 @@ body::before {
 
 .parameters-close-btn {
     margin-top: 0;
+}
+
+/* Settings render toggles: match the Appearance section's control size
+   (the theme select is --text-md), with the hint a step smaller. Scoped to
+   the parameters modal so the overlay-panel toggles keep their own size. */
+.parameters-section .overlay-toggle {
+    font-size: var(--text-md);
+}
+
+/* Always-visible hint under a Settings checkbox (the toggles' hover-title made
+   visible, per request) — a bit smaller than the setting label. */
+.parameters-hint {
+    margin: 0 0 var(--space-xs) calc(var(--space-md) + var(--space-2xs));
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
+    line-height: 1.4;
+    color: var(--gray);
+
+    a {
+        color: var(--secondary);
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
 }
 
 /* ── Nexus Auto Badge ─────────────────────────────────────────────── */
@@ -1885,6 +2422,13 @@ body::before {
 	transition: stroke-dashoffset 0.3s ease-out, stroke-opacity 0.3s ease-in;
 }
 
+/* District outline hover-brighten: NCZ.Overlay flips the path's stroke-opacity
+   between the faint baseline and the hover value; this animates the 250 ms fade
+   to match the SCHEMA (Three.js) tween. Pane class added in overlay.js init(). */
+.district-outline-pane path {
+	transition: stroke-opacity 0.25s ease;
+}
+
 .marker-cluster-step {
     --cluster-hue: 120;
 	background-color: hsl(
@@ -1951,4 +2495,188 @@ body::before {
         font-size: 15px;
         color: var(--color-white);
     }
+
+    /* Active cluster — the one whose contents are currently in the cluster
+       panel. Shared between Leaflet (SAT) and ThreeMarkers (SCHEMA) views. */
+    &.marker-cluster-active {
+        box-shadow:
+            0 0 0 2px var(--secondary),
+            0 0 var(--space-lg) var(--secondary-30);
+        z-index: 999 !important;
+    }
 }
+
+
+/* ── 3D pin layer (CSS2DRenderer overlay) ─────────────────────────────────
+   .three-marker is the pin element CSS2DRenderer anchors at the world point.
+   .three-popup-anchor is a zero-size wrapper at the world point; the inner
+   .three-popup card is absolutely positioned above it so the height of the
+   card never affects where it anchors. ::after draws the downward arrow.
+   ─────────────────────────────────────────────────────────────────────── */
+
+.three-marker {
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+/* District / subdistrict name labels (CSS2DObject at the polygon centroid).
+   Colour comes per-label from --label-color (the district's palette colour).
+   pointer-events:none so labels never intercept the outline hover or pins.
+   The .district-label-anchor is what CSS2DRenderer positions (it owns the inline
+   transform); the inner .district-label scales/glows on hover independently. */
+.district-label-anchor {
+    pointer-events: none;
+}
+
+.district-label {
+    pointer-events: none;
+    font-family: var(--font-heading);
+    color: var(--label-color, var(--white));
+    text-transform: uppercase;
+    white-space: nowrap;
+    text-align: center;
+    font-weight: 600;
+    /* Dark halo keeps the name legible over the busy map without a filled plate. */
+    text-shadow:
+        0 0 4px var(--surface-tooltip-95, rgba(2, 8, 20, 0.95)),
+        0 1px 3px rgba(0, 0, 0, 0.9);
+    user-select: none;
+    /* Faint by default (like the outlines), brightening only on hover. Roughly
+       half the previous baseline so names stay readable but recede; the hover
+       state lifts the focused one to full. 250 ms matches the outline brighten. */
+    opacity: 0.5;
+    transition: opacity 0.25s ease, transform 0.25s ease, text-shadow 0.25s ease;
+}
+
+.district-label-district {
+    font-size: var(--text-sm);
+    letter-spacing: 0.14em;
+}
+
+.district-label-subdistrict {
+    font-size: var(--text-xs);
+    letter-spacing: 0.1em;
+    opacity: 0.45;
+}
+
+/* Outline-hover emphasis: the hovered district/subdistrict's label pops to full
+   opacity, scales up slightly, and gains a colour glow — paired with the
+   outline brighten in setHoveredDistrict (3D) / onMapMouseMove (2D). */
+.district-label.district-label-hover {
+    opacity: 1;
+    transform: scale(1.18);
+    text-shadow:
+        0 0 6px var(--label-color, #fff),
+        0 0 12px var(--surface-tooltip-95, rgba(2, 8, 20, 0.95)),
+        0 1px 3px rgba(0, 0, 0, 0.95);
+}
+
+/* 2D (Leaflet) labels reuse the .district-label skin via a permanent centre
+   tooltip; strip Leaflet's bubble/arrow so only the text shows. Leaflet
+   positions this root, leaving the inner .district-label free to scale on hover
+   (same trick as the 3D .district-label-anchor). */
+.leaflet-tooltip.district-label-tooltip {
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.leaflet-tooltip.district-label-tooltip::before {
+    display: none; /* no arrow */
+}
+
+/* The satellite imagery is bright and busy, so the 3D schematic's soft halo
+   isn't enough — give the SAT labels a solid dark text-casing (1px outline in
+   all four diagonals + glow) and a heavier weight / more present baseline so the
+   names stay legible over any tile. Scoped to the Leaflet tooltip so the 3D
+   labels keep their faint look. Higher specificity than the shared hover rule,
+   so the hover override below must match it (4 classes) to still win. */
+.leaflet-tooltip.district-label-tooltip .district-label {
+    /* Faded baseline (so the fade + hover-emphasis still read) but kept legible
+       by the solid dark casing below — the outline carries contrast even at low
+       fill opacity, where the old soft halo couldn't. */
+    opacity: 0.6;
+    font-weight: 700;
+    text-shadow:
+        -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000,
+        0 0 4px #000, 0 0 7px rgba(0, 0, 0, 0.9);
+}
+
+.leaflet-tooltip.district-label-tooltip .district-label.district-label-hover {
+    opacity: 1;
+    /* keep the dark casing under the colour glow on hover */
+    text-shadow:
+        -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000,
+        0 0 6px var(--label-color, #fff), 0 0 12px #000;
+}
+
+/* 3D tooltip anchor — wraps the shared `.pin-tooltip` skin (defined above).
+   CSS2DRenderer projects the anchor to the pin's world position; the inner
+   .pin-tooltip is then offset upward in screen space so the arrow points
+   down at the pin. Single instance reused on every hover. */
+.three-tooltip-anchor {
+    position: relative;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    /* Above pins (auto inline 0–~300), below popup (500). 400 is the deliberate
+       middle slot. !important is required to beat CSS2DRenderer's per-frame
+       inline z-index. */
+    z-index: 400 !important;
+
+    /* Override Leaflet's left:0/top:0 (set dynamically there) so the inner
+       .pin-tooltip sits centred horizontally and above the world point. */
+    .pin-tooltip {
+        left: 50%;
+        top: auto;
+        bottom: 16px;
+        transform: translateX(-50%);
+    }
+}
+
+.three-popup-anchor {
+    /* CSS2DRenderer applies translate(-50%, -50%) — a zero-size box centres
+       its inner content's reference point exactly on the world position. */
+    position: relative;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+    /* CSS2DRenderer sets style.zIndex inline per frame based on camera
+       distance, which can place a closer pin in front of a popup attached
+       to a further pin. !important is the only way to beat inline styles
+       — combined with renderOrder=1000 on the CSS2DObject (see three-markers.js)
+       this guarantees the popup always paints above every pin.
+       Value 500 is deliberately chosen between:
+         - CSS2DRenderer's auto-assigned zIndex range (0–~300 for our pin count)
+         - the sidebar's z-index 1000
+       so the popup wins against pins but still loses to the sidebar/header/modals. */
+    z-index: 500 !important;
+}
+
+/* 3D-specific positioning — sizes the popup and floats it above (default)
+   or below (when `.ncz-popup-bottom` is added) the anchor's world point.
+   Visual chrome (background, arrow, category colour) comes from the shared
+   `.ncz-dynamic-popup` rules above; this rule only deals with layout. */
+.three-popup.ncz-dynamic-popup {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 360px;
+    max-width: 360px;
+    pointer-events: auto;
+    /* Default: popup is above the pin, 18px clearance for the arrow. */
+    bottom: 18px;
+    top: auto;
+    z-index: 10;
+
+    /* Auto-flip: shared `.ncz-popup-bottom` direction class repositions the
+       popup below the pin (arrow handled by the shared chrome rules). */
+    &.ncz-popup-bottom {
+        bottom: auto;
+        top: 18px;
+    }
+}
+

@@ -6,6 +6,8 @@
   "scripts": {
     "build": "node scripts/build_mods.js",
     "validate": "node scripts/validate_tags.js",
+    "encode-meshopt": "node scripts/encode_glbs_meshopt.js",
+    "build-lut": "node scripts/build_lut.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -22,5 +24,9 @@
   "homepage": "https://github.com/spuddeh/nc-zoning-board#readme",
   "dependencies": {
     "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "gltfpack": "^1.1.0",
+    "puppeteer-core": "^25.1.0"
   }
 }

@@ -39,6 +39,14 @@ NCZ.cetToLeaflet = function (cetX, cetY) {
   return [lat, lng];
 };
 
+// Exact inverse of cetToLeaflet: Leaflet [lat, lng] → CET [x, y]. Used to
+// resolve the district/subdistrict under the 2D cursor against the CET polygons.
+NCZ.leafletToCet = function (lat, lng) {
+  const cetX = lng / 256 * (NCZ.WORLD_MAX_X - NCZ.WORLD_MIN_X) + NCZ.WORLD_MIN_X;
+  const cetY = lat / 256 * (NCZ.WORLD_MAX_Y - NCZ.WORLD_MIN_Y) + NCZ.WORLD_MAX_Y;
+  return [cetX, cetY];
+};
+
 // Leaflet lat/lng distance converted to calibrated meters via the CET transform.
 NCZ.leafletDistanceMeters = function (a, b) {
   const deltaLng = b.lng - a.lng;
@@ -49,9 +57,61 @@ NCZ.leafletDistanceMeters = function (a, b) {
   return distanceCetUnits / NCZ.CET_UNITS_PER_METER;
 };
 
+// View-sync bridge between the 2D Leaflet map and the 3D perspective camera.
+// Both directions match the *horizontal* visible CET width at screen centre —
+// exact at any camera tilt, since the camera's right vector stays in world XZ
+// (same reasoning as updateScaleBar()). The look-direction extent foreshortens
+// when tilted, so the vertical match is approximate by design; we preserve the
+// user's heading/tilt rather than snapping top-down.
+//   Leaflet horizontal CET width @ zoom z = pxW · RX / (256 · 2^z)
+//   Three  horizontal CET width @ dist d  = 2 · d · tan(fovY/2) · aspect
+// `fov` is the camera's vertical FOV in degrees (THREE.PerspectiveCamera.fov).
+NCZ.leafletViewToCameraExtent = function ({ centerLat, centerLng, zoom, leafletPxW, aspect3d, fov }) {
+  const rangeX = NCZ.WORLD_MAX_X - NCZ.WORLD_MIN_X;
+  const [cetX, cetY] = NCZ.leafletToCet(centerLat, centerLng);
+  const widthCet = (leafletPxW * rangeX) / (256 * Math.pow(2, zoom));
+  const halfFovY = (fov * Math.PI) / 360;
+  const distance = widthCet / (2 * Math.tan(halfFovY) * aspect3d);
+  return { cetX, cetY, distance };
+};
+
+// Inverse of leafletViewToCameraExtent: 3D camera ground target + distance → a
+// Leaflet centre + (fractional) zoom. Caller clamps/rounds zoom to its range.
+NCZ.cameraExtentToLeafletView = function ({ cetX, cetY, distance, aspect3d, fov, leafletPxW }) {
+  const rangeX = NCZ.WORLD_MAX_X - NCZ.WORLD_MIN_X;
+  const [lat, lng] = NCZ.cetToLeaflet(cetX, cetY);
+  const halfFovY = (fov * Math.PI) / 360;
+  const widthCet = 2 * distance * Math.tan(halfFovY) * aspect3d;
+  const zoom = Math.log2((leafletPxW * rangeX) / (256 * widthCet));
+  return { lat, lng, zoom };
+};
+
 
 NCZ.clamp = function (value, min, max) {
   return Math.min(Math.max(value, min), max);
+};
+
+/**
+ * Tone-mapping exposure for a given sun elevation, from NCZ.SCENE_EXPOSURE_CURVE
+ * (piecewise-linear, clamped to the endpoints). Shared by the time-of-day
+ * slider (applySunTime) and the showcase flyover (updateFlyoverSun) so both
+ * drive exposure identically — see the curve comment in constants.js.
+ * @param {number} elevationRad sun elevation above the horizon, in radians
+ */
+NCZ.exposureForSunElevation = function (elevationRad) {
+  const curve = NCZ.SCENE_EXPOSURE_CURVE;
+  if (!curve || !curve.length) return NCZ.SCENE_EXPOSURE;
+  const deg = elevationRad * 180 / Math.PI;
+  if (deg <= curve[0][0]) return curve[0][1];
+  if (deg >= curve[curve.length - 1][0]) return curve[curve.length - 1][1];
+  for (let i = 1; i < curve.length; i++) {
+    const [d1, e1] = curve[i];
+    if (deg <= d1) {
+      const [d0, e0] = curve[i - 1];
+      return e0 + (e1 - e0) * ((deg - d0) / (d1 - d0));
+    }
+  }
+  return NCZ.SCENE_EXPOSURE;
 };
 
 /**
@@ -227,6 +287,48 @@ NCZ.isRecentlyUpdated = function (mod) {
 // CET → Three.js world coords. Game Y axis becomes -Z (both right-handed, but Y/Z are swapped).
 NCZ.cetToThree = function (cetX, cetY, cetZ) {
   return [cetX, cetZ || 0, -cetY];
+};
+
+// Area-weighted polygon centroid (shoelace) for a ring of [x, y] vertices.
+// Center of mass, so it handles non-convex rings far better than a plain vertex
+// average (which drifts toward dense corners). Returns [cx, cy] in the ring's
+// own space. Falls back to the vertex average for a degenerate (zero-area) ring.
+// Matches scripts/preview_district_borders.py's Shapely centroid.
+NCZ.polygonCentroid = function (ring) {
+  if (!ring || ring.length === 0) return null;
+  let a = 0, cx = 0, cy = 0;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const cross = ring[j][0] * ring[i][1] - ring[i][0] * ring[j][1];
+    a += cross;
+    cx += (ring[j][0] + ring[i][0]) * cross;
+    cy += (ring[j][1] + ring[i][1]) * cross;
+  }
+  a *= 0.5;
+  if (Math.abs(a) < 1e-6) {
+    let sx = 0, sy = 0;
+    for (const p of ring) { sx += p[0]; sy += p[1]; }
+    return [sx / ring.length, sy / ring.length];
+  }
+  return [cx / (6 * a), cy / (6 * a)];
+};
+
+// Ray-casting point-in-polygon test. Generic over coordinate space — `point`
+// and `ring` vertices are both [a, b] pairs in the SAME space (3D passes world
+// [x, -z]; 2D passes [lat, lng]). `ring` is the polygon's vertex list; the
+// closing edge back to ring[0] is handled implicitly. Returns true if the point
+// is inside (odd crossing count).
+NCZ.pointInPolygon = function (point, ring) {
+  if (!ring || ring.length < 3) return false;
+  const [px, py] = point;
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1];
+    const xj = ring[j][0], yj = ring[j][1];
+    const intersects = (yi > py) !== (yj > py) &&
+      px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
 };
 
 // Builds the full popup HTML string for a mod.

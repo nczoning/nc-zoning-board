@@ -21,6 +21,16 @@
 !/robots.txt
 !/sitemap.xml
 
+# Large generated data files — regenerate with scripts, do not commit
+data/buildings.json
+data/roads.json
+data/metro.json
+data/landmarks.json
+data/terrain_contours.json
+scripts/output/
+scripts/logs/
+scripts/__pycache__/
+
 # Ignore system and agent files
 .agent/
 .gemini/
@@ -30,3 +40,12 @@ raw maps/
 node_modules/
 .DS_Store
 Thumbs.db
+
+# Uncompressed source GLBs — drop WolvenKit exports here for `npm run encode-meshopt`.
+# Repo only commits the encoded output at assets/glb-meshopt/.
+assets/glb-source/
+
+# Source .cube for the colour-grading LUT — drop the WolvenKit .cube export
+# here for `npm run build-lut`. Repo only commits the runtime asset at
+# assets/data/.
+assets/lut-source/
