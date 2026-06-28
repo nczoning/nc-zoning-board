@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-28
+
 > **Headline: the flat schematic is now a live 3D map.** A navigable 3D recreation of Cyberpunk 2077's in-game world map: terrain, hundreds of thousands of buildings, roads, the metro, district borders and landmarks, lit and shaded like the game. Everything below ships together as one update.
 
 ### 3D Schematic Map
