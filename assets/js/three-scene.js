@@ -981,8 +981,22 @@ const ThreeScene = (() => {
     loadTerrain();
   }
 
+  // Suppresses renderer.setSize during the showcase. r185's WebGPURenderer
+  // caches a bind group referencing the internal HDR render-context target and
+  // does NOT invalidate it when setSize recreates that texture — so a setSize
+  // during the flyover's continuous loop makes every subsequent frame submit a
+  // destroyed texture ("Destroyed texture ... used in a submit"). The showcase's
+  // fullscreen enter fires a resize; suppressing setSize for its duration keeps
+  // the cached binding valid (we render at the pre-showcase resolution and let
+  // CSS stretch to fullscreen — a negligible resolution trade on a maximised
+  // window). See scripts/r185_resize_spike.html for the minimal repro; the real
+  // fix is upstream (bind-group cache must re-key on target recreation).
+  let _resizeSuppressed = false;
+  function setResizeSuppressed(on) { _resizeSuppressed = !!on; }
+
   function onResize() {
     if (!renderer) return;
+    if (_resizeSuppressed) return;
     const container = renderer.domElement.parentElement;
     if (!container || container.style.display === 'none') return;
     const w = container.clientWidth;
@@ -3504,7 +3518,7 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setEdgeGlowEnabled, getEdgeGlowEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, isInitialized, getLeafletView, frameLeafletView, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
+  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, setResizeSuppressed, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setEdgeGlowEnabled, getEdgeGlowEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, isInitialized, getLeafletView, frameLeafletView, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;

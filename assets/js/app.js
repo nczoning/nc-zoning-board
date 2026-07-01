@@ -926,13 +926,19 @@ async function initMap() {
     // Marker-overlay visibility during the showcase is owned by flyover.js:
     // it sets the flyCamera's layer mask based on opts.showPins and swaps
     // ThreeMarkers' active camera reference so projection lands correctly.
+    // Suppress renderer.setSize for the showcase's duration BEFORE entering
+    // fullscreen. The flyover renders in a continuous loop, and under r185 a
+    // setSize mid-loop poisons the WebGPU render-context binding cache (every
+    // subsequent frame submits a destroyed texture). Rendering at the current
+    // resolution and letting CSS stretch to fullscreen sidesteps it — restored
+    // in exitShowcase, where the loop has stopped and a resize is safe again.
+    NCZ.ThreeScene.setResizeSuppressed?.(true);
     document.getElementById('map-3d').classList.add('showcase-fullscreen');
     NCZ.Flyover.startFlyover(opts); // creates and manages the fade overlay internally
     flyoverBtn.classList.add("active");
     flyoverBtn.textContent = "Exit showcase";
     // Request native browser fullscreen — must be called from a user gesture (button click)
     document.documentElement.requestFullscreen().catch(() => {});
-    setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
   }
 
   function exitShowcase() {
@@ -945,6 +951,10 @@ async function initMap() {
     flyoverBtn.classList.remove("active");
     flyoverBtn.textContent = "Showcase";
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    // Re-enable resize now the continuous flyover loop has stopped, then
+    // reconcile the canvas to its true (windowed) size on-demand — safe here
+    // because on-demand renders only a frame or two, not a continuous loop.
+    NCZ.ThreeScene.setResizeSuppressed?.(false);
     setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
   }
 
