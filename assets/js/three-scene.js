@@ -50,7 +50,6 @@ const SUN_DIR = new THREE.Vector3(-1, 1.5, -1).normalize();
 
 const ThreeScene = (() => {
   let renderer, camera, scene, controls;
-  let animationId = null;
   let initialized = false;
   // True only when the renderer ended up on a real WebGPU backend. The webgpu
   // build reports renderer.isWebGPURenderer === true even on its WebGL2
@@ -212,7 +211,7 @@ const ThreeScene = (() => {
   const _shadowFrustumScratch    = new THREE.Frustum();
   const _shadowFrustumScratchMat = new THREE.Matrix4();
   // Per-district compute nodes (reset + cull) registered during loadBuildings.
-  // Dispatched in pairs from `renderLoop` before `renderer.render`.
+  // Dispatched in pairs from the animation-loop `frame()` before `renderer.render`.
   const _cullComputes = [];
 
   function updateFrustumUniforms(renderCam = camera) {
@@ -2433,7 +2432,7 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  // Advance the intro fly-in one frame. Called at the top of renderLoop so
+  // Advance the intro fly-in one frame. Called at the top of frame() so
   // the camera mutation lands before controls.update() reconciles it — that
   // reconcile fires the 'change' listener, refreshing district zoom, metro
   // LOD, the shadow camera, scale bar and cull frustum as the camera moves.
@@ -2524,25 +2523,54 @@ const ThreeScene = (() => {
     console.log('  NCZ.ThreeScene.dumpDebugInfo()       → full diagnostic snapshot (also bound to the "Copy debug info" button)');
   }
 
-  // Render-on-demand: rAF runs only when something has changed (camera moved,
-  // damping in progress, sun/theme/layer/material updated, pins added, or a
-  // module explicitly held the loop open via setContinuousRender). Idle map
-  // views cost zero GPU/CPU — the previous unconditional rAF chewed a full
-  // frame's worth of work even when the scene was identical to the last one.
-  // Triggered via requestRender(); any state mutation that affects pixels
-  // calls it. Damping continuation is detected from controls.update()'s
-  // return value (true = state still interpolating).
+  // Render-on-demand over renderer.setAnimationLoop — the WebGPU-native frame
+  // driver (issue #768; the WebGL-era manual rAF chain is retired). The loop
+  // fn stays armed while work exists and early-returns on non-dirty ticks;
+  // after IDLE_DISARM_MS of consecutive idle ticks it disarms itself via
+  // setAnimationLoop(null), so a truly idle map costs zero renders AND zero
+  // rAF wakeups. requestRender() marks the frame dirty and re-arms — hook it
+  // into any state mutation that affects pixels. The grace window (rather
+  // than disarm-on-first-idle-tick) keeps bursty input (wheel ticks, hover
+  // in/out) on a warm loop instead of churning setAnimationLoop.
+  // Damping continuation is detected from controls.update()'s return value
+  // (true = state still interpolating).
   //
-  // _suppressed — flyover stops the schema loop and runs its own rAF that
-  // calls renderFrame(flyCamera) directly. Beat-driven transitionToColors
-  // still fires requestRender during the flyover, which would otherwise
-  // resurrect the schema renderLoop and race the flyover camera. The flag
-  // gates requestRender so the flyover's own loop stays the sole renderer.
+  // _suppressed — flyover stops the schema loop and drives frames through
+  // _flyoverFrame (setFlyoverFrame below) on this same animation loop. Beat-
+  // driven transitionToColors still fires requestRender during the flyover,
+  // which would otherwise mark the schema path dirty and race the flyover
+  // camera. The flag gates requestRender so the flyover callback stays the
+  // sole renderer.
+  const IDLE_DISARM_MS = 250;
   let _continuousRenderRefs = 0;
   let _suppressed = false;
+  let _frameDirty = false;
+  let _loopArmed = false;
+  let _idleSince = 0;
+  let _flyoverFrame = null;   // showcase per-frame callback; loop persists while set
+  let _framesRendered = 0;    // lifetime renderer.render count — idle verification
 
-  function renderLoop() {
-    animationId = null;
+  function armLoop() {
+    if (_loopArmed || !renderer) return;
+    renderer.setAnimationLoop(frame);
+    _loopArmed = true;
+  }
+
+  function disarmLoop() {
+    if (!_loopArmed) return;
+    renderer.setAnimationLoop(null);
+    _loopArmed = false;
+  }
+
+  function frame(time) {
+    if (_flyoverFrame) { _flyoverFrame(time); return; }
+    if (_suppressed || (!_frameDirty && _continuousRenderRefs === 0)) {
+      // Idle tick — nothing changed since the last render. Disarm once the
+      // grace window has passed with no new work.
+      if ((time ?? performance.now()) - _idleSince > IDLE_DISARM_MS) disarmLoop();
+      return;
+    }
+    _frameDirty = false;
     if (stats) stats.begin();
     updateIntroTween();   // E5 intro fly-in — mutate the camera before controls.update() reconciles
     stepDistrictHoverFade(performance.now()); // district outline opacity tween
@@ -2561,6 +2589,7 @@ const ThreeScene = (() => {
       renderer.compute(c.cull);
     }
     renderer.render(scene, camera);
+    _framesRendered++;
     NCZ.ThreeMarkers?.render?.();
     if (stats) {
       statsCallsPanel.update(renderer.info.render.calls,         200);
@@ -2590,25 +2619,37 @@ const ThreeScene = (() => {
       const tilt = Math.round(90 - polarDegrees);
       tiltDisplay.textContent = `Tilt: ${tilt}°`;
     }
-    if (dampingActive || _continuousRenderRefs > 0) requestRender();
+    if (dampingActive || _continuousRenderRefs > 0) _frameDirty = true;
+    else _idleSince = performance.now();
   }
 
   // Schedule one frame. Idempotent — multiple calls within the same tick
-  // collapse to a single rAF. Hook into any state change that affects pixels.
+  // collapse to a single dirty flag. Hook into any state change that affects
+  // pixels. Re-arms the animation loop if it has idle-disarmed.
   function requestRender() {
     if (_suppressed) return;
-    if (animationId !== null) return;
     if (!renderer || !scene || !camera) return;
-    animationId = requestAnimationFrame(renderLoop);
+    _frameDirty = true;
+    armLoop();
   }
 
   // Hold the loop open across an arbitrary number of frames. Counter-based so
   // multiple animations (theme dissolve + sun arc + beat pulse) compose cleanly
   // — each pairs a true/false call. Flyover doesn't use this; it bypasses the
-  // schema renderLoop entirely with its own rAF + renderFrame(flyCamera) path.
+  // schema frame body entirely via its setFlyoverFrame callback.
   function setContinuousRender(active) {
     _continuousRenderRefs = Math.max(0, _continuousRenderRefs + (active ? 1 : -1));
     if (_continuousRenderRefs > 0) requestRender();
+  }
+
+  // Showcase frame driver (issue #768). While a callback is set, the shared
+  // animation loop invokes it every tick instead of the schema frame body —
+  // a cinematic is continuous by nature, so no dirty flag and no idle disarm.
+  // Clearing it falls back to the schema path, which (still _suppressed until
+  // startRenderLoop) idles out through the normal grace window.
+  function setFlyoverFrame(fn) {
+    _flyoverFrame = fn || null;
+    if (_flyoverFrame) armLoop();
   }
 
   // Backward-compat shims — external callers (app.js view switch, flyover
@@ -2616,7 +2657,7 @@ const ThreeScene = (() => {
   // renders soon" which on-demand satisfies via a single requestRender.
   // start also clears the flyover suppression flag in case stopRenderLoop
   // was the call that engaged it; stop sets it so any in-flight requestRender
-  // (e.g. from a still-running color tween) doesn't resurrect the loop.
+  // (e.g. from a still-running color tween) doesn't mark the schema path dirty.
   function startRenderLoop() {
     _suppressed = false;
     // The showcase flyover fits the shadow camera, the cull-frustum uniforms,
@@ -2636,10 +2677,10 @@ const ThreeScene = (() => {
 
   function stopRenderLoop() {
     _suppressed = true;
-    if (animationId !== null) {
-      cancelAnimationFrame(animationId);
-      animationId = null;
-    }
+    _frameDirty = false;
+    // Disarm now unless the flyover is (about to be) driving frames — in the
+    // flyover start sequence setFlyoverFrame() follows immediately and re-arms.
+    if (!_flyoverFrame) disarmLoop();
     _lastFrameTime = 0; // Reset so the next frame after restart doesn't sample the gap
   }
 
@@ -2649,6 +2690,9 @@ const ThreeScene = (() => {
   function getRenderInfo() {
     if (!renderer) return null;
     return {
+      // Lifetime count of frames actually rendered (schema + flyover) — poll
+      // twice to verify render-on-demand idles at zero (issue #768 acceptance).
+      framesRendered: _framesRendered,
       drawCalls:  renderer.info.render.calls,
       triangles:  renderer.info.render.triangles,
       points:     renderer.info.render.points,
@@ -3051,9 +3095,9 @@ const ThreeScene = (() => {
     if (!renderer || !scene) return;
     // The showcase flyover renders through its own PerspectiveCamera —
     // re-fit the shadow camera AND the cull-frustum uniforms to *its* view
-    // each frame (the schema renderLoop is suppressed during showcase, so
+    // each frame (the schema frame body is suppressed during showcase, so
     // nothing else is keeping these in sync). Then dispatch the per-frame
-    // Phase 2B cull computes the same way renderLoop does — without this,
+    // Phase 2B cull computes the same way frame() does — without this,
     // the indirect buffer's instanceCount is frozen at whatever the schema
     // cam last culled, so both the shadow pass and the main pass draw a
     // stale building set (the original symptom: shadows missing under
@@ -3074,6 +3118,7 @@ const ThreeScene = (() => {
       }
     }
     renderer.render(scene, cam);
+    _framesRendered++;
   }
 
   function setControlsEnabled(enabled) {
@@ -3677,7 +3722,7 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, setResizeSuppressed, forceDistrictBand, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setEdgeGlowEnabled, getEdgeGlowEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, isInitialized, getLeafletView, frameLeafletView, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
+  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, setFlyoverFrame, setResizeSuppressed, forceDistrictBand, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setEdgeGlowEnabled, getEdgeGlowEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, isInitialized, getLeafletView, frameLeafletView, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;
