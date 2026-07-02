@@ -855,7 +855,8 @@ async function initMap() {
   const showcaseThemeSelect     = document.getElementById("showcase-theme");
   const showcaseShowPinsCb      = document.getElementById("showcase-show-pins");
   const showcaseRevealLayersCb  = document.getElementById("showcase-reveal-layers");
-  const showcaseDistrictsCb     = document.getElementById("showcase-districts");
+  const showcaseDistrictNamesCb    = document.getElementById("showcase-district-names");
+  const showcaseDistrictOutlinesCb = document.getElementById("showcase-district-outlines");
   const showcaseAudioCb         = document.getElementById("showcase-audio");
   const showcaseLoopCb          = document.getElementById("showcase-loop");
 
@@ -874,7 +875,8 @@ async function initMap() {
     theme: "cycle",
     showPins: false,
     revealLayers: false,
-    districts: false,
+    districtNames: false,
+    districtOutlines: false,
     audio: true,
     loop: false,
   });
@@ -885,11 +887,15 @@ async function initMap() {
       if (!raw) return { ...SHOWCASE_DEFAULTS };
       const parsed = JSON.parse(raw);
       const validThemes = new Set(["cycle", ...(NCZ.THEMES || []).map(t => t.id)]);
+      // Back-compat: the single `districts` boolean (pre-split) seeds both
+      // new options so a stored "on" preference survives the upgrade.
+      const legacyDistricts = typeof parsed.districts === "boolean" ? parsed.districts : null;
       return {
         theme:        validThemes.has(parsed.theme) ? parsed.theme : SHOWCASE_DEFAULTS.theme,
         showPins:     typeof parsed.showPins     === "boolean" ? parsed.showPins     : SHOWCASE_DEFAULTS.showPins,
         revealLayers: typeof parsed.revealLayers === "boolean" ? parsed.revealLayers : SHOWCASE_DEFAULTS.revealLayers,
-        districts:    typeof parsed.districts    === "boolean" ? parsed.districts    : SHOWCASE_DEFAULTS.districts,
+        districtNames:    typeof parsed.districtNames    === "boolean" ? parsed.districtNames    : (legacyDistricts ?? SHOWCASE_DEFAULTS.districtNames),
+        districtOutlines: typeof parsed.districtOutlines === "boolean" ? parsed.districtOutlines : (legacyDistricts ?? SHOWCASE_DEFAULTS.districtOutlines),
         audio:        typeof parsed.audio        === "boolean" ? parsed.audio        : SHOWCASE_DEFAULTS.audio,
         loop:         typeof parsed.loop         === "boolean" ? parsed.loop         : SHOWCASE_DEFAULTS.loop,
       };
@@ -903,7 +909,8 @@ async function initMap() {
     if (showcaseThemeSelect)    showcaseThemeSelect.value      = opts.theme;
     if (showcaseShowPinsCb)     showcaseShowPinsCb.checked     = opts.showPins;
     if (showcaseRevealLayersCb) showcaseRevealLayersCb.checked = opts.revealLayers;
-    if (showcaseDistrictsCb)    showcaseDistrictsCb.checked    = opts.districts;
+    if (showcaseDistrictNamesCb)    showcaseDistrictNamesCb.checked    = opts.districtNames;
+    if (showcaseDistrictOutlinesCb) showcaseDistrictOutlinesCb.checked = opts.districtOutlines;
     if (showcaseAudioCb)        showcaseAudioCb.checked        = opts.audio;
     if (showcaseLoopCb)         showcaseLoopCb.checked         = opts.loop;
     showcaseModal?.classList.remove("hidden");
@@ -914,7 +921,7 @@ async function initMap() {
   }
 
   function enterShowcase(opts) {
-    ['header', '#sidebar-open', '#discover-location-btn',
+    ['header', '#sidebar', '#sidebar-open', '#discover-location-btn',
      '#overlay-controls', '#map-view-toggle', '#scene-controls', '#scene-scale']
       .forEach(sel => {
         const el = document.querySelector(sel);
@@ -927,11 +934,12 @@ async function initMap() {
     // it sets the flyCamera's layer mask based on opts.showPins and swaps
     // ThreeMarkers' active camera reference so projection lands correctly.
     // Suppress renderer.setSize for the showcase's duration BEFORE entering
-    // fullscreen. The flyover renders in a continuous loop, and under r185 a
-    // setSize mid-loop poisons the WebGPU render-context binding cache (every
-    // subsequent frame submits a destroyed texture). Rendering at the current
-    // resolution and letting CSS stretch to fullscreen sidesteps it — restored
-    // in exitShowcase, where the loop has stopped and a resize is safe again.
+    // fullscreen (issue #771). The flyover renders in a continuous loop, and
+    // under r185 a setSize mid-loop poisons the WebGPU render-context binding
+    // cache (every subsequent frame submits a destroyed texture). The drawing
+    // buffer holds its pre-showcase size and CSS stretches it to fullscreen;
+    // restored in exitShowcase, where the loop has stopped and a resize is
+    // safe again.
     NCZ.ThreeScene.setResizeSuppressed?.(true);
     document.getElementById('map-3d').classList.add('showcase-fullscreen');
     NCZ.Flyover.startFlyover(opts); // creates and manages the fade overlay internally
@@ -939,6 +947,11 @@ async function initMap() {
     flyoverBtn.textContent = "Exit showcase";
     // Request native browser fullscreen — must be called from a user gesture (button click)
     document.documentElement.requestFullscreen().catch(() => {});
+    // Reconcile everything EXCEPT the suppressed renderer.setSize to the new
+    // container size — the fullscreen class grows #map-3d without firing a
+    // window resize, and the CSS2DRenderer must adopt the new client size or
+    // every pin/cluster/district label drifts off its world anchor (#769).
+    setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
   }
 
   function exitShowcase() {
@@ -968,7 +981,8 @@ async function initMap() {
       theme:        showcaseThemeSelect?.value ?? SHOWCASE_DEFAULTS.theme,
       showPins:     !!showcaseShowPinsCb?.checked,
       revealLayers: !!showcaseRevealLayersCb?.checked,
-      districts:    !!showcaseDistrictsCb?.checked,
+      districtNames:    !!showcaseDistrictNamesCb?.checked,
+      districtOutlines: !!showcaseDistrictOutlinesCb?.checked,
       audio:        !!showcaseAudioCb?.checked,
       loop:         !!showcaseLoopCb?.checked,
     };
@@ -987,7 +1001,8 @@ async function initMap() {
     if (showcaseThemeSelect)    showcaseThemeSelect.value      = SHOWCASE_DEFAULTS.theme;
     if (showcaseShowPinsCb)     showcaseShowPinsCb.checked     = SHOWCASE_DEFAULTS.showPins;
     if (showcaseRevealLayersCb) showcaseRevealLayersCb.checked = SHOWCASE_DEFAULTS.revealLayers;
-    if (showcaseDistrictsCb)    showcaseDistrictsCb.checked    = SHOWCASE_DEFAULTS.districts;
+    if (showcaseDistrictNamesCb)    showcaseDistrictNamesCb.checked    = SHOWCASE_DEFAULTS.districtNames;
+    if (showcaseDistrictOutlinesCb) showcaseDistrictOutlinesCb.checked = SHOWCASE_DEFAULTS.districtOutlines;
     if (showcaseAudioCb)        showcaseAudioCb.checked        = SHOWCASE_DEFAULTS.audio;
     if (showcaseLoopCb)         showcaseLoopCb.checked         = SHOWCASE_DEFAULTS.loop;
     try { localStorage.setItem(NCZ.SHOWCASE_OPTIONS_KEY, JSON.stringify(SHOWCASE_DEFAULTS)); } catch (_) {}

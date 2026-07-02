@@ -683,6 +683,34 @@ const ThreeScene = (() => {
       hideLoading();
       return;
     }
+    // r185's #33700 "fixed" render-list sorting under reversedDepthBuffer with
+    // a wholesale list.reverse() AFTER the painter sort. The sort key is
+    // groupOrder → renderOrder → z → id, so the reverse fixes the z direction
+    // but also INVERTS renderOrder semantics — our transparent chain
+    // (water 0 → SeeThrough roads 1 → metro 2) drew backwards: metro first
+    // (then hidden under water's depthWrite) and SeeThrough roads before water
+    // had written stencil=STENCIL_WATER (tunnel roads gone). Compensate by
+    // handing the sorter comparators that are the exact NEGATION of the order
+    // we want — the engine's trailing .reverse() then lands the desired order:
+    // renderOrder ascending (the documented contract), z direction correct for
+    // reversed-depth projected z (larger z = nearer). The id tiebreaker makes
+    // the order total, so reverse(sort(-D)) == sort(D) exactly — no stability
+    // caveats. Remove when upstream replaces the wholesale reverse with a
+    // z-only fix: https://github.com/mrdoob/three.js/pull/33700
+    if (renderer.reversedDepthBuffer === true) {
+      const desiredOpaque = (a, b) =>       // front-to-back: z DESC (reversed z, near is larger)
+        a.groupOrder !== b.groupOrder ? a.groupOrder - b.groupOrder :
+        a.renderOrder !== b.renderOrder ? a.renderOrder - b.renderOrder :
+        a.z !== b.z ? b.z - a.z :
+        a.id - b.id;
+      const desiredTransparent = (a, b) =>  // back-to-front: z ASC (reversed z, far is smaller)
+        a.groupOrder !== b.groupOrder ? a.groupOrder - b.groupOrder :
+        a.renderOrder !== b.renderOrder ? a.renderOrder - b.renderOrder :
+        a.z !== b.z ? a.z - b.z :
+        a.id - b.id;
+      renderer.setOpaqueSort((a, b) => -desiredOpaque(a, b));
+      renderer.setTransparentSort((a, b) => -desiredTransparent(a, b));
+    }
     // Make the sRGB-correct colour pipeline explicit. These match Three.js r170
     // defaults (since r152 / r155 respectively) but stating them here protects
     // the scene's appearance against future Three.js default changes — both flags
@@ -981,27 +1009,36 @@ const ThreeScene = (() => {
     loadTerrain();
   }
 
-  // Suppresses renderer.setSize during the showcase. r185's WebGPURenderer
-  // caches a bind group referencing the internal HDR render-context target and
-  // does NOT invalidate it when setSize recreates that texture — so a setSize
-  // during the flyover's continuous loop makes every subsequent frame submit a
-  // destroyed texture ("Destroyed texture ... used in a submit"). The showcase's
-  // fullscreen enter fires a resize; suppressing setSize for its duration keeps
-  // the cached binding valid (we render at the pre-showcase resolution and let
-  // CSS stretch to fullscreen — a negligible resolution trade on a maximised
-  // window). See scripts/r185_resize_spike.html for the minimal repro; the real
-  // fix is upstream (bind-group cache must re-key on target recreation).
+  // Suppresses ONLY renderer.setSize during the showcase (issue #771). r185's
+  // WebGPURenderer keeps a stale binding to the internal HDR render-context
+  // target after setSize destroys/recreates it — a setSize during the
+  // flyover's continuous loop then makes every subsequent frame submit a
+  // destroyed texture ("Destroyed texture ... used in a submit"). The
+  // showcase's fullscreen enter fires a resize; holding the drawing buffer at
+  // its pre-showcase size keeps the cached binding valid, and CSS stretches
+  // the canvas to fullscreen. Geometrically safe: flyover.js keeps
+  // flyCamera.aspect synced to the *client* aspect, and the NDC→client
+  // mapping is identical whether the buffer resizes or CSS stretches.
+  //
+  // Everything else in onResize MUST still run — in particular
+  // ThreeMarkers.onResize (the CSS2DRenderer maps NDC to its own stored
+  // size; leaving it stale while the client size changes offsets every pin,
+  // cluster and district label from its world anchor — issue #769, the
+  // "floating pins" bug the original full-early-return version caused).
+  // See scripts/r185_resize_spike.html for the repro seed; the real fix is
+  // upstream (bind-group cache must re-key on target recreation).
   let _resizeSuppressed = false;
   function setResizeSuppressed(on) { _resizeSuppressed = !!on; }
 
   function onResize() {
     if (!renderer) return;
-    if (_resizeSuppressed) return;
     const container = renderer.domElement.parentElement;
     if (!container || container.style.display === 'none') return;
     const w = container.clientWidth;
     const h = container.clientHeight;
-    renderer.setSize(w, h, false); // updateStyle:false — CSS width/height stay at 100%
+    if (!_resizeSuppressed) {
+      renderer.setSize(w, h, false); // updateStyle:false — CSS width/height stay at 100%
+    }
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     updateShadowCamera();   // shadow camera follows the schema camera's aspect
@@ -1044,7 +1081,11 @@ const ThreeScene = (() => {
   function updateDistrictLabelVisibility() {
     if (!_districtLabels.length) return;
     const districtsOn = layers.districts ? layers.districts.visible : true;
-    for (const { css, group } of _districtLabels) css.visible = districtsOn && group.visible;
+    // Showcase mode: names are a user option independent of the outline tier
+    // (the tier groups stay visible to carry the pinned outlines — see
+    // forceDistrictBand — so the label gate needs its own switch).
+    const namesOn = _showcaseDistricts ? _showcaseDistricts.names : true;
+    for (const { css, group } of _districtLabels) css.visible = districtsOn && group.visible && namesOn;
   }
 
   function setLayerVisibility(name, visible) {
@@ -1066,7 +1107,49 @@ const ThreeScene = (() => {
     requestRender();
   }
 
+  // Pins the district-outline tier independent of the schema camera's zoom
+  // band. The showcase flyover renders through its own camera while the
+  // schema camera (which drives updateDistrictZoom) is frozen — starting a
+  // showcase zoomed in below SUBDISTRICT_DISTANCE_3D froze ALL outline tiers
+  // hidden for the whole flight, so "Show district outlines" silently did
+  // nothing. 'district' pins the main-district tier (the cinematic look the
+  // waypoint script was written for); null restores zoom-band control.
+  //
+  // opts { names, outlines } split the showcase district feature: names gate
+  // the CSS2D labels (see updateDistrictLabelVisibility), outlines gate the
+  // Line2 rings per-line (the tier groups stay visible either way so labels
+  // can show without outlines). Outlines render at the HOVERED opacity for
+  // the whole flight — the 5% base is illegible from cinematic distances.
+  let _districtBandForced = null; // 'district' | null
+  let _showcaseDistricts  = null; // { names, outlines } | null
+  function forceDistrictBand(band, opts = null) {
+    _districtBandForced = band;
+    _showcaseDistricts  = band === 'district'
+      ? { names: !!(opts?.names ?? true), outlines: !!(opts?.outlines ?? true) }
+      : null;
+    if (band === 'district') {
+      if (_districtOuter)  _districtOuter.visible  = true;
+      if (_districtSub)    _districtSub.visible    = false;
+      if (_districtAlways) _districtAlways.visible = true;
+      for (const e of _districtHover) {
+        if (e.line) e.line.visible = _showcaseDistricts.outlines;
+        e.target = NCZ.DISTRICT_LINE_OPACITY_HOVER;
+        if (e.material) e.material.opacity = NCZ.DISTRICT_LINE_OPACITY_HOVER;
+      }
+    } else {
+      for (const e of _districtHover) {
+        if (e.line) e.line.visible = true;
+        e.target = NCZ.DISTRICT_LINE_OPACITY;
+        if (e.material) e.material.opacity = NCZ.DISTRICT_LINE_OPACITY;
+      }
+      updateDistrictZoom();
+    }
+    updateDistrictLabelVisibility();
+    requestRender();
+  }
+
   function updateDistrictZoom() {
+    if (_districtBandForced) return; // showcase owns the band — see forceDistrictBand
     if (!_districtOuter || !_districtSub || !controls) return;
     // Three-state visibility, matching WorldMap.ZoomLevel* records:
     //   d ≥ 11000: main district outlines (ZoomLevelDistricts.showDistricts = 1)
@@ -1097,8 +1180,13 @@ const ThreeScene = (() => {
   // neighbour. Outlines have depthTest:false (depth ignored), so the only thing
   // that decides which of two coplanar coincident lines wins a pixel is paint
   // order — and the transparent back-to-front sort is unstable for equal-
-  // distance lines. A high renderOrder forces the hovered line last; > metro (2)
-  // so a highlighted district reads above roads/metro too. Reset to 0 on exit.
+  // distance lines. District outlines sit at tier 7 of the explicit transparent
+  // chain (water 0 → roads depth/colour 1/2 → borders depth/colour 3/4 →
+  // SeeThrough 5 → metro 6 → districts 7) so they always draw after water — a
+  // shared tier would fall back to camera-angle-dependent centroid-z ties.
+  // A higher renderOrder forces the hovered line last so it reads above its
+  // siblings. Reset to the base tier on exit.
+  const DISTRICT_LINE_RENDER_ORDER  = 7;
   const DISTRICT_HOVER_RENDER_ORDER = 10;
   let _hoverFading  = false; // true while any material.opacity != its target
   let _hoverLastT   = 0;
@@ -1168,7 +1256,7 @@ const ThreeScene = (() => {
     if (entry === _hoveredEntry) return;
     if (_hoveredEntry) {
       _hoveredEntry.target = NCZ.DISTRICT_LINE_OPACITY;
-      if (_hoveredEntry.line) _hoveredEntry.line.renderOrder = 0;
+      if (_hoveredEntry.line) _hoveredEntry.line.renderOrder = DISTRICT_LINE_RENDER_ORDER;
       _hoveredEntry.labelEl?.classList.remove('district-label-hover');
     }
     if (entry) {
@@ -1183,6 +1271,10 @@ const ThreeScene = (() => {
   }
 
   function onSceneMouseMove(e) {
+    // Showcase mode pins every outline at the hovered opacity — the pointer
+    // must not re-target materials mid-flight (and the pick raycast uses the
+    // schema camera, which is wrong under the fly camera anyway).
+    if (_showcaseDistricts) return;
     const gp = groundPointAt(e.clientX, e.clientY);
     setHoveredDistrict(pickDistrictAt(gp)); // outline/label brighten (tier-gated)
     // Info panel resolves the subdistrict under the cursor at any tier; stats
@@ -1405,13 +1497,61 @@ const ThreeScene = (() => {
       // alpha 255 → both full-strength additive. (Roads were Normal-blend opacity
       // 0.8 — an eyeballed guess that also let the road colour drift with whatever
       // sat under it; additive is the game-faithful blend.)
-      normalRoadsMat   = new THREE.MeshBasicNodeMaterial({ color: roadColor,   transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending });
-      normalBordersMat = new THREE.MeshBasicNodeMaterial({ color: borderColor, transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending, depthWrite: false });
+      // Surface roads/borders over-stamp stencil=STENCIL_OCCLUDER where they
+      // are the visible surface — the same pattern terrain/cliffs/buildings
+      // use in the opaque pass. This makes the surface and SeeThrough copies
+      // mutually exclusive per pixel: where the surface copy draws (passes
+      // depth), the stencil is no longer STENCIL_WATER, so the SeeThrough
+      // copy skips it. Without this, the below-sea-level tunnel-entrance
+      // cutting drew BOTH copies (water stamps 2 → surface ramp draws → the
+      // SeeThrough copy draws again on top = bright double-drawn band).
+      const roadOverstamp = {
+        stencilWrite: true, stencilRef: NCZ.STENCIL_OCCLUDER,
+        stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp,
+      };
+      // Depth pre-pass + Equal colour pass — additive layers can't occlude
+      // themselves (every overlapping fragment adds), so overlapping road
+      // decks / crossing borders drew twice (bright hot spots at any angle:
+      // draw order within a tier is buffer order, not per-fragment depth).
+      // Each layer first lays down its nearest-surface depth (colorWrite off,
+      // transparent:true keeps it in the transparent pass AFTER water — an
+      // opaque prepass would depth-block water under bridges and shift the
+      // additive base colour), then the colour pass draws with
+      // depthFunc:Equal so exactly one surface per pixel receives colour.
+      // The vertex path is identical between the two passes, so rasterized
+      // depth matches exactly.
+      const depthPrepassMat = new THREE.MeshBasicNodeMaterial({ transparent: true, colorWrite: false });
+      // r185 routes material.depthFunc through ReversedDepthFuncs under
+      // reversedDepthBuffer and wrongly inverts EqualDepth → NotEqualDepth
+      // (equality is direction-independent; the upstream map blanket-inverts
+      // every comparator). Hand it NotEqual so the broken inversion lands on
+      // the Equal we actually want — the same pre-compensation pattern as the
+      // render-list sort comparators above. Symptom if this regresses: roads
+      // invisible over terrain/water but visible through buildings.
+      // Remove together with the sort compensation when upstream fixes.
+      const equalDepth = renderer.reversedDepthBuffer === true ? THREE.NotEqualDepth : THREE.EqualDepth;
+      normalRoadsMat   = new THREE.MeshBasicNodeMaterial({ color: roadColor,   transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending, depthFunc: equalDepth, depthWrite: false, ...roadOverstamp });
+      normalBordersMat = new THREE.MeshBasicNodeMaterial({ color: borderColor, transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending, depthFunc: equalDepth, depthWrite: false, ...roadOverstamp });
 
       applyMaterial(roadsScene,   normalRoadsMat);
       applyMaterial(bordersScene, normalBordersMat);
 
-      // Metro: normal depth-tested, renderOrder=1 so it renders above roads.
+      // Explicit transparent-pass tiers — the whole water/roads/metro chain is
+      // order-dependent, and any two overlays sharing a renderOrder fall back
+      // to per-object centroid-z ties that flip with camera angle (the cause
+      // of the old "road borders vanish over water at some angles" bug):
+      //   water 0 → roads depth 1 → roads colour 2 → borders depth 3
+      //   → borders colour 4 → SeeThrough copies 5 → metro 6
+      //   → district outlines 7 → hover DISTRICT_HOVER_RENDER_ORDER.
+      // Borders draw AFTER the roads passes: a border under an overlapping
+      // road deck must depth-fail against that deck. Each layer's own
+      // depth-prepass → Equal-colour pair collapses self-overlap (deck over
+      // street, crossing borders) to a single additive contribution.
+      roadsScene.traverse(o   => { if (o.isMesh) o.renderOrder = 2; });
+      bordersScene.traverse(o => { if (o.isMesh) o.renderOrder = 4; });
+
+      // Metro: normal depth-tested, renderOrder=6 — after water (0) so it
+      // shows over the bay, after the road passes so it layers above both.
       //
       // LOD discard: COLOR_0 vertex attribute carries the LOD tier as one
       // mutually-exclusive channel per vertex (per the building/metro extraction
@@ -1487,11 +1627,10 @@ const ThreeScene = (() => {
       // loadTerrain). Pacifica tunnel: water writes stencil=STENCIL_WATER → the tunnel road + border
       // (below the water) draw on top of it = visible through the water ✓.  Mountain / city roads:
       // terrain/cliffs/buildings over-stamp stencil=STENCIL_OCCLUDER ≠ STENCIL_WATER → hidden ✓.
-      // (A road *bridging* the bay still gets a SeeThrough copy where stencil==STENCIL_WATER — its
-      // road is the same blue as the surface copy so no visible change, and its border's extra
-      // additive cyan reads as a slightly brighter edge over the bay. Tried masking that out by
-      // world-Y < waterline; it just dimmed the bay-area road borders for no real gain, so it's
-      // intentionally left as-is.)
+      // (Bridge-over-bay double-draw is gone since the surface copies over-stamp
+      // stencil=STENCIL_OCCLUDER where visible — the SeeThrough copy only draws
+      // where water remains the visible surface, so the two copies are mutually
+      // exclusive per pixel.)
       const stBase = {
         transparent: true, depthTest: false, depthWrite: false,
         stencilWrite: true, stencilWriteMask: 0x00,
@@ -1517,13 +1656,25 @@ const ThreeScene = (() => {
       stBorders.name  = 'road-borders-seethrough';
       nameSubtree(stRoads,   'road-st');
       nameSubtree(stBorders, 'road-border-st');
-      stRoads.traverse(o => { if (o.isMesh) o.renderOrder = 1; });
-      stBorders.traverse(o => { if (o.isMesh) o.renderOrder = 1; });
+      stRoads.traverse(o => { if (o.isMesh) o.renderOrder = 5; });
+      stBorders.traverse(o => { if (o.isMesh) o.renderOrder = 5; });
+
+      // Depth pre-passes (see depthPrepassMat above) — same geometry cloned
+      // via makeSeeThrough with the colourless depth-writing material, drawn
+      // one tier before their colour pass.
+      const dpRoads   = makeSeeThrough(roadsScene,   depthPrepassMat);
+      const dpBorders = makeSeeThrough(bordersScene, depthPrepassMat);
+      dpRoads.name    = 'roads-depth-prepass';
+      dpBorders.name  = 'road-borders-depth-prepass';
+      nameSubtree(dpRoads,   'road-dp');
+      nameSubtree(dpBorders, 'road-border-dp');
+      dpRoads.traverse(o   => { if (o.isMesh) o.renderOrder = 1; });
+      dpBorders.traverse(o => { if (o.isMesh) o.renderOrder = 3; });
 
       const roadsGroup = new THREE.Group();
       roadsGroup.name = 'roads';
-      roadsGroup.add(roadsScene, bordersScene, stRoads, stBorders);
-      metroScene.traverse(o => { if (o.isMesh) o.renderOrder = 2; });
+      roadsGroup.add(roadsScene, bordersScene, stRoads, stBorders, dpRoads, dpBorders);
+      metroScene.traverse(o => { if (o.isMesh) o.renderOrder = 6; });
 
       const metroGroup = new THREE.Group();
       metroGroup.name = 'metro';
@@ -2208,11 +2359,19 @@ const ThreeScene = (() => {
       depthTest: false,
       transparent: true,
       opacity: NCZ.DISTRICT_LINE_OPACITY,
+      // Line2NodeMaterial defaults alphaToCoverage:true, gated in-shader on
+      // renderer.currentSamples > 0. On r184 that gate never fired; r185's
+      // MSAA sample-count fixes activated it, and alpha-to-coverage QUANTIZES
+      // alpha to covered samples — the 5% base opacity rounds to 0 of 4
+      // samples = invisible lines (hover at ~1.0 still showed). We want the
+      // smooth faint alpha blend, not coverage dithering.
+      alphaToCoverage: false,
     });
     districtLineMaterials.push(material);
 
     const line = new Line2(geometry, material);
     line.computeLineDistances();
+    line.renderOrder = DISTRICT_LINE_RENDER_ORDER;
     return line;
   }
 
@@ -3518,7 +3677,7 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, setResizeSuppressed, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setEdgeGlowEnabled, getEdgeGlowEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, isInitialized, getLeafletView, frameLeafletView, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
+  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, setResizeSuppressed, forceDistrictBand, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setEdgeGlowEnabled, getEdgeGlowEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, isInitialized, getLeafletView, frameLeafletView, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;

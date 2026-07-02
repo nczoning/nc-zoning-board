@@ -106,10 +106,12 @@ const Flyover = (() => {
     // WP 0 — Ocean: snap to opening theme; showcase always controls its own layer state.
     // _runOpts.revealLayers=true  → hide everything, stagger layers back in over 6.9s
     // _runOpts.revealLayers=false → all layers on from frame 1 (immediate shadows)
-    // Districts honour _runOpts.districts in both branches.
+    // Districts honour the split _runOpts.districtNames/districtOutlines in
+    // both branches (the parent layer carries names + outlines; which of the
+    // two actually renders is decided by forceDistrictBand's mode).
     // Either way, exit always restores the user's pre-showcase layer state.
     0: () => {
-      const showDistricts = !!_runOpts?.districts;
+      const showDistricts = !!(_runOpts?.districtNames || _runOpts?.districtOutlines);
       if (_runOpts?.revealLayers) {
         NCZ.ThreeScene.setLayerVisibility('roads',     false);
         NCZ.ThreeScene.setLayerVisibility('metro',     false);
@@ -126,7 +128,11 @@ const Flyover = (() => {
     },
     // WP 9 — Badlands sweep: drop districts so the city behind camera reads cleaner.
     // Skipped when the user opted to keep districts visible.
-    9: () => { if (!_runOpts?.districts) NCZ.ThreeScene.setLayerVisibility('districts', false); },
+    9: () => {
+      if (!(_runOpts?.districtNames || _runOpts?.districtOutlines)) {
+        NCZ.ThreeScene.setLayerVisibility('districts', false);
+      }
+    },
   };
 
   // ── Beat-cycle visualiser ─────────────────────────────────────────────────
@@ -469,13 +475,26 @@ const Flyover = (() => {
       theme:        typeof opts.theme === 'string' ? opts.theme : 'cycle',
       showPins:     !!opts.showPins,
       revealLayers: !!opts.revealLayers,
-      districts:    !!opts.districts,
+      // Back-compat: a legacy boolean `districts` (pre-split callers) seeds both.
+      districtNames:    !!(opts.districtNames    ?? opts.districts),
+      districtOutlines: !!(opts.districtOutlines ?? opts.districts),
       audio:        opts.audio !== false, // default true
       loop:         !!opts.loop,
     };
 
     NCZ.ThreeScene.stopRenderLoop();
     NCZ.ThreeScene.setControlsEnabled(false);
+    // Pin the main-district outline tier for the flight. The zoom-band logic
+    // reads the (frozen) schema camera, so starting a showcase zoomed in
+    // below the outline band would otherwise leave every tier hidden and the
+    // district options silently dead. The mode carries the names/outlines
+    // split (labels vs Line2 rings) and renders the rings at the hovered
+    // opacity. Waypoint actions still toggle the parent districts layer on
+    // top of this. Restored on stop.
+    NCZ.ThreeScene.forceDistrictBand?.('district', {
+      names:    _runOpts.districtNames,
+      outlines: _runOpts.districtOutlines,
+    });
 
     if (!flyCamera) {
       const canvas = NCZ.ThreeScene.getCanvasElement();
@@ -595,6 +614,9 @@ const Flyover = (() => {
       // also re-runs cluster recompute (suppressed while a non-schema camera
       // is active).
       NCZ.ThreeMarkers?.setActiveCamera?.(null);
+      // Hand the district-outline band back to the schema camera's zoom logic
+      // (pinned to the main-district tier for the flight — see startFlyover).
+      NCZ.ThreeScene.forceDistrictBand?.(null);
       clearLayerReveal();
       _paused = false;
       removePauseHint();
