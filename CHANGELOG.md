@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### Changed
 
 - three.js upgraded r184 → r185; adopts the upstream fix for district outline rays at close zoom (#773).
+- The render loop (including the showcase flyover) now runs on `renderer.setAnimationLoop`, the WebGPU-native frame driver; idle render-on-demand behaviour is unchanged (#768).
 - Roads, borders and the metro now layer correctly at every camera angle: no more borders or roads glowing through overlapping decks, and metro/tunnel roads render correctly over water (#770).
 
 #### Fixed
