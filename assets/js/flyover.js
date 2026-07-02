@@ -360,7 +360,6 @@ const Flyover = (() => {
 
   let flyCamera       = null;
   let flyActive       = false;
-  let flyFrameId      = null;
   let flySeg          = 0;
   let flySegStart     = 0;
   let _paused         = false; // spacebar pause — freezes camera + audio, keeps pins clickable
@@ -561,7 +560,7 @@ const Flyover = (() => {
           _audio.addEventListener('ended', _onAudioEnded, { once: true });
           return;
         }
-        if (flyFrameId !== null) { cancelAnimationFrame(flyFrameId); flyFrameId = null; }
+        NCZ.ThreeScene.setFlyoverFrame(null);
         fadeToBlack(() => {
           document.dispatchEvent(new CustomEvent('flyover:ended'));
           resetFade();
@@ -587,7 +586,9 @@ const Flyover = (() => {
     flySeg      = 0;
     flySegStart = performance.now();
     _paused     = false;
-    flyoverLoop();
+    // Drive fly frames through the scene's shared animation loop (issue #768)
+    // — the loop invokes flyoverFrame every tick while the callback is set.
+    NCZ.ThreeScene.setFlyoverFrame(flyoverFrame);
   }
 
   // Short fade-out/in across the camera swap. The showcase camera renders at
@@ -599,7 +600,7 @@ const Flyover = (() => {
   function stopFlyover() {
     if (!flyActive) return;
     flyActive = false;
-    if (flyFrameId !== null) { cancelAnimationFrame(flyFrameId); flyFrameId = null; }
+    NCZ.ThreeScene.setFlyoverFrame(null);
 
     const canvas    = NCZ.ThreeScene.getCanvasElement?.();
     const container = canvas?.parentElement || null;
@@ -685,9 +686,10 @@ const Flyover = (() => {
     }, EXIT_FADE_MS);
   }
 
-  function flyoverLoop() {
+  // Per-tick showcase frame — invoked by three-scene's shared animation loop
+  // while registered via setFlyoverFrame (no private rAF; issue #768).
+  function flyoverFrame() {
     if (!flyActive) return;
-    flyFrameId = requestAnimationFrame(flyoverLoop);
 
     // Paused: hold the current pose. Re-render every frame so pins stay drawn
     // and clickable (popup placement tracks the frozen camera), but advance
@@ -708,8 +710,7 @@ const Flyover = (() => {
       // Last waypoint reached — hold this frame and wait for audio.ended to trigger the fade.
       // If audio isn't available, fall back to fading immediately.
       if (!_audio) {
-        cancelAnimationFrame(flyFrameId);
-        flyFrameId = null;
+        NCZ.ThreeScene.setFlyoverFrame(null);
         fadeToBlack(() => { document.dispatchEvent(new CustomEvent('flyover:ended')); resetFade(); });
       }
       // With audio: just keep rendering the last frame; audio.ended fires the fade.
