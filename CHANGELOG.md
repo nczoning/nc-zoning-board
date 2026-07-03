@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Fixed
 
+- Resizing the window no longer permanently blacks out the 3D view on three.js r185 (#771); the showcase also renders at native fullscreen resolution now instead of an upscaled windowed buffer.
 - Showcase: pins and district labels stay locked to the ground, the sidebar hides during the show, and district outlines display (bright, hover-style) regardless of starting zoom (#769).
 - Showcase options now offer district names and district outlines as separate toggles.
 - District outlines were invisible at their resting brightness on three.js r185 (#773).

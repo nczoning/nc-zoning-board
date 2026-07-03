@@ -1008,26 +1008,18 @@ const ThreeScene = (() => {
     loadTerrain();
   }
 
-  // Suppresses ONLY renderer.setSize during the showcase (issue #771). r185's
-  // WebGPURenderer keeps a stale binding to the internal HDR render-context
-  // target after setSize destroys/recreates it — a setSize during the
-  // flyover's continuous loop then makes every subsequent frame submit a
-  // destroyed texture ("Destroyed texture ... used in a submit"). The
-  // showcase's fullscreen enter fires a resize; holding the drawing buffer at
-  // its pre-showcase size keeps the cached binding valid, and CSS stretches
-  // the canvas to fullscreen. Geometrically safe: flyover.js keeps
-  // flyCamera.aspect synced to the *client* aspect, and the NDC→client
-  // mapping is identical whether the buffer resizes or CSS stretches.
+  // NOTE (issue #771 history): a `setResizeSuppressed` guard used to hold the
+  // drawing buffer at its pre-showcase size because any r185 setSize wedged
+  // the canvas (stale Line2 binding to the destroyed viewport-mip texture —
+  // see the dispose() below). With that mitigation in place the guard was
+  // retested (showcase + mid-flight window resizes, zero errors) and removed;
+  // the showcase now renders at native fullscreen resolution instead of a
+  // CSS-stretched windowed buffer.
   //
-  // Everything else in onResize MUST still run — in particular
-  // ThreeMarkers.onResize (the CSS2DRenderer maps NDC to its own stored
-  // size; leaving it stale while the client size changes offsets every pin,
-  // cluster and district label from its world anchor — issue #769, the
-  // "floating pins" bug the original full-early-return version caused).
-  // See scripts/r185_resize_spike.html for the repro seed; the real fix is
-  // upstream (bind-group cache must re-key on target recreation).
-  let _resizeSuppressed = false;
-  function setResizeSuppressed(on) { _resizeSuppressed = !!on; }
+  // ThreeMarkers.onResize must ALWAYS run here — the CSS2DRenderer maps NDC
+  // to its own stored size; leaving it stale while the client size changes
+  // offsets every pin, cluster and district label from its world anchor
+  // (issue #769, the "floating pins" bug).
   let _lastBufferW = 0, _lastBufferH = 0; // last size the drawing buffer was set to
 
   function onResize() {
@@ -1036,7 +1028,7 @@ const ThreeScene = (() => {
     if (!container || container.style.display === 'none') return;
     const w = container.clientWidth;
     const h = container.clientHeight;
-    const bufferResized = !_resizeSuppressed && (w !== _lastBufferW || h !== _lastBufferH);
+    const bufferResized = w !== _lastBufferW || h !== _lastBufferH;
     if (bufferResized) {
       renderer.setSize(w, h, false); // updateStyle:false — CSS width/height stay at 100%
       _lastBufferW = w; _lastBufferH = h;
@@ -3739,7 +3731,7 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, setFlyoverFrame, setResizeSuppressed, forceDistrictBand, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setEdgeGlowEnabled, getEdgeGlowEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, isInitialized, getLeafletView, frameLeafletView, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
+  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, setFlyoverFrame, forceDistrictBand, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setEdgeGlowEnabled, getEdgeGlowEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, isInitialized, getLeafletView, frameLeafletView, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;

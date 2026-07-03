@@ -933,24 +933,18 @@ async function initMap() {
     // Marker-overlay visibility during the showcase is owned by flyover.js:
     // it sets the flyCamera's layer mask based on opts.showPins and swaps
     // ThreeMarkers' active camera reference so projection lands correctly.
-    // Suppress renderer.setSize for the showcase's duration BEFORE entering
-    // fullscreen (issue #771). The flyover renders in a continuous loop, and
-    // under r185 a setSize mid-loop poisons the WebGPU render-context binding
-    // cache (every subsequent frame submits a destroyed texture). The drawing
-    // buffer holds its pre-showcase size and CSS stretches it to fullscreen;
-    // restored in exitShowcase, where the loop has stopped and a resize is
-    // safe again.
-    NCZ.ThreeScene.setResizeSuppressed?.(true);
     document.getElementById('map-3d').classList.add('showcase-fullscreen');
     NCZ.Flyover.startFlyover(opts); // creates and manages the fade overlay internally
     flyoverBtn.classList.add("active");
     flyoverBtn.textContent = "Exit showcase";
     // Request native browser fullscreen — must be called from a user gesture (button click)
     document.documentElement.requestFullscreen().catch(() => {});
-    // Reconcile everything EXCEPT the suppressed renderer.setSize to the new
-    // container size — the fullscreen class grows #map-3d without firing a
-    // window resize, and the CSS2DRenderer must adopt the new client size or
-    // every pin/cluster/district label drifts off its world anchor (#769).
+    // Reconcile the renderer + CSS2DRenderer to the new container size — the
+    // fullscreen class grows #map-3d without firing a window resize, and the
+    // CSS2DRenderer must adopt the new client size or every pin/cluster/
+    // district label drifts off its world anchor (#769). (Mid-showcase
+    // setSize was suppressed here while the r185 resize wedge (#771) was
+    // unmitigated; the dispose-on-resize fix in three-scene.js made it safe.)
     setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
   }
 
@@ -964,10 +958,7 @@ async function initMap() {
     flyoverBtn.classList.remove("active");
     flyoverBtn.textContent = "Showcase";
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    // Re-enable resize now the continuous flyover loop has stopped, then
-    // reconcile the canvas to its true (windowed) size on-demand — safe here
-    // because on-demand renders only a frame or two, not a continuous loop.
-    NCZ.ThreeScene.setResizeSuppressed?.(false);
+    // Reconcile the canvas to its true (windowed) size.
     setTimeout(() => window.dispatchEvent(new Event("resize")), 100);
   }
 
