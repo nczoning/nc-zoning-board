@@ -1028,6 +1028,7 @@ const ThreeScene = (() => {
   // upstream (bind-group cache must re-key on target recreation).
   let _resizeSuppressed = false;
   function setResizeSuppressed(on) { _resizeSuppressed = !!on; }
+  let _lastBufferW = 0, _lastBufferH = 0; // last size the drawing buffer was set to
 
   function onResize() {
     if (!renderer) return;
@@ -1035,8 +1036,10 @@ const ThreeScene = (() => {
     if (!container || container.style.display === 'none') return;
     const w = container.clientWidth;
     const h = container.clientHeight;
-    if (!_resizeSuppressed) {
+    const bufferResized = !_resizeSuppressed && (w !== _lastBufferW || h !== _lastBufferH);
+    if (bufferResized) {
       renderer.setSize(w, h, false); // updateStyle:false — CSS width/height stay at 100%
+      _lastBufferW = w; _lastBufferH = h;
     }
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
@@ -1044,8 +1047,22 @@ const ThreeScene = (() => {
     // flyCamera resize is handled in flyover.js
     // Line2NodeMaterial pulls viewport size from a TSL screen node at
     // shader-execution time, so the legacy resolution-set loop is no longer
-    // needed here — left as a single retained `districtLineMaterials` ref so
-    // the registry still exists for any future per-material resize work.
+    // needed here. What IS needed on r185: dispose the district line
+    // materials after setSize so the backend drops their cached render state.
+    // The Line2 render path retains GPU state referencing the renderer's
+    // canvas-size RGBA16Float framebuffer target; setSize destroys and
+    // recreates that target but the cached state is never re-keyed, so every
+    // later submit that includes a district line binds the destroyed texture
+    // and the whole frame's submit is discarded — canvas wedges black until
+    // reload (#771; bisect 2026-07-03: base scene, buildings, shadows, roads
+    // and metro all resize clean — district Line2 alone carries the wedge;
+    // material.needsUpdate is NOT sufficient to flush it, dispose() is).
+    // Three rebuilds the disposed materials transparently on their next
+    // render. Gated on an actual buffer resize so resize-event storms during
+    // a window drag don't recompile the line pipelines redundantly.
+    if (bufferResized) {
+      for (const m of districtLineMaterials) m.dispose();
+    }
     NCZ.ThreeMarkers?.onResize?.(w, h);
     updateScaleBar();
     requestRender();
