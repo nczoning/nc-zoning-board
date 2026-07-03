@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<!-- SCRATCH SPIKE — r185 resize/destroyed-texture investigation. Delete after. -->
+<html>
+<head><meta charset="utf-8"><title>r185 resize spike</title>
+<style>html,body{margin:0;height:100%;background:#0a192f;overflow:hidden}#c{width:100vw;height:100vh}</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.webgpu.min.js",
+  "three/webgpu": "https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.webgpu.min.js",
+  "three/tsl": "https://cdn.jsdelivr.net/npm/three@0.185.0/build/three.tsl.min.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="c"></div>
+<script type="module">
+import * as THREE from 'three/webgpu';
+import { Fn, instancedArray, instanceIndex, vec4, float } from 'three/tsl';
+
+// URL flags:
+//   ?loop=manual|sal   manual rAF (default) vs setAnimationLoop
+//   ?tone=1            enable ACESFilmic tone mapping (forces HDR RGBA16Float intermediate)
+//   ?ctone=1           register the app's CUSTOM CP2077 tone mapping (library.addToneMapping + LUT)
+//   ?shadow=1          directional light + shadow map pass (mimics our sun shadows)
+//   ?compute=1         dispatch a compute pass each frame (mimics our building cull)
+//   ?line=1            add a Line2 + Line2NodeMaterial ring (mimics our district outlines)
+const P = new URLSearchParams(location.search);
+const MODE = P.get('loop') || 'manual';
+const TONE = P.get('tone') === '1';
+const CTONE = P.get('ctone') === '1';
+const SHADOW = P.get('shadow') === '1';
+const COMPUTE = P.get('compute') === '1';
+const LINE = P.get('line') === '1';
+window.__spikeErrors = 0;
+
+const container = document.getElementById('c');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#0a192f');
+const camera = new THREE.PerspectiveCamera(60, container.clientWidth/container.clientHeight, 0.1, 1000);
+camera.position.set(0, 0, 5);
+
+const mesh = new THREE.Mesh(
+  new THREE.BoxGeometry(1,1,1),
+  SHADOW ? new THREE.MeshLambertNodeMaterial({ color: 0x00f0ff })
+         : new THREE.MeshBasicNodeMaterial({ color: 0x00f0ff })
+);
+scene.add(mesh);
+
+if (LINE) {
+  // Match the district-outline material config (three-scene.js loadDistricts).
+  const { Line2 } = await import('three/addons/lines/webgpu/Line2.js');
+  const { LineGeometry } = await import('three/addons/lines/LineGeometry.js');
+  const geo = new LineGeometry();
+  const pts = [];
+  for (let i = 0; i <= 32; i++) { const a = i / 32 * Math.PI * 2; pts.push(Math.cos(a) * 2, Math.sin(a) * 2, 0); }
+  geo.setPositions(pts);
+  const lineMat = new THREE.Line2NodeMaterial({
+    color: 0x00f0ff, linewidth: 2, depthTest: false,
+    transparent: true, opacity: 0.35, alphaToCoverage: false,
+  });
+  const line = new Line2(geo, lineMat);
+  scene.add(line);
+  window.__spikeLine = line; // exposed so the harness can hide/show across a resize
+}
+
+if (SHADOW) {
+  mesh.castShadow = true;
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(20, 20), new THREE.MeshLambertNodeMaterial({ color: 0x223344 }));
+  ground.rotation.x = -Math.PI / 2; ground.position.y = -2; ground.receiveShadow = true;
+  scene.add(ground);
+  const sun = new THREE.DirectionalLight(0xffffff, 2);
+  sun.position.set(3, 5, 2); sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  scene.add(sun);
+  scene.add(new THREE.AmbientLight(0x8899aa, 0.5));
+}
+
+// Match our app's renderer config as closely as relevant.
+const renderer = new THREE.WebGPURenderer({ antialias: true, stencil: true, reversedDepthBuffer: true });
+if (TONE) renderer.toneMapping = THREE.ACESFilmicToneMapping;
+if (CTONE) {
+  const { registerCP2077ToneMapping } = await import('../assets/js/aces-tonemap.js');
+  renderer.toneMapping = registerCP2077ToneMapping(renderer);
+  renderer.toneMappingExposure = 0.72;
+}
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setSize(container.clientWidth, container.clientHeight, false);
+container.appendChild(renderer.domElement);
+
+await renderer.init();
+
+// Optional compute pass — mimics our per-frame building cull (instancedArray + compute()).
+let computeNode = null;
+if (COMPUTE) {
+  const buf = instancedArray(1024, 'vec4');
+  computeNode = Fn(() => { buf.element(instanceIndex).assign(vec4(float(instanceIndex), 0, 0, 1)); })().compute(1024);
+}
+
+window.__spikeReady = true;
+window.__spikeMode = MODE + (TONE?'+tone':'') + (CTONE?'+ctone':'') + (SHADOW?'+shadow':'') + (COMPUTE?'+compute':'') + (LINE?'+line':'');
+
+function frame() {
+  mesh.rotation.x += 0.01;
+  mesh.rotation.y += 0.013;
+  if (computeNode) renderer.compute(computeNode);
+  renderer.render(scene, camera);
+}
+
+if (MODE === 'sal') {
+  // WebGPU-native idiom.
+  renderer.setAnimationLoop(frame);
+} else {
+  // WebGL-era pattern: manual rAF + render().
+  (function loop(){ frame(); requestAnimationFrame(loop); })();
+}
+
+// Exposed so the harness can trigger a mid-loop resize deterministically.
+window.__spikeResize = (w, h) => {
+  container.style.width = w + 'px';
+  container.style.height = h + 'px';
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h, false);
+};
+</script>
+</body>
+</html>
