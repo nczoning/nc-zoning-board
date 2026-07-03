@@ -41,6 +41,9 @@ import Stats from 'three/addons/libs/stats.module.js';
 // The exact in-game 3D-map colour pipeline (decoded from 3dmap.envparam):
 // ACES tonemap + colour grade + braindance LUT — see assets/js/aces-tonemap.js.
 import { registerCP2077ToneMapping, loadBraindanceLUT, setSceneGradeEnabled } from './aces-tonemap.js';
+// Custom TSL wide-line material for district outlines (#775) — replaces
+// THREE.Line2NodeMaterial; see the header of district-line-material.js.
+import { DistrictLineMaterial } from './district-line-material.js';
 
 window.NCZ = window.NCZ || {};
 
@@ -1037,24 +1040,11 @@ const ThreeScene = (() => {
     camera.updateProjectionMatrix();
     updateShadowCamera();   // shadow camera follows the schema camera's aspect
     // flyCamera resize is handled in flyover.js
-    // Line2NodeMaterial pulls viewport size from a TSL screen node at
-    // shader-execution time, so the legacy resolution-set loop is no longer
-    // needed here. What IS needed on r185: dispose the district line
-    // materials after setSize so the backend drops their cached render state.
-    // The Line2 render path retains GPU state referencing the renderer's
-    // canvas-size RGBA16Float framebuffer target; setSize destroys and
-    // recreates that target but the cached state is never re-keyed, so every
-    // later submit that includes a district line binds the destroyed texture
-    // and the whole frame's submit is discarded — canvas wedges black until
-    // reload (#771; bisect 2026-07-03: base scene, buildings, shadows, roads
-    // and metro all resize clean — district Line2 alone carries the wedge;
-    // material.needsUpdate is NOT sufficient to flush it, dispose() is).
-    // Three rebuilds the disposed materials transparently on their next
-    // render. Gated on an actual buffer resize so resize-event storms during
-    // a window drag don't recompile the line pipelines redundantly.
-    if (bufferResized) {
-      for (const m of districtLineMaterials) m.dispose();
-    }
+    // District lines need no resize handling: DistrictLineMaterial (#775)
+    // reads the viewport from a TSL screen node at shader-execution time and
+    // binds no framebuffer-copy textures — the dispose-on-resize mitigation
+    // that Line2NodeMaterial's viewportOpaqueMipTexture binding required
+    // (#771) was removed with it.
     NCZ.ThreeMarkers?.onResize?.(w, h);
     updateScaleBar();
     requestRender();
@@ -2293,6 +2283,17 @@ const ThreeScene = (() => {
   // District line materials — stored so resolution can be updated on resize
   const districtLineMaterials = [];
 
+  // Per-ring stencil refs for the joint self-overlap dedup (see
+  // district-line-material.js header). Values 3..255 — 1 (OCCLUDER) and 2
+  // (water) belong to the scene's SeeThrough stencil chain. Cycling is safe:
+  // a collision would need two rings ~253 build-order apart sharing a border.
+  let _nextLineStencilRef = 3;
+  function nextLineStencilRef() {
+    const ref = _nextLineStencilRef;
+    _nextLineStencilRef = _nextLineStencilRef >= 255 ? 3 : _nextLineStencilRef + 1;
+    return ref;
+  }
+
   // Drop consecutive ring vertices within ε CET units of each other. The
   // cleanup script (scripts/regenerate_subdistricts.py) runs Shapely boolean
   // ops on subdistrict polygons and rounds the output to 2 decimal places —
@@ -2345,7 +2346,7 @@ const ThreeScene = (() => {
       // an empty Line2 so the caller's group structure is preserved.
       const empty = new LineGeometry();
       empty.setPositions([]);
-      const placeholderMat = new THREE.Line2NodeMaterial({ color, linewidth: lineWidth, depthTest: false, transparent: true, opacity: 0 });
+      const placeholderMat = new DistrictLineMaterial({ color, linewidth: lineWidth, depthTest: false, transparent: true, opacity: 0 });
       districtLineMaterials.push(placeholderMat);
       return new Line2(empty, placeholderMat);
     }
@@ -2358,22 +2359,18 @@ const ThreeScene = (() => {
     const geometry = new LineGeometry();
     geometry.setPositions(positions);
 
-    // Line2NodeMaterial reads the viewport size from a TSL screen node at
-    // shader-execution time — no `resolution` field to keep in sync on resize
-    // like the WebGL LineMaterial required.
-    const material = new THREE.Line2NodeMaterial({
+    // Our own TSL wide-line material (#775) — real alpha blending instead of
+    // Line2NodeMaterial's NoBlending + opaque-backdrop fake, which was the
+    // shared root of the #771 resize wedge, the unhovered colour regression
+    // and the alphaToCoverage quantisation. Reads the viewport from a TSL
+    // screen node; no `resolution` field to keep in sync on resize.
+    const material = new DistrictLineMaterial({
       color,
       linewidth: lineWidth,
       depthTest: false,
       transparent: true,
       opacity: NCZ.DISTRICT_LINE_OPACITY,
-      // Line2NodeMaterial defaults alphaToCoverage:true, gated in-shader on
-      // renderer.currentSamples > 0. On r184 that gate never fired; r185's
-      // MSAA sample-count fixes activated it, and alpha-to-coverage QUANTIZES
-      // alpha to covered samples — the 5% base opacity rounds to 0 of 4
-      // samples = invisible lines (hover at ~1.0 still showed). We want the
-      // smooth faint alpha blend, not coverage dithering.
-      alphaToCoverage: false,
+      stencilRef: nextLineStencilRef(),
     });
     districtLineMaterials.push(material);
 
