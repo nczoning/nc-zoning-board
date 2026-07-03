@@ -275,6 +275,9 @@ const ThreeScene = (() => {
   let landmarkMat        = null;  // shared MeshLambertMaterial for all landmark GLBs
 
   // District metadata — sourced directly from 3dmap_triangle_soup.Material.json.
+  // Cache note: the *.dds paths below are served `no-cache` (see _headers), so
+  // updating a texture needs no cache-busting — just redeploy. Only tile regen
+  // needs manual action. See docs/caching-strategy.md.
   // dataDds: _data.dds (DXGI_FORMAT_R16G16B16A16_UNORM — raw 16-bit RGBA instance data)
   // dataDdsFixed: optional alignment-fixed _data from malgalad's "3D World Map
   //   Fixed" mod (Nexus #26500). Same dimensions/transforms as the vanilla

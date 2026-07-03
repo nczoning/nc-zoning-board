@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Infrastructure
+
+- The live site is now served by Cloudflare Pages instead of GitHub Pages, for faster loads via a closer edge and long-lived asset caching (see `docs/caching-strategy.md`).
+
 ### 3D Schematic Map
 
 #### Changed

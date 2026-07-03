@@ -567,7 +567,10 @@ async function initMap() {
     map.setMaxBounds(pannableBounds);
   }
 
-  L.tileLayer("assets/tiles/{z}/{x}/{y}.webp", {
+  // Tiles are served with `Cache-Control: immutable` (see _headers), so browsers
+  // never re-check them. If you regenerate the tile set, bump this ?v= token AND
+  // purge the Cloudflare edge cache. Full procedure: docs/caching-strategy.md.
+  L.tileLayer("assets/tiles/{z}/{x}/{y}.webp?v=1", {
     minZoom: 0,
     maxNativeZoom: 6,
     maxZoom: 8,
