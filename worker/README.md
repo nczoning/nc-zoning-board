@@ -59,13 +59,20 @@ curl "http://127.0.0.1:8787/cdn-cgi/handler/scheduled"   # trigger one refresh
 npx wrangler kv key get "dataset:v1:meta" --binding DATASET --local
 ```
 
-## Routes (current)
+## Routes
 
 | Route | Returns |
 | --- | --- |
-| `GET /v1/health` | `{ status, version }` in the standard envelope |
+| `GET /v1/health` | `{ status, version }` (uncached) |
+| `GET /v1/locations` | slim location array |
+| `GET /v1/locations/{id}` | one full entry (adds description/credits), or 404 |
+| `GET /v1/districts` | district/subdistrict hierarchy (flat boundaries) |
+| `GET /v1/tags` | tag dictionary |
+| `GET /v1/meta` | `{ counts, discovery_stale, skipped }` |
 
 Every response uses the envelope
-`{ schema, generated_at, dataset_version, data }`. The read routes that
-serve the dataset from KV (`/v1/locations`, `/v1/districts`, `/v1/meta`,
-`/v1/tags`) ship in phase B4; the full API reference in B5.
+`{ schema, generated_at, dataset_version, data }`. Dataset routes carry
+`ETag: "<dataset_version>"` and `Cache-Control: public, max-age=300,
+stale-while-revalidate=3600`; send `If-None-Match` to get a `304` when your
+copy is current. Before the first cron tick the dataset routes return `503
+not_ready`. The full API reference (repo doc + OpenAPI page) ships in B5.

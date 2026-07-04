@@ -73,9 +73,10 @@ export async function runRefresh(env, fetchImpl = fetch) {
     });
     const districtsOut = districtsPayload(districts);
 
-    // Hash the content that actually varies (not generated_at).
+    // Hash the content that actually varies (not generated_at). Tags are
+    // included so a tags.json edit propagates through the ETag.
     const version = await contentHash(
-      JSON.stringify({ locations, full, districts: districtsOut }),
+      JSON.stringify({ locations, full, districts: districtsOut, tags: tagsDict }),
     );
 
     const prev = await readMeta(env);
@@ -87,6 +88,7 @@ export async function runRefresh(env, fetchImpl = fetch) {
       slim: locations,
       full,
       districts: districtsOut,
+      tags: tagsDict,
       meta: {
         schema: SCHEMA_VERSION,
         generated_at: generatedAt,
