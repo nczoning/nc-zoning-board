@@ -5,6 +5,34 @@ The site is served by **Cloudflare Pages**. Cache behaviour is controlled by the
 output. GitHub Pages ignored this file, so none of this applied before the
 Cloudflare migration.
 
+## Required zone setting (read this first)
+
+For `_headers` to be honoured at all, the `nczoning.net` Cloudflare **zone** must
+have **Caching → Configuration → Browser Cache TTL** set to **"Respect Existing
+Headers."** This is a zone-level setting, so it covers every Pages project in the
+zone (prod and dev) — but a fresh zone, or a project moved to a new zone, needs it
+set explicitly.
+
+If it's set to a fixed value instead (the default is often "4 hours"), Cloudflare
+**overrides** the `Cache-Control` we send — but only in the "extend caching"
+direction, and only for its default-cacheable file extensions. The symptom is
+subtle and easy to miss: tiles (`immutable`, longer than the setting) look fine,
+`.dds`/`.glb` (not default-cacheable) look fine, but `.js`/`.css` silently come
+back as `Cache-Control: public, max-age=14400` instead of `no-cache`. That means
+a deploy's code wouldn't reach returning browsers for up to 4 hours — the exact
+failure `no-cache` exists to prevent.
+
+Verify from the command line (any tier; `.js` is the canary):
+
+```bash
+curl -sI https://nczoning.net/assets/js/app.js | grep -i cache-control
+# want: Cache-Control: public, no-cache   (NOT max-age=14400)
+```
+
+Changing the setting takes effect on existing edge objects on their next request
+(no purge needed); only browsers that loaded during the misconfigured window keep
+the stale header until it expires or a hard-refresh.
+
 ## The one rule
 
 There are **two independent caches**, and only one of them is under your control
