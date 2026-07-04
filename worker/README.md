@@ -4,9 +4,19 @@ Cloudflare Worker serving the mod registry at `api.nczoning.net/v1/*` for
 in-game consumers (and, later, the website itself). Architecture and phase
 plan: [docs/data-api-plan.md](../docs/data-api-plan.md).
 
-Deploys independently of the Pages site. The Pages Git integration ignores
-this directory; the Worker ships via `wrangler deploy` (CI workflow arrives
-in phase B6).
+Deploys independently of the Pages site, but mirrors its main/dev split with
+two environments:
+
+| Env | Worker | Domain | Source origin | Deployed from |
+| --- | --- | --- | --- | --- |
+| production | `nczoning-api` | api.nczoning.net | nczoning.net | `main` |
+| staging | `nczoning-api-staging` | api-dev.nczoning.net | dev.nczoning.net | `dev` |
+
+CI (`.github/workflows/deploy-api.yml`) deploys production on push to `main`
+and staging on push to `dev`, path-filtered to `worker/**`. So the live site
+(main → nczoning.net → api.nczoning.net) only changes through the same
+dev→main gate that protects the site itself; dev work stays on the staging
+API.
 
 ## Local development
 
@@ -19,24 +29,27 @@ curl http://127.0.0.1:8787/v1/health
 
 ## Deploy
 
-One-time setup (before the first deploy):
+Normally you don't — CI deploys on merge (see the table above). Manual
+deploy for local iteration:
 
 ```bash
 cd worker
-npx wrangler login                       # once per machine
-npx wrangler kv namespace create nczoning-api-dataset   # paste the id into wrangler.jsonc
-npx wrangler secret put DISCORD_WEBHOOK_URL   # optional: refresh-failure alerts
-npm run deploy
+npx wrangler login                    # once per machine
+npm run deploy                        # production
+npx wrangler deploy --env staging     # staging
 ```
 
-The `routes` entry in `wrangler.jsonc` binds `api.nczoning.net` as a custom
-domain on first deploy (DNS + certificate created automatically; the zone
-must be on the same Cloudflare account). The `triggers.crons` entry starts
-the 15-minute refresh once deployed.
+CI needs one GitHub Actions secret: `CLOUDFLARE_API_TOKEN` (a token with
+Workers Scripts:Edit, Workers KV Storage:Edit, and Zone DNS:Edit on the
+nczoning.net zone — DNS is needed so the custom-domain route can be created).
+The `DISCORD_WEBHOOK_URL` Worker secret and the KV namespaces persist across
+deploys; they're set once with `wrangler secret put` / `kv namespace create`
+and are not touched by CI.
 
-To seed KV immediately without waiting for the first cron tick, trigger the
-scheduled handler once from the dashboard (Worker → Triggers → run) or
-redeploy.
+The `routes` entry binds the custom domain on first deploy (DNS + certificate
+created automatically; the zone must be on the same Cloudflare account). The
+`triggers.crons` entry starts the 15-minute refresh once deployed; a freshly
+deployed env returns `503 not_ready` until its first cron tick seeds KV.
 
 ## Dataset refresh (cron)
 
