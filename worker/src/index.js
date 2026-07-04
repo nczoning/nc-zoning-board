@@ -16,6 +16,7 @@
 
 import { runRefresh } from './refresh.js';
 import { KEYS } from './store.js';
+import { docsPage, spec } from './docs.js';
 
 const SCHEMA_VERSION = 1;
 
@@ -89,6 +90,11 @@ async function serveDataset(request, env, build) {
 }
 
 const routes = {
+  // Human docs (Scalar) + the machine-readable spec.
+  'GET /': () => docsPage(),
+  'GET /openapi.json': () =>
+    json(spec, { headers: { 'Cache-Control': 'public, max-age=300' } }),
+
   'GET /v1/health': (request, env) =>
     json(envelope({ status: 'ok', version: env.API_VERSION }, null)),
 

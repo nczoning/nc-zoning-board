@@ -62,7 +62,7 @@ meta record, and (if configured) posts a Discord alert — it never serves an
 empty or partial dataset.
 
 KV keys: `dataset:v1` (slim), `dataset:v1:full`, `dataset:v1:districts`,
-`dataset:v1:meta`.
+`dataset:v1:tags`, `dataset:v1:meta`.
 
 ### Test the cron locally
 
@@ -76,6 +76,8 @@ npx wrangler kv key get "dataset:v1:meta" --binding DATASET --local
 
 | Route | Returns |
 | --- | --- |
+| `GET /` | interactive docs (Scalar, renders `openapi.json`) |
+| `GET /openapi.json` | the OpenAPI 3.1 spec |
 | `GET /v1/health` | `{ status, version }` (uncached) |
 | `GET /v1/locations` | slim location array |
 | `GET /v1/locations/{id}` | one full entry (adds description/credits), or 404 |
@@ -88,4 +90,22 @@ Every response uses the envelope
 `ETag: "<dataset_version>"` and `Cache-Control: public, max-age=300,
 stale-while-revalidate=3600`; send `If-None-Match` to get a `304` when your
 copy is current. Before the first cron tick the dataset routes return `503
-not_ready`. The full API reference (repo doc + OpenAPI page) ships in B5.
+not_ready`.
+
+Docs: `openapi.json` is the source of truth (drift-guarded by
+`test/openapi.test.js` — every served route must be documented and vice
+versa). The human-facing reference with redscript/CET snippets is
+[docs/api-reference.md](../docs/api-reference.md).
+
+## Rate limiting
+
+The read-only routes are edge-cached (`max-age=300`), so the vast majority
+of traffic never reaches the Worker, and the free tier (100k Worker
+requests/day) has a wide margin. A belt-and-braces WAF rate-limit rule is
+recommended but not code — add it in the Cloudflare dashboard:
+
+> Security → WAF → Rate limiting rules → Create, on the `nczoning.net` zone:
+> match `http.host eq "api.nczoning.net"`, **60 requests / 1 min per IP**,
+> action **Block** (or Managed Challenge). Mirror for `api-dev.nczoning.net`.
+
+Rate-limit rules are zone config, not part of `wrangler deploy`.
