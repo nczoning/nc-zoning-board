@@ -99,13 +99,22 @@ versa). The human-facing reference with redscript/CET snippets is
 
 ## Rate limiting
 
-The read-only routes are edge-cached (`max-age=300`), so the vast majority
-of traffic never reaches the Worker, and the free tier (100k Worker
-requests/day) has a wide margin. A belt-and-braces WAF rate-limit rule is
-recommended but not code — add it in the Cloudflare dashboard:
+The read-only routes are edge-cached (`max-age=300`), so most traffic never
+reaches the Worker and the free tier (100k Worker requests/day) has wide
+margin. A WAF rate-limit rule is deployed as belt-and-braces (zone config,
+not `wrangler deploy`):
 
-> Security → WAF → Rate limiting rules → Create, on the `nczoning.net` zone:
-> match `http.host eq "api.nczoning.net"`, **60 requests / 1 min per IP**,
-> action **Block** (or Managed Challenge). Mirror for `api-dev.nczoning.net`.
+> Dashboard → nczoning.net → **Security → Security rules → Rate limiting
+> rules**. Rule "API rate limit": match **URI Path starts with `/v1/`**,
+> characteristic **IP**, **100 requests / 10 seconds**, action **Block**,
+> duration **10 s**.
 
-Rate-limit rules are zone config, not part of `wrangler deploy`.
+**Free-plan constraints (why it's path-based, not host-based):** the free
+rate-limiting rule only matches on **URI Path** (hostname isn't offered),
+the period is fixed at **10 seconds**, and the only action is **Block**.
+Matching `/v1/` is unaffected by this because that path only exists on the
+API — the main site has no `/v1/` routes — so one rule covers both the prod
+and staging API hosts and never touches the site. The `/` docs page and
+`/openapi.json` are intentionally left uncovered (`/` would collide with the
+site homepage). Verified by burst test: request 101 within a 10 s window
+returns `429`.
