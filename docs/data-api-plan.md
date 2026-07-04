@@ -85,11 +85,39 @@ mod project; the frozen contract above is the interface between the two.
 | B2 | Server-side merge engine + district enrichment (testable module) | M |
 | B3 | Cron to KV refresh, last-known-good, Discord alerting | M |
 | B4 | Read endpoints live, payload size measured, contract finalised | M |
-| B5 | WAF rate rule + public `docs/api-reference.md` | S |
+| B5 | Modder docs (see below) + WAF rate rule | M |
 | B6 | Worker CI deploy (wrangler action, path-filtered) | S |
+| B7 | Website consumes `/v1/` (parity verification + fallback) | M |
 
 The mod project runs in parallel from B0 using local fixtures; it ships only
 against the live `/v1/`.
+
+## API documentation (for modders)
+
+Two layers:
+
+1. **`docs/api-reference.md`** (this repo) is canonical: routes, envelope,
+   DTO constraints, and copy-paste redscript/CET usage snippets. These are
+   the things modders actually need, and the things generated reference
+   pages are bad at.
+2. **OpenAPI spec** (`worker/openapi.yaml`) rendered as an interactive
+   reference page served by the Worker itself at the `api.nczoning.net`
+   root (Scalar or Redoc, a single static HTML). Zero extra hosting, and
+   the spec doubles as a CI artifact: the Worker's real responses are
+   validated against it.
+
+A separate docs-site product would be overkill for six read-only routes.
+
+## Dogfooding: the website as first consumer (B7)
+
+Once `/v1/` is live, the site itself switches to it instead of running the
+auto-discovery merge client-side. This is the strongest verification the
+API can get: the map's pins, District Info Panel counts and thumbnails
+exercise `/v1` on every page load, so any merge bug is immediately visible
+on the map. The switch ships with a graceful fallback to the current
+client-side path; the client-side Nexus GraphQL code is deleted only after
+parity is confirmed (auto-discovered counts match, exclusion list honoured,
+thumbnails present).
 
 ## Risks
 
@@ -107,5 +135,4 @@ against the live `/v1/`.
   design deliberately deferred.
 - Fast-travel / metro-station / POI data: no such dataset exists in the repo
   yet (future TweakDB/WolvenKit extraction).
-- The submission-system Worker (separate proposal) and the website itself
-  consuming `/v1/` instead of client-side Nexus calls.
+- The submission-system Worker (separate proposal).
