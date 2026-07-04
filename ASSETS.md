@@ -58,7 +58,7 @@ The `data/locations/` and `data/subdistricts.json` directories contain coordinat
 
 ## Attribution
 
-**NC Zoning Board** is maintained by the Cyberpunk 2077 modding community and hosted as a free resource on GitHub Pages.
+**NC Zoning Board** is maintained by the Cyberpunk 2077 modding community and hosted as a free resource on Cloudflare Pages.
 
 - **Original Vision:** Kaoziun
 - **Development Lead:** Spuddeh

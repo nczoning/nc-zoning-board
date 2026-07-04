@@ -13,7 +13,7 @@ The NC Zoning Board is an interactive map and coordinate registry for Cyberpunk 
 - ✅ Cyberpunk-themed UI (Orbitron/Rajdhani fonts, dark theme)
 - ✅ mods.json schema validation (CI via GitHub Actions)
 - ✅ Automated mod submission via GitHub Issue form → PR pipeline
-- ✅ GitHub Pages deployment
+- ✅ Cloudflare Pages deployment
 - ✅ Tile generation script (`scripts/generate_tiles.js`)
 - ✅ **Data refactor** — split `mods.json` into individual JSON files for cleaner management
 - ✅ **Custom pin icons** — colour-coded by mod category

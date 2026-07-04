@@ -19,10 +19,10 @@ The dev branch exists from **before Phase 0 started** through the eventual merge
 
 | Environment | Branch | URL | Deploys via |
 |-------------|--------|-----|-------------|
-| Production | `main` | [nczoning.net](https://nczoning.net) | GitHub Actions → GitHub Pages |
+| Production | `main` | [nczoning.net](https://nczoning.net) | Cloudflare Pages (native Git integration) |
 | Staging | `dev` | [dev.nczoning.net](https://dev.nczoning.net) | Cloudflare Pages (native Git integration) |
 
-Cloudflare Pages runs `node scripts/build_mods.js` on every push to `dev` and deploys the result. No GitHub Actions secrets or tokens needed — Cloudflare's GitHub integration handles authentication itself.
+Both environments are separate Cloudflare Pages projects on the same repo (prod builds `main`, staging builds `dev`). Cloudflare runs `node scripts/build_mods.js` on every push to the project's branch and deploys the result. No GitHub Actions secrets or tokens needed — Cloudflare's GitHub integration handles authentication itself.
 
 ## Contributing to a phase
 
