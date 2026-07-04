@@ -78,44 +78,44 @@ function fakeFetch({ failNexus = false, failMods = false, discordSink } = {}) {
 }
 
 test('first run writes the full dataset (changed=true)', async () => {
-  const env = { DATA: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
   const r = await runRefresh(env, fakeFetch());
   assert.equal(r.changed, true);
   assert.ok(r.version);
-  const slim = await env.DATA.get(KEYS.slim, 'json');
+  const slim = await env.DATASET.get(KEYS.slim, 'json');
   assert.equal(slim.length, 2); // 1 manual + 1 auto (777 excluded)
   assert.ok(slim.every((l) => l.district));
-  const meta = await env.DATA.get(KEYS.meta, 'json');
+  const meta = await env.DATASET.get(KEYS.meta, 'json');
   assert.equal(meta.discovery_stale, false);
   assert.equal(meta.counts.total, 2);
   assert.equal(meta.dataset_version, r.version);
 });
 
 test('unchanged content on the second run skips the write (changed=false)', async () => {
-  const env = { DATA: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
   await runRefresh(env, fakeFetch());
-  const before = (await env.DATA.get(KEYS.meta, 'json')).generated_at;
+  const before = (await env.DATASET.get(KEYS.meta, 'json')).generated_at;
   const r2 = await runRefresh(env, fakeFetch());
   assert.equal(r2.changed, false);
   // generated_at unchanged because we didn't rewrite.
-  assert.equal((await env.DATA.get(KEYS.meta, 'json')).generated_at, before);
+  assert.equal((await env.DATASET.get(KEYS.meta, 'json')).generated_at, before);
 });
 
 test('Nexus failure keeps last-known-good and flags stale + alerts Discord', async () => {
   const env = {
-    DATA: fakeKV(), SITE_ORIGIN: 'https://x',
+    DATASET: fakeKV(), SITE_ORIGIN: 'https://x',
     DISCORD_WEBHOOK_URL: 'https://discord/webhook',
   };
   await runRefresh(env, fakeFetch()); // seed good data
-  const goodSlim = await env.DATA.get(KEYS.slim, 'json');
+  const goodSlim = await env.DATASET.get(KEYS.slim, 'json');
 
   const discordSink = [];
   const r = await runRefresh(env, fakeFetch({ failNexus: true, discordSink }));
   assert.equal(r.stale, true);
   assert.match(r.error, /503/);
   // Dataset preserved (not wiped).
-  assert.deepEqual(await env.DATA.get(KEYS.slim, 'json'), goodSlim);
-  const meta = await env.DATA.get(KEYS.meta, 'json');
+  assert.deepEqual(await env.DATASET.get(KEYS.slim, 'json'), goodSlim);
+  const meta = await env.DATASET.get(KEYS.meta, 'json');
   assert.equal(meta.discovery_stale, true);
   assert.match(meta.last_error, /503/);
   assert.equal(discordSink.length, 1);
@@ -123,19 +123,19 @@ test('Nexus failure keeps last-known-good and flags stale + alerts Discord', asy
 });
 
 test('failure with no prior dataset returns stale with null version, no crash', async () => {
-  const env = { DATA: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
   const r = await runRefresh(env, fakeFetch({ failMods: true }));
   assert.equal(r.stale, true);
   assert.equal(r.version, null);
-  assert.equal(await env.DATA.get(KEYS.slim, 'json'), null);
+  assert.equal(await env.DATASET.get(KEYS.slim, 'json'), null);
 });
 
 test('recovery after a stale cycle rewrites and clears the stale flag', async () => {
-  const env = { DATA: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
   await runRefresh(env, fakeFetch());
   await runRefresh(env, fakeFetch({ failNexus: true }));
-  assert.equal((await env.DATA.get(KEYS.meta, 'json')).discovery_stale, true);
+  assert.equal((await env.DATASET.get(KEYS.meta, 'json')).discovery_stale, true);
   const r = await runRefresh(env, fakeFetch());
   assert.equal(r.changed, true); // stale flag forces a rewrite even if hash matches
-  assert.equal((await env.DATA.get(KEYS.meta, 'json')).discovery_stale, false);
+  assert.equal((await env.DATASET.get(KEYS.meta, 'json')).discovery_stale, false);
 });

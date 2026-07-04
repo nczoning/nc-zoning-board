@@ -50,7 +50,7 @@ async function alertDiscord(env, fetchImpl, reason) {
 
 /**
  * Run one refresh cycle.
- * @param {object} env  Worker env (DATA KV binding, SITE_ORIGIN?, DISCORD_WEBHOOK_URL?)
+ * @param {object} env  Worker env (DATASET KV binding, SITE_ORIGIN?, DISCORD_WEBHOOK_URL?)
  * @param {typeof fetch} fetchImpl  injectable
  * @returns {Promise<{changed:boolean, version:string|null, stale:boolean, error?:string}>}
  */

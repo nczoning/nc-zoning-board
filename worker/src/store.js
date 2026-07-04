@@ -26,7 +26,7 @@ export async function contentHash(str) {
 
 /** Read the current meta record (or null before the first successful cron). */
 export async function readMeta(env) {
-  return env.DATA.get(KEYS.meta, 'json');
+  return env.DATASET.get(KEYS.meta, 'json');
 }
 
 /**
@@ -36,14 +36,14 @@ export async function readMeta(env) {
  */
 export async function writeDataset(env, { slim, full, districts, meta }) {
   await Promise.all([
-    env.DATA.put(KEYS.slim, JSON.stringify(slim)),
-    env.DATA.put(KEYS.full, JSON.stringify(full)),
-    env.DATA.put(KEYS.districts, JSON.stringify(districts)),
-    env.DATA.put(KEYS.meta, JSON.stringify(meta)),
+    env.DATASET.put(KEYS.slim, JSON.stringify(slim)),
+    env.DATASET.put(KEYS.full, JSON.stringify(full)),
+    env.DATASET.put(KEYS.districts, JSON.stringify(districts)),
+    env.DATASET.put(KEYS.meta, JSON.stringify(meta)),
   ]);
 }
 
 /** Update only the meta record (last-known-good touch on a failed refresh). */
 export async function writeMeta(env, meta) {
-  await env.DATA.put(KEYS.meta, JSON.stringify(meta));
+  await env.DATASET.put(KEYS.meta, JSON.stringify(meta));
 }
