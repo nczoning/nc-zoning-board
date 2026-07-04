@@ -89,7 +89,7 @@ Prefer a permanent, manually curated entry? See **[docs/adding-mods.md](docs/add
 - **Vanilla JS / CSS** — No frameworks, purely static files
 - **[Sharp](https://sharp.pixelplumbing.com/)** — 8k map tile generation (dev dependency)
 - **GitHub Actions** — Automated JSON validation and PR pipeline
-- **GitHub Pages** — Static hosting
+- **Cloudflare Pages** — Static hosting (Git integration)
 
 ## Contributors & Community
 

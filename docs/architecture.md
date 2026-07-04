@@ -45,8 +45,8 @@ nc-zoning-board/
 │   └── workflows/
 │       ├── auto-pr-submission.yml       # Bot: submission issue → PR with new JSON
 │       ├── modify-location-submission.yml # Bot: edit issue → PR with modified JSON
-│       ├── validate-mods.yml            # CI: validates mods.json against schema
-│       └── deploy.yml                   # CD: deploys to GitHub Pages
+│       └── validate-mods.yml            # CI: validates mods.json against schema
+│                                        # (deploys via Cloudflare Pages Git integration, not a workflow)
 │
 └── docs/                   # You are here
 ```

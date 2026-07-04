@@ -13,8 +13,9 @@ The project has two deployment environments:
 | Production | `main` | [nczoning.net](https://nczoning.net) | Live site — always fully functional |
 | Staging | `dev` | [dev.nczoning.net](https://dev.nczoning.net) | In-progress Three.js work — may be incomplete |
 
-Production deploys via GitHub Actions → GitHub Pages on every push to `main`.
-Staging deploys via Cloudflare Pages Git integration on every push to `dev`.
+Both environments deploy via Cloudflare Pages Git integration: production on
+every push to `main`, staging on every push to `dev` (separate Pages projects on
+the same repo).
 
 ---
 

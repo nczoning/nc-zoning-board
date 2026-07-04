@@ -15,7 +15,7 @@ Source images are stored in `raw maps/` (not committed due to size):
 | 4k (4096²) | `4k/night_city.png` | 27 MB | Archive |
 | 8k (8192²) | `8k/night_city_8k_transparent.png` | 108 MB | Archive |
 | **16k (16384²)** | **`16k/night_city_16k.png`** | **529 MB** | **Current tile source** |
-| 32k (32768²) | `32k/night_city_32k.png` | ~1.7 GB | Available (too many tiles for GitHub Pages) |
+| 32k (32768²) | `32k/night_city_32k.png` | ~1.7 GB | Available (too many tiles for Cloudflare Pages' 20k-file deploy limit) |
 
 ## Generating Tiles
 
@@ -107,4 +107,4 @@ L.tileLayer('assets/tiles/{z}/{x}/{y}.webp', {
 
 ## Why Not 32k?
 
-The 32k source would give zoom 7 (128×128 = 16,384 tiles at native, ~21,845 total). At GitHub Pages' scale, this adds significant repo size (~100+ MB) for diminishing returns — users already get sharp detail at zoom 6 with only 4× upscaling at max zoom. The 32k source is available if we move to external hosting (CDN, blob storage) in the future.
+The 32k source would give zoom 7 (128×128 = 16,384 tiles at native, ~21,845 total). That alone exceeds Cloudflare Pages' 20,000-files-per-deployment limit (before counting the ~5,461 existing tiles and all other assets), and adds significant repo size (~100+ MB) for diminishing returns — users already get sharp detail at zoom 6 with only 4× upscaling at max zoom. The 32k source is available if we move tiles to external object storage (e.g. Cloudflare R2) in the future.
