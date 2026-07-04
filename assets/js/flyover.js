@@ -106,10 +106,12 @@ const Flyover = (() => {
     // WP 0 — Ocean: snap to opening theme; showcase always controls its own layer state.
     // _runOpts.revealLayers=true  → hide everything, stagger layers back in over 6.9s
     // _runOpts.revealLayers=false → all layers on from frame 1 (immediate shadows)
-    // Districts honour _runOpts.districts in both branches.
+    // Districts honour the split _runOpts.districtNames/districtOutlines in
+    // both branches (the parent layer carries names + outlines; which of the
+    // two actually renders is decided by forceDistrictBand's mode).
     // Either way, exit always restores the user's pre-showcase layer state.
     0: () => {
-      const showDistricts = !!_runOpts?.districts;
+      const showDistricts = !!(_runOpts?.districtNames || _runOpts?.districtOutlines);
       if (_runOpts?.revealLayers) {
         NCZ.ThreeScene.setLayerVisibility('roads',     false);
         NCZ.ThreeScene.setLayerVisibility('metro',     false);
@@ -126,7 +128,11 @@ const Flyover = (() => {
     },
     // WP 9 — Badlands sweep: drop districts so the city behind camera reads cleaner.
     // Skipped when the user opted to keep districts visible.
-    9: () => { if (!_runOpts?.districts) NCZ.ThreeScene.setLayerVisibility('districts', false); },
+    9: () => {
+      if (!(_runOpts?.districtNames || _runOpts?.districtOutlines)) {
+        NCZ.ThreeScene.setLayerVisibility('districts', false);
+      }
+    },
   };
 
   // ── Beat-cycle visualiser ─────────────────────────────────────────────────
@@ -354,7 +360,6 @@ const Flyover = (() => {
 
   let flyCamera       = null;
   let flyActive       = false;
-  let flyFrameId      = null;
   let flySeg          = 0;
   let flySegStart     = 0;
   let _paused         = false; // spacebar pause — freezes camera + audio, keeps pins clickable
@@ -469,13 +474,26 @@ const Flyover = (() => {
       theme:        typeof opts.theme === 'string' ? opts.theme : 'cycle',
       showPins:     !!opts.showPins,
       revealLayers: !!opts.revealLayers,
-      districts:    !!opts.districts,
+      // Back-compat: a legacy boolean `districts` (pre-split callers) seeds both.
+      districtNames:    !!(opts.districtNames    ?? opts.districts),
+      districtOutlines: !!(opts.districtOutlines ?? opts.districts),
       audio:        opts.audio !== false, // default true
       loop:         !!opts.loop,
     };
 
     NCZ.ThreeScene.stopRenderLoop();
     NCZ.ThreeScene.setControlsEnabled(false);
+    // Pin the main-district outline tier for the flight. The zoom-band logic
+    // reads the (frozen) schema camera, so starting a showcase zoomed in
+    // below the outline band would otherwise leave every tier hidden and the
+    // district options silently dead. The mode carries the names/outlines
+    // split (labels vs Line2 rings) and renders the rings at the hovered
+    // opacity. Waypoint actions still toggle the parent districts layer on
+    // top of this. Restored on stop.
+    NCZ.ThreeScene.forceDistrictBand?.('district', {
+      names:    _runOpts.districtNames,
+      outlines: _runOpts.districtOutlines,
+    });
 
     if (!flyCamera) {
       const canvas = NCZ.ThreeScene.getCanvasElement();
@@ -542,7 +560,7 @@ const Flyover = (() => {
           _audio.addEventListener('ended', _onAudioEnded, { once: true });
           return;
         }
-        if (flyFrameId !== null) { cancelAnimationFrame(flyFrameId); flyFrameId = null; }
+        NCZ.ThreeScene.setFlyoverFrame(null);
         fadeToBlack(() => {
           document.dispatchEvent(new CustomEvent('flyover:ended'));
           resetFade();
@@ -568,7 +586,9 @@ const Flyover = (() => {
     flySeg      = 0;
     flySegStart = performance.now();
     _paused     = false;
-    flyoverLoop();
+    // Drive fly frames through the scene's shared animation loop (issue #768)
+    // — the loop invokes flyoverFrame every tick while the callback is set.
+    NCZ.ThreeScene.setFlyoverFrame(flyoverFrame);
   }
 
   // Short fade-out/in across the camera swap. The showcase camera renders at
@@ -580,7 +600,7 @@ const Flyover = (() => {
   function stopFlyover() {
     if (!flyActive) return;
     flyActive = false;
-    if (flyFrameId !== null) { cancelAnimationFrame(flyFrameId); flyFrameId = null; }
+    NCZ.ThreeScene.setFlyoverFrame(null);
 
     const canvas    = NCZ.ThreeScene.getCanvasElement?.();
     const container = canvas?.parentElement || null;
@@ -595,6 +615,9 @@ const Flyover = (() => {
       // also re-runs cluster recompute (suppressed while a non-schema camera
       // is active).
       NCZ.ThreeMarkers?.setActiveCamera?.(null);
+      // Hand the district-outline band back to the schema camera's zoom logic
+      // (pinned to the main-district tier for the flight — see startFlyover).
+      NCZ.ThreeScene.forceDistrictBand?.(null);
       clearLayerReveal();
       _paused = false;
       removePauseHint();
@@ -663,9 +686,10 @@ const Flyover = (() => {
     }, EXIT_FADE_MS);
   }
 
-  function flyoverLoop() {
+  // Per-tick showcase frame — invoked by three-scene's shared animation loop
+  // while registered via setFlyoverFrame (no private rAF; issue #768).
+  function flyoverFrame() {
     if (!flyActive) return;
-    flyFrameId = requestAnimationFrame(flyoverLoop);
 
     // Paused: hold the current pose. Re-render every frame so pins stay drawn
     // and clickable (popup placement tracks the frozen camera), but advance
@@ -686,8 +710,7 @@ const Flyover = (() => {
       // Last waypoint reached — hold this frame and wait for audio.ended to trigger the fade.
       // If audio isn't available, fall back to fading immediately.
       if (!_audio) {
-        cancelAnimationFrame(flyFrameId);
-        flyFrameId = null;
+        NCZ.ThreeScene.setFlyoverFrame(null);
         fadeToBlack(() => { document.dispatchEvent(new CustomEvent('flyover:ended')); resetFade(); });
       }
       // With audio: just keep rendering the last frame; audio.ended fires the fade.

@@ -5,7 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.0] - 2026-07-04
+
+### Infrastructure
+
+- The live site is now served by Cloudflare Pages instead of GitHub Pages, for faster loads via a closer edge and long-lived asset caching (see `docs/caching-strategy.md`).
+
+### 3D Schematic Map
+
+#### Changed
+
+- three.js upgraded r184 → r185.1; adopts the upstream fix for district outline rays at close zoom (#773).
+- The render loop (including the showcase flyover) now runs on `renderer.setAnimationLoop`, the WebGPU-native frame driver; idle render-on-demand behaviour is unchanged (#768).
+- District outlines render through our own TSL line material instead of three.js `Line2NodeMaterial` (#775): true semi-transparent compositing over roads, metro and water, ring corners no longer over-brighten, and the r185 line workarounds (resize mitigation, alpha-to-coverage opt-out) are gone.
+- Roads, borders and the metro now layer correctly at every camera angle: no more borders or roads glowing through overlapping decks, and metro/tunnel roads render correctly over water (#770).
+
+#### Fixed
+
+- Resizing the window no longer permanently blacks out the 3D view on three.js r185 (#771); the showcase also renders at native fullscreen resolution now instead of an upscaled windowed buffer.
+- Showcase: pins and district labels stay locked to the ground, the sidebar hides during the show, and district outlines display (bright, hover-style) regardless of starting zoom (#769).
+- Showcase options now offer district names and district outlines as separate toggles.
+- District outlines were invisible at their resting brightness on three.js r185 (#773).
 
 ## [1.0.0] - 2026-06-28
 

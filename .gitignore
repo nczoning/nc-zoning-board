@@ -20,6 +20,7 @@
 !/package-lock.json
 !/robots.txt
 !/sitemap.xml
+!/_headers
 
 # Large generated data files — regenerate with scripts, do not commit
 data/buildings.json

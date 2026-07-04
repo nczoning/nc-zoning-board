@@ -1,0 +1,41 @@
+# Cloudflare Pages response headers.
+# Read by Pages from the build output root; ignored by GitHub Pages.
+# Full rationale + maintainer procedures: docs/caching-strategy.md
+#
+# Strategy in one line: `immutable` ONLY for paths whose bytes never change
+# (tiles). Everything that can change at a stable path is `no-cache`
+# (cache + revalidate) so Cloudflare's ETag auto-refreshes browsers on deploy
+# with zero manual cache-busting.
+
+# --- Never-changing, thousands of files -> cache hard, skip revalidation ---
+# Tiles are content-stable at a fixed path. If you EVER regenerate them you must
+# bump the ?v= token in the L.tileLayer() URL in assets/js/app.js AND purge the
+# Cloudflare edge cache. See docs/caching-strategy.md#regenerating-tiles.
+/assets/tiles/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# --- Big binaries that CAN change at a stable path -> cache + always revalidate ---
+# DDS building data / GLB meshes update as new fixed assets land. `no-cache`
+# keeps them cached but sends a conditional request each load; Cloudflare's
+# ETag returns a tiny 304 when unchanged (no re-download) and the full file when
+# changed. Nothing to do on update beyond redeploying.
+/assets/dds/*
+  Cache-Control: public, no-cache
+/assets/glb-meshopt/*
+  Cache-Control: public, no-cache
+
+# --- Un-hashed code, changes every deploy -> revalidate ---
+/assets/js/*
+  Cache-Control: public, no-cache
+/assets/css/*
+  Cache-Control: public, no-cache
+/index.html
+  Cache-Control: public, no-cache
+
+# --- Images and audio -> revalidate ---
+# Includes the ~10 MB satellite_8k.webp base image. `no-cache` keeps it cached
+# and only re-downloads if a re-export changes the bytes (ETag 304 otherwise).
+/assets/img/*
+  Cache-Control: public, no-cache
+/assets/audio/*
+  Cache-Control: public, no-cache
