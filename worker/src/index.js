@@ -10,6 +10,8 @@
  * - Path-based versioning: additive changes only within /v1/.
  */
 
+import { runRefresh } from './refresh.js';
+
 const SCHEMA_VERSION = 1;
 
 const CORS_HEADERS = {
@@ -50,6 +52,11 @@ const routes = {
 };
 
 export default {
+  // 15-minute cron: rebuild the dataset into KV (see refresh.js).
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(runRefresh(env));
+  },
+
   async fetch(request, env) {
     const url = new URL(request.url);
 

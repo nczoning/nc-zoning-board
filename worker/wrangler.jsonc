@@ -15,10 +15,23 @@
 
   "vars": {
     // Bumped manually on releases; reported by /v1/health.
-    "API_VERSION": "0.1.0"
+    "API_VERSION": "0.1.0",
+    // Origin the cron pulls source files from (mods.json, tags, subdistricts).
+    "SITE_ORIGIN": "https://nczoning.net"
+  },
+
+  // Dataset store. Create with:
+  //   npx wrangler kv namespace create DATA
+  // then paste the returned id below (and a preview_id for `wrangler dev`).
+  "kv_namespaces": [
+    { "binding": "DATA", "id": "REPLACE_WITH_KV_ID" }
+  ],
+
+  // Rebuild the dataset every 15 minutes.
+  "triggers": {
+    "crons": ["*/15 * * * *"]
   }
 
-  // B3 will add:
-  // - "kv_namespaces": [{ "binding": "DATA", "id": "..." }]
-  // - "triggers": { "crons": ["*/15 * * * *"] }
+  // DISCORD_WEBHOOK_URL is a secret (wrangler secret put DISCORD_WEBHOOK_URL),
+  // not committed here. Optional — refresh runs without it.
 }
