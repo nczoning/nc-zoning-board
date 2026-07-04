@@ -3,17 +3,19 @@
  * - dataset:v1           slim locations array (the workhorse read)
  * - dataset:v1:full      { id: fullEntry } map for /v1/locations/{id}
  * - dataset:v1:districts /v1/districts payload
+ * - dataset:v1:tags      tag dictionary ({ tagId: description })
  * - dataset:v1:meta      { schema, generated_at, dataset_version, counts,
  *                          discovery_stale, skipped }
  *
  * dataset_version is a content hash: the cron writes only when it changes,
- * and it doubles as the ETag for the read path (B4).
+ * and it doubles as the ETag for the read path.
  */
 
 export const KEYS = {
   slim: 'dataset:v1',
   full: 'dataset:v1:full',
   districts: 'dataset:v1:districts',
+  tags: 'dataset:v1:tags',
   meta: 'dataset:v1:meta',
 };
 
@@ -30,15 +32,16 @@ export async function readMeta(env) {
 }
 
 /**
- * Persist a freshly built dataset. Writes all four keys; callers only reach
- * here when the hash changed, so the per-key 1 write/s limit is never a risk
+ * Persist a freshly built dataset. Writes all keys; callers only reach here
+ * when the hash changed, so the per-key 1 write/s limit is never a risk
  * (cron runs every 15 min).
  */
-export async function writeDataset(env, { slim, full, districts, meta }) {
+export async function writeDataset(env, { slim, full, districts, tags, meta }) {
   await Promise.all([
     env.DATASET.put(KEYS.slim, JSON.stringify(slim)),
     env.DATASET.put(KEYS.full, JSON.stringify(full)),
     env.DATASET.put(KEYS.districts, JSON.stringify(districts)),
+    env.DATASET.put(KEYS.tags, JSON.stringify(tags)),
     env.DATASET.put(KEYS.meta, JSON.stringify(meta)),
   ]);
 }
