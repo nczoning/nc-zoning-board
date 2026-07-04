@@ -15,6 +15,10 @@
 	"name": "nczoning-api",
 	"main": "src/index.js",
 	"compatibility_date": "2026-07-04",
+	// Set so CI's scoped API token doesn't need User→Memberships→Read to
+	// discover the account (wrangler skips the /memberships lookup). Account
+	// IDs are not secret. Inherited by all environments.
+	"account_id": "ab7ff2fad6832c2db0a25d22e3287227",
 	// Custom domain: deploying creates the DNS record + cert on the zone
 	// automatically (the zone must be on the same Cloudflare account).
 	"routes": [
