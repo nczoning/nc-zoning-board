@@ -1,0 +1,24 @@
+// NC Zoning Data API — Cloudflare Worker config.
+// Deploys independently of the Pages site; shares only the nczoning.net zone.
+// See docs/data-api-plan.md for the architecture.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nczoning-api",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-04",
+
+  // Custom domain: deploying creates the DNS record + cert on the zone
+  // automatically (the zone must be on the same Cloudflare account).
+  "routes": [
+    { "pattern": "api.nczoning.net", "custom_domain": true }
+  ],
+
+  "vars": {
+    // Bumped manually on releases; reported by /v1/health.
+    "API_VERSION": "0.1.0"
+  }
+
+  // B3 will add:
+  // - "kv_namespaces": [{ "binding": "DATA", "id": "..." }]
+  // - "triggers": { "crons": ["*/15 * * * *"] }
+}
