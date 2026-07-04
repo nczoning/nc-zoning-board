@@ -24,7 +24,7 @@ One-time setup (before the first deploy):
 ```bash
 cd worker
 npx wrangler login                       # once per machine
-npx wrangler kv namespace create DATA    # paste the id into wrangler.jsonc
+npx wrangler kv namespace create nczoning-api-dataset   # paste the id into wrangler.jsonc
 npx wrangler secret put DISCORD_WEBHOOK_URL   # optional: refresh-failure alerts
 npm run deploy
 ```
@@ -56,7 +56,7 @@ KV keys: `dataset:v1` (slim), `dataset:v1:full`, `dataset:v1:districts`,
 ```bash
 npm run dev
 curl "http://127.0.0.1:8787/cdn-cgi/handler/scheduled"   # trigger one refresh
-npx wrangler kv key get "dataset:v1:meta" --binding DATA --local
+npx wrangler kv key get "dataset:v1:meta" --binding DATASET --local
 ```
 
 ## Routes (current)
