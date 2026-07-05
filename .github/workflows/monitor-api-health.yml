@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  actions: read   # read this workflow's own run history to detect the recovery edge
 
 # A slow/queued run shouldn't stack; keep only the latest.
 concurrency:
@@ -28,10 +29,33 @@ jobs:
         with:
           node-version: 24
 
+      # The previous completed run's conclusion is the last known health state:
+      # the probe exits 1 on an outage (→ failure) and 0 when serving
+      # (→ success). Filter to success/failure so a cancelled (concurrency) or
+      # in-progress run never counts. The most recent match is "last time".
+      - name: Read previous health state
+        id: prev
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prev=$(gh run list --workflow monitor-api-health.yml \
+            --status completed --limit 20 \
+            --json conclusion \
+            --jq '[.[] | select(.conclusion == "success" or .conclusion == "failure")][0].conclusion // ""')
+          echo "previous conclusion: '${prev:-none}'"
+          if [ "$prev" = "failure" ]; then
+            echo "prev_outage=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prev_outage=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Probe /v1 and alert on outage
         env:
           # Dedicated map-alerts channel, kept separate from submissions.
           NCZ_ALERTS_DISCORD_WEBHOOK_URL: ${{ secrets.NCZ_ALERTS_DISCORD_WEBHOOK_URL }}
+          # Was the API down last run? A clean run after a down one is the
+          # recovery edge → the script posts a green all-clear exactly once.
+          API_HEALTH_PREV_OUTAGE: ${{ steps.prev.outputs.prev_outage }}
           # Both matter: prod (api.nczoning.net) is what in-game mods hit;
           # staging (api-dev) is what the dev site consumes during the B7 bake,
           # where an outage would otherwise be hidden by the client fallback.

@@ -155,5 +155,25 @@ test('recovery after a stale cycle rewrites and clears the stale flag', async ()
   assert.equal((await env.DATASET.get(KEYS.meta, 'json')).discovery_stale, true);
   const r = await runRefresh(env, fakeFetch());
   assert.equal(r.changed, true); // stale flag forces a rewrite even if hash matches
+  assert.equal(r.recovered, true);
   assert.equal((await env.DATASET.get(KEYS.meta, 'json')).discovery_stale, false);
+});
+
+test('recovery posts a recovery alert exactly once (edge, not every cycle)', async () => {
+  const env = {
+    DATASET: fakeKV(), SITE_ORIGIN: 'https://x',
+    NCZ_ALERTS_DISCORD_WEBHOOK_URL: 'https://discord/webhook',
+  };
+  const discordSink = [];
+  await runRefresh(env, fakeFetch({ discordSink }));                  // seed good
+  await runRefresh(env, fakeFetch({ failNexus: true, discordSink })); // fail → stale + alert
+  const r = await runRefresh(env, fakeFetch({ discordSink }));        // recover → all-clear
+  assert.equal(r.recovered, true);
+  const titles = discordSink.map((m) => m.embeds[0].title);
+  assert.deepEqual(titles, ['⚠️ Data API refresh failed', '✅ Data API refresh recovered']);
+
+  // A subsequent healthy cycle must NOT re-announce recovery.
+  const r2 = await runRefresh(env, fakeFetch({ discordSink }));
+  assert.equal(r2.recovered ?? false, false);
+  assert.equal(discordSink.length, 2); // still just the fail + the one recovery
 });
