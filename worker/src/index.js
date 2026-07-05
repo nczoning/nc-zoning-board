@@ -69,11 +69,14 @@ function notReady() {
  * receives the parsed meta and returns the response `data`, or `undefined`
  * to signal a 404 (e.g. an unknown location id).
  */
-async function serveDataset(request, env, build) {
+async function serveDataset(request, env, build, etagSuffix = '') {
   const meta = await env.DATASET.get(KEYS.meta, 'json');
   if (!meta) return notReady();
 
-  const etag = `"${meta.dataset_version}"`;
+  // The ETag is the dataset content hash. Representations that share a hash
+  // but differ in body (slim vs ?full=1) must NOT share an ETag, or a client
+  // caching one and requesting the other would get a wrong 304. Vary it.
+  const etag = `"${meta.dataset_version}${etagSuffix}"`;
   if (request.headers.get('If-None-Match') === etag) {
     return new Response(null, {
       status: 304,
@@ -98,8 +101,24 @@ const routes = {
   'GET /v1/health': (request, env) =>
     json(envelope({ status: 'ok', version: env.API_VERSION }, null)),
 
-  'GET /v1/locations': (request, env) =>
-    serveDataset(request, env, (e) => e.DATASET.get(KEYS.slim, 'json')),
+  // Slim by default (the in-game RedData workhorse list). `?full=1` returns
+  // the full entries as an array — description/credits + image URLs — for the
+  // website and any consumer that wants everything in one request.
+  'GET /v1/locations': (request, env) => {
+    const url = new URL(request.url);
+    if (url.searchParams.get('full') === '1') {
+      return serveDataset(
+        request,
+        env,
+        async (e) => {
+          const full = await e.DATASET.get(KEYS.full, 'json');
+          return full ? Object.values(full) : undefined;
+        },
+        '-full',
+      );
+    }
+    return serveDataset(request, env, (e) => e.DATASET.get(KEYS.slim, 'json'));
+  },
 
   'GET /v1/districts': (request, env) =>
     serveDataset(request, env, (e) => e.DATASET.get(KEYS.districts, 'json')),

@@ -81,6 +81,19 @@ NCZ.NEXUS_GAME_ID = 3333; // Cyberpunk 2077
 NCZ.NEXUS_GQL_ENDPOINT = "https://api.nexusmods.com/v2/graphql";
 NCZ.NEXUS_BATCH_SIZE = 50;
 
+// Data API (B7) — the site consumes the server-built /v1 dataset instead of
+// running the Nexus auto-discovery merge client-side. Base URL is chosen by
+// hostname so environments line up with the API's: prod → prod API; everything
+// else (dev.nczoning.net, *.pages.dev previews, localhost) → staging API.
+NCZ.API_BASE =
+  location.hostname === "nczoning.net" || location.hostname === "www.nczoning.net"
+    ? "https://api.nczoning.net"
+    : "https://api-dev.nczoning.net";
+// { etag, data } for the full-locations list. Freshness is driven by the ETag
+// (If-None-Match → 304), not a TTL, so this is stored raw rather than via the
+// TTL-based cacheGet/cacheSet.
+NCZ.API_LOCATIONS_CACHE_KEY = "nc_api_locations_full";
+
 // Data paths
 NCZ.DATA_MODS_PATH = "mods.json";
 NCZ.DATA_TAGS_PATH = "data/tags.json";

@@ -70,6 +70,15 @@ function fakeFetch({ failNexus = false, failMods = false, discordSink } = {}) {
     if (url.includes('/subdistricts.json')) return { ok: true, json: async () => SUBDISTRICTS };
     if (url.includes('api.nexusmods.com')) {
       if (failNexus) return { ok: false, status: 503 };
+      // Two POST shapes hit the same endpoint: the tagged-mods query and the
+      // modsByUid image backfill. Route by the query body.
+      if (JSON.parse(init.body).query.includes('modsByUid')) {
+        return { ok: true, json: async () => ({
+          data: { modsByUid: { nodes: [
+            { modId: 12345, pictureUrl: 'pm', thumbnailUrl: 'tm', updatedAt: '2026-07-08' },
+          ] } },
+        }) };
+      }
       return { ok: true, json: async () => NEXUS_PAGE };
     }
     if (url.includes('discord')) { discordSink?.push(JSON.parse(init.body)); return { ok: true }; }
@@ -89,6 +98,14 @@ test('first run writes the full dataset (changed=true)', async () => {
   assert.equal(meta.discovery_stale, false);
   assert.equal(meta.counts.total, 2);
   assert.equal(meta.dataset_version, r.version);
+});
+
+test('manual-mod images are backfilled into full via modsByUid', async () => {
+  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  await runRefresh(env, fakeFetch());
+  const full = await env.DATASET.get(KEYS.full, 'json');
+  assert.equal(full.m1.thumbnail_url, 'tm'); // manual mod 12345, not NCZoning-tagged
+  assert.equal(full.m1.updated_at, '2026-07-08');
 });
 
 test('unchanged content on the second run skips the write (changed=false)', async () => {

@@ -82,3 +82,85 @@ export async function fetchTaggedModNodes(fetchImpl = fetch) {
 
   return nodes;
 }
+
+/**
+ * Composite UID Nexus expects for modsByUid: (gameId << 32) + modId, as a
+ * single decimal string — NOT "gameId:modId". Must match the site's
+ * NCZ.toNexusUid (assets/js/utils.js) exactly, or Nexus silently drops the
+ * UIDs and returns no images.
+ */
+function toNexusUid(modId) {
+  return ((BigInt(NEXUS_GAME_ID) << 32n) + BigInt(modId)).toString();
+}
+
+const THUMBS_QUERY = `query modsByUid($uids: [ID!]!, $count: Int!) {
+  modsByUid(uids: $uids, count: $count) {
+    nodes {
+      modId
+      pictureUrl
+      thumbnailUrl
+      updatedAt
+    }
+  }
+}`;
+
+/**
+ * Fetch picture/thumbnail/updatedAt for a set of numeric mod ids via
+ * modsByUid. Unlike fetchTaggedModNodes, this NEVER throws: thumbnails are
+ * cosmetic, so a Nexus hiccup here degrades to "some images missing this
+ * cycle", not "whole dataset stale". Auto-discovered mods already carry their
+ * images from the tagged query; this covers the manual entries.
+ *
+ * Mirrors the site's chunk + single-retry pattern (large modsByUid calls
+ * silently drop a subset of nodes), see assets/js/services.js.
+ *
+ * @param {typeof fetch} fetchImpl injectable for tests
+ * @param {string[]} numericIds manual mods' numeric nexus_ids
+ * @returns {Promise<Object<string, {pictureUrl, thumbnailUrl, updatedAt}>>}
+ */
+export async function fetchModsByUidThumbs(fetchImpl = fetch, numericIds = []) {
+  const ids = [...new Set(numericIds.map(String))].filter((id) => /^\d+$/.test(id));
+  if (ids.length === 0) return {};
+
+  const postChunk = async (chunkIds) => {
+    try {
+      const res = await fetchImpl(NEXUS_GQL_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: THUMBS_QUERY,
+          variables: { uids: chunkIds.map(toNexusUid), count: chunkIds.length },
+        }),
+      });
+      if (!res.ok) return {};
+      const json = await res.json();
+      const nodes = json?.data?.modsByUid?.nodes || [];
+      const map = {};
+      for (const node of nodes) {
+        map[String(node.modId)] = {
+          pictureUrl: node.pictureUrl || null,
+          thumbnailUrl: node.thumbnailUrl || null,
+          updatedAt: node.updatedAt || null,
+        };
+      }
+      return map;
+    } catch {
+      return {}; // cosmetic — swallow and let the caller serve what it has
+    }
+  };
+
+  const fetchChunk = async (chunkIds) => {
+    const first = await postChunk(chunkIds);
+    const missing = chunkIds.filter((id) => !first[id]);
+    if (missing.length === 0) return first;
+    const retry = await postChunk(missing); // one in-flight retry for dropped UIDs
+    return { ...first, ...retry };
+  };
+
+  const chunks = [];
+  for (let i = 0; i < ids.length; i += NEXUS_BATCH_SIZE) {
+    chunks.push(ids.slice(i, i + NEXUS_BATCH_SIZE));
+  }
+  const results = await Promise.all(chunks.map(fetchChunk));
+  return Object.assign({}, ...results);
+}

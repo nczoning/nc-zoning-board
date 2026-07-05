@@ -66,6 +66,27 @@ test('GET /v1/locations returns the slim array in an envelope with ETag', async 
   assert.ok(!('description' in body.data[0])); // slim
 });
 
+test('GET /v1/locations?full=1 returns full entries as an array, with a -full ETag', async () => {
+  const res = await worker.fetch(GET('/v1/locations?full=1'), seededEnv());
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('ETag'), '"abc123-full"'); // variant ETag, not the slim one
+  const body = await res.json();
+  assert.equal(body.data.length, 2);
+  assert.equal(body.data[0].description, 'a manual mod'); // full carries description
+});
+
+test('a slim ETag does not satisfy a ?full=1 request (distinct representations)', async () => {
+  const res = await worker.fetch(
+    GET('/v1/locations?full=1', { 'If-None-Match': '"abc123"' }), seededEnv());
+  assert.equal(res.status, 200); // slim etag ≠ full etag → fresh 200, never a wrong 304
+});
+
+test('matching -full ETag yields 304 for ?full=1', async () => {
+  const res = await worker.fetch(
+    GET('/v1/locations?full=1', { 'If-None-Match': '"abc123-full"' }), seededEnv());
+  assert.equal(res.status, 304);
+});
+
 test('matching If-None-Match yields 304 with no body', async () => {
   const res = await worker.fetch(GET('/v1/locations', { 'If-None-Match': '"abc123"' }), seededEnv());
   assert.equal(res.status, 304);

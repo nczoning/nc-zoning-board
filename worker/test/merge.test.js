@@ -81,6 +81,31 @@ test('manual entry wins by nexus_id; node contributes thumbnail backfill', () =>
   });
 });
 
+test('manual full entry carries images from the tagged-query backfill', () => {
+  const full = dataset.full['aaaa-1111']; // nexus_id 12345, also a tagged node
+  assert.equal(full.thumbnail_url, 'thumb-dup');
+  assert.equal(full.picture_url, 'pic-dup');
+  assert.equal(full.updated_at, '2026-07-01');
+});
+
+test('WIP manual entry resolves to null images (shape stays stable)', () => {
+  const full = dataset.full['bbbb-2222']; // nexus_id WIP — no Nexus page
+  assert.equal(full.thumbnail_url, null);
+  assert.equal(full.picture_url, null);
+  assert.equal(full.updated_at, null);
+});
+
+test('manualThumbs backfills manual mods that are not NCZoning-tagged (modsByUid path)', () => {
+  const ds = buildDataset({
+    manualMods: MANUAL, tagsDict: TAGS, excluded: { 777: 'x' },
+    nexusNodes: [], districts: DISTRICTS, // no tagged nodes → images can only come from modsByUid
+    manualThumbs: { 12345: { pictureUrl: 'p-mbu', thumbnailUrl: 't-mbu', updatedAt: '2026-07-09' } },
+  });
+  const full = ds.full['aaaa-1111'];
+  assert.equal(full.thumbnail_url, 't-mbu');
+  assert.equal(full.updated_at, '2026-07-09');
+});
+
 test('auto entry: authors, tags (nczoning + known only), yaw, images in full', () => {
   const auto = dataset.locations.find((l) => l.id === 'nexus-888');
   assert.deepEqual(auto.authors, ['Uploader888', 'Friend']);

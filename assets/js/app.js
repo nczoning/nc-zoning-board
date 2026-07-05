@@ -1811,47 +1811,32 @@ async function initMap() {
 
   // 3. Fetch and Setup Data
   try {
-    const { mods, tagsDict, excludedIds } = await NCZ.fetchModData();
-
-    // Auto-discover mods tagged "NCZoning" on Nexus (manual entries win on conflict;
-    // excluded ids are never rendered, even with a valid block)
-    const existingNexusIds = new Set(
-      mods
-        .filter((m) => m.nexus_id && !["WIP", "Dummy"].includes(String(m.nexus_id)))
-        .map((m) => String(m.nexus_id)),
-    );
-    const validTagNames = new Set(Object.keys(tagsDict));
-    const { mods: autoMods, meta: autoMeta } = await NCZ.fetchNexusTaggedMods(existingNexusIds, validTagNames, excludedIds);
-    mods.push(...autoMods);
+    // B7: primary data path is the server-built Data API (/v1). It already does
+    // the manual + Nexus auto-discovery merge, district enrichment and thumbnail
+    // resolution server-side, so the browser makes no Nexus calls here. tags.json
+    // stays a local static fetch (same-origin — not the Nexus fragility this
+    // replaces). If the API is unavailable we fall back to the legacy
+    // client-side merge, so the map never regresses during the transition.
+    let mods, nexusThumbs, tagsDict;
+    try {
+      const [apiResult, localTags] = await Promise.all([
+        NCZ.fetchLocationsFromApi(),
+        fetch(NCZ.DATA_TAGS_PATH).then((r) => r.json()),
+      ]);
+      mods = apiResult.mods;
+      nexusThumbs = apiResult.nexusThumbs;
+      tagsDict = localTags;
+      console.log(`Data source: /v1 API — ${mods.length} mods`);
+    } catch (apiErr) {
+      console.warn("Data API unavailable — falling back to client-side merge:", apiErr);
+      const fb = await NCZ.fetchModDataClientSide();
+      mods = fb.mods;
+      nexusThumbs = fb.nexusThumbs;
+      tagsDict = fb.tagsDict;
+      console.log(`Data source: client-side fallback — ${mods.length} mods`);
+    }
 
     modCountEl.textContent = `(${mods.length})`;
-
-    // Pre-seed thumbnail map from auto-discovery (already fetched), then
-    // only call the API for manual mods that still need images
-    const nexusThumbs = {};
-    const manualNexusIds = [];
-    for (const mod of mods) {
-      const nid = String(mod.nexus_id);
-      if (mod._thumbnailUrl || mod._pictureUrl) {
-        nexusThumbs[nid] = { pictureUrl: mod._pictureUrl, thumbnailUrl: mod._thumbnailUrl };
-      } else if (nid && !["wip", "dummy"].includes(nid.toLowerCase()) && !autoMeta[nid]) {
-        manualNexusIds.push(nid);
-      }
-    }
-    const fetchedThumbs = await NCZ.fetchNexusThumbnails(manualNexusIds);
-    Object.assign(nexusThumbs, fetchedThumbs);
-    // Fill in metadata from auto-discovery for manual mods that are NCZoning-tagged
-    for (const [id, data] of Object.entries(autoMeta)) {
-      if (!nexusThumbs[id]) nexusThumbs[id] = data;
-    }
-
-    // Backfill _updatedAt for manual Nexus mods before sorting
-    for (const mod of mods) {
-      if (!mod._updatedAt) {
-        const thumb = nexusThumbs[String(mod.nexus_id)];
-        if (thumb?.updatedAt) mod._updatedAt = thumb.updatedAt;
-      }
-    }
 
     const sortedMods = mods.sort(NCZ.sortModsByUpdated);
     // Hand the same data set to the 3D pin layer — pins won't appear until ThreeScene
