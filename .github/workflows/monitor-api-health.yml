@@ -1,0 +1,41 @@
+name: Monitor Data API Health
+
+# The site consumes /v1 with a client-side fallback (B7), and in-game mods —
+# the API's primary consumer — have NO fallback. So a silent website fallback
+# would mask an API outage. This is the independent alarm: it hits the live API
+# on a schedule and pings Discord (+ fails the run) when it isn't serving.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'   # every 15 min — matches the dataset cron cadence
+  workflow_dispatch:          # manual trigger (testing / on demand)
+
+permissions:
+  contents: read
+
+# A slow/queued run shouldn't stack; keep only the latest.
+concurrency:
+  group: monitor-api-health
+  cancel-in-progress: true
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Probe /v1 and alert on outage
+        env:
+          # Dedicated map-alerts channel, kept separate from submissions.
+          NCZ_ALERTS_DISCORD_WEBHOOK_URL: ${{ secrets.NCZ_ALERTS_DISCORD_WEBHOOK_URL }}
+          # Both matter: prod (api.nczoning.net) is what in-game mods hit;
+          # staging (api-dev) is what the dev site consumes during the B7 bake,
+          # where an outage would otherwise be hidden by the client fallback.
+          # The script retries 3× before declaring an outage, so a momentary
+          # deploy blip won't page. Drop api-dev here if it ever gets noisy.
+          API_HEALTH_TARGETS: 'https://api.nczoning.net,https://api-dev.nczoning.net'
+        run: node scripts/monitor_api_health.js

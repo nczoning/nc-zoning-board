@@ -42,9 +42,12 @@ npx wrangler deploy --env staging     # staging
 CI needs one GitHub Actions secret: `CLOUDFLARE_API_TOKEN` (a token with
 Workers Scripts:Edit, Workers KV Storage:Edit, and Zone DNS:Edit on the
 nczoning.net zone — DNS is needed so the custom-domain route can be created).
-The `DISCORD_WEBHOOK_URL` Worker secret and the KV namespaces persist across
-deploys; they're set once with `wrangler secret put` / `kv namespace create`
-and are not touched by CI.
+Refresh-failure alerts post to the dedicated map-alerts channel via the
+`NCZ_ALERTS_DISCORD_WEBHOOK_URL` Worker secret (set once per environment:
+`wrangler secret put NCZ_ALERTS_DISCORD_WEBHOOK_URL` and again with
+`--env staging`). It falls back to the legacy `DISCORD_WEBHOOK_URL` secret if
+the new one isn't set, so there's no alerting gap during the move. The secrets
+and KV namespaces persist across deploys and are not touched by CI.
 
 The `routes` entry binds the custom domain on first deploy (DNS + certificate
 created automatically; the zone must be on the same Cloudflare account). The

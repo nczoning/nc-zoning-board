@@ -12,7 +12,8 @@
  * it can never drift from what users actually experience.
  *
  * Run: node scripts/monitor_auto_discovery.js
- * Posts a Discord embed (DISCORD_WEBHOOK_URL) only when ≥1 NCZoning-
+ * Posts a Discord embed (NCZ_ALERTS_DISCORD_WEBHOOK_URL — the dedicated
+ * map-alerts channel, separate from submissions) only when ≥1 NCZoning-
  * tagged mod fails to parse and isn't covered by a manual registry
  * entry. Exit 0 on a clean run OR detected-bad-mods (it's a report,
  * not a gate); exit 1 only on an infrastructure error.
@@ -138,7 +139,7 @@ async function fetchTaggedMods({ endpoint, gameId, batchSize }) {
 }
 
 async function postDiscord(failures, total, excludedCount) {
-  const url = process.env.DISCORD_WEBHOOK_URL;
+  const url = process.env.NCZ_ALERTS_DISCORD_WEBHOOK_URL;
   const MAX_PER_GROUP = 12;
   const fmt = (group) => {
     const lines = group
@@ -198,7 +199,7 @@ async function postDiscord(failures, total, excludedCount) {
   if (!url) {
     // No webhook (local run / dry run): print the exact payload that
     // would be POSTed so the alert can be reviewed without sending it.
-    console.log("\n--- DISCORD_WEBHOOK_URL not set — preview of payload that would be sent ---");
+    console.log("\n--- NCZ_ALERTS_DISCORD_WEBHOOK_URL not set — preview of payload that would be sent ---");
     console.log(JSON.stringify(body, null, 2));
     console.log("--- end preview (nothing was sent) ---");
     return;

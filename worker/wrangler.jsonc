@@ -49,8 +49,12 @@
 			"*/15 * * * *"
 		]
 	},
-	// DISCORD_WEBHOOK_URL is a secret (wrangler secret put DISCORD_WEBHOOK_URL),
-	// not committed here. Optional — refresh runs without it.
+	// Refresh-failure alerts post to the dedicated map-alerts channel:
+	//   wrangler secret put NCZ_ALERTS_DISCORD_WEBHOOK_URL           (production)
+	//   wrangler secret put NCZ_ALERTS_DISCORD_WEBHOOK_URL --env staging
+	// Falls back to the legacy DISCORD_WEBHOOK_URL secret if the new one isn't
+	// set (no alerting gap during the move). Secrets aren't committed here.
+	// Optional — refresh runs without either.
 
 	"env": {
 		// Staging: pulls source files from the dev site, writes to a separate

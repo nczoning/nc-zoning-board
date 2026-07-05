@@ -27,11 +27,18 @@ async function fetchJson(fetchImpl, origin, path) {
   return res.json();
 }
 
-/** Post a failure embed to Discord if a webhook is configured. */
+/**
+ * Post a failure embed to Discord if a webhook is configured. Prefers the
+ * dedicated map-alerts channel (NCZ_ALERTS_DISCORD_WEBHOOK_URL), falling back
+ * to the legacy submissions webhook so there's no alerting gap until the new
+ * Cloudflare Worker secret is set (`wrangler secret put
+ * NCZ_ALERTS_DISCORD_WEBHOOK_URL` for BOTH the prod and staging Workers).
+ */
 async function alertDiscord(env, fetchImpl, reason) {
-  if (!env.DISCORD_WEBHOOK_URL) return;
+  const webhook = env.NCZ_ALERTS_DISCORD_WEBHOOK_URL || env.DISCORD_WEBHOOK_URL;
+  if (!webhook) return;
   try {
-    await fetchImpl(env.DISCORD_WEBHOOK_URL, {
+    await fetchImpl(webhook, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

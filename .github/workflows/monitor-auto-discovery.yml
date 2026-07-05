@@ -27,5 +27,6 @@ jobs:
 
       - name: Scan NCZoning-tagged mods and alert on parse failures
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # Dedicated map-alerts channel, kept separate from submissions.
+          NCZ_ALERTS_DISCORD_WEBHOOK_URL: ${{ secrets.NCZ_ALERTS_DISCORD_WEBHOOK_URL }}
         run: node scripts/monitor_auto_discovery.js
