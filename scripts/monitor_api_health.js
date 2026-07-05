@@ -39,19 +39,20 @@ const FETCH_TIMEOUT_MS = 15000;
 
 // Request headers for the probe.
 //
-// The obvious `User-Agent: nczoning-health-monitor` is exactly what got this
-// monitor 403'd: the zone runs Cloudflare's free Bot Fight Mode, which flags a
-// non-browser UA coming from a datacentre IP (the GitHub Actions runner) and
-// blocks it — a false "outage" for a fully-healthy API. Free Bot Fight Mode is
-// zone-wide and honours no WAF Skip / IP allow rule, so it can't be excepted;
-// the only lever is to not match its heuristic. Present a normal browser UA,
-// and keep the real identity in an X-Health-Probe header (visible in CF logs,
-// and ready to key a WAF allow rule to if the zone ever moves to Super Bot
-// Fight Mode). See wiki learning: cloudflare-bot-fight-mode-403s-health-monitor.
+// This monitor was once 403'd on every run: the zone ran Cloudflare's free Bot
+// Fight Mode, which managed-challenges automated clients from datacentre IPs
+// (the GitHub Actions runner, ASN 8075) — a false "outage" for a fully-healthy
+// API. It keyed on the request being non-interactive automation, NOT the UA
+// string, so a browser-UA disguise did nothing (verified: BFM still challenged
+// the Chrome UA). BFM is fundamentally incompatible with an Actions-based probe
+// and its protective value on a public read-only API is nil, so it was disabled
+// zone-wide (a /v1 rate-limit rule is the compensating control; DDoS + WAF stay
+// on). With BFM off the UA is unchallenged, so keep the honest, self-describing
+// one — and keep X-Health-Probe as a stable, spoof-resistant identifier for CF
+// logs / a future rate-limit exception. See wiki learning:
+// cloudflare-bot-fight-mode-403s-health-monitor.
 const PROBE_HEADERS = {
-  "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  "User-Agent": "nczoning-health-monitor",
   "X-Health-Probe": "nczoning-health-monitor",
 };
 

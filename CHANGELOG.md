@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Data API refresh cadence 15 → 5 min, so new/updated mods propagate to the map faster after a submission. (Nexus load stays well under limits.)
 - API alerts are now self-healing: the health monitor posts a green "recovered" all-clear once the API is serving again after an outage, and the refresh cron does the same when a failed refresh next succeeds.
+- The `/v1` API no longer bot-challenges automated consumers (tools, servers, uptime checks): Cloudflare Bot Fight Mode was returning `403` to datacentre clients, including our own health monitor. Disabled it; a `/v1` rate-limit rule remains, and DDoS + WAF protection are unaffected.
 
 ## [1.2.0] - 2026-07-05
 
