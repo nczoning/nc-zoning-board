@@ -104,9 +104,12 @@ async function checkTarget(base) {
   return { base, issues, warnings };
 }
 
-async function postDiscord(results) {
+// `recovered` = the previous run reported an outage and this one is clean, so
+// this post is the down→up edge (a green all-clear) rather than a page.
+async function postDiscord(results, { recovered = false } = {}) {
   const url = process.env.NCZ_ALERTS_DISCORD_WEBHOOK_URL;
   const down = results.filter((r) => r.issues.length);
+  const anyWarning = results.some((r) => r.warnings.length);
 
   const fields = results
     .filter((r) => r.issues.length || r.warnings.length)
@@ -118,17 +121,34 @@ async function postDiscord(results) {
       ].join("\n"),
     }));
 
+  // Three headlines: outage (page), recovery (all-clear edge), warning (soft).
+  // Outage wins if anything is currently down — recovery only applies when
+  // this run is fully clean.
+  let title, description, color;
+  if (down.length) {
+    title = `🔴 Data API outage — ${down.length} environment${down.length === 1 ? "" : "s"} not serving`;
+    description =
+      "The API is not usable by consumers (in-game mods have no fallback). " +
+      "The website may look fine via its client-side fallback — this is that hidden failure surfacing.";
+    color = 15158332; /* red */
+  } else if (recovered) {
+    title = `✅ Data API recovered — serving normally again`;
+    description =
+      "The earlier outage has cleared: every target is serving again." +
+      (anyWarning ? " One soft signal is still active (see below)." : "");
+    color = 3066993; /* green */
+  } else {
+    title = `🟠 Data API warning`;
+    description = "The API is serving but a soft signal fired (see below).";
+    color = 15105570; /* amber */
+  }
+
   const body = {
     embeds: [
       {
-        title: down.length
-          ? `🔴 Data API outage — ${down.length} environment${down.length === 1 ? "" : "s"} not serving`
-          : `🟠 Data API warning`,
-        description: down.length
-          ? "The API is not usable by consumers (in-game mods have no fallback). " +
-            "The website may look fine via its client-side fallback — this is that hidden failure surfacing."
-          : "The API is serving but a soft signal fired (see below).",
-        color: down.length ? 15158332 /* red */ : 15105570 /* amber */,
+        title,
+        description,
+        color,
         fields,
         footer: { text: "NC Zoning Board • Data API health monitor" },
       },
@@ -170,13 +190,24 @@ async function postDiscord(results) {
 
     const anyOutage = results.some((r) => r.issues.length);
     const anyWarning = results.some((r) => r.warnings.length);
-    if (anyOutage || anyWarning) await postDiscord(results);
+
+    // The previous run's conclusion IS the last health state: this script
+    // exits 1 on an outage (Actions run → failure) and 0 when serving
+    // (→ success). The workflow reads that conclusion and passes it in, so a
+    // clean run that follows a failed one is the recovery edge — announce the
+    // all-clear ONCE (next run sees success and stays quiet). A prior infra
+    // error also lands here as "was down"; a reassuring green after it is
+    // harmless. Absent the flag (local run, first ever run) → no false edge.
+    const prevOutage = process.env.API_HEALTH_PREV_OUTAGE === "true";
+    const recovered = prevOutage && !anyOutage;
+
+    if (anyOutage || anyWarning || recovered) await postDiscord(results, { recovered });
 
     if (anyOutage) {
       console.error("\nHealth check FAILED — at least one target is not serving.");
       process.exitCode = 1;
     } else {
-      console.log("\nAll targets healthy.");
+      console.log(recovered ? "\nAll targets healthy — recovered from prior outage." : "\nAll targets healthy.");
     }
   } catch (err) {
     console.error("Health monitor failed (infrastructure error):", err.message);
