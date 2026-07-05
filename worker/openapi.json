@@ -1,0 +1,229 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "NC Zoning Data API",
+    "version": "1.0.0",
+    "description": "Read-only API serving the NC Zoning Board mod registry (Cyberpunk 2077 location mods) to in-game mods and the website. Every response is wrapped in a versioned envelope. Coordinates are raw CET world values [X, Y, Z] — usable in-game with no transform. The JSON stays DTO-mappable for the in-game RedData parser: no arrays-of-arrays, property names are case-sensitive. See https://github.com/spuddeh/nc-zoning-board for the project.",
+    "contact": { "name": "NC Zoning Board", "url": "https://nczoning.net" }
+  },
+  "servers": [
+    { "url": "https://api.nczoning.net", "description": "Production" },
+    { "url": "https://api-dev.nczoning.net", "description": "Staging" }
+  ],
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "summary": "Liveness + deployed version",
+        "description": "Uncached. Does not touch the dataset.",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": {
+              "allOf": [{ "$ref": "#/components/schemas/Envelope" }, { "type": "object", "properties": {
+                "data": { "type": "object", "properties": {
+                  "status": { "type": "string", "const": "ok" },
+                  "version": { "type": "string", "example": "0.1.0" }
+                } } } }]
+            } } }
+          }
+        }
+      }
+    },
+    "/v1/locations": {
+      "get": {
+        "summary": "All locations (slim, or full with ?full=1)",
+        "description": "The workhorse. Slim entries by default (no description/credits/images) — lean for the in-game RedData list. Pass ?full=1 to get full entries (description, credits, and Nexus image URLs) as an array in one request; that variant carries its own ETag (suffixed -full) so it can't be confused with the slim cache. Supports conditional GET: send If-None-Match with the last dataset_version to get a 304.",
+        "parameters": [
+          { "name": "full", "in": "query", "required": false, "schema": { "type": "string", "enum": ["1"] }, "description": "Set full=1 to return LocationFull entries (adds description, credits, thumbnail_url, picture_url, updated_at). Omit for the slim list." },
+          { "$ref": "#/components/parameters/IfNoneMatch" }
+        ],
+        "responses": {
+          "200": {
+            "description": "The location array — slim Location[] by default, or LocationFull[] when ?full=1.",
+            "headers": { "ETag": { "$ref": "#/components/headers/ETag" }, "Cache-Control": { "$ref": "#/components/headers/CacheControl" } },
+            "content": { "application/json": { "schema": {
+              "allOf": [{ "$ref": "#/components/schemas/Envelope" }, { "type": "object", "properties": {
+                "data": { "type": "array", "items": { "oneOf": [{ "$ref": "#/components/schemas/Location" }, { "$ref": "#/components/schemas/LocationFull" }] } } } }]
+            } } }
+          },
+          "304": { "$ref": "#/components/responses/NotModified" },
+          "503": { "$ref": "#/components/responses/NotReady" }
+        }
+      }
+    },
+    "/v1/locations/{id}": {
+      "get": {
+        "summary": "One location (full)",
+        "description": "Full entry including description and credits.",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Location id: a UUID (manual) or nexus-<nexus_id> (auto-discovered).", "example": "nexus-27618" },
+          { "$ref": "#/components/parameters/IfNoneMatch" }
+        ],
+        "responses": {
+          "200": {
+            "description": "The full location entry.",
+            "headers": { "ETag": { "$ref": "#/components/headers/ETag" }, "Cache-Control": { "$ref": "#/components/headers/CacheControl" } },
+            "content": { "application/json": { "schema": {
+              "allOf": [{ "$ref": "#/components/schemas/Envelope" }, { "type": "object", "properties": {
+                "data": { "$ref": "#/components/schemas/LocationFull" } } }]
+            } } }
+          },
+          "304": { "$ref": "#/components/responses/NotModified" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "503": { "$ref": "#/components/responses/NotReady" }
+        }
+      }
+    },
+    "/v1/districts": {
+      "get": {
+        "summary": "District/subdistrict hierarchy",
+        "description": "9 districts and their subdistricts, with centroids and FLATTENED boundary rings ([x1,y1,x2,y2,...]) in CET coordinates. Anywhere outside every district polygon is Badlands (the game default), so a location's district is never null.",
+        "parameters": [{ "$ref": "#/components/parameters/IfNoneMatch" }],
+        "responses": {
+          "200": {
+            "description": "The district hierarchy.",
+            "headers": { "ETag": { "$ref": "#/components/headers/ETag" }, "Cache-Control": { "$ref": "#/components/headers/CacheControl" } },
+            "content": { "application/json": { "schema": {
+              "allOf": [{ "$ref": "#/components/schemas/Envelope" }, { "type": "object", "properties": {
+                "data": { "type": "array", "items": { "$ref": "#/components/schemas/District" } } } }]
+            } } }
+          },
+          "304": { "$ref": "#/components/responses/NotModified" },
+          "503": { "$ref": "#/components/responses/NotReady" }
+        }
+      }
+    },
+    "/v1/tags": {
+      "get": {
+        "summary": "Tag dictionary",
+        "description": "Map of tag id → human description. The allow-list a location's tags are drawn from.",
+        "parameters": [{ "$ref": "#/components/parameters/IfNoneMatch" }],
+        "responses": {
+          "200": {
+            "description": "Tag dictionary.",
+            "headers": { "ETag": { "$ref": "#/components/headers/ETag" }, "Cache-Control": { "$ref": "#/components/headers/CacheControl" } },
+            "content": { "application/json": { "schema": {
+              "allOf": [{ "$ref": "#/components/schemas/Envelope" }, { "type": "object", "properties": {
+                "data": { "type": "object", "additionalProperties": { "type": "string" }, "example": { "apartment": "A residence you can enter", "corpo": "Corporate aesthetic" } } } }]
+            } } }
+          },
+          "304": { "$ref": "#/components/responses/NotModified" },
+          "503": { "$ref": "#/components/responses/NotReady" }
+        }
+      }
+    },
+    "/v1/meta": {
+      "get": {
+        "summary": "Dataset metadata",
+        "description": "Counts (total, manual, auto, per-district) and health flags. dataset_version and generated_at live on the envelope.",
+        "parameters": [{ "$ref": "#/components/parameters/IfNoneMatch" }],
+        "responses": {
+          "200": {
+            "description": "Dataset metadata.",
+            "headers": { "ETag": { "$ref": "#/components/headers/ETag" }, "Cache-Control": { "$ref": "#/components/headers/CacheControl" } },
+            "content": { "application/json": { "schema": {
+              "allOf": [{ "$ref": "#/components/schemas/Envelope" }, { "type": "object", "properties": {
+                "data": { "$ref": "#/components/schemas/Meta" } } }]
+            } } }
+          },
+          "304": { "$ref": "#/components/responses/NotModified" },
+          "503": { "$ref": "#/components/responses/NotReady" }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "IfNoneMatch": {
+        "name": "If-None-Match", "in": "header", "required": false,
+        "schema": { "type": "string" },
+        "description": "The dataset_version (as a quoted ETag) from your last fetch. Returns 304 if unchanged."
+      }
+    },
+    "headers": {
+      "ETag": { "description": "The dataset_version, quoted. Use as If-None-Match next time.", "schema": { "type": "string" } },
+      "CacheControl": { "description": "public, max-age=300, stale-while-revalidate=3600", "schema": { "type": "string" } }
+    },
+    "responses": {
+      "NotModified": { "description": "Your copy is current (ETag matched). No body." },
+      "NotFound": { "description": "Unknown id or route.", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/Envelope" }, { "type": "object", "properties": { "data": { "type": "object", "properties": { "error": { "type": "string", "const": "not_found" } } } } }] } } } },
+      "NotReady": { "description": "The dataset has not been built yet (before the first cron tick). Retry shortly.", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/Envelope" }, { "type": "object", "properties": { "data": { "type": "object", "properties": { "error": { "type": "string", "const": "not_ready" } } } } }] } } } }
+    },
+    "schemas": {
+      "Envelope": {
+        "type": "object",
+        "required": ["schema", "generated_at", "dataset_version", "data"],
+        "properties": {
+          "schema": { "type": "integer", "const": 1, "description": "Envelope schema version." },
+          "generated_at": { "type": ["string", "null"], "format": "date-time", "description": "When the dataset was last built." },
+          "dataset_version": { "type": ["string", "null"], "description": "Content hash; the ETag value." },
+          "data": { "description": "Route-specific payload." }
+        }
+      },
+      "Location": {
+        "type": "object",
+        "description": "Slim location entry.",
+        "required": ["id", "name", "nexus_id", "coordinates", "category", "tags", "authors", "source", "district"],
+        "properties": {
+          "id": { "type": "string", "description": "UUID (manual) or nexus-<nexus_id> (auto).", "example": "nexus-27618" },
+          "name": { "type": "string" },
+          "nexus_id": { "type": "string", "description": "Numeric Nexus id, or WIP / Dummy.", "example": "27618" },
+          "coordinates": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 3, "description": "Raw CET world [X, Y, Z].", "example": [-2229.57, 3618.96, 12.22] },
+          "yaw": { "type": "number", "description": "Player facing in degrees (optional)." },
+          "category": { "type": "string", "enum": ["location-overhaul", "new-location", "other"] },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "authors": { "type": "array", "items": { "type": "string" } },
+          "source": { "type": "string", "enum": ["manual", "auto"] },
+          "district": { "type": "string", "description": "Never null (defaults to Badlands)." },
+          "subdistrict": { "type": ["string", "null"] }
+        }
+      },
+      "LocationFull": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Location" },
+          { "type": "object", "properties": {
+            "description": { "type": "string" },
+            "credits": { "type": "string" },
+            "thumbnail_url": { "type": ["string", "null"], "description": "Nexus thumbnail image URL, or null (unknown / WIP / Dummy)." },
+            "picture_url": { "type": ["string", "null"], "description": "Nexus full-size image URL, or null." },
+            "updated_at": { "type": ["string", "null"], "format": "date-time", "description": "Nexus last-updated timestamp, or null." }
+          } }
+        ]
+      },
+      "District": {
+        "type": "object",
+        "required": ["id", "name", "boundary", "subdistricts"],
+        "properties": {
+          "id": { "type": ["string", "null"] },
+          "name": { "type": "string" },
+          "centroid": { "$ref": "#/components/schemas/Point" },
+          "boundary": { "type": "array", "items": { "type": "number" }, "description": "Flattened ring [x1,y1,x2,y2,...] in CET." },
+          "subdistricts": { "type": "array", "items": { "$ref": "#/components/schemas/Subdistrict" } }
+        }
+      },
+      "Subdistrict": {
+        "type": "object",
+        "required": ["id", "name", "boundary"],
+        "properties": {
+          "id": { "type": ["string", "null"] },
+          "name": { "type": "string" },
+          "canonical": { "type": "boolean" },
+          "centroid": { "$ref": "#/components/schemas/Point" },
+          "boundary": { "type": "array", "items": { "type": "number" } }
+        }
+      },
+      "Point": { "type": ["object", "null"], "properties": { "x": { "type": "number" }, "y": { "type": "number" } } },
+      "Meta": {
+        "type": "object",
+        "properties": {
+          "counts": { "type": "object", "properties": {
+            "total": { "type": "integer" }, "manual": { "type": "integer" }, "auto": { "type": "integer" },
+            "per_district": { "type": "object", "additionalProperties": { "type": "integer" } }
+          } },
+          "discovery_stale": { "type": "boolean", "description": "True if the last Nexus refresh failed and the dataset is being served from last-known-good." },
+          "skipped": { "type": "array", "items": { "type": "object", "properties": { "nexus_id": { "type": "string" }, "name": { "type": "string" } } }, "description": "Mods tagged NCZoning whose metadata block did not parse." }
+        }
+      }
+    }
+  }
+}

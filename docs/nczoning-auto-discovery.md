@@ -167,8 +167,8 @@ The format is a flat `{ "nexusId": "reason" }` object (same shape as `data/tags.
 
 An excluded id is honoured in two places:
 
-1. **Auto-discovery (`services.js`)** — the mod is never rendered as a pin, *even if its block parses correctly*. This is what stops a mistakenly-tagged mod that happens to have valid coordinates from showing up.
-2. **Health monitor (`scripts/monitor_auto_discovery.js`)** — the mod is skipped, so the daily Discord alert stops flagging it. Without this, an intentionally-excluded mod with no block would be reported every single day.
+1. **The Data API merge (`worker/src/merge.js`)** — the mod is never rendered as a pin, *even if its block parses correctly*, and it's kept out of `/v1/meta.skipped`. This is what stops a mistakenly-tagged mod that happens to have valid coordinates from showing up. (The site's client-side fallback in `services.js` honours the same list.)
+2. **Health monitor (`scripts/monitor_auto_discovery.js`)** — reads `/v1/meta.skipped`, which the API has already filtered, so an excluded mod is never flagged. Without the exclusion an intentionally-excluded mod with no block would be reported every day.
 
 To exclude a mod, add its Nexus id and a short reason to `data/excluded_mods.json` and open a PR. To re-include it later, delete the entry.
 

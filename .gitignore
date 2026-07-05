@@ -18,6 +18,7 @@
 !/docs/
 !/package.json
 !/package-lock.json
+!/worker/
 !/robots.txt
 !/sitemap.xml
 !/_headers
@@ -50,3 +51,6 @@ assets/glb-source/
 # here for `npm run build-lut`. Repo only commits the runtime asset at
 # assets/data/.
 assets/lut-source/
+
+# Wrangler local dev state
+worker/.wrangler/

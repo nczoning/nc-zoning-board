@@ -274,3 +274,141 @@ NCZ.fetchModData = async function () {
   }
   return { mods, tagsDict, excludedIds };
 };
+
+// ── Data API (B7) ────────────────────────────────────────────────────────────
+
+// Primary data path: fetch the whole registry from the server-built Data API
+// (/v1/locations?full=1). This replaces the client-side manual + Nexus
+// auto-discovery merge — the server already does that merge (plus district
+// enrichment and, since B7, manual-mod thumbnails), so the browser makes ZERO
+// Nexus calls here. Uses If-None-Match/304 against a localStorage-cached body.
+//
+// Returns { mods, nexusThumbs } in the same shapes the rest of app.js expects.
+// THROWS on any failure (network, non-2xx, malformed) so the caller can fall
+// back to the legacy client-side path — never a silent empty map.
+NCZ.fetchLocationsFromApi = async function () {
+  const url = `${NCZ.API_BASE}/v1/locations?full=1`;
+
+  let cached = null;
+  try {
+    cached = JSON.parse(localStorage.getItem(NCZ.API_LOCATIONS_CACHE_KEY) || "null");
+  } catch {
+    cached = null;
+  }
+
+  const headers = {};
+  if (cached?.etag) headers["If-None-Match"] = cached.etag;
+
+  const res = await fetch(url, { headers });
+
+  let rawLocations;
+  let freshEtag = null; // set only on a fresh 200 we should cache
+  if (res.status === 304 && Array.isArray(cached?.data)) {
+    console.log(`Data API: 304 Not Modified — reusing ${cached.data.length} cached locations`);
+    rawLocations = cached.data;
+  } else if (res.ok) {
+    const envelope = await res.json();
+    rawLocations = envelope?.data;
+    if (!Array.isArray(rawLocations)) {
+      throw new Error("Data API: malformed payload (envelope.data is not an array)");
+    }
+    freshEtag = res.headers.get("ETag");
+    console.log(`Data API: loaded ${rawLocations.length} locations (dataset ${String(envelope.dataset_version).slice(0, 8)})`);
+  } else {
+    throw new Error(`Data API: HTTP ${res.status}`);
+  }
+
+  // Guard against a slim payload (an API that doesn't honour ?full=1 — e.g. an
+  // older deploy still on the endpoint). Full entries always carry a
+  // `description` key; if it's missing the popups/cluster list would render
+  // empty, so treat it as unusable and let the caller fall back rather than
+  // ship a degraded map. (Zero locations is a valid dataset — don't trip on it.)
+  // Runs before caching so a rejected slim body is never stored.
+  if (rawLocations.length > 0 && !("description" in rawLocations[0])) {
+    throw new Error("Data API: slim payload (full=1 not honoured) — falling back");
+  }
+
+  if (freshEtag !== null) {
+    try {
+      localStorage.setItem(NCZ.API_LOCATIONS_CACHE_KEY, JSON.stringify({ etag: freshEtag, data: rawLocations }));
+    } catch {
+      /* localStorage quota — fine, we just won't get a 304 next load */
+    }
+  }
+
+  // Map API entries → the internal shape the rest of the app consumes. The API
+  // uses source "manual"/"auto" + snake_case image fields; the app keys off the
+  // legacy `_source` sentinel, `_updatedAt`, and a `nexusThumbs` lookup.
+  const nexusThumbs = {};
+  const mods = rawLocations.map((e) => {
+    const nid = String(e.nexus_id);
+    if (e.thumbnail_url || e.picture_url) {
+      nexusThumbs[nid] = {
+        thumbnailUrl: e.thumbnail_url || null,
+        pictureUrl: e.picture_url || null,
+        updatedAt: e.updated_at || null,
+      };
+    }
+    return {
+      ...e,
+      // Manual mods have no _source (drives the "Suggest Edit" link + no auto
+      // badge); auto mods use the "nexus-auto" sentinel the badges key off.
+      ...(e.source === "auto" ? { _source: "nexus-auto" } : {}),
+      _updatedAt: e.updated_at || null,
+    };
+  });
+
+  return { mods, nexusThumbs };
+};
+
+// Legacy client-side data path (pre-B7): load mods.json + tags.json +
+// excluded_mods.json, merge Nexus auto-discovery, fetch thumbnails via
+// modsByUid, backfill _updatedAt. Retained as the graceful FALLBACK for when
+// the Data API is unavailable; a follow-up deletes it once B7 parity has baked.
+// Returns { mods, nexusThumbs, tagsDict } — the same trio the API path yields
+// (plus tagsDict, which the API path fetches locally alongside).
+NCZ.fetchModDataClientSide = async function () {
+  const { mods, tagsDict, excludedIds } = await NCZ.fetchModData();
+
+  const existingNexusIds = new Set(
+    mods
+      .filter((m) => m.nexus_id && !["WIP", "Dummy"].includes(String(m.nexus_id)))
+      .map((m) => String(m.nexus_id)),
+  );
+  const validTagNames = new Set(Object.keys(tagsDict));
+  const { mods: autoMods, meta: autoMeta } = await NCZ.fetchNexusTaggedMods(
+    existingNexusIds,
+    validTagNames,
+    excludedIds,
+  );
+  mods.push(...autoMods);
+
+  // Pre-seed thumbnails from auto-discovery (already fetched), then only call
+  // the API for manual mods that still need images.
+  const nexusThumbs = {};
+  const manualNexusIds = [];
+  for (const mod of mods) {
+    const nid = String(mod.nexus_id);
+    if (mod._thumbnailUrl || mod._pictureUrl) {
+      nexusThumbs[nid] = { pictureUrl: mod._pictureUrl, thumbnailUrl: mod._thumbnailUrl };
+    } else if (nid && !["wip", "dummy"].includes(nid.toLowerCase()) && !autoMeta[nid]) {
+      manualNexusIds.push(nid);
+    }
+  }
+  const fetchedThumbs = await NCZ.fetchNexusThumbnails(manualNexusIds);
+  Object.assign(nexusThumbs, fetchedThumbs);
+  // Fill in metadata from auto-discovery for manual mods that are NCZoning-tagged.
+  for (const [id, data] of Object.entries(autoMeta)) {
+    if (!nexusThumbs[id]) nexusThumbs[id] = data;
+  }
+
+  // Backfill _updatedAt for manual Nexus mods before the caller sorts.
+  for (const mod of mods) {
+    if (!mod._updatedAt) {
+      const thumb = nexusThumbs[String(mod.nexus_id)];
+      if (thumb?.updatedAt) mod._updatedAt = thumb.updatedAt;
+    }
+  }
+
+  return { mods, nexusThumbs, tagsDict };
+};

@@ -1,0 +1,15 @@
+{
+  "name": "nczoning-api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NC Zoning Data API worker (api.nczoning.net)",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "wrangler": "^4.107.0"
+  }
+}
