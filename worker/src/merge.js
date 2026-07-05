@@ -27,9 +27,13 @@ export const DESCRIPTION_MAX_LENGTH = 500;
  * @param {object} input.excluded     data/excluded_mods.json ({nexusId: reason})
  * @param {Array}  input.nexusNodes   raw nodes from the NCZoning GraphQL query
  * @param {Array}  input.districts    data/subdistricts.json `districts[]`
+ * @param {object} [input.manualThumbs] modsByUid image/updatedAt for manual
+ *   mods, keyed by numeric nexus_id ({pictureUrl, thumbnailUrl, updatedAt}).
+ *   Covers manual entries not tagged NCZoning (the tagged query only backfills
+ *   the tagged ones). Optional so existing callers/tests don't break.
  * @returns {{locations: Array, full: Object<string, object>, meta: object}}
  */
-export function buildDataset({ manualMods, tagsDict, excluded, nexusNodes, districts }) {
+export function buildDataset({ manualMods, tagsDict, excluded, nexusNodes, districts, manualThumbs = {} }) {
   const validTagNames = new Set(Object.keys(tagsDict));
   const excludedIds = new Set(Object.keys(excluded || {}));
 
@@ -90,6 +94,28 @@ export function buildDataset({ manualMods, tagsDict, excluded, nexusNodes, distr
     ...autoEntries,
   ].sort((a, b) => a.name.localeCompare(b.name));
 
+  // Resolve image/updatedAt for a full entry. Auto mods carry theirs from the
+  // tagged node; manual mods come from the modsByUid backfill (manualThumbs),
+  // falling back to the tagged-query thumbs for manual mods that happen to be
+  // NCZoning-tagged. WIP/Dummy (non-numeric) manual entries resolve to nulls.
+  // The field is ALWAYS present (null when unknown) so the shape stays stable
+  // for DTO consumers.
+  function resolveThumbs(entry) {
+    if (entry.source === 'auto') {
+      return {
+        thumbnail_url: entry.thumbnail_url ?? null,
+        picture_url: entry.picture_url ?? null,
+        updated_at: entry.updated_at ?? null,
+      };
+    }
+    const t = manualThumbs[String(entry.nexus_id)] || nexusThumbs[String(entry.nexus_id)] || null;
+    return {
+      thumbnail_url: t?.thumbnailUrl ?? null,
+      picture_url: t?.pictureUrl ?? null,
+      updated_at: t?.updatedAt ?? null,
+    };
+  }
+
   const perDistrict = {};
   const locations = [];
   const full = {};
@@ -117,13 +143,7 @@ export function buildDataset({ manualMods, tagsDict, excluded, nexusNodes, distr
       ...locations[locations.length - 1],
       description: entry.description ?? '',
       ...(entry.credits ? { credits: entry.credits } : {}),
-      ...(entry.source === 'auto'
-        ? {
-            thumbnail_url: entry.thumbnail_url,
-            picture_url: entry.picture_url,
-            updated_at: entry.updated_at,
-          }
-        : {}),
+      ...resolveThumbs(entry),
     };
   }
 

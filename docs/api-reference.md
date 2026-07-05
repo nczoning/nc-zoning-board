@@ -53,7 +53,8 @@ parser:
 | --- | --- |
 | `GET /v1/health` | `{ status, version }` (uncached) |
 | `GET /v1/locations` | all locations, slim |
-| `GET /v1/locations/{id}` | one full entry (adds `description`, `credits`), or 404 |
+| `GET /v1/locations?full=1` | all locations, full (adds `description`, `credits`, image URLs) — one request for everything |
+| `GET /v1/locations/{id}` | one full entry (adds `description`, `credits`, image URLs), or 404 |
 | `GET /v1/districts` | district/subdistrict hierarchy (flat boundaries + centroids) |
 | `GET /v1/tags` | tag id → description |
 | `GET /v1/meta` | `{ counts, discovery_stale, skipped }` |
@@ -76,7 +77,13 @@ A location (slim):
 }
 ```
 
-`/v1/locations/{id}` adds `description` and (if present) `credits`.
+Full entries (`/v1/locations/{id}` or the whole list via `/v1/locations?full=1`)
+add `description`, `credits` (if present), and the Nexus image fields
+`thumbnail_url` / `picture_url` / `updated_at` (each `null` when unknown — e.g.
+WIP/Dummy entries). Images live on the full entry only; the slim list stays
+lean for the in-game RedData consumer. The `?full=1` list carries its own ETag
+(the dataset version suffixed `-full`), so caching it never collides with the
+slim list.
 
 ## Caching
 

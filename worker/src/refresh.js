@@ -13,7 +13,7 @@
  * unit-testable with a fake KV + fake fetch.
  */
 
-import { fetchTaggedModNodes } from './nexus.js';
+import { fetchTaggedModNodes, fetchModsByUidThumbs } from './nexus.js';
 import { buildDataset } from './merge.js';
 import { districtsPayload } from './districts.js';
 import { KEYS, contentHash, readMeta, writeDataset, writeMeta } from './store.js';
@@ -68,8 +68,17 @@ export async function runRefresh(env, fetchImpl = fetch) {
     const districts = subdistricts.districts;
     const nexusNodes = await fetchTaggedModNodes(fetchImpl);
 
+    // Manual-mod thumbnails: the tagged query only backfills manual mods that
+    // are themselves NCZoning-tagged, so pull the rest via modsByUid. Cosmetic
+    // and non-throwing — a failure here just leaves some images null this
+    // cycle, it never marks the dataset stale.
+    const manualNumericIds = manualMods
+      .map((m) => String(m.nexus_id))
+      .filter((id) => /^\d+$/.test(id));
+    const manualThumbs = await fetchModsByUidThumbs(fetchImpl, manualNumericIds);
+
     const { locations, full, meta } = buildDataset({
-      manualMods, tagsDict, excluded, nexusNodes, districts,
+      manualMods, tagsDict, excluded, nexusNodes, districts, manualThumbs,
     });
     const districtsOut = districtsPayload(districts);
 
