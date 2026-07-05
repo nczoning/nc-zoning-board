@@ -121,7 +121,8 @@ test('unchanged content on the second run skips the write (changed=false)', asyn
 test('Nexus failure keeps last-known-good and flags stale + alerts Discord', async () => {
   const env = {
     DATASET: fakeKV(), SITE_ORIGIN: 'https://x',
-    DISCORD_WEBHOOK_URL: 'https://discord/webhook',
+    // Dedicated alerts channel (preferred over the legacy DISCORD_WEBHOOK_URL).
+    NCZ_ALERTS_DISCORD_WEBHOOK_URL: 'https://discord/webhook',
   };
   await runRefresh(env, fakeFetch()); // seed good data
   const goodSlim = await env.DATASET.get(KEYS.slim, 'json');

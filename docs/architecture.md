@@ -152,13 +152,21 @@ The auto-PR pipeline and Discord notifications require two secrets configured in
 | Secret | Value |
 | --- | --- |
 | `ACTIONS_PAT` | A GitHub Personal Access Token (fine-grained) with `Contents: Read/Write` and `Pull requests: Read/Write` on this repo |
-| `DISCORD_WEBHOOK_URL` | A Discord channel webhook URL (channel Settings → Integrations → Webhooks) |
+| `DISCORD_WEBHOOK_URL` | Webhook for the **submissions** channel — new/modified submission embeds and their PR-status edits (channel Settings → Integrations → Webhooks) |
+| `NCZ_ALERTS_DISCORD_WEBHOOK_URL` | Webhook for the dedicated **map-alerts** channel — auto-discovery parse failures and Data API health/outage alerts, kept separate from submissions |
 
 > **Why ACTIONS_PAT?** GitHub's `GITHUB_TOKEN` cannot trigger other workflow runs (a security design). Using a PAT for `create-pull-request` allows the `validate-json` check to fire automatically on the generated PR.
 
 ### Discord Notifications
 
-Two workflows handle Discord messaging:
+Two channels, two webhooks. **Submissions** (`DISCORD_WEBHOOK_URL`) — the mod
+submission lifecycle:
 
 - **`auto-pr-submission.yml`** — Posts a new embed when a submission PR is created (status: ⏳ Awaiting review). Stores the Discord message ID as a hidden comment on the issue.
-- **`notify-discord-pr-status.yml`** — When the PR is merged or closed, edits the original embed in-place to show the outcome (✅ Approved or ❌ Closed).
+- **`modify-location-submission.yml`** — Posts an embed for modification/removal requests.
+- **`notify-discord-pr-status.yml`** — When the PR is merged or closed, edits the original embed in-place to show the outcome (✅ Approved or ❌ Closed). Must use the same webhook that posted the message.
+
+**Alerts** (`NCZ_ALERTS_DISCORD_WEBHOOK_URL`) — operational health, separate channel:
+
+- **`monitor-auto-discovery.yml`** — Daily scan; alerts when a NCZoning-tagged mod fails to parse and isn't covered by a manual entry.
+- **`monitor-api-health.yml`** — Every 15 min; alerts when the Data API (`/v1`) isn't serving. The Worker's own refresh-failure alert (`worker/src/refresh.js`) posts here too (Cloudflare Worker secret, set separately via `wrangler secret put`).

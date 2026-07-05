@@ -31,9 +31,13 @@ The static `mods.json` is not enough for game clients, for three reasons:
   `data/subdistricts.json` are already in CET world coordinates), then write
   to KV only when the content hash changes.
 - **Failure posture:** keep last-known-good data, set `discovery_stale=true`,
-  alert Discord (same pattern as `monitor-auto-discovery.yml`). Never serve an
+  alert Discord on the dedicated map-alerts channel
+  (`NCZ_ALERTS_DISCORD_WEBHOOK_URL`, separate from submissions). Never serve an
   empty or partial dataset. Git remains the source of truth for manual
-  entries; the Worker only reads deployed CDN artifacts.
+  entries; the Worker only reads deployed CDN artifacts. A separate
+  `monitor-api-health.yml` GitHub Action probes `/v1` every 15 min and alerts
+  on the same channel if the API stops serving (independent of the Worker's own
+  alert — catches cases where the Worker can't alert for itself).
 - **Free tier:** ~1 conditional GET per player session against a 100k req/day
   cap; KV writes at most 96/day. Passes with a huge margin.
 
