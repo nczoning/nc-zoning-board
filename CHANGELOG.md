@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Infrastructure
+
+- Data API refresh cadence 15 → 5 min, so new/updated mods propagate to the map faster after a submission. (Nexus load stays well under limits.)
+
 ## [1.2.0] - 2026-07-05
 
 > **Headline: the NC Zoning Data API is live for modders.** A read-only HTTPS API at `api.nczoning.net/v1/` serves the full mod registry — locations, districts and tags — to in-game mods and tools, running the same server-side merge the website used to do in the browser. The website now consumes it too.
