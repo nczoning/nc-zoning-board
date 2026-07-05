@@ -174,12 +174,15 @@ async function postDiscord(results) {
 
     if (anyOutage) {
       console.error("\nHealth check FAILED — at least one target is not serving.");
-      process.exit(1);
+      process.exitCode = 1;
+    } else {
+      console.log("\nAll targets healthy.");
     }
-    console.log("\nAll targets healthy.");
-    process.exit(0);
   } catch (err) {
     console.error("Health monitor failed (infrastructure error):", err.message);
-    process.exit(1);
+    process.exitCode = 1;
   }
 })();
+// NOTE: we set process.exitCode and let the event loop drain rather than calling
+// process.exit(), which can trip a libuv assertion on Windows when fetch's
+// keep-alive sockets are still closing.

@@ -1,11 +1,11 @@
 name: Monitor Auto-Discovery Health
 
-# Auto-discovered pins are parsed client-side from live Nexus descriptions
-# that authors add at any time, and a parse failure is silent (a console
-# log nobody reads). This runs the REAL production parser
-# (assets/js/utils.js) against live Nexus data on a schedule and pings
-# Discord only when a tagged mod is missing from the map — so a broken or
-# incomplete block is caught within a day instead of when an author complains.
+# Authors add NCZoning metadata blocks to their Nexus descriptions at any time,
+# and a parse failure is silent. Since B7 the parsing runs server-side (the Data
+# API cron) and the result is exposed at /v1/meta.skipped — mods tagged NCZoning
+# that aren't excluded/manual and didn't parse. This reads that list and pings
+# Discord when it's non-empty, so a broken block is caught within a day instead
+# of when an author complains. (One source of truth: no client/server drift.)
 
 on:
   schedule:
@@ -21,9 +21,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: 24
 
       - name: Scan NCZoning-tagged mods and alert on parse failures
         env:
