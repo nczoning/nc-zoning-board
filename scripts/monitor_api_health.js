@@ -37,13 +37,31 @@ const RETRIES = 3;        // transient blips shouldn't page anyone
 const RETRY_DELAY_MS = 4000;
 const FETCH_TIMEOUT_MS = 15000;
 
+// Request headers for the probe.
+//
+// The obvious `User-Agent: nczoning-health-monitor` is exactly what got this
+// monitor 403'd: the zone runs Cloudflare's free Bot Fight Mode, which flags a
+// non-browser UA coming from a datacentre IP (the GitHub Actions runner) and
+// blocks it — a false "outage" for a fully-healthy API. Free Bot Fight Mode is
+// zone-wide and honours no WAF Skip / IP allow rule, so it can't be excepted;
+// the only lever is to not match its heuristic. Present a normal browser UA,
+// and keep the real identity in an X-Health-Probe header (visible in CF logs,
+// and ready to key a WAF allow rule to if the zone ever moves to Super Bot
+// Fight Mode). See wiki learning: cloudflare-bot-fight-mode-403s-health-monitor.
+const PROBE_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  "X-Health-Probe": "nczoning-health-monitor",
+};
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function fetchJson(url) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { signal: ctrl.signal, headers: { "User-Agent": "nczoning-health-monitor" } });
+    const res = await fetch(url, { signal: ctrl.signal, headers: PROBE_HEADERS });
     let json = null;
     try { json = await res.json(); } catch { /* non-JSON body — leave null */ }
     return { ok: res.ok, status: res.status, json };
