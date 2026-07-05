@@ -83,9 +83,14 @@ export async function fetchTaggedModNodes(fetchImpl = fetch) {
   return nodes;
 }
 
-/** Composite UID Nexus expects for modsByUid: `${gameId}:${modId}`. */
+/**
+ * Composite UID Nexus expects for modsByUid: (gameId << 32) + modId, as a
+ * single decimal string — NOT "gameId:modId". Must match the site's
+ * NCZ.toNexusUid (assets/js/utils.js) exactly, or Nexus silently drops the
+ * UIDs and returns no images.
+ */
 function toNexusUid(modId) {
-  return `${NEXUS_GAME_ID}:${modId}`;
+  return ((BigInt(NEXUS_GAME_ID) << 32n) + BigInt(modId)).toString();
 }
 
 const THUMBS_QUERY = `query modsByUid($uids: [ID!]!, $count: Int!) {

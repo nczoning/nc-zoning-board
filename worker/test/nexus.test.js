@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { fetchTaggedModNodes, fetchModsByUidThumbs, NEXUS_BATCH_SIZE } from '../src/nexus.js';
+import { fetchTaggedModNodes, fetchModsByUidThumbs, NEXUS_BATCH_SIZE, NEXUS_GAME_ID } from '../src/nexus.js';
 
 function fakeFetch(pages) {
   let call = 0;
@@ -88,6 +88,19 @@ test('modsByUid: HTTP error degrades to empty, never throws (images are cosmetic
 test('modsByUid: a thrown fetch degrades to empty, never throws', async () => {
   const impl = uidFetch([new Error('network'), new Error('network')]);
   assert.deepEqual(await fetchModsByUidThumbs(impl, ['1']), {});
+});
+
+test('modsByUid: sends the composite (gameId<<32)+modId UID (not "gameId:modId")', async () => {
+  // Wire-contract guard: Nexus silently drops UIDs in the wrong format and
+  // returns no images — a bug the shape-only tests above can't catch.
+  let sentUids = null;
+  const impl = async (url, init) => {
+    sentUids = JSON.parse(init.body).variables.uids;
+    return { ok: true, json: async () => ({ data: { modsByUid: { nodes: [uidNode(28630)] } } }) };
+  };
+  await fetchModsByUidThumbs(impl, ['28630']);
+  const expected = ((BigInt(NEXUS_GAME_ID) << 32n) + 28630n).toString();
+  assert.deepEqual(sentUids, [expected]);
 });
 
 test('modsByUid: retries UIDs the first call silently dropped', async () => {
