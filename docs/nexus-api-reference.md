@@ -12,9 +12,15 @@ This document covers the Nexus Mods GraphQL API implementation used by NC Zoning
 
 **Status:** ⚠️ **Technically Unsupported**
 
-The V2 API is not officially supported by Nexus Mods. Per direct conversation with Nexus Mods staff (Pickysaurus), they intend to eventually migrate back to REST. If that happens, [`services.js`](../assets/js/services.js) will need updates. Monitor [Nexus announcements](https://www.nexusmods.com) for any API retirement notices.
+The V2 API is not officially supported by Nexus Mods. Per direct conversation with Nexus Mods staff (Pickysaurus), they intend to eventually migrate back to REST. Since B7 the auto-discovery + thumbnail fetches run **server-side** in [`worker/src/nexus.js`](../worker/src/nexus.js) (the Data API cron); the copy in [`services.js`](../assets/js/services.js) is now only the client-side fallback. Monitor [Nexus announcements](https://www.nexusmods.com) for any V2 retirement notices.
 
-**Rate Limits:** No rate limits are publicly documented, and none have been encountered in practice.
+**Rate Limits:** No rate limits are publicly documented for V2 GraphQL, and none have been encountered in practice. For scale: the REST API's documented limits are **20,000 requests/day + 500 requests/hour**. Our 5-minute cron makes ~8 Nexus requests/run → ~96/hour (~2,300/day), comfortably under either figure.
+
+### Nexus API v3 (REST) — reviewed 2026-07-05, NOT a replacement for our discovery
+
+Nexus published an official REST **API v3** (`https://api.nexusmods.com/v3`; OpenAPI at `https://api.nexusmods.com/openapi.yaml`; docs at <https://api-docs.nexusmods.com/>). It requires authentication (API key or OAuth JWT) and has a real stability + deprecation policy (stable endpoints get a 90-day notice). **But it does not replace what we depend on.** v3 is a mod *publishing / management* API — uploads, mod-files, versions, collections. Its only read operations are `getMod` / `getModsBatch` (by id) and `getTrendingMods`; there is **no "mods by tag" or mod-search endpoint**, and the spec surfaces no mod image/description fields. Our auto-discovery ("find every mod tagged `NCZoning`") exists **only** in V2 GraphQL, so V2 stays required and there is no v3 migration path for it today.
+
+**Watch for:** (a) v3 gaining a mods-by-tag / search endpoint → a migration becomes possible; or (b) a V2 GraphQL retirement announcement → we'd need a new discovery mechanism (e.g. author self-registration), since v3 can't do tag discovery. Note: if we ever adopt v3, its API key must live **server-side** in the Worker cron (it can't go in the browser) — which the B7 server-side move already accommodates.
 
 ## Queries Used
 
