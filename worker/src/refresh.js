@@ -56,6 +56,32 @@ async function alertDiscord(env, fetchImpl, reason) {
 }
 
 /**
+ * Post a recovery embed: the previous cycle marked the dataset discovery_stale
+ * and this cycle rebuilt it cleanly, so this is the down→up edge. Fires once
+ * (the next successful cycle sees discovery_stale=false and stays quiet).
+ */
+async function alertDiscordRecovered(env, fetchImpl) {
+  const webhook = env.NCZ_ALERTS_DISCORD_WEBHOOK_URL || env.DISCORD_WEBHOOK_URL;
+  if (!webhook) return;
+  try {
+    await fetchImpl(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        embeds: [{
+          title: '✅ Data API refresh recovered',
+          description: 'A refresh succeeded after an earlier failure — the dataset is fresh again (discovery_stale=false).',
+          color: 0x2ecc71,
+          footer: { text: 'NC Zoning Board • Data API refresh' },
+        }],
+      }),
+    });
+  } catch {
+    // A missed all-clear is not worth throwing over.
+  }
+}
+
+/**
  * Run one refresh cycle.
  * @param {object} env  Worker env (DATASET KV binding, SITE_ORIGIN?, DISCORD_WEBHOOK_URL?)
  * @param {typeof fetch} fetchImpl  injectable
@@ -100,6 +126,10 @@ export async function runRefresh(env, fetchImpl = fetch) {
       return { changed: false, version, stale: false };
     }
 
+    // Recovery edge: last cycle failed (discovery_stale) and this one rebuilt
+    // cleanly. Announce the all-clear after the write actually lands.
+    const recovered = prev?.discovery_stale === true;
+
     await writeDataset(env, {
       slim: locations,
       full,
@@ -114,7 +144,8 @@ export async function runRefresh(env, fetchImpl = fetch) {
         discovery_stale: false,
       },
     });
-    return { changed: true, version, stale: false };
+    if (recovered) await alertDiscordRecovered(env, fetchImpl);
+    return { changed: true, version, stale: false, recovered };
   } catch (err) {
     // Keep last-known-good; flag stale; alert. Never wipe the dataset.
     const prev = await readMeta(env);
