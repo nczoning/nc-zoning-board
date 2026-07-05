@@ -43,6 +43,8 @@ This workflow triggers whenever the `mod-submission` label is applied to an issu
 
 Within the same `auto-pr-submission.yml` workflow, the bot reaches out to a Discord channel (using the `DISCORD_WEBHOOK_URL` secret) with an embedded message noting that a PR is awaiting review.
 
+> `DISCORD_WEBHOOK_URL` is the **submissions** channel. Operational alerts (health/monitoring) go to a separate channel via `NCZ_ALERTS_DISCORD_WEBHOOK_URL` — see [architecture.md](architecture.md#discord-notifications).
+
 **The Clever Part:**
 To allow the bot to update this exact discord message later on, the webhook returns a unique `message_id`. The bot saves this ID as a hidden HTML comment at the bottom of the original GitHub Issue `<!-- discord_message_id: XXXXX -->`.
 

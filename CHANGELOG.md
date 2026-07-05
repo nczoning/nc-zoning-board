@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Infrastructure
+
+- The website now loads the mod registry from the `/v1` Data API instead of running the Nexus auto-discovery merge in the browser; mod thumbnails moved server-side, so the browser no longer calls Nexus. Falls back to the client-side path if the API is unavailable.
+- Added a Data API health monitor (`monitor-api-health.yml`) that alerts if `/v1` stops serving. Operational alerts (API health + auto-discovery) now post to a dedicated Discord channel, separate from submissions.
+
 ## [1.1.0] - 2026-07-04
 
 ### Infrastructure
