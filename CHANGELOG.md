@@ -5,7 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.0] - 2026-07-05
+
+> **Headline: the NC Zoning Data API is live for modders.** A read-only HTTPS API at `api.nczoning.net/v1/` serves the full mod registry — locations, districts and tags — to in-game mods and tools, running the same server-side merge the website used to do in the browser. The website now consumes it too.
+
+### Data API
+
+- Public read-only API at `api.nczoning.net/v1/`: `/locations` (+ `?full=1`), `/locations/{id}`, `/districts`, `/tags`, `/meta`, `/health`. Versioned envelope, `ETag`/`304` caching, and DTO-mappable JSON for the in-game RedData parser. Interactive docs at the API root; reference in `docs/api-reference.md`.
 
 ### Infrastructure
 
