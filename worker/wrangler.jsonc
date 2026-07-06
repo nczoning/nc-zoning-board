@@ -47,7 +47,7 @@
 	// submission). Nexus load stays well under limits — see docs/nexus-api-reference.md.
 	"triggers": {
 		"crons": [
-			"*/15 * * * *"
+			"*/5 * * * *"
 		]
 	},
 	// Refresh-failure alerts post to the dedicated map-alerts channel:

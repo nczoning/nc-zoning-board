@@ -7,7 +7,7 @@ name: Monitor Data API Health
 
 on:
   schedule:
-    - cron: '*/15 * * * *'   # every 15 min — matches the dataset cron cadence
+    - cron: '*/15 * * * *'   # independent uptime probe, every 15 min (need not match the dataset cron)
   workflow_dispatch:          # manual trigger (testing / on demand)
 
 permissions:

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "NC Zoning Data API",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "description": "Read-only API serving the NC Zoning Board mod registry (Cyberpunk 2077 location mods) to in-game mods and the website. Every response is wrapped in a versioned envelope. Coordinates are raw CET world values [X, Y, Z] — usable in-game with no transform. The JSON stays DTO-mappable for the in-game RedData parser: no arrays-of-arrays, property names are case-sensitive. See https://github.com/spuddeh/nc-zoning-board for the project.",
     "contact": { "name": "NC Zoning Board", "url": "https://nczoning.net" }
   },
