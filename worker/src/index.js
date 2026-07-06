@@ -9,7 +9,7 @@
  *   no arrays-of-arrays, property names are case-sensitive.
  * - Path-based versioning: additive changes only within /v1/.
  *
- * Data is served from KV (written by the 15-minute cron, see refresh.js).
+ * Data is served from KV (written by the 5-minute cron, see refresh.js).
  * ETag = dataset_version (the content hash): a client sending a matching
  * If-None-Match gets a 304 without the big data read.
  */
@@ -145,7 +145,7 @@ function locationById(request, env, id) {
 }
 
 export default {
-  // 15-minute cron: rebuild the dataset into KV (see refresh.js).
+  // 5-minute cron: rebuild the dataset into KV (see refresh.js).
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(runRefresh(env));
   },

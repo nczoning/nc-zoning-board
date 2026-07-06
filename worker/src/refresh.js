@@ -1,5 +1,5 @@
 /**
- * Refresh orchestrator — the body of the 15-minute cron. Fetches the CDN
+ * Refresh orchestrator — the body of the 5-minute cron. Fetches the CDN
  * source files + Nexus auto-discovery, rebuilds the dataset, and writes to
  * KV only when the content hash changes.
  *
