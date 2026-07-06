@@ -9,7 +9,7 @@
  *   no arrays-of-arrays, property names are case-sensitive.
  * - Path-based versioning: additive changes only within /v1/.
  *
- * Data is served from KV (written by the 15-minute cron, see refresh.js).
+ * Data is served from KV (written by the 5-minute cron, see refresh.js).
  * ETag = dataset_version (the content hash): a client sending a matching
  * If-None-Match gets a 304 without the big data read.
  */
@@ -101,9 +101,11 @@ const routes = {
   'GET /v1/health': (request, env) =>
     json(envelope({ status: 'ok', version: env.API_VERSION }, null)),
 
-  // Slim by default (the in-game RedData workhorse list). `?full=1` returns
-  // the full entries as an array — description/credits + image URLs — for the
-  // website and any consumer that wants everything in one request.
+  // Slim by default: the lean list, kept RedData-mappable for the in-game
+  // parser. `?full=1` returns the full entries as an array — description/credits
+  // + image URLs — in one request. Both current consumers (the website and the
+  // in-game NCZoningCore mod) fetch ?full=1; slim stays for any consumer that
+  // only needs the minimal shape.
   'GET /v1/locations': (request, env) => {
     const url = new URL(request.url);
     if (url.searchParams.get('full') === '1') {
@@ -143,7 +145,7 @@ function locationById(request, env, id) {
 }
 
 export default {
-  // 15-minute cron: rebuild the dataset into KV (see refresh.js).
+  // 5-minute cron: rebuild the dataset into KV (see refresh.js).
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(runRefresh(env));
   },
