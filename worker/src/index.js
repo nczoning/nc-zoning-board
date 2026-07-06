@@ -101,9 +101,11 @@ const routes = {
   'GET /v1/health': (request, env) =>
     json(envelope({ status: 'ok', version: env.API_VERSION }, null)),
 
-  // Slim by default (the in-game RedData workhorse list). `?full=1` returns
-  // the full entries as an array — description/credits + image URLs — for the
-  // website and any consumer that wants everything in one request.
+  // Slim by default: the lean list, kept RedData-mappable for the in-game
+  // parser. `?full=1` returns the full entries as an array — description/credits
+  // + image URLs — in one request. Both current consumers (the website and the
+  // in-game NCZoningCore mod) fetch ?full=1; slim stays for any consumer that
+  // only needs the minimal shape.
   'GET /v1/locations': (request, env) => {
     const url = new URL(request.url);
     if (url.searchParams.get('full') === '1') {
