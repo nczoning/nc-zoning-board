@@ -1,0 +1,20 @@
+{
+    "id": "924ea351-ab6a-4a2e-95ff-699d23e919c9",
+    "name": "Neon Isolation",
+    "authors": [
+        "DevilDevil868"
+    ],
+    "credits": "",
+    "coordinates": [
+        -1152.6123,
+        1457.2716,
+        54.0579
+    ],
+    "nexus_id": "31233",
+    "description": "A netrunners hideout in Kabuki.",
+    "category": "new-location",
+    "tags": [
+        "apartment"
+    ],
+    "yaw": -91.6504
+}
