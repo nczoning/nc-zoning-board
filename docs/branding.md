@@ -39,19 +39,21 @@ Night Corp's aesthetic relies on conveying trust, stability, and control, contra
 
 ## 3. Typography
 
-To maintain the Cyberpunk aesthetic while adhering to corporate readability:
+A four-tier scale. The tiers are additive: the display face sits **above** Orbitron, it does not replace it.
 
-- **Primary Heading Font:** `Orbitron` (For titles, stats, and major UI elements). It provides that unmistakable shape and tech-forward feel.
-- **Body & Data Font:** `Rajdhani` (For tooltips, descriptions, and lists). Squarish but highly legible for dense data.
-- **Monospace (Logs/Coords):** `Fira Code` or generic `monospace` for coordinates and system outputs to look like raw terminal logic.
+- **Tier 0 — Display / Brand:** `Night Corp Display` (local `@font-face`, derived from the logo; caps-only A-Z, 0-9, punctuation). CSS token `--font-nightcorp`. Reserve for the shortest, biggest, most branded moments only — wordmarks and boot/splash hero text. Rule of thumb: under ~20 characters, all-caps, and ≥28px. Never body copy, never a full sentence. Currently used on: the header wordmark (`NC ZONING BOARD`) and the welcome-modal splash.
+- **Tier 1 — Heading:** `Orbitron` (Google Fonts). CSS token `--font-heading`. Screen titles, card headers, stat labels, nav, modal headers — all the structural lifting. More legible at small sizes and has the lowercase the display face lacks.
+- **Tier 2 — Body & Data:** `Rajdhani` (Google Fonts). CSS token `--font-body`. Tooltips, descriptions, lists. Squarish but highly legible for dense data.
+- **Tier 3 — Monospace (Logs/Coords):** `Fira Code` or generic `monospace` for coordinates and system outputs.
 
 ---
 
 ## 4. UI Elements & Styling
 
 ### Logos & Branding
-- **Primary Logo:** `assets/img/nightcorp-logo.webp`. Used in the header to establish immediate corporate identity.
-- **Favicon:** The standard `assets/img/favicon.ico` is used as the site favicon to maintain presence in the browser tab.
+- **Primary Logo:** `assets/img/nightcorp-logo.svg` (fill `#e6f1ff` so it reads on the navy header). Used in the `night-corp` theme header. Each theme swaps in its own logo file.
+- **Favicon:** The Cyan favicon set in `assets/img/favicon/` — SVG + `.ico` + 16/32px PNG + apple-touch + `site.webmanifest`.
+- **Parked / source assets:** `assets/brand/` holds brand assets not currently wired into the site (the compact monogram, candidate shard icons, an unused Gold favicon set). Kept version-controlled but out of the runtime `assets/img/` path. See `assets/brand/README.md`.
 
 ### Buttons & Toggles
 - Sharp corners, no border radius (0px). Night Corp doesn't do "soft."

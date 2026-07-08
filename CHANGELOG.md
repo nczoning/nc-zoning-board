@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-07-09
+
+### Design
+
+- New Cyan favicon set (SVG + ico + PNGs + apple-touch + manifest) replaces the single `.ico`.
+- Header logo is now an SVG (was WebP); recoloured to read on the navy header.
+- New Tier 0 brand face **Night Corp Display** (`--font-nightcorp`, derived from the logo) on the header wordmark and welcome-modal splash. Orbitron keeps all headings.
+
 ### Infrastructure
 
 - Data API refresh cadence 15 → 5 min, so new/updated mods propagate to the map faster after a submission. (Nexus load stays well under limits.)
