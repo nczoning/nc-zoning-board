@@ -137,6 +137,6 @@ E:\Audio\Cyberpunk 2077\GMNC - District beats.txt
 | `transitionToColors(from, to, ms)` | Lerp materials to explicit colors — beat cycle (includes buildings) |
 | `setLayerVisibility(name, bool)` | Toggle terrain/water/cliffs/roads/metro/buildings/districts |
 | `getLayerVisibility(name)` | Read current layer visibility (used for state save/restore) |
-| `setSunPosition(az, alt)` | Move directional light + sun sphere |
+| `setSunPosition(az, alt)` | Move sun light + sun disc |
+| `setMoonPosition(az, alt)` | Move moon light + moon disc (showcase drives both bodies) |
 | `setShadowsEnabled(bool)` | Toggle shadow casting |
-| `setSunSphereVisible(bool)` | Show/hide the visible sun orb |

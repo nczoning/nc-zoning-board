@@ -10,48 +10,64 @@ Reference for the sun/shadow/lighting system in the Three.js schematic view.
 
 ---
 
-## Sun and Ambient Light
+## Day–night lighting model
 
-Lighting is calibrated to the in-game 3D map's environment file
-(`base/weather/24h_basic/3dmap.envparam`), which lights the world map with a fixed
-low sun + a 6-direction ambient cube through an ACES tonemap. We reproduce that with
-**one `DirectionalLight` (sun) + one `HemisphereLight` (ambient)**, both at fixed,
-calibrated colour and intensity — the in-game map has no time-of-day variation.
+The daytime base is calibrated to the in-game 3D map's environment file
+(`base/weather/24h_basic/3dmap.envparam`) — a low sun + a 6-direction ambient cube
+through an ACES tonemap. Layered on top is a full **day–night cycle** driven by one
+control, `nightFactor` (a `smoothstep` over the sun's elevation: 0 by day, 1 at
+night; `NCZ.nightFactorForSunElevation`). At `nightFactor == 0` the scene is
+byte-identical to the original calibrated daytime.
+
+**Three lights — two celestial, one ambient:**
 
 ```javascript
-// Sun — warm white, fixed intensity (envparam LightAreaSettings.sunColor)
-_dirLight = new THREE.DirectionalLight(0xffffff, NCZ.SUN_INTENSITY); // 3.00
-_dirLight.color.setRGB(...NCZ.SUN_COLOR_RGB, THREE.LinearSRGBColorSpace); // [0.975, 0.869, 0.774]
+// SUN — warm, casts shadows. Intensity fades out with nightFactor.
+_dirLight  = new THREE.DirectionalLight(0xffffff, NCZ.SUN_INTENSITY);   // 3.00 by day → 0 at night
+_dirLight.color.setRGB(...NCZ.SUN_COLOR_RGB, THREE.LinearSRGBColorSpace);  // [0.975, 0.869, 0.774]
 
-// Ambient — the envparam ambient cube collapses to a hemisphere:
-// 5 bright cool-white faces (sky+sides) over 1 dim blue face (ground)
-_hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, NCZ.AMBIENT_INTENSITY); // 0.405
-_hemiLight.color.setRGB(...NCZ.AMBIENT_SKY_RGB, THREE.LinearSRGBColorSpace);    // [0.796, 0.895, 1.0]
-_hemiLight.groundColor.setRGB(...NCZ.AMBIENT_GROUND_RGB, THREE.LinearSRGBColorSpace); // [0.566, 0.766, 1.0]
+// MOON — cool, casts NO shadows (castShadow stays false, set once). Real lunar arc.
+_moonLight = new THREE.DirectionalLight(0xffffff, 0);                    // → MOON_INTENSITY × phase × altitude × nightFactor
+_moonLight.color.setRGB(...NCZ.MOON_COLOR_RGB, THREE.LinearSRGBColorSpace); // [0.62, 0.74, 1.0]
+
+// AMBIENT — hemisphere; day cube ⇄ night skyglow cube by nightFactor.
+_hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, NCZ.AMBIENT_INTENSITY); // 0.405 day
 ```
 
-Sun : ambient ≈ 7.4 : 1 (envelope-fit). Cast shadows are layered on top as an
-intentional artistic choice — the in-game map has them disabled.
+Both bodies are positioned from **real ephemeris** (SunCalc, at the Morro Bay anchor
+on the June solstice): the sun via `getPosition`, the moon via `getMoonPosition`. The
+moon's brightness uses a tunable phase constant (`NCZ.MOON_PHASE`, default ~full) so a
+new-moon date can't leave the night dark. As `nightFactor`→1 the warm sun crossfades
+out and the cool moon (gated by its own altitude) crossfades in; the ambient lerps to a
+cool night skyglow, boosted toward `AMBIENT_INTENSITY_NIGHT_MOONLESS` as the moon sets
+so a moonless deep night stays legible. See `docs/3d-map-lighting.md` for the full
+colour/exposure model.
 
-### Updating sun position
+> **Shadows belong to the sun.** Only `_dirLight` casts; the moon never does
+> (moonlight shadows are physically imperceptible, and a moon caster would re-introduce
+> the shadow-box artifact at night). Shadow *strength* also fades with the sun's
+> elevation (`SUN_SHADOW_FADE_*`), so dusk softens shadows out and night has none.
 
-`NCZ.ThreeScene.setSunPosition(azimuthRad, altitudeRad)` moves **only the sun's
-direction** — colour and intensity are fixed at construction. The slider/showcase
-sweep the direction so shadows move and faces relight; the look stays calibrated.
+### Updating sun / moon position
 
-It:
+`NCZ.ThreeScene.setSunPosition(az, alt)` and `setMoonPosition(az, alt)` store the
+body's az/el (`_sunAz/_sunEl`, `_moonAz/_moonEl`), move that body's visible disc, then
+call the shared **`updateDayNightLighting()`** which recomputes everything from
+`nightFactor`: both light directions/colours/intensities, the ambient lerp, and the
+sun-shadow fade. `setSunPosition` stores its az/el **before** the lights-exist guard
+(so an early pre-`init()` call still propagates to the UI-sync poll — PR #733).
 
-- Stores the requested az/el in `_sunAz` / `_sunEl` **before** the lights-exist guard
-  (so an early call before `init()` still propagates to the UI-sync poll — see
-  PR #733, the cold-load sun-init race)
-- Recomputes `_sunDir` and re-places the light `SUN_DIST` up the sun ray from the
-  shadow camera's target (orthographic ⇒ only direction matters for shading)
-- **Floors the sun direction's Y at ~6° elevation** (`Math.max(0.1, sin(el))`) so the
-  shadow camera's `lookAt` never goes degenerate-horizontal. The visible sun *sphere*
-  (showcase only) uses the unclamped elevation so it still sets at the horizon.
-- Calls `flagShadowUpdate()` (sun moved ⇒ re-render the depth map next frame)
+- The **sun** drives the shadow camera. `_sunDir`'s Y is floored at
+  `NCZ.KEY_LIGHT_MIN_DIR_Y` (~5.7°) so the shadow camera's `lookAt` can't go
+  degenerate near the horizon.
+- The **visible discs** use the *unclamped* elevation (`positionSkyBody`) so they
+  trace their true arcs — they're not gated on/off; terrain depth-occludes them at the
+  horizon (they crest ridgelines naturally). Over open sea, with no terrain, a low disc
+  simply hovers (accepted — no horizon to set behind).
+- `flagShadowUpdate()` fires only when the sun actually casts (`_sunShadowFade > 0`).
 
-The showcase flyover drives `setSunPosition()` automatically during its animation.
+The showcase flyover drives **both** `setSunPosition()` and `setMoonPosition()` each
+frame from the same SunCalc data — so the map and showcase share one path.
 
 ---
 
@@ -65,7 +81,7 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
 
 _dirLight.castShadow         = true;
-_dirLight.shadow.mapSize.set(NCZ.SHADOW_MAP_SIZE, NCZ.SHADOW_MAP_SIZE); // 4096²
+_dirLight.shadow.mapSize.set(NCZ.SHADOW_MAP_SIZE, NCZ.SHADOW_MAP_SIZE); // 8192²
 _dirLight.shadow.camera.near = NCZ.SHADOW_CAM_NEAR;  //     1
 _dirLight.shadow.camera.far  = NCZ.SHADOW_CAM_FAR;   // 40000
 _dirLight.shadow.bias        = NCZ.SHADOW_BIAS;      //     0
@@ -76,6 +92,16 @@ _dirLight.shadow.bias        = NCZ.SHADOW_BIAS;      //     0
 ample depth precision, so the old WebGL RGBA8-packed-depth cushion (`-0.0005`) is no
 longer needed. The geometric self-shadow (a shadow texel covering a depth range) is
 handled entirely by the **normal bias** instead.
+
+### Shadow strength fades with the sun (night has no cast shadows)
+
+`updateDayNightLighting()` sets the live shadow strength as
+`_shadowsOn ? _shadowIntensity × _sunShadowFade : 0`, where `_sunShadowFade` is a
+`smoothstep` over the sun's elevation: full at/above `SUN_SHADOW_FADE_FULL_DEG` (12°),
+0 at/below `SUN_SHADOW_FADE_OFF_DEG` (3°). So crisp shadows in daylight, fading through
+dusk, **none at night** — and with the moon casting nothing, night has no caster at
+all. This is what removes the night/dusk "shadow box" by construction: no caster ⇒
+nothing to clip against the coverage cap.
 
 ### Shadow render-on-demand (WebGPU) — the gate is on the *light*
 
@@ -108,23 +134,24 @@ casters stop being drawn into the main pass. (PR #751.)
 ### Dynamic shadow camera
 
 The single shadow camera (an `OrthographicCamera`) is **re-fitted every camera change**
-in `updateShadowCamera(renderCam = camera)` to concentrate the 4096² map on exactly the
-visible-ground footprint — far sharper shadows when zoomed in. Two fit paths, because the
-camera shapes differ too much to share one:
+in `updateShadowCamera(renderCam = camera)` to concentrate the 8192² map on the visible
+ground — far sharper shadows when zoomed in. The fit switches by *regime*, not by camera:
 
-- **Schema cam** (interactive top-down perspective): **rect-fit** — ray-cast the view's
-  NDC corners to the `Y=0` ground plane, take the bbox. Tight and sharp; always succeeds
-  because `controls` constrain tilt below horizontal.
-- **Showcase fly cam** (cinematic, often near-horizontal): **fixed-size box** centred
-  where the camera's forward ray meets the ground, with `tHit` capped. Constant size →
-  no per-frame "shadow box pop" as the cinematic camera crosses the horizon.
+- **Zoomed in** (visible-ground sphere radius ≤ `SHADOW_MAX_DISTANCE`): **camera-fit** —
+  bounding-sphere of the view's NDC corners ray-cast to `Y=0`. Tight, sharp, tracks
+  what you see.
+- **Zoomed out** (radius > the cap) **and the showcase fly cam**: **world-locked box** —
+  centred on the world, half = cap. The box already spans the whole ~12 km world, so
+  following the camera buys no sharpness and only causes the **"moving shadow box"**
+  (a capped, camera-tracking slice whose centre clamps to a world edge, leaving the far
+  side unshadowed). World-locking gives full coverage from a static centre. This
+  subsumes the fly cam's old forward-ray + `tHit`-cap fit (now removed).
 
 ```javascript
 function updateShadowCamera(renderCam = camera) {
-  // half = min(0.5 * hypot(W, D), SHADOW_MAX_DISTANCE) + SHADOW_GROUND_MARGIN  (schema)
-  //      = SHADOW_MAX_DISTANCE + SHADOW_GROUND_MARGIN                          (fly cam)
-  // center is clamped to world bounds (the scene is finite; a centre past the
-  // edge would waste half the map on empty void)
+  // Zoomed in : half = groundSphereRadius + SHADOW_GROUND_MARGIN, centre = footprint
+  // Zoomed out / fly cam : half = SHADOW_MAX_DISTANCE + SHADOW_GROUND_MARGIN, centre = WORLD centre
+  // (world half-diagonal ≈ the cap, so a world-centred cap-sized box covers every corner)
   shadowCam.left = -half; shadowCam.right = half;
   shadowCam.top  =  half; shadowCam.bottom = -half;
   shadowCam.near = NCZ.SHADOW_CAM_NEAR;
@@ -149,8 +176,10 @@ Key constants:
 
 | Constant | Value | Purpose |
 | --- | --- | --- |
-| `SHADOW_MAP_SIZE` | 4096 | Shadow map resolution (4096² texels) |
-| `SHADOW_MAX_DISTANCE` | 8600 | Cap on the footprint half-side (≈ world half-diagonal; nothing renders past the world bounds) |
+| `SHADOW_MAP_SIZE` | 8192 | Shadow map resolution (8192² texels). Always-on (not resized per-mode): the fine texels keep the showcase's fast sun from shimmering; runtime resize is unreliable on r184 (three.js #30766, fixed r185). Interactive cost is bounded by render-on-demand (re-renders only on camera moves). |
+| `SUN_SHADOW_FADE_OFF_DEG` / `…_FULL_DEG` | 3 / 12 | Sun elevation over which cast-shadow strength ramps 0→full. Below 3° (dusk/night) shadows fade out — no caster ⇒ no shadow box. |
+| `KEY_LIGHT_MIN_DIR_Y` | 0.10 | Floor on the sun direction's Y (~5.7°) so the shadow camera's `lookAt` can't degenerate near the horizon. |
+| `SHADOW_MAX_DISTANCE` | 8600 | Cap on the footprint half-side (≈ world half-diagonal; nothing renders past the world bounds). Past the cap the box world-locks. |
 | `SHADOW_GROUND_MARGIN` | 600 | Footprint extends this far past the visible ground (building heights + a sliver of off-screen casters) |
 | `SHADOW_CAM_NEAR` | 1 | Shadow camera near clip |
 | `SHADOW_CAM_FAR` | 40000 | Far clip — the camera sits `SUN_DIST` up the sun ray, so this must reach the far edge even at a low sun (orthographic ⇒ wide range is free) |
@@ -169,6 +198,8 @@ Key constants:
 | Buildings | ✓ | ✓ | `MeshLambertNodeMaterial` + TSL nodes | Instanced; stencil=1 |
 | Roads | — | — | `MeshBasicNodeMaterial` (additive) | Overlay layer; no shadow |
 | Metro | — | — | `MeshBasicNodeMaterial` (additive) | Overlay layer; no shadow |
+| Sun disc | — | — | `MeshBasicNodeMaterial` | Visible orb; traces the solar arc, terrain-occluded |
+| Moon disc | — | — | `MeshBasicNodeMaterial` | Visible orb; traces the lunar arc (incl. daytime) |
 
 **Note on `frustumCulled=false`:** terrain and cliffs are always included in the shadow
 pass regardless of the dynamic shadow camera position.

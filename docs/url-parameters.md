@@ -11,6 +11,26 @@ Query-string flags the app reads at load time. Append to the site URL, e.g.
 | `?forcewebgl` | flag | Forces the Three.js renderer to the WebGL2 backend instead of WebGPU (for comparison/debugging; the scene's compute buildings need WebGPU, so expect a degraded/2D fallback). | `three-scene.js` |
 | `?gamelight` | flag | Lighting **calibration reference** mode: pins the decoded in-game sun, freezes the time-of-day slider, and strips Districts/Pins overlays so surfaces can be matched against the in-game capture. | `app.js`, `three-scene.js` |
 | `?only=<district>` | value | Renders **only** the named `DISTRICT_META` building cloud (e.g. `?only=my_district`, `?only=ugly_building`, `?only=watson`) — isolates one cloud for diagnosing placement/content. | `three-scene.js` |
+| `?archdebug` | flag | Colours every building box by its **discrete** archetype class (tower/block/podium/elongated/thin/short) and shows the legend (with hover definitions) left of the overlays box. See [`building-classification.md`](building-classification.md). | `three-scene.js`, `app.js` |
+| `?segdebug` | flag | **Structure** visualiser: colours every box by its **segmented building id** (hash colour), so adjacent buildings differ and you can see which boxes form one building — the result of the road / height / split segmentation. Complements `?archdebug` (which shows *class*, not *grouping*). Self-lit. See [`building-classification.md`](building-classification.md). | `three-scene.js`, `app.js` |
+| `?zonetool` | flag | Loads the in-3D **building-zone drawing tool** (draw/extrude/edit CET zones; merge/forceClass/exclude/forceLit; localStorage + file import/export). See [`building-classification.md`](building-classification.md). | `three-scene.js`, `zone-tool.js` |
+
+## Live building-tuning overrides (with `?archdebug` / `?zonetool`)
+
+These override the cluster / archetype / segmentation constants at load (no
+rebuild) — handy for A/B'ing classification. Read in `constants.js` (the override
+hook) and consumed by `three-scene.js`. Absent = the committed default.
+
+| Key | Constant | Key | Constant |
+| --- | --- | --- | --- |
+| `gap` | `BUILDING_CLUSTER_GAP` (legacy) | `dh` | `BUILDING_SEG_DH` |
+| `cell` | `BUILDING_SEG_CELL` | `mincells` | `BUILDING_SEG_MIN_CELLS` |
+| `keepwhole` | `BUILDING_SEG_KEEP_WHOLE` | `fbig` | `ARCH_FOOTPRINT_BIG` |
+| `vlo` / `vhi` | `ARCH_VERTICALITY_LO/HI` | `minf` | `ARCH_MIN_FOOTPRINT` |
+| `maxe` | `ARCH_MAX_ELONGATION` | `podlo` / `podhi` | `ARCH_PODIUM_HEIGHT_LO/HI` |
+| `winmin` / `winband` | `WINDOW_MIN_HEIGHT` / `_BAND` | | |
+
+Example: `?archdebug&fbig=220&dh=24&keepwhole=2000`.
 
 Notes:
 

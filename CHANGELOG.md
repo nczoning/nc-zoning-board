@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - District info panel no longer undercounts: locations outside every district/subdistrict polygon now fall back to Badlands (matching the API), instead of being dropped from all stats. Fixes Badlands count (41 → 44) and the `% of all locations` denominator (292 → 295). ([#823](https://github.com/spuddeh/nc-zoning-board/issues/823))
 
+### 3D Schematic Map
+
+#### Night city look (in development)
+
+- **Night-time** lighting: the time slider now runs a full day-night cycle. As the sun sets, a real moon on its own lunar arc lights the city with cool moonlight, with a smooth dusk/dawn transition and a cool night sky. The sun and moon are visible discs that rise and set along their real paths.
+- Per-district neon **sign density**: each subdistrict's signage matches its in-game character. Kabuki, Little China and Japantown blaze, the corpo/commercial cores stay dense, and industrial, rural and spaceport zones go dark.
+
 ## [1.3.0] - 2026-07-09
 
 ### Design
@@ -89,6 +96,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Shadow edges stay put as you pan, rotate and tilt instead of crawling or shimmering (#754).
 - Zoomed all the way out (and during the showcase fly-over), shadows now cover the whole city instead of a camera-tracking box that left the far side unlit (#756).
 - The **Shadows** toggle now fully skips the shadow render when off (a real performance gain, not just hidden shadows), and shadows stop re-rendering on frames that don't change geometry (#751).
+- Shadows now fade out through dusk and are gone at night (moonlight casts none), and the shadow coverage no longer "boxes" or drifts when fully zoomed out.
 
 #### Themes
 
