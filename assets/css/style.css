@@ -1793,11 +1793,14 @@ header {
 }
 
 h1 {
-    font-family: var(--font-heading);
-    font-size: var(--text-xl);
+    /* Tier 0 wordmark — the one place the Night Corp Display face earns its keep.
+       The display face is wider than Orbitron, so pin it to one line. */
+    font-family: var(--font-nightcorp);
+    font-size: 1.75rem;
     color: var(--secondary);
     letter-spacing: var(--space-2xs);
     margin: 0;
+    white-space: nowrap;
     text-shadow: 0 0 var(--space-md) var(--secondary-50);
 
     span {
@@ -1958,6 +1961,21 @@ body::before {
     p {
         margin-bottom: 15px;
         line-height: var(--lh-loose);
+    }
+}
+
+/* Tier 0 boot splash — display face, biggest branded moment in the welcome flow */
+.welcome-hero {
+    font-family: var(--font-nightcorp);
+    font-size: var(--text-2xl);
+    line-height: 1;
+    color: var(--white);
+    letter-spacing: var(--space-2xs);
+    margin-bottom: var(--space-lg);
+    text-shadow: 0 0 var(--space-lg) var(--secondary-50);
+
+    span {
+        color: var(--secondary);
     }
 }
 
