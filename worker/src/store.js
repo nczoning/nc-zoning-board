@@ -34,7 +34,7 @@ export async function readMeta(env) {
 /**
  * Persist a freshly built dataset. Writes all keys; callers only reach here
  * when the hash changed, so the per-key 1 write/s limit is never a risk
- * (cron runs every 15 min).
+ * (cron runs every 5 min).
  */
 export async function writeDataset(env, { slim, full, districts, tags, meta }) {
   await Promise.all([
