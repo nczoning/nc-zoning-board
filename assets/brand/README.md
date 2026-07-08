@@ -11,12 +11,12 @@ When you activate one of these, move it into the appropriate runtime location
 | --- | --- | --- |
 | `nightcorp-monogram.svg` | Compact Night Corp mark (the `NC` monogram alone, no wordmark). Black fill — recolour before use, same as the header logo. | Parked |
 | `shards/shard_*.svg` | Candidate geometric "shard" UI icons (hex/shard motifs). Not yet assigned to any UI role. | Parked |
+| `favicon-gold/` | Full Gold-tinted favicon set (SVG + ico + PNGs + apple-touch + manifest) — colour variant of the active Cyan set. Wire up by moving it under `assets/img/favicon/` and pointing the `<head>` links at it. | Parked |
 
 ## Active brand assets (for reference — these live outside this folder)
 
 - **Header logo:** `assets/img/nightcorp-logo.svg` (per-theme; each theme has its own file)
-- **Favicon (active):** `assets/img/favicon/Cyan/`
-- **Favicon (alternate, unused):** `assets/img/favicon/Gold/`
+- **Favicon (active):** `assets/img/favicon/` (Cyan set)
 - **Display font (Tier 0):** `assets/fonts/NightCorpDisplay-Regular.{woff2,otf}`
 
 See `docs/branding.md` for the full brand guidelines and typography tiers.
