@@ -69,7 +69,7 @@ document.addEventListener("DOMContentLoaded", () => {
       id: "night-corp",
       label: "Night Corp",
       className: "theme-night-corp",
-      logo: "assets/img/nightcorp-logo.webp",
+      logo: "assets/img/nightcorp-logo.svg",
       logoAlt: "Night Corp",
     }];
 

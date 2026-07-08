@@ -1,3 +1,15 @@
+/* Tier 0 — Display / Brand face (derived from the Night Corp logo).
+   Caps-only subset: A-Z, 0-9, punctuation. Reserve for the shortest, biggest,
+   most branded moments only (wordmarks, splash hero text). Never body copy. */
+@font-face {
+    font-family: 'Night Corp Display';
+    src: url('../fonts/NightCorpDisplay-Regular.woff2') format('woff2'),
+         url('../fonts/NightCorpDisplay-Regular.otf') format('opentype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
 :root {
     /* UI primitives */
     --ui-border-thin: 1px;
@@ -63,6 +75,7 @@
     --transition-fast: all 225ms ease;
 
     /* Font families */
+    --font-nightcorp: 'Night Corp Display', 'Orbitron', sans-serif;
     --font-heading: 'Orbitron', sans-serif;
     --font-body: 'Rajdhani', sans-serif;
 
