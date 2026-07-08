@@ -226,6 +226,7 @@ function tagDistrict(cetX, cetY, polys) {
 
 module.exports = {
   ROOT, NCZ, DISTRICT_META, DISTRICTS,
+  SCENE, sliceBalanced,
   clusterBuildingBoxes, segmentBuildings, pointInPolygon,
   loadDataDds, decodeDistrict,
   smoothstep, classifyBuilding,

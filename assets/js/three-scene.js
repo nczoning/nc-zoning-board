@@ -2552,6 +2552,221 @@ const ThreeScene = (() => {
     return { attr, baseY, center, clusterCount: nextId };
   }
 
+  // ── Exterior-face occlusion mask ─────────────────────────────────────────────
+  // Ground truth for "which box faces are on the OUTSIDE of the building". For
+  // each box's 4 side faces (local ±X/±Z) this probes 2–3 vertical column
+  // segments across the face — pushed out FACE_EPS along the face normal so
+  // coplanar-abutting AND overlapping neighbours count — and clips them against
+  // every nearby box (spatial hash over ALL boxes: a neighbouring building's box
+  // buries a face just as well as a sibling). The result per face is the
+  // box-local height fraction ABOVE WHICH the face is unoccluded
+  // ("exposed-above-Y"): 0 = fully exposed, 1.05 = fully buried. Burial is
+  // dominantly from BELOW (podium boxes, lower neighbours), so a single scalar
+  // clips the dark part spatially instead of dimming the whole face. Max over
+  // columns wins (conservative — errs dark). Axis-aligned neighbours (~87.5%)
+  // clip against their world AABB; tilted ones via lazily cached inverse
+  // matrices against the unit cube. Output order per box: +X, −X, +Z, −Z →
+  // vec4.xyzw (the shader maps normalLocal to the same order).
+  // scripts/tune_faces.js lifts THIS function verbatim — keep them in sync.
+  function computeFaceExposure(matrixData, cx, cy, cz, hx, hy, hz, count) {
+    const EPS = NCZ.FACE_EPS, MAXCOLS = NCZ.FACE_COLUMNS;
+    const INTERIOR = 1.05;               // sentinel: whole face buried
+    const exposure = new Float32Array(count * 4);
+    if (count === 0) return { exposure, interiorPct: 0, partialPct: 0 };
+
+    // Spatial hash (CSR layout) on XZ, 32-CET cells. Boxes covering more than
+    // CAP×CAP cells go to `bigBoxes`, appended to every query (mirrors
+    // segmentBuildings' huge-box cap).
+    const CELL = 32, CAP = 12;
+    let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+    for (let i = 0; i < count; i++) {
+      if (cx[i] - hx[i] < minX) minX = cx[i] - hx[i];
+      if (cx[i] + hx[i] > maxX) maxX = cx[i] + hx[i];
+      if (cz[i] - hz[i] < minZ) minZ = cz[i] - hz[i];
+      if (cz[i] + hz[i] > maxZ) maxZ = cz[i] + hz[i];
+    }
+    const col0 = Math.floor((minX - EPS) / CELL), row0 = Math.floor((minZ - EPS) / CELL);
+    const cols = Math.floor((maxX + EPS) / CELL) - col0 + 1;
+    const rows = Math.floor((maxZ + EPS) / CELL) - row0 + 1;
+    const cellCount = new Int32Array(cols * rows);
+    const bigBoxes = [];
+    const rangeOf = (i) => {
+      const c0 = Math.floor((cx[i] - hx[i] - EPS) / CELL) - col0;
+      const c1 = Math.floor((cx[i] + hx[i] + EPS) / CELL) - col0;
+      const r0 = Math.floor((cz[i] - hz[i] - EPS) / CELL) - row0;
+      const r1 = Math.floor((cz[i] + hz[i] + EPS) / CELL) - row0;
+      return [c0, c1, r0, r1];
+    };
+    for (let i = 0; i < count; i++) {
+      const [c0, c1, r0, r1] = rangeOf(i);
+      if (c1 - c0 >= CAP || r1 - r0 >= CAP) { bigBoxes.push(i); continue; }
+      for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) cellCount[r * cols + c]++;
+    }
+    const cellStart = new Int32Array(cols * rows + 1);
+    for (let k = 0; k < cellCount.length; k++) cellStart[k + 1] = cellStart[k] + cellCount[k];
+    const cellItems = new Int32Array(cellStart[cellCount.length]);
+    const fill = cellStart.slice(0, -1);
+    for (let i = 0; i < count; i++) {
+      const [c0, c1, r0, r1] = rangeOf(i);
+      if (c1 - c0 >= CAP || r1 - r0 >= CAP) continue;
+      for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) cellItems[fill[r * cols + c]++] = i;
+    }
+
+    // Per-box: axis-aligned flag (all three matrix columns lie on a world axis —
+    // then the AABB arrays ARE the exact box) and, for tilted boxes, a lazily
+    // built inverse matrix so probes clip against the unit cube in local space.
+    const axisAligned = new Uint8Array(count);
+    for (let i = 0; i < count; i++) {
+      const b = i * 16, e = matrixData;
+      let ok = 1;
+      for (let c = 0; c < 3 && ok; c++) {
+        const x = e[b + c * 4], y = e[b + c * 4 + 1], z = e[b + c * 4 + 2];
+        const l2 = x * x + y * y + z * z;
+        const m2 = Math.max(x * x, y * y, z * z);
+        if (m2 < l2 * 0.9999) ok = 0;
+      }
+      axisAligned[i] = ok;
+    }
+    const invCache = new Map();
+    const invOf = (j) => {
+      let inv = invCache.get(j);
+      if (inv) return inv;
+      const b = j * 16, e = matrixData;
+      // Affine inverse: L⁻¹ (adjugate/det of the 3×3) and t' = −L⁻¹·t.
+      const a00 = e[b], a01 = e[b + 4], a02 = e[b + 8];
+      const a10 = e[b + 1], a11 = e[b + 5], a12 = e[b + 9];
+      const a20 = e[b + 2], a21 = e[b + 6], a22 = e[b + 10];
+      const tx = e[b + 12], ty = e[b + 13], tz = e[b + 14];
+      const c00 = a11 * a22 - a12 * a21, c01 = a02 * a21 - a01 * a22, c02 = a01 * a12 - a02 * a11;
+      const c10 = a12 * a20 - a10 * a22, c11 = a00 * a22 - a02 * a20, c12 = a02 * a10 - a00 * a12;
+      const c20 = a10 * a21 - a11 * a20, c21 = a01 * a20 - a00 * a21, c22 = a00 * a11 - a01 * a10;
+      const det = a00 * c00 + a01 * c10 + a02 * c20 || 1e-12;
+      const d = 1 / det;
+      inv = new Float32Array(12);
+      inv[0] = c00 * d; inv[1] = c01 * d; inv[2] = c02 * d;
+      inv[3] = c10 * d; inv[4] = c11 * d; inv[5] = c12 * d;
+      inv[6] = c20 * d; inv[7] = c21 * d; inv[8] = c22 * d;
+      inv[9]  = -(inv[0] * tx + inv[1] * ty + inv[2] * tz);
+      inv[10] = -(inv[3] * tx + inv[4] * ty + inv[5] * tz);
+      inv[11] = -(inv[6] * tx + inv[7] * ty + inv[8] * tz);
+      invCache.set(j, inv);
+      return inv;
+    };
+
+    // Clip the segment p + t·d, t∈[0,1], against a min/max box. Returns the exit
+    // fraction t1 of the covered interval, or -1 for a miss.
+    const clipSeg = (px, py, pz, dx, dy, dz, mnx, mny, mnz, mxx, mxy, mxz) => {
+      let t0 = 0, t1 = 1;
+      for (let a = 0; a < 3; a++) {
+        const p = a === 0 ? px : a === 1 ? py : pz;
+        const d = a === 0 ? dx : a === 1 ? dy : dz;
+        const mn = a === 0 ? mnx : a === 1 ? mny : mnz;
+        const mx = a === 0 ? mxx : a === 1 ? mxy : mxz;
+        if (Math.abs(d) < 1e-9) { if (p < mn || p > mx) return -1; continue; }
+        let ta = (mn - p) / d, tb = (mx - p) / d;
+        if (ta > tb) { const s = ta; ta = tb; tb = s; }
+        if (ta > t0) t0 = ta;
+        if (tb < t1) t1 = tb;
+        if (t0 > t1) return -1;
+      }
+      return t1;
+    };
+
+    const seen = new Int32Array(count).fill(-1);   // candidate dedupe stamp
+    let probeId = 0, interiorFaces = 0, partialFaces = 0;
+    const e = matrixData;
+
+    for (let i = 0; i < count; i++) {
+      const b = i * 16;
+      const upX = e[b + 4], upY = e[b + 5], upZ = e[b + 6];       // col1 = local Y (full height)
+      const upLen2 = upX * upX + upY * upY + upZ * upZ;
+      if (upLen2 < 1e-4) continue;                                 // degenerate: leave exposed
+      for (let f = 0; f < 4; f++) {
+        // Face axis (local X for slots 0/1, local Z for 2/3) and width vector.
+        const axC = f < 2 ? 0 : 8, wdC = f < 2 ? 8 : 0;
+        const sgn = (f % 2 === 0) ? 1 : -1;
+        const axX = e[b + axC], axY = e[b + axC + 1], axZ = e[b + axC + 2];
+        const wdX = e[b + wdC], wdY = e[b + wdC + 1], wdZ = e[b + wdC + 2];
+        const axLen = Math.hypot(axX, axY, axZ);
+        const wdLen = Math.hypot(wdX, wdY, wdZ);
+        if (axLen < 1e-3 || wdLen < 1e-3) continue;               // sliver: leave exposed
+        const nX = sgn * axX / axLen, nY = sgn * axY / axLen, nZ = sgn * axZ / axLen;
+        const fcX = e[b + 12] + sgn * 0.5 * axX + EPS * nX;
+        const fcY = e[b + 13] + sgn * 0.5 * axY + EPS * nY;
+        const fcZ = e[b + 14] + sgn * 0.5 * axZ + EPS * nZ;
+        const us = (MAXCOLS >= 3 && wdLen > 8) ? [-0.35, 0.35, 0] : [-0.35, 0.35];
+        // Face AABB (all column endpoints) for the candidate prefilter.
+        const ex = Math.abs(wdX) * 0.35 + Math.abs(upX) * 0.49;
+        const ey = Math.abs(wdY) * 0.35 + Math.abs(upY) * 0.49;
+        const ez = Math.abs(wdZ) * 0.35 + Math.abs(upZ) * 0.49;
+        const fMinX = fcX - ex, fMaxX = fcX + ex;
+        const fMinY = fcY - ey, fMaxY = fcY + ey;
+        const fMinZ = fcZ - ez, fMaxZ = fcZ + ez;
+        probeId++;
+        let yExp = 0;
+        const c0 = Math.max(0, Math.floor(fMinX / CELL) - col0);
+        const c1 = Math.min(cols - 1, Math.floor(fMaxX / CELL) - col0);
+        const r0 = Math.max(0, Math.floor(fMinZ / CELL) - row0);
+        const r1 = Math.min(rows - 1, Math.floor(fMaxZ / CELL) - row0);
+        for (let pass = 0; pass < 2 && yExp < 0.995; pass++) {
+          // pass 0: hashed candidates; pass 1: the big-box overflow list.
+          let list, len;
+          if (pass === 1) { list = bigBoxes; len = bigBoxes.length; }
+          for (let r = r0; r <= (pass === 0 ? r1 : r0) && yExp < 0.995; r++) {
+            for (let c = c0; c <= (pass === 0 ? c1 : c0) && yExp < 0.995; c++) {
+              let s, eIdx;
+              if (pass === 0) { const k = r * cols + c; s = cellStart[k]; eIdx = cellStart[k + 1]; }
+              else { s = 0; eIdx = len; }
+              for (let q = s; q < eIdx; q++) {
+                const j = pass === 0 ? cellItems[q] : list[q];
+                if (j === i || seen[j] === probeId) continue;
+                seen[j] = probeId;
+                // AABB prefilter vs the face AABB.
+                if (cx[j] + hx[j] < fMinX || cx[j] - hx[j] > fMaxX ||
+                    cy[j] + hy[j] < fMinY || cy[j] - hy[j] > fMaxY ||
+                    cz[j] + hz[j] < fMinZ || cz[j] - hz[j] > fMaxZ) continue;
+                const inv = axisAligned[j] ? null : invOf(j);
+                for (const u of us) {
+                  // Column p0→p1 along the box's own up axis (1% end-shrink so a
+                  // same-height roof-touching neighbour doesn't clip the top).
+                  const bx = fcX + u * wdX, by = fcY + u * wdY, bz = fcZ + u * wdZ;
+                  const p0x = bx - 0.49 * upX, p0y = by - 0.49 * upY, p0z = bz - 0.49 * upZ;
+                  const dx = 0.98 * upX, dy = 0.98 * upY, dz = 0.98 * upZ;
+                  let tExit;
+                  if (!inv) {
+                    tExit = clipSeg(p0x, p0y, p0z, dx, dy, dz,
+                      cx[j] - hx[j], cy[j] - hy[j], cz[j] - hz[j],
+                      cx[j] + hx[j], cy[j] + hy[j], cz[j] + hz[j]);
+                  } else {
+                    const lx = inv[0] * p0x + inv[1] * p0y + inv[2] * p0z + inv[9];
+                    const ly = inv[3] * p0x + inv[4] * p0y + inv[5] * p0z + inv[10];
+                    const lz = inv[6] * p0x + inv[7] * p0y + inv[8] * p0z + inv[11];
+                    const ldx = inv[0] * dx + inv[1] * dy + inv[2] * dz;
+                    const ldy = inv[3] * dx + inv[4] * dy + inv[5] * dz;
+                    const ldz = inv[6] * dx + inv[7] * dy + inv[8] * dz;
+                    tExit = clipSeg(lx, ly, lz, ldx, ldy, ldz, -0.5, -0.5, -0.5, 0.5, 0.5, 0.5);
+                  }
+                  if (tExit > yExp) yExp = tExit;
+                }
+                if (yExp >= 0.995) break;
+              }
+            }
+          }
+        }
+        const v = yExp >= 0.995 ? INTERIOR : yExp;
+        exposure[i * 4 + f] = v;
+        if (v >= 1) interiorFaces++;
+        else if (v > 0.01) partialFaces++;
+      }
+    }
+    const totalFaces = count * 4;
+    return {
+      exposure,
+      interiorPct: Math.round(100 * interiorFaces / totalFaces),
+      partialPct: Math.round(100 * partialFaces / totalFaces),
+    };
+  }
+
   // ── Per-building metadata table ────────────────────────────────────────────
   // One record per segmented building: { cloud, id, boxCount, centroid:[cetX,cetY],
   // heightHalf, footMax, footMin, geoClass, districtId, subId }. Built at load
@@ -2796,6 +3011,16 @@ const ThreeScene = (() => {
         const buildingSignDensityBuffer = instancedArray(validCount, 'float');
         buildingSignDensityBuffer.value.set(signDensityData);
 
+        // Per-instance EXTERIOR-FACE mask (vec4: exposed-above-Y per local
+        // +X/−X/+Z/−Z side face). Ground truth for "is this face on the
+        // OUTSIDE of the building" — the shader gates windows AND all signage
+        // layers with it so buried faces stay dark (see computeFaceExposure).
+        const tFace0 = performance.now();
+        const faceExp = computeFaceExposure(matrixData, bcx, bcy, bcz, bhx, bhy, bhz, validCount);
+        const faceExposureBuffer = instancedArray(validCount, 'vec4');
+        faceExposureBuffer.value.set(faceExp.exposure);
+        console.log(`[NCZ] ${meta.name}: face exposure ${(performance.now() - tFace0).toFixed(0)}ms — ${faceExp.interiorPct}% side faces interior, ${faceExp.partialPct}% partial`);
+
         // Per-instance zone OVERRIDE (vec2: code, param) for forceClass/exclude/
         // forceLit. A box is overridden when its centroid (CET) falls in the zone
         // footprint + height range. Default (0,0) = no override.
@@ -2902,7 +3127,7 @@ const ThreeScene = (() => {
         renderer.compute(initFn);
         _cullComputes.push({ reset: resetFn, cull: cullFn });
 
-        const mat  = buildBuildingMaterial(meta, await loadMDds(meta.mDds), matricesBuffer, visibleIndicesBuffer, buildingAttrBuffer, buildingOverrideBuffer, buildingBaseBuffer, buildingCenterBuffer, buildingSignDensityBuffer);
+        const mat  = buildBuildingMaterial(meta, await loadMDds(meta.mDds), matricesBuffer, visibleIndicesBuffer, buildingAttrBuffer, buildingOverrideBuffer, buildingBaseBuffer, buildingCenterBuffer, buildingSignDensityBuffer, faceExposureBuffer);
         mat.userData.instanceMatricesBuffer = matricesBuffer;
         mat.userData.visibleIndicesBuffer   = visibleIndicesBuffer;
         mat.userData.indirectAttribute      = indirectAttribute;
@@ -2996,7 +3221,7 @@ const ThreeScene = (() => {
   // Per-district `uniform()` node refs are stashed on `mat.userData.tslUniforms`
   // so the colour-binding registry (`getColorBindings.buildingsEdge`) can mutate
   // `.value` during theme switches and flyover beat-driven colour tweens.
-  function buildBuildingMaterial(meta, mTex, instanceMatricesBuffer, visibleIndicesBuffer, buildingAttrBuffer, buildingOverrideBuffer, buildingBaseBuffer, buildingCenterBuffer, buildingSignDensityBuffer) {
+  function buildBuildingMaterial(meta, mTex, instanceMatricesBuffer, visibleIndicesBuffer, buildingAttrBuffer, buildingOverrideBuffer, buildingBaseBuffer, buildingCenterBuffer, buildingSignDensityBuffer, faceExposureBuffer) {
     const mat = new THREE.MeshLambertNodeMaterial({
       color: readThemeColor('--scene-buildings', '#7a8fa0'),
     });
@@ -3064,6 +3289,7 @@ const ThreeScene = (() => {
     const bBaseY = buildingBaseBuffer.element(realIndex); // building base elevation (world Y) — sign height rule
     const bCenter = buildingCenterBuffer.element(realIndex); // building horizontal centre (world X, Z) — billboard placement
     const bSignDensity = buildingSignDensityBuffer.element(realIndex); // per-subdistrict sign-density multiplier (Night Phase A)
+    const bFaceExp = faceExposureBuffer.element(realIndex); // exposed-above-Y per side face (+X, −X, +Z, −Z)
     mat.positionNode = instMatrix.mul(vec4(positionLocal, 1)).xyz;
     const worldNormal = transformNormal(normalLocal, instMatrix); // also drives the _m slope guard below
     mat.normalNode   = transformNormalToView(worldNormal);
@@ -3156,6 +3382,24 @@ const ThreeScene = (() => {
     const wN = worldNormal.normalize();
     // Vertical facades only: 1 on walls, fading to 0 on near-horizontal roofs/floors.
     const onWall = float(1).sub(smoothstep(float(0.35), float(0.6), wN.y.abs()));
+    // EXTERIOR-FACE gate — ground truth from computeFaceExposure(): per side
+    // face, the box-local height fraction ABOVE WHICH the face is unoccluded.
+    // Fragments below that height sit buried against a neighbouring box → dark.
+    // normalLocal is exactly ±1 on one axis for the unit cube, so the step()
+    // chain picks the face's slot; local ±Y (roof/floor) selects nothing and
+    // decodes to 0 (exposed) — onWall already suppresses those. Gates windows
+    // AND all signage layers. Compile-time no-op at strength 0 (?facemask=0).
+    let faceGate = float(1.0);
+    if (NCZ.FACE_MASK_STRENGTH > 0) {
+      const nl = normalLocal;
+      const yExp = bFaceExp.x.mul(step(float(0.5), nl.x))
+        .add(bFaceExp.y.mul(step(float(0.5), nl.x.negate())))
+        .add(bFaceExp.z.mul(step(float(0.5), nl.z)))
+        .add(bFaceExp.w.mul(step(float(0.5), nl.z.negate())));
+      const boxHF = positionLocal.y.add(float(0.5)); // 0 at box base, 1 at box top
+      const gate = smoothstep(yExp.sub(float(NCZ.FACE_MASK_SOFT)), yExp.add(float(NCZ.FACE_MASK_SOFT)), boxHF);
+      faceGate = mix(float(1.0), gate, float(NCZ.FACE_MASK_STRENGTH));
+    }
     // Height gate — uses the BUILDING's height (cluster aggregate, bAttr.x), so a
     // short slab that's part of a tall building still passes. Soft-gated.
     const instUpLen = bAttr.x;
@@ -3334,7 +3578,7 @@ const ThreeScene = (() => {
     // Windows are night-only (off in daylight). The always-on "some lights in the
     // city" element lives on the city-glow fill instead (see CITY_GLOW_DAY_FACTOR).
     const windowEmissive = winColor
-      .mul(pane).mul(lit).mul(shellGate).mul(onWall).mul(archMask).mul(archIntensity)
+      .mul(pane).mul(lit).mul(shellGate).mul(faceGate).mul(onWall).mul(archMask).mul(archIntensity)
       .mul(densityMul)
       .mul(_buildingNightFactor)
       .mul(float(NCZ.WINDOW_INTENSITY))
@@ -3421,9 +3665,9 @@ const ThreeScene = (() => {
     const podiumStreetMask = podiumSel.mul(hasPodiumSign).mul(districtDensity).mul(zoneAllow);
     const streetMask = archMask.max(podiumStreetMask); // lit block/tower OR occasional podium; NO tower bias
     const streetEmissive = signLayer(0.0, 0.0, NCZ.SIGN_STREET_CELL_W, NCZ.SIGN_STREET_CELL_H, NCZ.SIGN_STREET_SIZE, NCZ.SIGN_STREET_DENSITY)
-      .mul(streetW).mul(hasSpeckle).mul(onWall).mul(streetMask);
+      .mul(streetW).mul(hasSpeckle).mul(onWall).mul(faceGate).mul(streetMask);
     const roofEmissive = signLayer(53.0, 17.0, NCZ.SIGN_ROOF_CELL_W, NCZ.SIGN_ROOF_CELL_H, NCZ.SIGN_ROOF_SIZE, NCZ.SIGN_ROOF_DENSITY)
-      .mul(roofW).mul(hasBigSign).mul(onWall).mul(archMask).mul(towernessF);
+      .mul(roofW).mul(hasBigSign).mul(onWall).mul(faceGate).mul(archMask).mul(towernessF);
     const signageEmissive = streetEmissive.add(roofEmissive)
       .mul(densityMul)
       .mul(_buildingNightFactor)
@@ -3478,6 +3722,28 @@ const ThreeScene = (() => {
       return mat;
     }
 
+    // ── ?facedebug — exterior-face mask visualiser ───────────────────────────
+    // Renders the occlusion gate SPATIALLY, exactly as the emissive sees it:
+    // green = wall area the mask lets light, red = wall area gated as buried
+    // (below the face's exposed-above-Y line), so a partially buried face shows
+    // its actual red/green boundary. Roofs/floors grey. If a wall that should
+    // light is red here, tune ?faceeps / report it. Self-lit, day or night.
+    if (new URLSearchParams(location.search).has('facedebug')) {
+      const nl = normalLocal;
+      const yExpDbg = bFaceExp.x.mul(step(float(0.5), nl.x))
+        .add(bFaceExp.y.mul(step(float(0.5), nl.x.negate())))
+        .add(bFaceExp.z.mul(step(float(0.5), nl.z)))
+        .add(bFaceExp.w.mul(step(float(0.5), nl.z.negate())));
+      const boxHFDbg = positionLocal.y.add(float(0.5));
+      const soft = float(NCZ.FACE_MASK_SOFT);
+      const buried = float(1).sub(smoothstep(yExpDbg.sub(soft), yExpDbg.add(soft), boxHFDbg));
+      let dbg = mix(vec3(0.1, 0.85, 0.25), vec3(0.95, 0.12, 0.1), buried);
+      dbg = mix(vec3(0.25, 0.27, 0.3), dbg, onWall); // roofs/floors grey
+      mat.colorNode = vec3(0.0, 0.0, 0.0);
+      mat.emissiveNode = dbg;
+      return mat;
+    }
+
     // ── Per-building BIG billboard ── ONE large neon panel per hasBigSign building,
     // in the upper facade band, a SINGLE colour. Placed from the building's world
     // centre (bCenter) so it's one coherent panel on the facade — not the tiled roof
@@ -3509,7 +3775,7 @@ const ThreeScene = (() => {
     // Billboards land on ANY lit building (towers AND block megabuildings — both
     // carry huge rooftop signs in-game), selective via hasBigSign. No tower bias.
     const billboardEmissive = bbCol.mul(bbField)
-      .mul(hasBigSign).mul(onWall).mul(archMask)
+      .mul(hasBigSign).mul(onWall).mul(faceGate).mul(archMask)
       .mul(densityMul)
       .mul(_buildingNightFactor)
       .mul(float(NCZ.SIGN_INTENSITY)).mul(float(NCZ.SIGN_BB_INTENSITY_MUL))
