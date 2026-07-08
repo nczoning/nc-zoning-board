@@ -17,6 +17,36 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
+  // ?archdebug — reveal the archetype-classification legend (parked left of the
+  // overlays box). Rows are built from NCZ.ARCHDEBUG_COLORS (the SAME source the
+  // shader uses) so swatch colours match the render exactly; each row's title is
+  // its hover definition.
+  if (new URLSearchParams(window.location.search).has("archdebug")) {
+    const legend = document.getElementById("archdebug-legend");
+    const rows = document.getElementById("archdebug-legend-rows");
+    if (legend && rows && Array.isArray(NCZ.ARCHDEBUG_COLORS)) {
+      const toHex = (rgb) => "#" + rgb.map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, "0")).join("");
+      rows.innerHTML = NCZ.ARCHDEBUG_COLORS.map((c) =>
+        `<span class="adl-row" title="${c.def}"><span class="adl-swatch" style="background:${toHex(c.rgb)}"></span>${c.label}</span>`
+      ).join("");
+    }
+    if (legend) { legend.classList.remove("hidden"); legend.setAttribute("aria-hidden", "false"); }
+  }
+
+  // ?segdebug — STRUCTURE (segmentation) visualiser: the shader colours each box by
+  // its segmented building id (three-scene.js), so adjacent buildings differ and you
+  // can see which boxes form one building (the road/height/split grouping). Here we
+  // just add a caption; colours are arbitrary per-building hashes so there's no legend.
+  if (new URLSearchParams(window.location.search).has("segdebug")) {
+    const cap = document.createElement("div");
+    cap.id = "segdebug-caption";
+    cap.textContent = "Structures — each colour = one segmented building";
+    cap.style.cssText = "position:fixed;left:50%;top:8px;transform:translateX(-50%);z-index:9999;" +
+      "font:600 12px/1.4 Rajdhani,sans-serif;letter-spacing:.08em;color:#bfe9ff;text-transform:uppercase;" +
+      "background:rgba(8,18,32,.72);border:1px solid rgba(0,240,255,.25);padding:4px 12px;border-radius:3px;pointer-events:none";
+    document.body.appendChild(cap);
+  }
+
   // Welcome Modal Logic — runs immediately, independent of map loading
   const welcomeModal = document.getElementById("welcome-modal");
   const closeModalBtn = document.getElementById("close-modal");
@@ -608,6 +638,10 @@ async function initMap() {
   // A reproducible reference frame — same URL always yields the identical
   // lighting state. Debug/calibration only; not linked from the UI.
   const GAMELIGHT = new URLSearchParams(window.location.search).has('gamelight');
+  // ?night — start at the most moonlit hour so the night lighting / moon arc are
+  // immediately visible for calibration (overlays off). Just sets the slider's
+  // initial value; the slider stays fully scrubbable.
+  const NIGHT = new URLSearchParams(window.location.search).has('night');
   function switchView(viewName) {
     if (viewName === "schema" && !threeDAvailable) return;
     document.querySelectorAll(".map-view-btn").forEach(btn => {
@@ -752,9 +786,17 @@ async function initMap() {
     date.setUTCHours((Math.floor(morroMinutes / 60) - PDT_OFFSET) % 24, morroMinutes % 60, 0, 0);
     const pos = SunCalc.getPosition(date, SUN_LAT, SUN_LNG);
     NCZ.ThreeScene.setSunPosition(pos.azimuth, pos.altitude);
+    // The moon on its own real lunar arc (same anchor + date), so scrubbing past
+    // sunset shows a real moon rise/set, not a recoloured sun. Phase brightness
+    // is a tunable constant in the scene (NCZ.MOON_PHASE); here we only supply
+    // the real position. Below-horizon altitudes are fine — the scene gates the
+    // moon key light + disc on altitude.
+    const moon = SunCalc.getMoonPosition(date, SUN_LAT, SUN_LNG);
+    NCZ.ThreeScene.setMoonPosition?.(moon.azimuth, moon.altitude);
     // Time-of-day exposure — floor the dark ends without flattening the natural
-    // day/night variation. Keyed on elevation so the flyover shares it. See
-    // NCZ.SCENE_EXPOSURE_CURVE + NCZ.exposureForSunElevation.
+    // day/night variation. Keyed on elevation so the flyover shares it; the curve
+    // now extends below the horizon for night. See NCZ.SCENE_EXPOSURE_CURVE +
+    // NCZ.exposureForSunElevation.
     NCZ.ThreeScene?.setSceneExposure?.(NCZ.exposureForSunElevation(pos.altitude));
     const h = String(Math.floor(morroMinutes / 60)).padStart(2, '0');
     const m = String(morroMinutes % 60).padStart(2, '0');
@@ -764,21 +806,33 @@ async function initMap() {
   if (sunSlider) {
     sunSlider.addEventListener("input", () => applySunTime(parseInt(sunSlider.value)));
 
-    if (typeof SunCalc !== 'undefined') {
-      // Compute solstice sunrise/sunset in UTC minutes, then convert to Morro Bay PDT
-      const times      = SunCalc.getTimes(SOLSTICE, SUN_LAT, SUN_LNG);
-      const utcToMorro = (date) => ((date.getUTCHours() * 60 + date.getUTCMinutes()) + PDT_OFFSET * 60 + 1440) % 1440;
-      sunSlider.min    = utcToMorro(times.sunrise); // ~353 min = 05:53 PDT
-      sunSlider.max    = utcToMorro(times.sunset);  // ~1216 min = 20:16 PDT
-    } else {
-      sunSlider.min = 353;
-      sunSlider.max = 1216;
+    // Full 24h domain (Morro Bay PDT minutes): the slider now wraps through the
+    // night so the sun sets, the moon rises on its real arc, and night lighting
+    // takes over. (Previously clamped to sunrise→sunset, daytime only.)
+    sunSlider.min = 0;
+    sunSlider.max = 1439;
+
+    // ?night — jump to the most moonlit hour: the dark-sky minute (sun well below
+    // the horizon) where the real moon is highest, so the moon is always visibly
+    // up regardless of the year's lunar geometry. Falls back to ~22:00 PDT.
+    function bestNightMinutes() {
+      if (typeof SunCalc === 'undefined') return 1320;
+      let best = { alt: -Infinity, min: 1320 };
+      const SUN_DARK = -6 * Math.PI / 180;
+      for (let m = 0; m < 1440; m += 5) {
+        const d = new Date(SOLSTICE);
+        d.setUTCHours((Math.floor(m / 60) - PDT_OFFSET + 24) % 24, m % 60, 0, 0);
+        if (SunCalc.getPosition(d, SUN_LAT, SUN_LNG).altitude >= SUN_DARK) continue;
+        const moonAlt = SunCalc.getMoonPosition(d, SUN_LAT, SUN_LNG).altitude;
+        if (moonAlt > best.alt) best = { alt: moonAlt, min: m };
+      }
+      return best.alt > 0 ? best.min : 1320;
     }
 
     // Default: 8:00 AM PDT — sun ~24° elevation from the east. The high-noon
     // default (10am, el 48°) over-lights building tops under the new photometric
     // lighting; a moderate morning sun reads as 3D-massed city without blasting.
-    const DEFAULT_SUN_MINUTES = 480;
+    const DEFAULT_SUN_MINUTES = NIGHT ? bestNightMinutes() : 480;
     sunSlider.value = DEFAULT_SUN_MINUTES;
     applySunTime(DEFAULT_SUN_MINUTES);
   }

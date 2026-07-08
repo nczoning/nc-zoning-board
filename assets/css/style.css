@@ -167,6 +167,48 @@
     margin-bottom: 2px;
 }
 
+/* ?archdebug archetype legend — same panel styling as #overlay-controls, parked
+   immediately to its left (clears the overlays box width + a small gap). */
+#archdebug-legend {
+    position: absolute;
+    bottom: 120px;
+    right: calc(var(--space-sm) + 160px);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xs);
+    background: var(--surface-panel);
+    border: var(--ui-border-thin) solid var(--secondary-20);
+    padding: var(--space-xs) var(--space-md);
+
+    &.hidden { display: none; }
+
+    .archdebug-legend-label {
+        font-family: var(--font-heading);
+        font-size: var(--text-2xs);
+        color: var(--gray);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-bottom: 2px;
+    }
+
+    .adl-row {
+        display: flex;
+        align-items: center;
+        gap: var(--space-xs);
+        font-family: var(--font-body);
+        font-size: var(--text-xs);
+        color: var(--white);
+    }
+
+    .adl-swatch {
+        width: 12px;
+        height: 12px;
+        flex: 0 0 auto;
+        border: 1px solid var(--secondary-20);
+    }
+}
+
 .overlay-perf-warn {
     font-size: var(--text-2xs);
     color: var(--tertiary);

@@ -14,7 +14,7 @@
 
 import * as THREE from 'three';
 import {
-  attribute, uniform, texture, positionWorld, positionLocal, normalLocal,
+  attribute, uniform, texture, positionWorld, positionLocal, normalLocal, normalWorld,
   transformNormal, transformNormalToView, uv, vec2, vec4, float, mix, smoothstep, materialColor,
   instancedArray, instanceIndex,
   // Phase 2B compute culling
@@ -23,6 +23,10 @@ import {
   dFdx, dFdy,
   // Building edge highlight
   cameraPosition,
+  // Bloom post-process — the scene render pass node
+  pass,
+  // Lit-window facades (Night Stage 2)
+  vec3, floor, fract, step,
 } from 'three/tsl';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -38,6 +42,11 @@ import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import Stats from 'three/addons/libs/stats.module.js';
+// Bloom — the TSL bloom node (threshold highpass + Gaussian mip pyramid). Ports
+// the in-game 3D map's BloomAreaSettings glow; at night it makes the lit-window
+// facades read as glowing lights instead of flat dots. See the post-processing
+// setup in init() and the BLOOM_* constants for the decoded values.
+import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 // The exact in-game 3D-map colour pipeline (decoded from 3dmap.envparam):
 // ACES tonemap + colour grade + braindance LUT — see assets/js/aces-tonemap.js.
 import { registerCP2077ToneMapping, loadBraindanceLUT, setSceneGradeEnabled } from './aces-tonemap.js';
@@ -51,8 +60,26 @@ window.NCZ = window.NCZ || {};
 // real SunCalc-driven position arrives via setSunPosition.
 const SUN_DIR = new THREE.Vector3(-1, 1.5, -1).normalize();
 
+// ?archdebug discrete class palette (TSL vec3), built from the shared
+// NCZ.ARCHDEBUG_COLORS source so the render matches the legend exactly.
+const ARCHDBG = (() => {
+  const m = {};
+  for (const c of (window.NCZ.ARCHDEBUG_COLORS || [])) m[c.key] = vec3(...c.rgb);
+  m.excluded = vec3(0.04, 0.0, 0.08); // override viz only (not a class)
+  return m;
+})();
+
 const ThreeScene = (() => {
   let renderer, camera, scene, controls;
+  // Bloom post-processing chain (set up in init()): the scene renders through
+  // `renderPipeline` instead of straight to the canvas. `scenePass` is the
+  // scene render-to-texture node — its `.camera` is reassigned per frame so the
+  // schema camera and the showcase fly camera both bloom (PassNode reads
+  // `.camera` fresh each render). `_bloomPass` is kept so updateDayNightLighting
+  // can drive bloom strength by nightFactor (a low daytime baseline easing up to
+  // the night peak).
+  let renderPipeline = null, scenePass = null, _bloomPass = null, _sceneScaleUniform = null;
+  let _hazePass = null;   // second wide bloom — night atmospheric light-pollution haze
   let initialized = false;
   // True only when the renderer ended up on a real WebGPU backend. The webgpu
   // build reports renderer.isWebGPURenderer === true even on its WebGL2
@@ -63,9 +90,12 @@ const ThreeScene = (() => {
   let loadingFillEl  = null;
   let loadStepsTotal = 0;
   let loadStepsDone  = 0;
-  let _dirLight      = null; // the sun (DirectionalLight + single fitted shadow camera)
+  let _dirLight      = null; // the SUN (DirectionalLight + single fitted shadow camera) — the only shadow caster
+  let _moonLight     = null; // the MOON (DirectionalLight, castShadow:false) — cool night fill, no shadows
   let _hemiLight     = null; // sky/ground fill (replaces a flat AmbientLight)
-  let _sunDir        = SUN_DIR.clone(); // unit, ground→sun; updated by setSunPosition, consumed by updateShadowCamera
+  let _sunDir        = SUN_DIR.clone(); // unit, ground→sun; updated by updateDayNightLighting, consumed by updateShadowCamera
+  let _moonDir       = new THREE.Vector3(); // unit, ground→moon; scratch for the moon light direction
+  let _sunShadowFade = 1;    // 0..1 shadow strength by sun elevation — fades shadows out as the sun sets (night/dusk ⇒ no caster ⇒ no shadow box)
   let _shadowScratchV = new THREE.Vector3();     // reused by updateShadowCamera so it doesn't allocate per camera move
   // Light-space basis + up vector for the shadow texel-snap (see updateShadowCamera).
   // _SHADOW_UP matches Three's default OrthographicCamera up, so the basis we build
@@ -157,8 +187,18 @@ const ThreeScene = (() => {
   // the constant; the Shadows overlay multiplies by this when enabled, by 0 when
   // off (so the tuned strength survives a Shadows toggle).
   let _shadowIntensity = NCZ.SHADOW_INTENSITY;
-  let _sunSphere     = null; // visible sun disc — shown during showcase only
+  let _sunSphere     = null; // visible sun disc — always present, traces the real solar arc (positionSkyBody); terrain occludes it at the horizon
+  let _moonSphere    = null; // visible moon disc — always present, traces the real lunar arc (incl. daytime); terrain occludes it at the horizon
   let _sunAz = Math.PI * 0.25, _sunEl = Math.PI * 0.35; // last *requested* setSunPosition args — placeholders only until the first call (the slider init in app.js), which may land before the lights exist
+  let _moonAz = 0, _moonEl = -Math.PI * 0.25; // last *requested* setMoonPosition args — seeded below the horizon so the moon is absent until app.js drives it
+  let _nightFactor = 0; // 0 = full day, 1 = full night; derived from sun elevation in updateDayNightLighting, read by getNightFactor (and later stages)
+  // Shared TSL uniforms feeding the building lit-window emissive (Night Stage 2).
+  // Created lazily in buildBuildingMaterial. _buildingNightFactor is driven from
+  // _nightFactor; the colour palette is constant (cyberpunk window lights, not
+  // theme-driven — recolouring the buildings is explicitly out of scope).
+  let _buildingNightFactor = null;  // uniform(0)
+  let _windowColorUniforms = null;  // [uniform(THREE.Color)] from NCZ.WINDOW_COLORS
+  let _signColorUniforms   = null;  // [uniform(THREE.Color)] from NCZ.SIGN_COLORS (signage neon)
   let _terrainBox = null;     // THREE.Box3 of the terrain GLB; gates pan-bound clamp
                               // because the bound shouldn't activate before terrain loads
   let _introTween   = null;   // E5 intro fly-in tween, or null when idle
@@ -273,6 +313,19 @@ const ThreeScene = (() => {
   let buildingMeshes     = [];    // one InstancedMesh per district
   let buildingMaterials  = [];    // parallel ShaderMaterial array for theme updates
   let landmarkMat        = null;  // shared MeshLambertMaterial for all landmark GLBs
+
+  // District night-lighting mask — a CET-space window-density map rasterized from
+  // the district polygons (data/subdistricts.json). Each texel = the 0..1 window
+  // density for that region; the building shader samples it by world position so
+  // per-district coverage keys off the TRUE polygon boundary, not the .dds cloud
+  // (which bleeds across districts). Created up front (default-filled) so building
+  // materials can reference it; filled once loadDistricts has the polygons.
+  const DISTRICT_MASK_SIZE = 1024;
+  let _districtMaskCanvas = null;
+  let _districtMaskTex    = null;
+  // City-glow TSL uniforms (per-fragment glow term, shared by building + terrain
+  // shaders). Created lazily; intensity driven by nightFactor.
+  let _glowSkyU = null, _glowGroundU = null, _glowIntensityU = null;
 
   // District metadata — sourced directly from 3dmap_triangle_soup.Material.json.
   // Cache note: the *.dds paths below are served `no-cache` (see _headers), so
@@ -479,6 +532,12 @@ const ThreeScene = (() => {
     // shared terrain material); terrain and cliffs are 1.
     const shaded = mix(materialColor, uGrid, terrainGridFactor());
     mat.colorNode = brightness === 1 ? shaded : shaded.mul(brightness);
+    // City glow — the same per-fragment hemisphere fill the buildings use, scaled
+    // by district density so the ground glows per district (dark in ocean /
+    // Badlands). Replaces the old global HemisphereLight on the terrain too.
+    mat.emissiveNode = cityGlowEmissive(
+      normalWorld, positionWorld.x, positionWorld.z.negate(), materialColor,
+    );
     return mat;
   }
 
@@ -830,6 +889,20 @@ const ThreeScene = (() => {
     scene.add(_dirLight);
     scene.add(_dirLight.target);
 
+    // Moon light — a SECOND permanent directional light (cool), no shadows. The
+    // sun above is the only shadow caster; the moon just adds soft cool fill at
+    // night (intensity driven in updateDayNightLighting). castShadow:false is set
+    // once and never toggled — safe under WebGPURenderer. Direction comes from the
+    // real lunar arc; target sits at the world centre so only direction matters.
+    _moonLight = new THREE.DirectionalLight(0xffffff, 0);
+    _moonLight.color.setRGB(...NCZ.MOON_COLOR_RGB, THREE.LinearSRGBColorSpace);
+    _moonLight.castShadow = false;
+    _moonLight.name = 'moon';
+    _moonLight.target.name = 'moon-target';
+    _moonLight.target.position.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
+    scene.add(_moonLight);
+    scene.add(_moonLight.target);
+
     // Hemisphere ambient — the decoded envparam ambient cube collapses to a
     // hemisphere: 5 bright cool-white faces (sky + sides) over 1 dim blue face
     // (ground). Fixed colour + intensity, matching the game's fixed environment.
@@ -838,17 +911,90 @@ const ThreeScene = (() => {
     _hemiLight.groundColor.setRGB(...NCZ.AMBIENT_GROUND_RGB, THREE.LinearSRGBColorSpace);
     _hemiLight.name = 'sky-fill';
     scene.add(_hemiLight);
+    // NOTE: the Stage-2 city glow used to be a second HemisphereLight here, but a
+    // global light can't be masked per district. It's now a per-fragment shader
+    // term (cityGlowEmissive) in the building + terrain materials, scaled by the
+    // district mask — so the glow falls off by district exactly like the windows.
     // Sun position is applied by app.js via the slider once terrain has loaded.
 
-    // Visible sun sphere — hidden by default, shown during showcase only.
+    // Visible sun sphere — always present, traces the real solar arc (map AND
+    // showcase use the same path). Seeded hidden for the one frame before the
+    // first applySunTime positions it; updateDayNightLighting then keeps it shown.
     // Radius NCZ.SUN_SPHERE_RADIUS units at NCZ.SUN_SPHERE_DIST distance ≈ 1.7° apparent diameter (≈3× real sun).
     _sunSphere = new THREE.Mesh(
       new THREE.SphereGeometry(NCZ.SUN_SPHERE_RADIUS, 16, 16),
-      new THREE.MeshBasicNodeMaterial({ color: 0xffcc44 })
+      new THREE.MeshBasicNodeMaterial({ color: 0xffcc44 })  // opaque — depth-tested so terrain at the horizon occludes it (the disc sets behind ridgelines)
     );
     _sunSphere.name = 'sun-sphere';
     _sunSphere.visible = false;
     scene.add(_sunSphere);
+
+    // Visible moon disc — always present, traces the real lunar arc (incl. daytime,
+    // same path as the sun disc). Flat cool-white sphere reads as a full moon at
+    // the default ~full phase; a phase terminator is a follow-up.
+    _moonSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(NCZ.MOON_SPHERE_RADIUS, 16, 16),
+      new THREE.MeshBasicNodeMaterial({ color: NCZ.MOON_SPHERE_COLOR })  // opaque — depth-tested so terrain at the horizon occludes it (the disc sets behind ridgelines)
+    );
+    _moonSphere.name = 'moon-sphere';
+    _moonSphere.visible = false;
+    scene.add(_moonSphere);
+
+    // ── Bloom — the in-game map's BloomAreaSettings glow, used here for night ──
+    // At night the lit-window facades + neon are bright sources against the dark
+    // city; bloom is what makes them read as glowing lights rather than flat
+    // painted dots. Bloom is an HDR effect, so it runs on the *linear* scene
+    // before the ACES tonemap; the scene therefore renders through a
+    // RenderPipeline instead of straight to the canvas:
+    //
+    //   scenePass  → linear HDR scene render (HalfFloat RT)
+    //   bloom()    → threshold highpass + Gaussian mip pyramid
+    //   outputNode → scene·SCENE_COLOR_SCALE + bloom   (linear composite)
+    //   RenderPipeline.outputColorTransform (default on) → applies the
+    //     registered CP2077 ACES tonemap + grade + LUT + sRGB at the output.
+    //
+    // stencilBuffer:true on the scene pass RT — the SeeThrough roads (Pacifica
+    // tunnel) stencil-test *inside* the scene render; the pass's offscreen RT
+    // must carry a stencil attachment or that test silently fails. Forcing the
+    // depth texture to DepthStencilFormat gives depth32float-stencil8, matching
+    // the main framebuffer's reverse-Z + stencil format. See CLAUDE.md
+    // "Stencil buffer rendering".
+    //
+    // Bloom STRENGTH is driven by nightFactor in updateDayNightLighting: a low
+    // daytime baseline (BLOOM_DAY_STRENGTH) easing up (nf²) to the night peak
+    // (BLOOM_STRENGTH). It runs all day on a curve — that consistency is why the
+    // district outlines can stay in this scene and bloom with everything else,
+    // rather than needing a separate un-bloomed pass.
+    renderPipeline = new THREE.RenderPipeline(renderer);
+    scenePass = pass(scene, camera, { depthBuffer: true, stencilBuffer: true });
+    scenePass.renderTarget.depthTexture.format = THREE.DepthStencilFormat;
+    const scenePassColor = scenePass.getTextureNode();
+    // Bloom is global — the envparam bloom is not theme-specific. The decoded
+    // luminanceThreshold range maps onto the node's smoothstep highpass:
+    // threshold = min, smoothWidth = max − min (see BLOOM_* in constants.js).
+    _bloomPass = bloom(scenePassColor, 0, NCZ.BLOOM_RADIUS, NCZ.BLOOM_THRESHOLD);
+    _bloomPass.smoothWidth.value = NCZ.BLOOM_SMOOTH_WIDTH;
+
+    // Atmospheric haze — a SECOND, wide, low-threshold bloom on the same scene.
+    // Where the tight bloom (above) gives lights a crisp halo, this spreads the
+    // lit windows/signage into a broad soft glow: the night light-pollution haze
+    // in the reference shots. Separate node so the crisp glint and the wide haze
+    // tune independently. Night-only (strength driven by nightFactor² in
+    // updateDayNightLighting) — daytime has no light pollution. Max radius for
+    // the widest mip spread; low threshold so the haze comes from the actual
+    // lights, not the dark terrain.
+    _hazePass = bloom(scenePassColor, 0, NCZ.HAZE_RADIUS, NCZ.HAZE_THRESHOLD);
+    _hazePass.smoothWidth.value = NCZ.HAZE_SMOOTH_WIDTH;
+
+    // Composite in linear space: dim the base scene to sceneColorScale, then add
+    // the tight bloom + the wide haze. Dim and both glow strengths are driven by
+    // nightFactor in updateDayNightLighting. District outlines live in the main
+    // scene and bloom along with everything else — bloom runs all day (on a
+    // curve) so there's no day/night inconsistency to exclude them for. The
+    // RenderPipeline tonemaps the result at its output.
+    _sceneScaleUniform = uniform(1);
+    renderPipeline.outputNode =
+      scenePassColor.mul(_sceneScaleUniform).add(_bloomPass).add(_hazePass);
 
     // OrbitControls — left=pan, right=tilt, middle=zoom.
     //
@@ -1010,6 +1156,15 @@ const ThreeScene = (() => {
     // Initial scale bar — controls 'change' won't fire until the user
     // interacts, so paint the bar once at startup using the initial camera state.
     updateScaleBar();
+
+    // ?zonetool — the in-3D building-zone drawing tool (dev only). Lazy-loaded so
+    // the module only downloads when the flag is present. It gets the scene refs +
+    // groundPointAt (screen→CET raycast) and draws with WebGPU-safe node materials.
+    if (new URLSearchParams(location.search).has('zonetool')) {
+      import('./zone-tool.js')
+        .then((m) => m.initZoneTool({ scene, camera, renderer, controls, orbitDom: _orbitDom, groundPointAt, requestRender }))
+        .catch((e) => console.error('[NCZ] zone-tool failed to load', e));
+    }
 
     loadTerrain();
   }
@@ -1376,6 +1531,11 @@ const ThreeScene = (() => {
       //     visible surface (depth-tested, ZPass:Replace) — so SeeThrough roads don't draw through
       //     them. Safe vs the tunnel because water (transparent pass) re-writes stencil=STENCIL_WATER
       //     over the bay AFTER the terrain seabed wrote stencil=STENCIL_OCCLUDER there in the opaque pass.
+      // The night-lighting district mask must exist before any material that
+      // samples it is built (terrain here, buildings later). Created empty now;
+      // loadDistricts fills it in parallel and flips needsUpdate.
+      initDistrictMask();
+
       const stencilOverstamp = { stencilWrite: true, stencilRef: NCZ.STENCIL_OCCLUDER, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp };
       terrainMat = makeHillshadeMaterial('--scene-terrain', '#566c88', stencilOverstamp);
       waterMat   = makeHillshadeMaterial('--scene-water',   '#566c88', {
@@ -1694,10 +1854,118 @@ const ThreeScene = (() => {
     }
   }
 
+  // CET [x,y] → mask-canvas pixel. World bounds map to [0,S]; v uses the same
+  // (cetY−MIN_Y)/range as the shader (flipY:false), so canvas and sampling agree.
+  function cetToMaskPx(cetX, cetY) {
+    const S = DISTRICT_MASK_SIZE;
+    const u = (cetX - NCZ.WORLD_MIN_X) / (NCZ.WORLD_MAX_X - NCZ.WORLD_MIN_X);
+    const v = (cetY - NCZ.WORLD_MIN_Y) / (NCZ.WORLD_MAX_Y - NCZ.WORLD_MIN_Y);
+    return [u * S, v * S];
+  }
+
+  // Create the mask texture up front, default-filled, so building materials can
+  // reference it before loadDistricts has run (they load in parallel).
+  function initDistrictMask() {
+    if (_districtMaskCanvas) return;
+    const S = DISTRICT_MASK_SIZE;
+    _districtMaskCanvas = document.createElement('canvas');
+    _districtMaskCanvas.width = _districtMaskCanvas.height = S;
+    const ctx = _districtMaskCanvas.getContext('2d');
+    const d0 = Math.round((NCZ.DISTRICT_NIGHT_DENSITY._default ?? 0) * 255);
+    ctx.fillStyle = `rgb(${d0},${d0},${d0})`;
+    ctx.fillRect(0, 0, S, S);
+    _districtMaskTex = new THREE.CanvasTexture(_districtMaskCanvas);
+    _districtMaskTex.colorSpace      = THREE.NoColorSpace; // data, not colour
+    _districtMaskTex.minFilter       = THREE.LinearFilter;
+    _districtMaskTex.magFilter       = THREE.LinearFilter;
+    _districtMaskTex.generateMipmaps = false;
+    _districtMaskTex.flipY           = false;
+  }
+
+  // Paint each district's density into the mask. District polygon first (tiles
+  // with neighbours), then its subdistrict polygons (covers no-district-polygon
+  // cases like Badlands). Same density per district for now; sub-level granularity
+  // and lit-spot exceptions come later via the polygon system.
+  function rasterizeDistrictMask(districts) {
+    if (!_districtMaskCanvas) initDistrictMask();
+    const ctx = _districtMaskCanvas.getContext('2d');
+    const S = DISTRICT_MASK_SIZE;
+    const paint = (ring, density) => {
+      if (!ring || ring.length < 3) return;
+      const g = Math.round(density * 255);
+      ctx.fillStyle = `rgb(${g},${g},${g})`;
+      ctx.beginPath();
+      ring.forEach((pt, i) => {
+        const [px, py] = cetToMaskPx(pt[0], pt[1]);
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      });
+      ctx.closePath();
+      ctx.fill();
+    };
+    // Repaint the default everywhere first (in case of a re-rasterize), then the
+    // districts, so the blur below starts from a clean fill.
+    const d0 = Math.round((NCZ.DISTRICT_NIGHT_DENSITY._default ?? 0) * 255);
+    ctx.fillStyle = `rgb(${d0},${d0},${d0})`;
+    ctx.fillRect(0, 0, S, S);
+    for (const dist of districts) {
+      const density = NCZ.DISTRICT_NIGHT_DENSITY[dist.id]
+        ?? NCZ.DISTRICT_NIGHT_DENSITY._default ?? 0;
+      paint(dist.polygon, density);
+      for (const sub of (dist.subdistricts || [])) paint(sub.polygon, density);
+    }
+    // Feather the region edges so the glow/windows fall off SMOOTHLY past district
+    // boundaries (light-pollution halo) instead of a hard polygon cutoff. Blur the
+    // painted mask by DISTRICT_MASK_FEATHER_CET (converted to canvas px).
+    const blurPx = NCZ.DISTRICT_MASK_FEATHER_CET * S / (NCZ.WORLD_MAX_X - NCZ.WORLD_MIN_X);
+    if (blurPx > 0.5) {
+      const tmp = document.createElement('canvas');
+      tmp.width = tmp.height = S;
+      tmp.getContext('2d').drawImage(_districtMaskCanvas, 0, 0);
+      ctx.clearRect(0, 0, S, S);
+      ctx.filter = `blur(${blurPx}px)`;
+      ctx.drawImage(tmp, 0, 0);
+      ctx.filter = 'none';
+    }
+    if (_districtMaskTex) _districtMaskTex.needsUpdate = true;
+    requestRender();
+  }
+
+  // Lazily create the city-glow uniforms (warm-below/cool-above colours + the
+  // night-driven intensity). Colours from constants; live only via reload.
+  function ensureGlowUniforms() {
+    if (_glowIntensityU) return;
+    _glowGroundU    = uniform(new THREE.Color().setRGB(...NCZ.CITY_GLOW_GROUND_RGB, THREE.LinearSRGBColorSpace));
+    _glowSkyU       = uniform(new THREE.Color().setRGB(...NCZ.CITY_GLOW_SKY_RGB, THREE.LinearSRGBColorSpace));
+    _glowIntensityU = uniform(0); // set each frame in updateDayNightLighting
+  }
+
+  // District density (0..1) at a CET position, sampled from the mask (1 if no
+  // mask yet). Shared by the window gate and the city-glow term.
+  function sampleDistrictDensity(cetXNode, cetYNode) {
+    if (!_districtMaskTex) return float(1);
+    const u = cetXNode.sub(float(NCZ.WORLD_MIN_X)).div(float(NCZ.WORLD_MAX_X - NCZ.WORLD_MIN_X));
+    const v = cetYNode.sub(float(NCZ.WORLD_MIN_Y)).div(float(NCZ.WORLD_MAX_Y - NCZ.WORLD_MIN_Y));
+    return texture(_districtMaskTex, vec2(u, v)).r;
+  }
+
+  // Per-fragment city glow: the warm-from-below / cool-from-above hemisphere fill
+  // (the ex-HemisphereLight), now a shader term so it can be scaled by the
+  // district density — regional, exactly like the windows. Tinted by surface
+  // albedo so it reads like a light, not flat emissive. cetX/cetY locate the
+  // sample in the mask (buildings pass the instance centre, terrain its world pos).
+  function cityGlowEmissive(worldNormalNode, cetXNode, cetYNode, albedoNode) {
+    ensureGlowUniforms();
+    const hemi = mix(_glowGroundU, _glowSkyU, worldNormalNode.y.mul(0.5).add(0.5));
+    return hemi.mul(albedoNode)
+      .mul(_glowIntensityU)
+      .mul(sampleDistrictDensity(cetXNode, cetYNode));
+  }
+
   async function loadDistricts() {
     registerLoadStep(); // districts
     try {
       const data = await fetch('data/subdistricts.json').then(r => r.json());
+      rasterizeDistrictMask(data.districts); // fill the night-lighting density mask
       const outerGroup  = new THREE.Group(); // districts with subs — zoom-out only
       const alwaysGroup = new THREE.Group(); // no-sub districts + canonical:false subs — always visible
       const subGroup    = new THREE.Group(); // canonical subdistricts — zoom-in only
@@ -1786,6 +2054,10 @@ const ThreeScene = (() => {
       _districtSub    = subGroup;
       _districtAlways = alwaysGroup;
       layers.districts = parent;
+      // District outlines go in the dedicated overlay scene (not the main scene)
+      // so the bloom pass never sees them — they composite back un-bloomed (see
+      // the bloom setup in init()). Visibility toggling still works via the
+      // group's .visible flag; hover raycasting works regardless of scene.
       scene.add(parent);
       scene.add(labelGroup);
       layers.districtLabels = labelGroup;
@@ -1883,9 +2155,511 @@ const ThreeScene = (() => {
     }
   }
 
+  // Cluster building boxes into "buildings". The .dds has no grouping — a building
+  // is many adjacent boxes (thin slabs etc.). Union boxes whose world AABBs are
+  // within `gap` (CET) via a spatial-hash grid + union-find, then return a packed
+  // vec4 per box = (buildingHeightHalf, footMaxHalf, footMinHalf, clusterId) so the
+  // shader classifies + seeds per BUILDING. Inputs are Three-space box centres
+  // (cx/cy/cz) and world-AABB half-extents (hx/hy/hz); Y = height, X/Z = footprint.
+  function clusterBuildingBoxes(cx, cy, cz, hx, hy, hz, count, gap) {
+    const parent = new Int32Array(count);
+    for (let i = 0; i < count; i++) parent[i] = i;
+    const find = (a) => { while (parent[a] !== a) { parent[a] = parent[parent[a]]; a = parent[a]; } return a; };
+    const union = (a, b) => { a = find(a); b = find(b); if (a !== b) parent[b] = a; };
+
+    const CELL = 40;       // CET spatial-hash cell
+    const MAX_SPAN = 6;    // cap cells a single (huge, rare) box spreads into
+    const grid = new Map();
+    for (let i = 0; i < count; i++) {
+      const ex = hx[i] + gap, ey = hy[i] + gap, ez = hz[i] + gap;
+      let x0 = Math.floor((cx[i]-ex)/CELL), x1 = Math.floor((cx[i]+ex)/CELL);
+      let y0 = Math.floor((cy[i]-ey)/CELL), y1 = Math.floor((cy[i]+ey)/CELL);
+      let z0 = Math.floor((cz[i]-ez)/CELL), z1 = Math.floor((cz[i]+ez)/CELL);
+      if (x1-x0 > MAX_SPAN || y1-y0 > MAX_SPAN || z1-z0 > MAX_SPAN) {
+        x0 = x1 = Math.floor(cx[i]/CELL); y0 = y1 = Math.floor(cy[i]/CELL); z0 = z1 = Math.floor(cz[i]/CELL);
+      }
+      for (let X = x0; X <= x1; X++) for (let Y = y0; Y <= y1; Y++) for (let Z = z0; Z <= z1; Z++) {
+        const k = X + ',' + Y + ',' + Z;
+        let arr = grid.get(k); if (!arr) { arr = []; grid.set(k, arr); }
+        // overlapping boxes always share a covered cell, so test-on-insert finds all pairs
+        for (const j of arr) {
+          if (Math.abs(cx[i]-cx[j]) <= hx[i]+hx[j]+gap &&
+              Math.abs(cy[i]-cy[j]) <= hy[i]+hy[j]+gap &&
+              Math.abs(cz[i]-cz[j]) <= hz[i]+hz[j]+gap) union(i, j);
+        }
+        arr.push(i);
+      }
+    }
+
+    // Aggregate world AABB per cluster root.
+    const agg = new Map();
+    for (let i = 0; i < count; i++) {
+      const r = find(i);
+      const lx = cx[i]-hx[i], ux = cx[i]+hx[i], ly = cy[i]-hy[i], uy = cy[i]+hy[i], lz = cz[i]-hz[i], uz = cz[i]+hz[i];
+      let a = agg.get(r);
+      if (!a) agg.set(r, { minx:lx, maxx:ux, miny:ly, maxy:uy, minz:lz, maxz:uz });
+      else {
+        if (lx<a.minx) a.minx=lx; if (ux>a.maxx) a.maxx=ux;
+        if (ly<a.miny) a.miny=ly; if (uy>a.maxy) a.maxy=uy;
+        if (lz<a.minz) a.minz=lz; if (uz>a.maxz) a.maxz=uz;
+      }
+    }
+    const rootId = new Map(); let nextId = 0;
+    const attr = new Float32Array(count * 4);
+    for (let i = 0; i < count; i++) {
+      const r = find(i);
+      let id = rootId.get(r); if (id === undefined) { id = nextId++; rootId.set(r, id); }
+      const a = agg.get(r);
+      const fx = (a.maxx-a.minx)*0.5, fz = (a.maxz-a.minz)*0.5;
+      attr[i*4+0] = (a.maxy-a.miny)*0.5;        // building height half-extent
+      attr[i*4+1] = Math.max(fx, fz);           // footprint max half
+      attr[i*4+2] = Math.min(fx, fz);           // footprint min half
+      attr[i*4+3] = id;                         // cluster id (seed for window/sign hashing)
+    }
+    return { attr, clusterCount: nextId };
+  }
+
+  // ── Road-coverage grid for segmentation (built once, lazily) ────────────────
+  // The building footprint has no street gaps, so the height segmenter over-merges
+  // flat same-height areas into mega-blobs. The road network (3dmap_roads.glb)
+  // supplies the street grid — rasterised here into a global BOOLEAN coverage grid
+  // (the thickness gate in segmentBuildings means road ELEVATION isn't needed).
+  // World transform mirrors the rendered roads (rotation.y = π): worldX = -rawX,
+  // worldZ = -rawZ. See wiki learnings/roads-as-segmentation-barriers.
+  let _roadGridPromise = null;
+  function ensureRoadGrid() {
+    if (_roadGridPromise) return _roadGridPromise;
+    _roadGridPromise = (async () => {
+      const CELL = NCZ.BUILDING_SEG_CELL;
+      const scene = await loadGLB('3dmap_roads.glb');
+      scene.updateMatrixWorld(true); // bake the KHR_mesh_quantization dequant (loader stores it as node TRS)
+      const tris = [];
+      const tmp = new THREE.Vector3();
+      scene.traverse((o) => {
+        if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+        const pos = o.geometry.attributes.position, idx = o.geometry.index, m = o.matrixWorld;
+        // The meshopt GLB stores QUANTISED uint16 positions; o.matrixWorld carries
+        // the dequantisation (scale+offset) the loader baked in. Apply it, then the
+        // rendered 180° Y rotation (x→-x, z→-z) to reach building world space.
+        const v = (i) => { tmp.fromBufferAttribute(pos, i).applyMatrix4(m); return [-tmp.x, -tmp.z]; };
+        if (idx) { for (let i = 0; i < idx.count; i += 3) tris.push([v(idx.getX(i)), v(idx.getX(i + 1)), v(idx.getX(i + 2))]); }
+        else { for (let i = 0; i < pos.count; i += 3) tris.push([v(i), v(i + 1), v(i + 2)]); }
+      });
+      if (!tris.length) return null;
+      // Clamp bounds to the sane map extent (~±9000 CET). The meshopt runtime GLB
+      // can carry a stray far outlier vertex that would otherwise blow the grid up
+      // to tens of millions of cells; skip any triangle reaching outside.
+      const LIM = 9000;
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      for (const t of tris) for (const p of t) {
+        if (Math.abs(p[0]) > LIM || Math.abs(p[1]) > LIM) continue;
+        if (p[0] < minX) minX = p[0]; if (p[0] > maxX) maxX = p[0]; if (p[1] < minZ) minZ = p[1]; if (p[1] > maxZ) maxZ = p[1];
+      }
+      const inBounds = (t) => t.every((p) => Math.abs(p[0]) <= LIM && Math.abs(p[1]) <= LIM);
+      const col0 = Math.floor(minX / CELL) - 2, row0 = Math.floor(minZ / CELL) - 2;
+      const cols = Math.floor(maxX / CELL) - col0 + 3, rows = Math.floor(maxZ / CELL) - row0 + 3;
+      const covered = new Uint8Array(cols * rows);
+      for (const t of tris) {
+        if (!inBounds(t)) continue;
+        const xs0 = t[0][0], xs1 = t[1][0], xs2 = t[2][0], zs0 = t[0][1], zs1 = t[1][1], zs2 = t[2][1];
+        const c0 = Math.floor(Math.min(xs0, xs1, xs2) / CELL) - col0, c1 = Math.floor(Math.max(xs0, xs1, xs2) / CELL) - col0;
+        const r0 = Math.floor(Math.min(zs0, zs1, zs2) / CELL) - row0, r1 = Math.floor(Math.max(zs0, zs1, zs2) / CELL) - row0;
+        const d = (zs1 - zs2) * (xs0 - xs2) + (xs2 - xs1) * (zs0 - zs2);
+        if (Math.abs(d) < 1e-9) continue;
+        for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+          if (r < 0 || c < 0 || r >= rows || c >= cols) continue;
+          const px = (c + col0 + 0.5) * CELL, pz = (r + row0 + 0.5) * CELL;
+          const wa = ((zs1 - zs2) * (px - xs2) + (xs2 - xs1) * (pz - zs2)) / d;
+          const wb = ((zs2 - zs0) * (px - xs2) + (xs0 - xs2) * (pz - zs2)) / d;
+          if (wa >= -0.01 && wb >= -0.01 && 1 - wa - wb >= -0.01) covered[r * cols + c] = 1;
+        }
+      }
+      for (let dlt = 0; dlt < NCZ.BUILDING_ROAD_DILATE; dlt++) {
+        const next = covered.slice();
+        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+          if (covered[r * cols + c]) continue;
+          let hit = false;
+          for (let dr = -1; dr <= 1 && !hit; dr++) for (let dc = -1; dc <= 1; dc++) { const a = r + dr, b = c + dc; if (a >= 0 && b >= 0 && a < rows && b < cols && covered[a * cols + b]) { hit = true; break; } }
+          if (hit) next[r * cols + c] = 1;
+        }
+        covered.set(next);
+      }
+      console.log(`[NCZ] road grid ${cols}x${rows}, ${covered.reduce((a, b) => a + b, 0)} road cells`);
+      return { CELL, col0, row0, cols, rows, covered };
+    })().catch((e) => { console.warn('[NCZ] road grid failed', e); return null; });
+    return _roadGridPromise;
+  }
+
+  // Building segmentation by HEIGHT DISCONTINUITY — the live replacement for the
+  // percolating clusterBuildingBoxes (above). Same output contract: per-instance
+  // vec4 attr (heightHalf, footMaxHalf, footMinHalf, buildingId) + a building count.
+  // Inputs are the per-box world centre (cx = X, cy = up, cz = Z) and AABB
+  // half-extents. `roadGrid` (optional) carves the street grid out of the footprint
+  // so buildings separate by city block. Rationale + tuning live in
+  // scripts/tune_segment.js / scripts/tune_seg_roads.js / scripts/tune_lib.js (the
+  // headless harness lifts the algorithm from THIS function — keep them in sync).
+  function segmentBuildings(cx, cy, cz, hx, hy, hz, count, mergeZones, roadGrid) {
+    const CELL = NCZ.BUILDING_SEG_CELL, DH = NCZ.BUILDING_SEG_DH, MIN_CELLS = NCZ.BUILDING_SEG_MIN_CELLS;
+    if (count === 0) return { attr: new Float32Array(0), clusterCount: 0 };
+
+    // 1. CET ground grid; per cell, roof = max box-top elevation (cy + hy).
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (let i = 0; i < count; i++) {
+      if (cx[i] - hx[i] < minX) minX = cx[i] - hx[i];
+      if (cx[i] + hx[i] > maxX) maxX = cx[i] + hx[i];
+      if (cz[i] - hz[i] < minZ) minZ = cz[i] - hz[i];
+      if (cz[i] + hz[i] > maxZ) maxZ = cz[i] + hz[i];
+    }
+    const col0 = Math.floor(minX / CELL), row0 = Math.floor(minZ / CELL);
+    const cols = Math.floor(maxX / CELL) - col0 + 1, rows = Math.floor(maxZ / CELL) - row0 + 1;
+    const roof = new Float32Array(cols * rows).fill(-Infinity);
+    const floorG = new Float32Array(cols * rows).fill(Infinity); // min box bottom per cell (for road thickness gate)
+    const occ = new Uint8Array(cols * rows);
+    for (let i = 0; i < count; i++) {
+      const c0 = Math.floor((cx[i] - hx[i]) / CELL) - col0;
+      const c1 = Math.min(Math.floor((cx[i] + hx[i]) / CELL) - col0, c0 + 12); // cap huge boxes
+      const r0 = Math.floor((cz[i] - hz[i]) / CELL) - row0;
+      const r1 = Math.min(Math.floor((cz[i] + hz[i]) / CELL) - row0, r0 + 12);
+      const t = cy[i] + hy[i], b = cy[i] - hy[i];
+      for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+        const k = r * cols + c; occ[k] = 1; if (t > roof[k]) roof[k] = t; if (b < floorG[k]) floorG[k] = b;
+      }
+    }
+
+    // ROAD barrier: a road-covered cell that is STRUCTURALLY THIN (roof-floor <
+    // clearance — a surface street / podium deck, not a real building) blocks
+    // region-grow, so buildings can't merge across a street → separation by CITY
+    // BLOCK. Thick buildings (over tunnels / under elevated highways) are NOT thin,
+    // so they're kept whole. See wiki learnings/roads-as-segmentation-barriers.
+    const barrier = new Uint8Array(cols * rows);
+    if (roadGrid) {
+      const RC = NCZ.BUILDING_ROAD_CLEARANCE, rg = roadGrid;
+      for (let k = 0; k < occ.length; k++) {
+        if (!occ[k] || roof[k] - floorG[k] >= RC) continue;
+        const r = (k / cols) | 0, c = k % cols;
+        const gc = Math.floor(((c + col0 + 0.5) * CELL) / rg.CELL) - rg.col0;
+        const gr = Math.floor(((r + row0 + 0.5) * CELL) / rg.CELL) - rg.row0;
+        if (gr >= 0 && gc >= 0 && gr < rg.rows && gc < rg.cols && rg.covered[gr * rg.cols + gc]) barrier[k] = 1;
+      }
+    }
+
+    // 2a. footprint connected-components (pure connectivity, height ignored). An
+    //     isolated structure is its own component; the percolated downtown is one
+    //     giant component. ccBig[component] flags the components big enough to need
+    //     height-splitting — everything else is kept WHOLE so a single structure
+    //     with a varied roof (e.g. Kujira) isn't cut into pieces.
+    const KEEP_WHOLE = NCZ.BUILDING_SEG_KEEP_WHOLE;
+    const ccLabel = new Int32Array(cols * rows).fill(-1);
+    const ccSize = [];
+    const cstack = [];
+    for (let s = 0; s < occ.length; s++) {
+      if (!occ[s] || ccLabel[s] !== -1) continue;
+      const id = ccSize.length; ccLabel[s] = id; cstack.length = 0; cstack.push(s);
+      let size = 0;
+      while (cstack.length) {
+        const k = cstack.pop(); size++;
+        const r = (k / cols) | 0, c = k % cols;
+        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+          if (!dr && !dc) continue;
+          const nr = r + dr, nc = c + dc;
+          if (nr < 0 || nc < 0 || nr >= rows || nc >= cols) continue;
+          const nk = nr * cols + nc;
+          if (occ[nk] && ccLabel[nk] === -1) { ccLabel[nk] = id; cstack.push(nk); }
+        }
+      }
+      ccSize.push(size);
+    }
+    const ccBig = ccSize.map((s) => s > KEEP_WHOLE);
+
+    // 2b. region-grow: 8-adjacent occupied cells join iff they share a footprint
+    //     component AND (that component is kept whole OR their roofs are within DH).
+    const label = new Int32Array(cols * rows).fill(-1);
+    const sizes = [];
+    const stack = [];
+    let next = 0;
+    for (let s = 0; s < occ.length; s++) {
+      if (!occ[s] || label[s] !== -1) continue;
+      const id = next++; label[s] = id; stack.length = 0; stack.push(s);
+      const big = ccBig[ccLabel[s]];
+      let size = 0;
+      while (stack.length) {
+        const k = stack.pop(); size++;
+        if (barrier[k]) continue; // road-barrier cells are singleton dead-ends — don't bridge a street
+        const r = (k / cols) | 0, c = k % cols, h = roof[k];
+        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+          if (!dr && !dc) continue;
+          const nr = r + dr, nc = c + dc;
+          if (nr < 0 || nc < 0 || nr >= rows || nc >= cols) continue;
+          const nk = nr * cols + nc;
+          if (occ[nk] && !barrier[nk] && label[nk] === -1 && (!big || Math.abs(roof[nk] - h) < DH)) { label[nk] = id; stack.push(nk); }
+        }
+      }
+      sizes.push(size);
+    }
+
+    // 3. absorb sub-MIN_CELLS regions into the neighbour they border most. (Road
+    //    carving leaves barrier cells as singletons → many tiny regions; the pass
+    //    cap bounds the work, the rest fold into their dominant block.)
+    let changed = true, absorbPass = 0;
+    while (changed && absorbPass++ < 20) {
+      changed = false;
+      for (let k = 0; k < occ.length; k++) {
+        if (!occ[k]) continue;
+        const id = label[k];
+        if (sizes[id] >= MIN_CELLS) continue;
+        const r = (k / cols) | 0, c = k % cols;
+        const tally = new Map();
+        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+          if (!dr && !dc) continue;
+          const nr = r + dr, nc = c + dc;
+          if (nr < 0 || nc < 0 || nr >= rows || nc >= cols) continue;
+          const nk = nr * cols + nc;
+          if (occ[nk] && label[nk] !== id) tally.set(label[nk], (tally.get(label[nk]) || 0) + 1);
+        }
+        let best = -1, bestN = 0;
+        for (const [lab, n] of tally) if (n > bestN) { best = lab; bestN = n; }
+        if (best >= 0) { sizes[best]++; sizes[id]--; label[k] = best; changed = true; }
+      }
+    }
+
+    // 3.5 CONTAINMENT (tower-on-podium) MERGE. The height split cuts a tall column
+    //     (tower) from the lower apron/base (podium) it rises from → "one building,
+    //     two colours". Re-join a segment into the LOWER neighbour it SITS ON: the
+    //     dominant neighbour is lower by > DH AND borders > FRAC of the segment's
+    //     perimeter (the podium wraps the tower base). Two side-by-side buildings
+    //     only touch along one edge (< FRAC) so they DON'T merge. Union-find chains
+    //     tower→podium→base. 4-connectivity for a clean perimeter measure.
+    if (NCZ.BUILDING_PODIUM_MERGE) {
+      const segRoof = new Map(), perim = new Map(), nbrs = new Map(); // nbrs: id → Map(nbrId → borderCount)
+      const NB = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+      for (let k = 0; k < occ.length; k++) {
+        if (!occ[k]) continue;
+        const id = label[k], rf = roof[k];
+        const cur = segRoof.get(id); if (cur === undefined || rf > cur) segRoof.set(id, rf);
+        const r = (k / cols) | 0, c = k % cols;
+        for (const [dr, dc] of NB) {
+          const nr = r + dr, nc = c + dc;
+          if (nr < 0 || nc < 0 || nr >= rows || nc >= cols) continue;
+          const nk = nr * cols + nc, nl = label[nk];
+          if (!occ[nk] || nl === id) continue;
+          perim.set(id, (perim.get(id) || 0) + 1);
+          let m = nbrs.get(id); if (!m) { m = new Map(); nbrs.set(id, m); } m.set(nl, (m.get(nl) || 0) + 1);
+        }
+      }
+      const parent = new Map();
+      const find = (x) => { let p = parent.get(x); if (p === undefined) { parent.set(x, x); return x; } while (p !== parent.get(p)) { parent.set(p, parent.get(parent.get(p))); p = parent.get(p); } return p; };
+      const FRAC = NCZ.BUILDING_PODIUM_MERGE_FRAC;
+      for (const s of segRoof.keys()) {
+        const p = perim.get(s) || 0, m = nbrs.get(s); if (!p || !m) continue;
+        let best = -1, bestN = 0;
+        for (const [nl, n] of m) if (n > bestN) { bestN = n; best = nl; }
+        // sits-on: dominant neighbour is LOWER (podium) and wraps > FRAC of S's base
+        if (best >= 0 && segRoof.get(best) < segRoof.get(s) - DH && bestN / p > FRAC) parent.set(find(s), find(best));
+      }
+      if (parent.size) for (let k = 0; k < occ.length; k++) if (occ[k]) label[k] = find(label[k]);
+    }
+
+    // 4a. assign each box to its centroid cell's region label.
+    const boxLabel = new Int32Array(count);
+    for (let i = 0; i < count; i++) {
+      const c = Math.floor(cx[i] / CELL) - col0, r = Math.floor(cz[i] / CELL) - row0;
+      boxLabel[i] = label[r * cols + c];
+    }
+
+    // 4b. ZONE MERGE override: every box whose centroid falls inside a merge zone's
+    //     footprint (CET) and height range is reassigned to ONE building per zone —
+    //     so a single structure the auto-segmenter split (a ship, a flat complex)
+    //     becomes one coherent unit. Sentinel labels (negative) can't collide with
+    //     region ids; the dense remap below folds them into normal building ids.
+    if (mergeZones && mergeZones.length) {
+      for (let zi = 0; zi < mergeZones.length; zi++) {
+        const z = mergeZones[zi];
+        if (!z.footprint || z.footprint.length < 3) continue;
+        const mergeLabel = -1000 - zi;
+        const minY = z.minZ ?? -Infinity, maxY = z.maxZ ?? Infinity;
+        for (let i = 0; i < count; i++) {
+          if (cy[i] < minY || cy[i] > maxY) continue;          // box outside the zone's height range
+          if (NCZ.pointInPolygon([cx[i], -cz[i]], z.footprint)) boxLabel[i] = mergeLabel; // CET = (x, -z)
+        }
+      }
+    }
+
+    // 4b.5 SPLIT oversized regions. Flat, same-roof-height areas (Watson core, the
+    //     spaceport apron, agri farms) have NO street gaps in the box data, so the
+    //     height segmenter percolates them into one mega-building spanning 1000+ CET
+    //     — which then mis-classifies AND grabs one giant single-colour billboard.
+    //     Chop any region whose footprint SPAN exceeds BUILDING_SPLIT_MIN_SPAN into
+    //     BUILDING_SPLIT_CELL world-grid chunks. Pure spatial chop (a flat plateau
+    //     carries no geometric split signal — see the percolation learning); the
+    //     span gate spares tall megabuildings (compact footprint, many boxes) and
+    //     normal buildings. Merge-zone sentinels (negative labels, hand-corrected)
+    //     are left intact. URL: ?splitcell= / ?splitmin= (0 disables).
+    const SPLIT_CELL = NCZ.BUILDING_SPLIT_CELL, SPLIT_SPAN = NCZ.BUILDING_SPLIT_MIN_SPAN;
+    if (SPLIT_CELL > 0 && SPLIT_SPAN > 0) {
+      const span = new Map(); // label → world AABB (x, z)
+      for (let i = 0; i < count; i++) {
+        const lab = boxLabel[i]; if (lab < 0) continue; // skip merge sentinels
+        let s = span.get(lab);
+        if (!s) { s = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity }; span.set(lab, s); }
+        if (cx[i] < s.minX) s.minX = cx[i]; if (cx[i] > s.maxX) s.maxX = cx[i];
+        if (cz[i] < s.minZ) s.minZ = cz[i]; if (cz[i] > s.maxZ) s.maxZ = cz[i];
+      }
+      const oversized = new Set();
+      for (const [lab, s] of span) {
+        if (Math.max(s.maxX - s.minX, s.maxZ - s.minZ) > SPLIT_SPAN) oversized.add(lab);
+      }
+      if (oversized.size) {
+        const subId = new Map(); let subNext = -100000; // large negatives, can't collide
+        for (let i = 0; i < count; i++) {
+          const lab = boxLabel[i];
+          if (!oversized.has(lab)) continue;
+          const gx = Math.floor(cx[i] / SPLIT_CELL), gz = Math.floor(cz[i] / SPLIT_CELL);
+          const key = lab + ':' + gx + ':' + gz;
+          let nl = subId.get(key);
+          if (nl === undefined) { nl = subNext--; subId.set(key, nl); }
+          boxLabel[i] = nl;
+        }
+      }
+    }
+
+    // 4c. aggregate world AABB per (possibly merged / split) label → building dims.
+    const aggMin = new Map(); // label → {minX..maxZ, minY, maxY}
+    for (let i = 0; i < count; i++) {
+      const lab = boxLabel[i];
+      let a = aggMin.get(lab);
+      if (!a) { a = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity }; aggMin.set(lab, a); }
+      if (cx[i]-hx[i]<a.minX) a.minX=cx[i]-hx[i]; if (cx[i]+hx[i]>a.maxX) a.maxX=cx[i]+hx[i];
+      if (cy[i]-hy[i]<a.minY) a.minY=cy[i]-hy[i]; if (cy[i]+hy[i]>a.maxY) a.maxY=cy[i]+hy[i];
+      if (cz[i]-hz[i]<a.minZ) a.minZ=cz[i]-hz[i]; if (cz[i]+hz[i]>a.maxZ) a.maxZ=cz[i]+hz[i];
+    }
+    const denseId = new Map(); let nextId = 0;
+    const attr = new Float32Array(count * 4);
+    const baseY = new Float32Array(count);     // building base elevation (world Y) per box — for the sign height rule
+    const center = new Float32Array(count * 2); // building horizontal centre (world X, Z) — for the billboard placement
+    for (let i = 0; i < count; i++) {
+      const lab = boxLabel[i];
+      let id = denseId.get(lab); if (id === undefined) { id = nextId++; denseId.set(lab, id); }
+      const a = aggMin.get(lab);
+      const fx = (a.maxX - a.minX) * 0.5, fz = (a.maxZ - a.minZ) * 0.5;
+      attr[i*4+0] = (a.maxY - a.minY) * 0.5;   // building height half-extent
+      attr[i*4+1] = Math.max(fx, fz);          // footprint max half
+      attr[i*4+2] = Math.min(fx, fz);          // footprint min half
+      attr[i*4+3] = id;                        // building id (window/sign hash seed)
+      baseY[i]    = a.minY;                     // building base Y
+      center[i*2+0] = (a.minX + a.maxX) * 0.5;  // building centre world X
+      center[i*2+1] = (a.minZ + a.maxZ) * 0.5;  // building centre world Z
+    }
+    return { attr, baseY, center, clusterCount: nextId };
+  }
+
+  // ── Per-building metadata table ────────────────────────────────────────────
+  // One record per segmented building: { cloud, id, boxCount, centroid:[cetX,cetY],
+  // heightHalf, footMax, footMin, geoClass, districtId, subId }. Built at load
+  // (loadBuildings); the building-level district tag is the polygon containing the
+  // building's CENTROID (so a structure straddling a subdistrict line isn't split).
+  // The foundation the block-selection editor will read/write. Query via
+  // ThreeScene.getBuildingMeta().
+  let _buildingMeta = [];
+
+  // Subdistrict polygons (CET space) from data/subdistricts.json, flattened with
+  // areas so the smallest containing polygon wins (most-specific subdistrict).
+  async function loadDistrictPolys() {
+    try {
+      const data = await fetch('data/subdistricts.json').then((r) => (r.ok ? r.json() : null));
+      const polys = [];
+      for (const d of (data?.districts || [])) {
+        if (d.polygon?.length >= 3) polys.push({ districtId: d.id, subId: null, ring: d.polygon, area: polygonArea(d.polygon) });
+        for (const s of (d.subdistricts || [])) {
+          if (s.polygon?.length >= 3) polys.push({ districtId: d.id, subId: s.id, ring: s.polygon, area: polygonArea(s.polygon) });
+        }
+      }
+      return polys;
+    } catch (e) { console.warn('[NCZ] district polys load failed', e); return []; }
+  }
+  function tagDistrict(cetX, cetY, polys) {
+    let best = null;
+    for (const p of polys) {
+      if (NCZ.pointInPolygon([cetX, cetY], p.ring) && (!best || p.area < best.area)) best = p;
+    }
+    return best ? { districtId: best.districtId, subId: best.subId } : { districtId: null, subId: null };
+  }
+  // CPU mirror of the shader's discrete archetype classification (three-scene.js
+  // ~2680-2760). Keep in sync if the shader's class logic changes.
+  function classifyDimsCPU(h, fMax, fMin) {
+    const ss = (e0, e1, x) => { let t = (x - e0) / (e1 - e0); t = t < 0 ? 0 : t > 1 ? 1 : t; return t * t * (3 - 2 * t); };
+    const tallEnough  = ss(NCZ.WINDOW_MIN_HEIGHT, NCZ.WINDOW_MIN_HEIGHT + NCZ.WINDOW_HEIGHT_BAND, h);
+    const towerness   = ss(NCZ.ARCH_VERTICALITY_LO, NCZ.ARCH_VERTICALITY_HI, h / (fMax + 1));
+    const solidNarrow = ss(NCZ.ARCH_MIN_FOOTPRINT * 0.6, NCZ.ARCH_MIN_FOOTPRINT, fMin);
+    const blocky      = 1 - ss(NCZ.ARCH_MAX_ELONGATION, NCZ.ARCH_MAX_ELONGATION * 1.5, fMax / (fMin + 0.5));
+    const broad       = ss(NCZ.ARCH_FOOTPRINT_BIG, NCZ.ARCH_FOOTPRINT_BIG * 2, fMax);
+    const podiumLow   = 1 - ss(NCZ.ARCH_PODIUM_HEIGHT_LO, NCZ.ARCH_PODIUM_HEIGHT_HI, h);
+    const industrial  = broad * (1 - towerness) * podiumLow;
+    if (tallEnough < 0.5) return 'short';
+    if (solidNarrow < 0.5) return 'thin';
+    if (blocky < 0.5) return 'elongated';
+    if (industrial > 0.5) return 'podium';
+    return towerness >= 0.5 ? 'tower' : 'block';
+  }
+  // Build per-building records for one district cloud and append to _buildingMeta.
+  // Returns a Map(buildingId → sign-density multiplier) so the caller can bake a
+  // per-instance buffer (the district tag is already resolved here from the
+  // centroid — no second polygon pass needed). See NCZ.signDensityFor.
+  function buildDistrictMeta(cloudName, attr, bcx, bcy, bcz, count, polys) {
+    const agg = new Map(); // buildingId → accumulator
+    for (let i = 0; i < count; i++) {
+      const id = attr[i * 4 + 3];
+      let a = agg.get(id);
+      if (!a) { a = { n: 0, sx: 0, sz: 0, h: attr[i * 4 + 0], fMax: attr[i * 4 + 1], fMin: attr[i * 4 + 2] }; agg.set(id, a); }
+      a.n++; a.sx += bcx[i]; a.sz += bcz[i];
+    }
+    const signDensityById = new Map(); // buildingId → sign-density multiplier
+    for (const [id, a] of agg) {
+      const cetX = a.sx / a.n, cetY = -(a.sz / a.n);
+      const tag = tagDistrict(cetX, cetY, polys);
+      signDensityById.set(id, NCZ.signDensityFor(tag.subId, tag.districtId));
+      _buildingMeta.push({
+        cloud: cloudName, id, boxCount: a.n,
+        centroid: [Math.round(cetX), Math.round(cetY)],
+        heightHalf: +a.h.toFixed(1), footMax: +a.fMax.toFixed(1), footMin: +a.fMin.toFixed(1),
+        geoClass: classifyDimsCPU(a.h, a.fMax, a.fMin),
+        districtId: tag.districtId, subId: tag.subId,
+      });
+    }
+    return signDensityById;
+  }
+
+  // Load the building-zone overrides: working edits in localStorage (NCZ.ZONES_KEY)
+  // take precedence over the committed baseline (data/building-zones.json). Returns
+  // the full zone array; loadBuildings filters by op.
+  async function loadBuildingZones() {
+    try {
+      const ls = localStorage.getItem(NCZ.ZONES_KEY);
+      if (ls) { const j = JSON.parse(ls); if (Array.isArray(j?.zones)) return j.zones; }
+    } catch (e) { console.warn('[NCZ] bad zones in localStorage', e); }
+    try {
+      const data = await fetch('data/building-zones.json').then((r) => (r.ok ? r.json() : null));
+      if (Array.isArray(data?.zones)) return data.zones;
+    } catch (e) { /* no baseline file yet */ }
+    return [];
+  }
+
   async function loadBuildings() {
     registerLoadStep(DISTRICT_META.length); // one step per district
     try {
+      // Zone overrides. `merge` affects segmentation; forceClass/exclude/forceLit
+      // become a per-instance override buffer the shader reads (see below).
+      const _zones = await loadBuildingZones();
+      const _mergeZones = _zones.filter((z) => z.op === 'merge');
+      const _overrideZones = _zones.filter((z) => z.op !== 'merge');
+      const CLASS_IDX = { tower: 0, block: 1, podium: 2, short: 3, thin: 4, elongated: 5 };
+      const OP_CODE = { exclude: 1, forceLit: 2, forceClass: 3 };
+      if (_zones.length) console.log(`[NCZ] building zones: ${_zones.length} (${_mergeZones.length} merge, ${_overrideZones.length} override)`);
+
+      // Per-building metadata table — district polygons loaded once; the table is
+      // rebuilt per (re)load, one record per building, tagged by centroid.
+      _buildingMeta = [];
+      const _districtPolys = await loadDistrictPolys();
+
       // Source geometry — single unit cube reused by every district. Wrapped in
       // an InstancedBufferGeometry per-district so Three.js draws `instanceCount`
       // copies; the per-instance matrix lookup happens in our positionNode via
@@ -1900,6 +2674,10 @@ const ThreeScene = (() => {
       // textures. Districts without a fixed variant (ep1_spaceport) fall back to
       // dataDds in either set. Read once per (re)load.
       const assetSet = (typeof localStorage !== 'undefined' && localStorage.getItem(NCZ.ASSET_SET_KEY)) || NCZ.ASSET_SET_DEFAULT;
+
+      // Road-coverage grid for segmentation (built once; used by every district to
+      // carve the street grid out of the footprint → separation by city block).
+      const _roadGrid = NCZ.BUILDING_ROAD_CARVE ? await ensureRoadGrid() : null;
 
       // Debug aid: ?only=<district> renders only that DISTRICT_META entry by
       // name (e.g. ?only=my_district, ?only=ugly_building) — isolates a single
@@ -1923,6 +2701,9 @@ const ThreeScene = (() => {
         // buffer with the trimmed count and only upload that slice.
         const maxInstances = blockW * blockH;
         const matrixData   = new Float32Array(maxInstances * 16);
+        // Per-box world centre + AABB half-extents, for the building clustering below.
+        const bcx = new Float32Array(maxInstances), bcy = new Float32Array(maxInstances), bcz = new Float32Array(maxInstances);
+        const bhx = new Float32Array(maxInstances), bhy = new Float32Array(maxInstances), bhz = new Float32Array(maxInstances);
 
         let validCount = 0;
         for (let y = 0; y < blockH; y++) {
@@ -1966,7 +2747,14 @@ const ThreeScene = (() => {
             // Pack the 16 floats of the matrix at offset (validCount * 16).
             // Three.js stores Matrix4.elements in column-major order, which
             // matches WGSL's mat4x4f memory layout — direct copy, no transpose.
-            matrixData.set(dummy.matrix.elements, validCount * 16);
+            const e = dummy.matrix.elements;
+            matrixData.set(e, validCount * 16);
+            // World centre (translation) + world-AABB half-extents (0.5 × abs-row
+            // sums of the 3×3 linear part — the unit cube's [-0.5,0.5] mapped out).
+            bcx[validCount] = e[12]; bcy[validCount] = e[13]; bcz[validCount] = e[14];
+            bhx[validCount] = 0.5 * (Math.abs(e[0]) + Math.abs(e[4]) + Math.abs(e[8]));
+            bhy[validCount] = 0.5 * (Math.abs(e[1]) + Math.abs(e[5]) + Math.abs(e[9]));
+            bhz[validCount] = 0.5 * (Math.abs(e[2]) + Math.abs(e[6]) + Math.abs(e[10]));
             validCount++;
           }
         }
@@ -1975,6 +2763,56 @@ const ThreeScene = (() => {
         // Phase 2B compute culling reaches it through the material reference.
         const matricesBuffer = instancedArray(validCount, 'mat4');
         matricesBuffer.value.set(matrixData.subarray(0, validCount * 16));
+
+        // Cluster adjacent boxes → per-instance "building" attributes
+        // (vec4: heightHalf, footMaxHalf, footMinHalf, clusterId). The shader
+        // classifies + seeds window/sign hashing from THESE, not the per-box size,
+        // so a thin slab inherits its building's class.
+        const { attr: buildingAttrData, baseY: buildingBaseData, center: buildingCenterData, clusterCount } = segmentBuildings(
+          bcx, bcy, bcz, bhx, bhy, bhz, validCount, _mergeZones, _roadGrid);
+        const buildingAttrBuffer = instancedArray(validCount, 'vec4');
+        buildingAttrBuffer.value.set(buildingAttrData.subarray(0, validCount * 4));
+        // Per-building base elevation (world Y) — drives the sign height rule.
+        const buildingBaseBuffer = instancedArray(validCount, 'float');
+        buildingBaseBuffer.value.set(buildingBaseData.subarray(0, validCount));
+        // Per-building horizontal centre (world X, Z) — drives the billboard placement.
+        const buildingCenterBuffer = instancedArray(validCount, 'vec2');
+        buildingCenterBuffer.value.set(buildingCenterData.subarray(0, validCount * 2));
+        console.log(`[NCZ] ${meta.name}: ${validCount} boxes → ${clusterCount} buildings`);
+
+        // Per-building metadata records (centroid, dims, class, district tag).
+        // Also returns each building's sign-density multiplier (subId → profile).
+        const _signDensityById = buildDistrictMeta(meta.name, buildingAttrData, bcx, bcy, bcz, validCount, _districtPolys);
+        // Per-instance SIGN-DENSITY multiplier (Night Phase A). Each box inherits
+        // its building's (clusterId = buildingAttrData[i*4+3]) per-subdistrict
+        // multiplier; the shader scales the sign gates by it so signage clumps per
+        // district (Kabuki dense, industrial ~zero). ?nosignprof bakes a flat 1.0.
+        const _signProfOff = new URLSearchParams(location.search).has('nosignprof');
+        const signDensityData = new Float32Array(validCount);
+        for (let i = 0; i < validCount; i++) {
+          signDensityData[i] = _signProfOff ? 1.0
+            : (_signDensityById.get(buildingAttrData[i * 4 + 3]) ?? NCZ.SIGN_DENSITY_DEFAULT);
+        }
+        const buildingSignDensityBuffer = instancedArray(validCount, 'float');
+        buildingSignDensityBuffer.value.set(signDensityData);
+
+        // Per-instance zone OVERRIDE (vec2: code, param) for forceClass/exclude/
+        // forceLit. A box is overridden when its centroid (CET) falls in the zone
+        // footprint + height range. Default (0,0) = no override.
+        const overrideData = new Float32Array(validCount * 2);
+        for (const z of _overrideZones) {
+          if (!z.footprint || z.footprint.length < 3) continue;
+          const code = OP_CODE[z.op]; if (!code) continue;
+          const param = z.op === 'forceClass' ? (CLASS_IDX[z.forceClass] ?? 1)
+                      : z.op === 'forceLit' ? (z.density ?? 1) : 0;
+          const minY = z.minZ ?? -Infinity, maxY = z.maxZ ?? Infinity;
+          for (let i = 0; i < validCount; i++) {
+            if (bcy[i] < minY || bcy[i] > maxY) continue;
+            if (NCZ.pointInPolygon([bcx[i], -bcz[i]], z.footprint)) { overrideData[i * 2] = code; overrideData[i * 2 + 1] = param; }
+          }
+        }
+        const buildingOverrideBuffer = instancedArray(validCount, 'vec2');
+        buildingOverrideBuffer.value.set(overrideData.subarray(0, validCount * 2));
 
         // ── Phase 2B compute culling per-district setup ──────────────────
         // visibleIndices: every cull pass appends survivors as a packed prefix.
@@ -2064,7 +2902,7 @@ const ThreeScene = (() => {
         renderer.compute(initFn);
         _cullComputes.push({ reset: resetFn, cull: cullFn });
 
-        const mat  = buildBuildingMaterial(meta, await loadMDds(meta.mDds), matricesBuffer, visibleIndicesBuffer);
+        const mat  = buildBuildingMaterial(meta, await loadMDds(meta.mDds), matricesBuffer, visibleIndicesBuffer, buildingAttrBuffer, buildingOverrideBuffer, buildingBaseBuffer, buildingCenterBuffer, buildingSignDensityBuffer);
         mat.userData.instanceMatricesBuffer = matricesBuffer;
         mat.userData.visibleIndicesBuffer   = visibleIndicesBuffer;
         mat.userData.indirectAttribute      = indirectAttribute;
@@ -2107,10 +2945,19 @@ const ThreeScene = (() => {
 
       layers.buildings = group;
       scene.add(group);
+      // Buildings can finish loading after the sun is already set (e.g. ?night):
+      // sync the shared night-factor uniform so the lit windows are correct on
+      // the first frame rather than waiting for the next sun move.
+      if (_buildingNightFactor) _buildingNightFactor.value = _nightFactor;
       flagShadowUpdate();   // new shadow casters → re-render the depth map (loads after the post-terrain refit, so nothing else flags it)
       requestRender();
       freezeStatic(group);
       console.log(`[NCZ] Buildings: ${DISTRICT_META.length} districts loaded`);
+      // Metadata table summary: total buildings + how many tagged to each district.
+      const tagged = _buildingMeta.filter((b) => b.districtId).length;
+      const byDistrict = {};
+      for (const b of _buildingMeta) { const k = b.districtId || '(untagged)'; byDistrict[k] = (byDistrict[k] || 0) + 1; }
+      console.log(`[NCZ] Building metadata: ${_buildingMeta.length} buildings, ${tagged} district-tagged`, byDistrict);
     } catch (err) {
       console.error('[NCZ] Buildings load failed:', err);
     }
@@ -2149,7 +2996,7 @@ const ThreeScene = (() => {
   // Per-district `uniform()` node refs are stashed on `mat.userData.tslUniforms`
   // so the colour-binding registry (`getColorBindings.buildingsEdge`) can mutate
   // `.value` during theme switches and flyover beat-driven colour tweens.
-  function buildBuildingMaterial(meta, mTex, instanceMatricesBuffer, visibleIndicesBuffer) {
+  function buildBuildingMaterial(meta, mTex, instanceMatricesBuffer, visibleIndicesBuffer, buildingAttrBuffer, buildingOverrideBuffer, buildingBaseBuffer, buildingCenterBuffer, buildingSignDensityBuffer) {
     const mat = new THREE.MeshLambertNodeMaterial({
       color: readThemeColor('--scene-buildings', '#7a8fa0'),
     });
@@ -2205,6 +3052,18 @@ const ThreeScene = (() => {
     // visibleIndices each frame; vertex shader reads through it transparently.
     const realIndex  = visibleIndicesBuffer.element(instanceIndex);
     const instMatrix = instanceMatricesBuffer.element(realIndex);
+    // Per-BUILDING attributes (cluster of adjacent boxes): heightHalf, footMaxHalf,
+    // footMinHalf, clusterId. The archetype + window/sign seeding use these so a
+    // thin slab is classified as part of its building, not as a thin pole.
+    const bAttr = buildingAttrBuffer.element(realIndex);
+    // Per-instance zone OVERRIDE (vec2): x = op code (0 none, 1 exclude, 2 forceLit,
+    // 3 forceClass), y = param (forceLit density, or forceClass class index). Applied
+    // to the geometric archMask/towerness below so a drawn zone can force/suppress a
+    // building's lighting where the shape heuristic is wrong.
+    const bOverride = buildingOverrideBuffer.element(realIndex);
+    const bBaseY = buildingBaseBuffer.element(realIndex); // building base elevation (world Y) — sign height rule
+    const bCenter = buildingCenterBuffer.element(realIndex); // building horizontal centre (world X, Z) — billboard placement
+    const bSignDensity = buildingSignDensityBuffer.element(realIndex); // per-subdistrict sign-density multiplier (Night Phase A)
     mat.positionNode = instMatrix.mul(vec4(positionLocal, 1)).xyz;
     const worldNormal = transformNormal(normalLocal, instMatrix); // also drives the _m slope guard below
     mat.normalNode   = transformNormalToView(worldNormal);
@@ -2278,7 +3137,389 @@ const ThreeScene = (() => {
     // self-lit so it doesn't dim in shadow / at low sun. uEdgeColor (not edgeTint)
     // keeps the glow at the theme's pure edge hue rather than the luma-boosted
     // albedo tint, so neon colour stays saturated.
-    mat.emissiveNode = uEdgeColor.mul(edge).mul(uEdgeGlow);
+    const edgeGlowEmissive = uEdgeColor.mul(edge).mul(uEdgeGlow);
+
+    // ── Night Stage 2: procedural lit windows ──────────────────────────────
+    // The city lights up at night WITHOUT recolouring the buildings — this is
+    // pure emissive added on top of the untouched albedo (colorNode above). A
+    // world-space window grid on the vertical facades, each cell hash-lit on/off,
+    // warm-white-dominant with scattered neon accents. Bloom (the RenderPipeline)
+    // gives the lit cells their halo so they read as lights, not flat dots.
+    // Everything is × _buildingNightFactor, so at day (nf==0) emissive is exactly
+    // the edge-glow term above — daytime is unchanged.
+    _buildingNightFactor ||= uniform(0);
+    _windowColorUniforms ||= NCZ.WINDOW_COLORS.map(h => uniform(new THREE.Color(h)));
+
+    // fract(sin(dot)·k) value hash → [0,1), stable per (building, cell).
+    const hash21 = (p) => p.dot(vec2(127.1, 311.7)).sin().mul(43758.5453).fract();
+
+    const wN = worldNormal.normalize();
+    // Vertical facades only: 1 on walls, fading to 0 on near-horizontal roofs/floors.
+    const onWall = float(1).sub(smoothstep(float(0.35), float(0.6), wN.y.abs()));
+    // Height gate — uses the BUILDING's height (cluster aggregate, bAttr.x), so a
+    // short slab that's part of a tall building still passes. Soft-gated.
+    const instUpLen = bAttr.x;
+    const tallEnough = smoothstep(
+      float(NCZ.WINDOW_MIN_HEIGHT),
+      float(NCZ.WINDOW_MIN_HEIGHT + NCZ.WINDOW_HEIGHT_BAND),
+      instUpLen,
+    );
+    // ── Archetype classification (which BUILDINGS get lit, how densely) ───────
+    // Dims are the clustered BUILDING's (bAttr), not the individual box — so a thin
+    // slab inherits its building's height/footprint instead of being culled as a
+    // thin pole. The discriminators still separate real buildings from genuine
+    // infrastructure (which clusters to thin/elongated/low aggregates):
+    //   bAttr.x heightHalf · bAttr.y footMaxHalf · bAttr.z footMinHalf
+    //   verticality = height/footprint  slender ⇒ tower, squat ⇒ block
+    //   elongation  = footMax/footMin   long+thin ⇒ wall / span / container row
+    const footprint    = bAttr.y;                                 // building wide side
+    const minFoot      = bAttr.z;                                 // building narrow side
+    const verticality  = instUpLen.div(footprint.add(float(1)));  // +1 avoids /0
+    // towerness: 0 = broad block, 1 = slender tower.
+    const towerness = smoothstep(
+      float(NCZ.ARCH_VERTICALITY_LO), float(NCZ.ARCH_VERTICALITY_HI), verticality,
+    );
+    // (B) Narrow-side floor — kills poles, bridge pillars, wind turbines, thin walls.
+    const solidNarrow = smoothstep(
+      float(NCZ.ARCH_MIN_FOOTPRINT * 0.6), float(NCZ.ARCH_MIN_FOOTPRINT), minFoot,
+    );
+    // (B) Elongation cap — kills long walls, bridge decks, container rows, pipes.
+    const elongation = footprint.div(minFoot.add(float(0.5)));
+    const blocky = float(1).sub(smoothstep(
+      float(NCZ.ARCH_MAX_ELONGATION), float(NCZ.ARCH_MAX_ELONGATION * 1.5), elongation,
+    ));
+    // Podium/industrial kill: broad footprint AND not slim ⇒ stays dark even when
+    // it clears the height gate (malls, parking, sheds, stadiums).
+    const broad = smoothstep(
+      float(NCZ.ARCH_FOOTPRINT_BIG), float(NCZ.ARCH_FOOTPRINT_BIG * 2), footprint,
+    );
+    // Height veto: a genuinely TALL mass is never podium, however broad — only LOW
+    // broad squat masses (malls, parking, sheds, oil tanks) stay industrial. Uses
+    // the BUILDING height (instUpLen = bAttr.x). Without this, big-footprint
+    // skyscrapers read as dark podium ("too much yellow").
+    const podiumLow = float(1).sub(smoothstep(
+      float(NCZ.ARCH_PODIUM_HEIGHT_LO), float(NCZ.ARCH_PODIUM_HEIGHT_HI), instUpLen,
+    ));
+    const industrial = broad.mul(towerness.oneMinus()).mul(podiumLow);  // big & squat & LOW
+    // (A) World-region suppression — zero windows inside any CET rect in
+    // NCZ.WINDOW_SUPPRESS_ZONES (ocean, oil fields, etc. — and parts of regions
+    // the shape heuristic can't tell apart). Polygon zones (drawn on the map)
+    // will replace these rects. World→CET: cetX = worldX, cetY = -worldZ. Built
+    // at compile time from the array (empty ⇒ no-op).
+    const cetX = instCenter4.x;
+    const cetY = instCenter4.z.negate();
+    let zoneAllow = float(1);
+    for (const z of (NCZ.WINDOW_SUPPRESS_ZONES || [])) {
+      const inside = step(float(z[0]), cetX).mul(step(cetX, float(z[2])))
+                .mul(step(float(z[1]), cetY)).mul(step(cetY, float(z[3])));
+      zoneAllow = zoneAllow.mul(inside.oneMinus());
+    }
+    // (A) Per-district density — sampled from the CET-space mask (0 = region dark:
+    // ocean / unzoned / Badlands, 1 = full). Keyed off the TRUE polygon, immune to
+    // the .dds cloud crossing borders. Drives windows AND the city glow below.
+    const districtDensity = sampleDistrictDensity(cetX, cetY);
+    // Final per-box enable. The lit/dark decision is DISCRETE and uses the SAME
+    // thresholds ?archdebug shows, so the visualiser is truthful: a building is lit
+    // only if it classifies tower/block — NOT short/thin/elongated/podium. (The old
+    // continuous smoothstep gate let a building 60% into "podium" show fully yellow
+    // yet still get 40% lighting — confusing. Now per-building dims make the gate
+    // uniform per building anyway, so discrete = building-level on/off, no within-
+    // building hard edge.) Region density + overrides stay continuous.
+    const shortSel  = step(tallEnough, float(0.5));      // 1 ⇒ short  (matches archdebug)
+    const thinSel   = step(solidNarrow, float(0.5));     // 1 ⇒ thin
+    const elongSel  = step(blocky, float(0.5));          // 1 ⇒ elongated
+    const podiumSel = step(float(0.5), industrial);      // 1 ⇒ podium
+    const isLit = shortSel.oneMinus().mul(thinSel.oneMinus())
+                 .mul(elongSel.oneMinus()).mul(podiumSel.oneMinus());
+    const archMaskGeo = isLit.mul(zoneAllow).mul(districtDensity);
+    // ── Zone override (bOverride.x = code, .y = param) ───────────────────────
+    // code 1 exclude → dark; 2 forceLit → lit (param = density); 3 forceClass →
+    // param is a class index (0 tower, 1 block = LIT; 2..5 = dark). Overrides beat
+    // the geometric mask AND the region density (a forced building lights anywhere).
+    const oCode = bOverride.x, oParam = bOverride.y;
+    const isExclude    = step(float(0.5), oCode).mul(step(oCode, float(1.5)));
+    const isForceLit   = step(float(1.5), oCode).mul(step(oCode, float(2.5)));
+    const isForceClass = step(float(2.5), oCode).mul(step(oCode, float(3.5)));
+    const fcLit       = step(oParam, float(1.5)); // class index ≤ 1 (tower/block) ⇒ lit
+    const fcTowerness = step(oParam, float(0.5)); // class index 0 (tower) ⇒ towerness 1
+    let archMask = archMaskGeo;
+    archMask = mix(archMask, float(0), isExclude);
+    archMask = mix(archMask, float(1), isForceLit);
+    archMask = mix(archMask, fcLit, isForceClass);
+    const towernessF = mix(towerness, fcTowerness, isForceClass);
+    const densityMul = mix(float(1), oParam, isForceLit); // forceLit density scales emissive
+    // Towers a touch brighter than blocks (override-aware towerness).
+    const archIntensity = mix(float(1), float(NCZ.ARCH_TOWER_BOOST), towernessF);
+    // Facade frame INDEPENDENT of box orientation. The old code picked world X or Z
+    // as the horizontal axis by dominant normal — correct only for axis-aligned
+    // boxes; a rotated/diagonal box got skewed, mis-aligned windows. Instead define
+    // the facade frame from a fixed WORLD-UP: vertical = world Y; horizontal = along
+    // the wall (perpendicular to the face normal AND up). So every wall, however the
+    // box is turned, shares one consistent "up" and a wall-aligned horizontal grid.
+    const wTan   = vec3(0, 1, 0).cross(wN);                 // horizontal tangent along the wall
+    const wTanN  = wTan.div(wTan.length().max(float(0.0001))); // safe-normalise (near-vertical faces are masked by onWall)
+    const hCoord = instWorldPos4.xyz.dot(wTanN);
+    const vCoord = instWorldPos4.y;
+    // Cell index (per window) + position within the cell (0..1).
+    const cellH  = hCoord.div(NCZ.WINDOW_CELL_W);
+    const cellV  = vCoord.div(NCZ.WINDOW_CELL_H);
+    const cell   = vec2(floor(cellH), floor(cellV));
+    const inH    = fract(cellH);
+    const inV    = fract(cellV);
+    // Lit pane = centred rectangle in the cell; the surrounding band is dark frame.
+    const marginH = (1 - NCZ.WINDOW_PANE_W) / 2;
+    const marginV = (1 - NCZ.WINDOW_PANE_H) / 2;
+    const pane = step(float(marginH), inH).mul(step(inH, float(1 - marginH)))
+            .mul(step(float(marginV), inV)).mul(step(inV, float(1 - marginV)));
+    // Per-building seed (cluster id) — slabs of one building share it, so their
+    // windows/signs read as one coherent building rather than per-box noise.
+    const bSeed = vec2(bAttr.w, bAttr.w.mul(1.37).add(11.3));
+    // Per-cell randomness — unique per building AND cell.
+    const seed = cell.add(bSeed);
+    const cellRnd = hash21(seed);                           // per-window on/off draw
+    // Lit fraction scales with archetype: towers brightly occupied, blocks sparse.
+    // Uses override-aware towerness so a forceClass zone changes window density too.
+    const litFrac = mix(
+      float(NCZ.WINDOW_LIT_FRACTION_BLOCK), float(NCZ.WINDOW_LIT_FRACTION_TOWER), towernessF,
+    );
+    // Floor/column coherence: cluster lit windows into lit FLOORS and COLUMNS so the
+    // facade reads as a grid (real towers light by floor), instead of per-cell noise.
+    // floorAct/colAct are per-row/per-column random occupancies; their product
+    // (mean 0.25, ×4 → mean 1) scales the LOCAL lit fraction without moving the
+    // building-wide average. WINDOW_COHERENCE blends from the original per-cell
+    // behaviour (0) to fully coherent (1). cell.y = floor index, cell.x = column.
+    const floorAct = hash21(vec2(cell.y, bAttr.w.mul(2.13).add(4.7)));
+    const colAct   = hash21(vec2(cell.x, bAttr.w.mul(1.71).add(19.3)));
+    // FLOOR-DOMINANT coherence. floorAct is keyed on cell.y = world height, so a lit
+    // floor is identical on ALL faces → it WRAPS the building (every side lit) and
+    // reads as a continuous horizontal ribbon. The column term only mildly varies
+    // occupancy unless WINDOW_COLUMN_COHERENCE → 1 (then it's the old floor×column
+    // product: intersection-dots + one-sided blanking). Mean-preserving at all blends.
+    const colTerm  = mix(float(1.0), colAct.mul(2.0), float(NCZ.WINDOW_COLUMN_COHERENCE));
+    const cohScale = floorAct.mul(colTerm).mul(float(2.0));
+    const fracScale = mix(float(1.0), cohScale, float(NCZ.WINDOW_COHERENCE));
+    const lit  = step(litFrac.mul(fracScale).oneMinus(), cellRnd);
+    const hTint = hash21(seed.add(vec2(53.7, 91.3)));       // default vs alt temperature
+    const hHue  = hash21(seed.add(vec2(17.3, 68.9)));       // which alt temperature
+    // Colour: default warm white (index 0) for most; a hash-bucketed warm/cool
+    // white (1..5) for WINDOW_TINT_FRACTION — a mix of light temperatures, no neon.
+    let tint = _windowColorUniforms[1];
+    tint = mix(tint, _windowColorUniforms[2], step(float(0.2), hHue));
+    tint = mix(tint, _windowColorUniforms[3], step(float(0.4), hHue));
+    tint = mix(tint, _windowColorUniforms[4], step(float(0.6), hHue));
+    tint = mix(tint, _windowColorUniforms[5], step(float(0.8), hHue));
+    const isTint   = step(float(1 - NCZ.WINDOW_TINT_FRACTION), hTint);
+    const winColor = mix(_windowColorUniforms[0], tint, isTint);
+    // OUTER-SHELL gate — kill windows on interior/back faces of the box-soup, so the
+    // grid only paints the building's outward-facing shell (see WINDOW_SHELL_GATE).
+    // Compile-time OFF when the threshold ≤ −0.99 (no gate node emitted).
+    let shellGate = float(1.0);
+    if (NCZ.WINDOW_SHELL_GATE > -0.99) {
+      // Depth of this fragment OUT ALONG ITS OWN NORMAL from the building centre,
+      // normalised by the building's NARROW half-extent (footMin = bAttr.z). An
+      // exterior wall — long OR short — sits at depth ≈ its extent (d̂ ≳ 1); interior
+      // boxes sit shallow (d̂ < 1); back-facing interior walls are negative. This is
+      // orientation-correct: it keeps ALL outer walls including the short-end walls
+      // of elongated buildings. (The earlier radial-vs-normal dot blanked short ends
+      // because their normal is perpendicular to the dominant long-axis radial →
+      // "one side lit, ends blank".)
+      const shellNrm = vec2(wN.x, wN.z);
+      const nrmU = shellNrm.div(shellNrm.length().max(float(0.001)));
+      const depth = vec2(instWorldPos4.x, instWorldPos4.z).sub(bCenter).dot(nrmU);
+      const dHat  = depth.div(bAttr.z.max(float(1.0)));   // ÷ footMinHalf
+      shellGate = smoothstep(float(NCZ.WINDOW_SHELL_GATE - 0.25), float(NCZ.WINDOW_SHELL_GATE + 0.25), dHat);
+    }
+    // Compose: colour × pane × lit × wall-mask × nightFactor × intensity, with a
+    // mild _m modulation so denser/taller blocks glow a touch more.
+    // Windows are night-only (off in daylight). The always-on "some lights in the
+    // city" element lives on the city-glow fill instead (see CITY_GLOW_DAY_FACTOR).
+    const windowEmissive = winColor
+      .mul(pane).mul(lit).mul(shellGate).mul(onWall).mul(archMask).mul(archIntensity)
+      .mul(densityMul)
+      .mul(_buildingNightFactor)
+      .mul(float(NCZ.WINDOW_INTENSITY))
+      .mul(modulation);
+
+    // ── Signage ── HEIGHT-STRATIFIED neon: two layers blended by height fraction.
+    // STREET (fine grid, small, dense) fades out going up; ROOF (coarse grid, big,
+    // very sparse) fades in. The mid-building reads as their blend. A per-building
+    // hasSign gate clumps signage onto ~SIGN_BUILDING_FRACTION of buildings; the
+    // whole thing is tower-biased (towernessF), night-only, and bright (bloom).
+    _signColorUniforms ||= NCZ.SIGN_COLORS.map(h => uniform(new THREE.Color(h)));
+    // Weighted neon-colour pick: uniform hash over the palette, so SIGN_COLORS'
+    // repetition sets the distribution. Works for any palette length (the old
+    // hand-written 6-colour mix chain didn't). Used by both sign layers + billboard.
+    const pickSignColor = (hueNode) => {
+      const u = _signColorUniforms, n = u.length;
+      let col = u[0];
+      for (let i = 1; i < n; i++) col = mix(col, u[i], step(float(i / n), hueNode));
+      return col;
+    };
+    // Two DECOUPLED per-building gates from ONE hash, so the two registers don't
+    // have to co-occur (the old single gate clumped BOTH speckle and big signs onto
+    // the same ~10% of buildings — "certain buildings hit all over"):
+    //   hasSpeckle (street layer) — present on SIGN_SPECKLE_FRACTION of buildings.
+    //     Raise it toward 1 for a sparse neon scatter across the WHOLE city.
+    //   hasBigSign (roof layer) — SELECTIVE (SIGN_BUILDING_FRACTION), so the huge
+    //     top billboards land on only a few skyline buildings.
+    // Shared hash ⇒ big-sign buildings are a subset of speckle buildings, and when
+    // both fractions are equal the gates are identical (the original behaviour).
+    // Per-subdistrict SIGN DENSITY (Night Phase A): scale the gate FRACTION (not the
+    // emissive) by the building's profile multiplier, so a higher/lower fraction of
+    // buildings WIN the gate → genuine sign density per district. profile 0 ⇒ edge 1
+    // ⇒ step never passes ⇒ no signage (industrial/Badlands go dark). Saturates at
+    // "every building" when fraction×profile ≥ 1 (Kabuki). ?nosignprof bakes 1.0.
+    const signGateHash = hash21(bSeed.add(vec2(7.1, 3.3)));
+    const hasSpeckle = step(float(1).sub(float(NCZ.SIGN_SPECKLE_FRACTION).mul(bSignDensity)), signGateHash);
+    const hasBigSign = step(float(1).sub(float(NCZ.SIGN_BUILDING_FRACTION).mul(bSignDensity)), signGateHash);
+    const gw = float(NCZ.SIGN_GLOW_WIDTH);
+    // One sign layer on its own world grid → colour × soft-shape-field × density-gate.
+    // size = panel-size multiplier; density = fraction of cells carrying a sign.
+    const signLayer = (saltX, saltY, cellW, cellH, size, density) => {
+      const cH = hCoord.div(float(cellW)), cV = vCoord.div(float(cellH));
+      const cell = vec2(floor(cH), floor(cV));
+      const iH = fract(cH), iV = fract(cV);
+      const seed = cell.add(bSeed).add(vec2(saltX, saltY));
+      const litGate = step(float(1).sub(float(density)), hash21(seed));
+      const pW = mix(float(NCZ.SIGN_PANE_W_MIN), float(NCZ.SIGN_PANE_W_MAX), hash21(seed.add(vec2(3.1, 27.5)))).mul(float(size));
+      const pH = mix(float(NCZ.SIGN_PANE_H_MIN), float(NCZ.SIGN_PANE_H_MAX), hash21(seed.add(vec2(61.2, 9.8)))).mul(float(size));
+      const hW = pW.mul(0.5), hH = pH.mul(0.5);
+      const cx = iH.sub(0.5), cy = iV.sub(0.5);
+      const ax = cx.abs(), ay = cy.abs();
+      // SHAPE — rectangle / circle / triangle, hash-picked; each a soft glow field.
+      const rectD = vec2(ax.sub(hW).max(0.0), ay.sub(hH).max(0.0)).length();
+      const rC    = hW.min(hH);
+      const circD = vec2(cx, cy).length().sub(rC).max(0.0);
+      const triTy = cy.add(hH).div(hH.mul(2).max(float(0.001))).clamp(0, 1);
+      const triAW = hW.mul(triTy.oneMinus());
+      const triD  = vec2(ax.sub(triAW).max(0.0), ay.sub(hH).max(0.0)).length();
+      const shp = hash21(seed.add(vec2(5.5, 88.2)));
+      // SIGN_RECT_BIAS fraction are rectangles (billboards/screens); the remainder
+      // splits evenly between circles and triangles. Higher = cleaner, less confetti.
+      const rb = float(NCZ.SIGN_RECT_BIAS);
+      const cMid = rb.add(float(1).sub(rb).mul(0.5));
+      const isR = step(shp, rb);
+      const isC = step(rb, shp).mul(step(shp, cMid));
+      const isT = step(cMid, shp);
+      const fOf = (d) => float(1).sub(smoothstep(float(0.0), gw, d));
+      const field = fOf(rectD).mul(isR).add(fOf(circD).mul(isC)).add(fOf(triD).mul(isT));
+      const hue = hash21(seed.add(vec2(41.3, 88.1)));
+      const col = pickSignColor(hue);
+      return col.mul(field).mul(litGate);
+    };
+    // Per-fragment height fraction (0 base → 1 top) drives the layer crossfade. (Sign
+    // SIZE is fixed per layer, so a per-fragment weight here doesn't shear a sign.)
+    const signHF  = vCoord.sub(bBaseY).div(instUpLen.mul(2).max(float(1))).clamp(0, 1);
+    const streetW = float(1).sub(smoothstep(float(NCZ.SIGN_STREET_FADE_LO), float(NCZ.SIGN_STREET_FADE_HI), signHF));
+    const roofW   = smoothstep(float(NCZ.SIGN_ROOF_RISE_LO), float(NCZ.SIGN_ROOF_RISE_HI), signHF);
+    // Per-layer gating so the two registers live on different building sets:
+    //   STREET speckle = ground-level neon, on lit towers/blocks EQUALLY (no tower
+    //     bias — street signs are everywhere at street level) PLUS occasional podium
+    //     (mall / shop fronts). Region-gated like the windows.
+    //   ROOF big signs = tower-biased skyline billboards, lit tower/block only.
+    const hasPodiumSign = step(float(1).sub(float(NCZ.SIGN_PODIUM_FRACTION).mul(bSignDensity)), hash21(bSeed.add(vec2(31.7, 5.9))));
+    const podiumStreetMask = podiumSel.mul(hasPodiumSign).mul(districtDensity).mul(zoneAllow);
+    const streetMask = archMask.max(podiumStreetMask); // lit block/tower OR occasional podium; NO tower bias
+    const streetEmissive = signLayer(0.0, 0.0, NCZ.SIGN_STREET_CELL_W, NCZ.SIGN_STREET_CELL_H, NCZ.SIGN_STREET_SIZE, NCZ.SIGN_STREET_DENSITY)
+      .mul(streetW).mul(hasSpeckle).mul(onWall).mul(streetMask);
+    const roofEmissive = signLayer(53.0, 17.0, NCZ.SIGN_ROOF_CELL_W, NCZ.SIGN_ROOF_CELL_H, NCZ.SIGN_ROOF_SIZE, NCZ.SIGN_ROOF_DENSITY)
+      .mul(roofW).mul(hasBigSign).mul(onWall).mul(archMask).mul(towernessF);
+    const signageEmissive = streetEmissive.add(roofEmissive)
+      .mul(densityMul)
+      .mul(_buildingNightFactor)
+      .mul(float(NCZ.SIGN_INTENSITY))
+      .mul(modulation);
+
+    // ── ?segdebug — STRUCTURE (segmentation) visualiser ─────────────────────
+    // Colours each box by its SEGMENTED BUILDING id (bAttr.w) with a hash colour,
+    // so ADJACENT BUILDINGS render different colours — you can directly see which
+    // boxes the segmenter grouped into one building (the same read as the headless
+    // lab PNGs). Class is irrelevant here; this shows the GROUPING / road-block
+    // separation. Self-lit, visible day or night. Compile-time early-return.
+    if (new URLSearchParams(location.search).has('segdebug')) {
+      const fid = bAttr.w; // dense per-building id (shared by every box of a building)
+      const hsh = (a, b) => fid.mul(a).add(b).sin().mul(43758.5453).fract();
+      const seg = vec3(hsh(12.9898, 0.7), hsh(78.233, 2.3), hsh(37.719, 5.1)).mul(0.72).add(0.28);
+      mat.colorNode = vec3(0.0, 0.0, 0.0);
+      mat.emissiveNode = seg;
+      return mat;
+    }
+
+    // ── ?archdebug — classification visualiser ──────────────────────────────
+    // Colours each box by how the archetype heuristic reads it. The .dds carries
+    // NO type — only position/rotation/scale — so class is inferred purely from
+    // box proportions. Legend: grey = too short · red = too thin (pole/pillar/
+    // turbine) · orange = too elongated (wall/bridge deck/containers) · yellow =
+    // podium/industrial · green = tower · blue = block. Dimmed where district
+    // density is low (region gate). Self-lit, so visible day or night.
+    if (new URLSearchParams(location.search).has('archdebug')) {
+      // DISCRETE class colour — every box renders exactly ONE legend colour (the
+      // binary `step` selectors mean no continuous blend, so no in-between
+      // teal/purple). Precedence (highest wins, applied last): short > thin >
+      // elongated > podium > tower > block. Colours must match the index.html
+      // legend swatches exactly. No region-density dimming (kept pure for the key).
+      let dbg = mix(ARCHDBG.block, ARCHDBG.tower, step(float(0.5), towernessF)); // block / tower
+      dbg = mix(dbg, ARCHDBG.podium,    step(float(0.5), industrial));           // podium (broad & low)
+      dbg = mix(dbg, ARCHDBG.elongated, step(blocky, float(0.5)));               // elongated (wall/span)
+      dbg = mix(dbg, ARCHDBG.thin,      step(solidNarrow, float(0.5)));          // thin (pole/mast)
+      dbg = mix(dbg, ARCHDBG.short,     step(tallEnough, float(0.5)));           // short (ground clutter)
+      // Zone overrides made visible (discrete): forceClass → forced class colour,
+      // exclude → dark. (forceLit keeps its geometric class colour.)
+      let fcCol = ARCHDBG.tower;                                                 // 0 tower
+      fcCol = mix(fcCol, ARCHDBG.block,     step(float(0.5), oParam));           // 1 block
+      fcCol = mix(fcCol, ARCHDBG.podium,    step(float(1.5), oParam));           // 2 podium
+      fcCol = mix(fcCol, ARCHDBG.short,     step(float(2.5), oParam));           // 3 short
+      fcCol = mix(fcCol, ARCHDBG.thin,      step(float(3.5), oParam));           // 4 thin
+      fcCol = mix(fcCol, ARCHDBG.elongated, step(float(4.5), oParam));           // 5 elongated
+      dbg = mix(dbg, fcCol, isForceClass);
+      dbg = mix(dbg, ARCHDBG.excluded, isExclude);
+      mat.colorNode = vec3(0.0, 0.0, 0.0);
+      mat.emissiveNode = dbg;
+      return mat;
+    }
+
+    // ── Per-building BIG billboard ── ONE large neon panel per hasBigSign building,
+    // in the upper facade band, a SINGLE colour. Placed from the building's world
+    // centre (bCenter) so it's one coherent panel on the facade — not the tiled roof
+    // grid (which structurally can't make a single big sign). Seed-varied between a
+    // tall vertical strip and a wide banner. Tower-biased + lit-gated like the roof.
+    const bbSeed   = bSeed.add(vec2(13.3, 47.1));
+    // Building centre projected onto THIS face's horizontal tangent → local facade
+    // coord, normalised by the facade half-width (footMax): 0 = centre, ±1 = edge.
+    const bCenterH = bCenter.x.mul(wTanN.x).add(bCenter.y.mul(wTanN.z));
+    const bbLocalH = hCoord.sub(bCenterH).div(footprint.max(float(1)));
+    const bbAspect = hash21(bbSeed);                                   // tall-strip ↔ wide-banner
+    // Half-extents start as fractions of the FACADE half-width (footprint) so the
+    // aspect ratio is consistent in WORLD units regardless of building height. The
+    // resulting WORLD size is then CAPPED at SIGN_BB_MAX_HALF (CET) so an over-merged
+    // mega-block (footprint 1000+) can't spawn a 900 CET single-colour monster — the
+    // root cause of the "giant billboard" artefacts. Normal towers are well under the
+    // cap, so they're unaffected.
+    const fp       = footprint.max(float(1));
+    const bbHalfWw = mix(float(NCZ.SIGN_BB_W_MIN), float(NCZ.SIGN_BB_W_MAX), bbAspect).mul(fp).min(float(NCZ.SIGN_BB_MAX_HALF)); // world CET
+    const bbHalfHw = mix(float(NCZ.SIGN_BB_H_MAX), float(NCZ.SIGN_BB_H_MIN), bbAspect).mul(fp).min(float(NCZ.SIGN_BB_MAX_HALF)); // world CET, anti-correlated
+    const bbHalfW  = bbHalfWw.div(fp);                                   // back to facade-normalised (for bbLocalH)
+    const bbHalfH  = bbHalfHw.div(instUpLen.mul(2).max(float(1)));       // → height-fraction (for signHF)
+    const bbJitH   = mix(float(-0.25), float(0.25), hash21(bbSeed.add(vec2(7.7, 3.1))));
+    const bbDH = bbLocalH.sub(bbJitH).abs().sub(bbHalfW).max(0.0);
+    const bbDV = signHF.sub(float(NCZ.SIGN_BB_CENTER_V)).abs().sub(bbHalfH).max(0.0);
+    const bbField = float(1).sub(smoothstep(float(0.0), float(NCZ.SIGN_BB_GLOW), vec2(bbDH, bbDV).length()));
+    const bbHue = hash21(bbSeed.add(vec2(91.7, 22.3)));               // ONE colour per building
+    const bbCol = pickSignColor(bbHue);
+    // Billboards land on ANY lit building (towers AND block megabuildings — both
+    // carry huge rooftop signs in-game), selective via hasBigSign. No tower bias.
+    const billboardEmissive = bbCol.mul(bbField)
+      .mul(hasBigSign).mul(onWall).mul(archMask)
+      .mul(densityMul)
+      .mul(_buildingNightFactor)
+      .mul(float(NCZ.SIGN_INTENSITY)).mul(float(NCZ.SIGN_BB_INTENSITY_MUL))
+      .mul(modulation);
+
+    // City glow — the warm-below/cool-above fill, now per-fragment and scaled by
+    // the same district density as the windows (regional, not global). Replaces
+    // the old global HemisphereLight on buildings.
+    const buildingGlow = cityGlowEmissive(wN, cetX, cetY, materialColor);
+    mat.emissiveNode = edgeGlowEmissive.add(windowEmissive).add(buildingGlow).add(signageEmissive).add(billboardEmissive);
 
     return mat;
   }
@@ -2597,7 +3838,11 @@ const ThreeScene = (() => {
       renderer.compute(c.reset);
       renderer.compute(c.cull);
     }
-    renderer.render(scene, camera);
+    // Render through the bloom RenderPipeline (scene → HDR pass → bloom →
+    // composite → tonemap). PassNode reads `.camera` fresh each frame, so
+    // pointing it at the schema camera here is all that is needed.
+    scenePass.camera = camera;
+    renderPipeline.render();
     _framesRendered++;
     NCZ.ThreeMarkers?.render?.();
     if (stats) {
@@ -2637,7 +3882,7 @@ const ThreeScene = (() => {
   // pixels. Re-arms the animation loop if it has idle-disarmed.
   function requestRender() {
     if (_suppressed) return;
-    if (!renderer || !scene || !camera) return;
+    if (!renderer || !scene || !camera || !renderPipeline) return;
     _frameDirty = true;
     armLoop();
   }
@@ -3101,7 +4346,7 @@ const ThreeScene = (() => {
   // Called by flyover.js — kept minimal to avoid exposing internals.
 
   function renderFrame(cam) {
-    if (!renderer || !scene) return;
+    if (!renderer || !scene || !renderPipeline) return;
     // The showcase flyover renders through its own PerspectiveCamera —
     // re-fit the shadow camera AND the cull-frustum uniforms to *its* view
     // each frame (the schema frame body is suppressed during showcase, so
@@ -3126,7 +4371,10 @@ const ThreeScene = (() => {
         renderer.compute(c.cull);
       }
     }
-    renderer.render(scene, cam);
+    // Same bloom RenderPipeline as the schema loop — point the scene pass at the
+    // showcase fly camera.
+    scenePass.camera = cam;
+    renderPipeline.render();
     _framesRendered++;
   }
 
@@ -3338,42 +4586,129 @@ const ThreeScene = (() => {
     _sunAz = azimuthRad;
     _sunEl = altitudeRad;
     if (!_dirLight || !_hemiLight) return;
-    const el = altitudeRad;
-    const az = azimuthRad;
-
-    // Sun direction (unit, ground→sun). Floor the Y at ~6° elevation so the
-    // shadow camera's lookAt never goes degenerate-horizontal; the visible sun
-    // sphere below uses the *unclamped* elevation so it still sets at the horizon.
-    _sunDir.set(-Math.cos(el) * Math.sin(az), Math.max(0.1, Math.sin(el)), Math.cos(el) * Math.cos(az)).normalize();
-    // Re-orient the light around its current target (updateShadowCamera owns the
-    // target = visible-ground centre; here we just keep the light up the sun ray
-    // from it). Orthographic ⇒ only the direction matters for shading.
-    _dirLight.position.copy(_dirLight.target.position).addScaledVector(_sunDir, NCZ.SUN_DIST);
-    flagShadowUpdate();   // sun moved ⇒ re-render the shadow depth map next frame (no-op while shadows off)
-
-    // Sun + ambient colour and intensity are fixed (calibrated to 3dmap.envparam,
-    // set once at light construction) — the in-game map has no time-of-day
-    // variation. The slider only moves the sun's direction, above.
-
-    // Move the visible sun sphere (shown during showcase only).
-    // Centred on Night City (WORLD_CX, 0, -WORLD_CY) so it hangs over the map.
-    if (_sunSphere) {
-      const SUN_SPHERE_DIST = NCZ.SUN_SPHERE_DIST;
-      const nx = -Math.cos(el) * Math.sin(az);
-      const ny =  Math.sin(el); // unclamped — terrain naturally occludes it at sunrise/sunset
-      const nz =  Math.cos(el) * Math.cos(az);
-      _sunSphere.position.set(
-        NCZ.WORLD_CX + nx * SUN_SPHERE_DIST,
-        ny * SUN_SPHERE_DIST,
-        -NCZ.WORLD_CY + nz * SUN_SPHERE_DIST,
-      );
-    }
+    // Move the visible sun sphere (showcase-only). Unclamped elevation so it
+    // sets at the horizon naturally. Centred on Night City so it hangs over the map.
+    if (_sunSphere) positionSkyBody(_sunSphere, azimuthRad, altitudeRad, NCZ.SUN_SPHERE_DIST);
+    updateDayNightLighting();
     requestRender();
   }
 
-  function setSunSphereVisible(visible) {
-    if (_sunSphere) _sunSphere.visible = visible;
+  // Night moon — its own real arc (SunCalc.getMoonPosition, driven from app.js).
+  // Same azimuth/elevation convention as setSunPosition.
+  function setMoonPosition(azimuthRad, altitudeRad) {
+    _moonAz = azimuthRad;
+    _moonEl = altitudeRad;
+    if (!_dirLight || !_moonLight || !_hemiLight) return;
+    if (_moonSphere) positionSkyBody(_moonSphere, azimuthRad, altitudeRad, NCZ.SUN_SPHERE_DIST);
+    updateDayNightLighting();
     requestRender();
+  }
+
+  // Position a sky-body mesh (sun/moon disc) on the sky shell over Night City,
+  // using the UNCLAMPED elevation so it rises/sets at the horizon.
+  function positionSkyBody(mesh, az, el, dist) {
+    mesh.position.set(
+      NCZ.WORLD_CX + (-Math.cos(el) * Math.sin(az)) * dist,
+       Math.sin(el) * dist,
+      -NCZ.WORLD_CY + ( Math.cos(el) * Math.cos(az)) * dist,
+    );
+  }
+
+  // Apply the effective sun-shadow strength: the user's Shadows toggle (_shadowsOn)
+  // gates it on/off; _sunShadowFade fades it with the sun's elevation. Changing
+  // shadow.intensity is a uniform tweak (no depth re-render needed).
+  function applyShadowIntensity() {
+    if (_dirLight) _dirLight.shadow.intensity = _shadowsOn ? _shadowIntensity * _sunShadowFade : 0;
+  }
+
+  // Day-night lighting. TWO permanent directional lights, each driven by its own
+  // real body — no morphing, no slerp, just a crossfade:
+  //   • SUN  — warm, casts shadows. castShadow stays ON permanently (never toggled
+  //     ⇒ no WebGPU depth-texture teardown crash); its shadow STRENGTH fades out
+  //     with elevation (_sunShadowFade). Intensity fades to 0 by nightFactor.
+  //   • MOON — cool, casts NO shadows; intensity by its own altitude × phase × nf.
+  // Net: night is soft moonlight + ambient with NO cast shadows. That's both
+  // physically right (moonlight shadows are imperceptible) and removes the shadow-
+  // box artifact at night/dusk — a low/absent caster has nothing to clip against
+  // the SHADOW_MAX_DISTANCE coverage cap. At nightFactor==0 (sun up) this is
+  // byte-identical to the original daytime lighting (sun = SUN_INTENSITY, moon 0).
+  // Called whenever the sun OR moon moves.
+  function updateDayNightLighting() {
+    if (!_dirLight || !_moonLight || !_hemiLight) return;
+    const nf = _nightFactor = NCZ.nightFactorForSunElevation(_sunEl);
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+
+    // ── Sun (the shadow caster) ── real direction, Y floored for shadow-camera
+    // safety; warm colour was set once at init. Intensity fades out by nightFactor.
+    _sunDir.set(-Math.cos(_sunEl) * Math.sin(_sunAz), Math.max(NCZ.KEY_LIGHT_MIN_DIR_Y, Math.sin(_sunEl)), Math.cos(_sunEl) * Math.cos(_sunAz)).normalize();
+    _dirLight.position.copy(_dirLight.target.position).addScaledVector(_sunDir, NCZ.SUN_DIST);
+    _dirLight.intensity = NCZ.SUN_INTENSITY * (1 - nf);
+
+    // Shadow strength fades with the sun's real elevation: full when high, gone by
+    // the time it nears the horizon — so dusk softens shadows out and night (sun
+    // below horizon) has none. No caster ⇒ no shadow-box cut-out.
+    _sunShadowFade = smooth(NCZ.SUN_SHADOW_FADE_OFF_DEG, NCZ.SUN_SHADOW_FADE_FULL_DEG, _sunEl * 180 / Math.PI);
+    applyShadowIntensity();
+
+    // ── Moon (no shadows) ── real direction; cool colour set once at init.
+    // Intensity gated by the moon's own altitude (0 below the horizon ⇒ a moonless
+    // night is just ambient) and by nightFactor (off during the day).
+    const moonUp = Math.max(0, Math.min(1, Math.sin(_moonEl) / Math.sin(10 * Math.PI / 180)));
+    _moonDir.set(-Math.cos(_moonEl) * Math.sin(_moonAz), Math.sin(_moonEl), Math.cos(_moonEl) * Math.cos(_moonAz)).normalize();
+    _moonLight.position.copy(_moonLight.target.position).addScaledVector(_moonDir, NCZ.SUN_DIST);
+    _moonLight.intensity = NCZ.MOON_INTENSITY * NCZ.MOON_PHASE * moonUp * nf;
+
+    // ── Ambient ── day sky/ground cube → night skyglow cube by nightFactor.
+    _hemiLight.color.setRGB(
+      lerp(NCZ.AMBIENT_SKY_RGB[0], NCZ.AMBIENT_SKY_RGB_NIGHT[0], nf),
+      lerp(NCZ.AMBIENT_SKY_RGB[1], NCZ.AMBIENT_SKY_RGB_NIGHT[1], nf),
+      lerp(NCZ.AMBIENT_SKY_RGB[2], NCZ.AMBIENT_SKY_RGB_NIGHT[2], nf),
+      THREE.LinearSRGBColorSpace,
+    );
+    _hemiLight.groundColor.setRGB(
+      lerp(NCZ.AMBIENT_GROUND_RGB[0], NCZ.AMBIENT_GROUND_RGB_NIGHT[0], nf),
+      lerp(NCZ.AMBIENT_GROUND_RGB[1], NCZ.AMBIENT_GROUND_RGB_NIGHT[1], nf),
+      lerp(NCZ.AMBIENT_GROUND_RGB[2], NCZ.AMBIENT_GROUND_RGB_NIGHT[2], nf),
+      THREE.LinearSRGBColorSpace,
+    );
+    // Night ambient intensity: base when the moon is up (let moonlight dominate),
+    // boosted toward the moonless level as the moon sets — so a moonless deep
+    // night stays legible without washing out the moonlit hours (both are nf==1).
+    const nightAmbient = lerp(NCZ.AMBIENT_INTENSITY_NIGHT_MOONLESS, NCZ.AMBIENT_INTENSITY_NIGHT, moonUp);
+    _hemiLight.intensity = lerp(NCZ.AMBIENT_INTENSITY, nightAmbient, nf);
+    // Stage-2 city glow (per-fragment shader term, district-masked). Daytime floor
+    // ramping to full at night: dim by day, dimmer as the day brightens (nf→0),
+    // brightest at night; never fully off. Drives the shared shader uniform.
+    if (_glowIntensityU) _glowIntensityU.value =
+      NCZ.CITY_GLOW_INTENSITY * (NCZ.CITY_GLOW_DAY_FACTOR + (1 - NCZ.CITY_GLOW_DAY_FACTOR) * nf);
+
+    // Sky discs trace their full real arcs (positionSkyBody already uses the true
+    // unclamped elevation, so they descend below the horizon as the body sets).
+    // No visibility gate or opacity fade — celestial bodies don't blink out; they
+    // follow a continuous path. Below the horizon the disc is simply below the
+    // ground plane and naturally out of a top-down view.
+    if (_sunSphere)  _sunSphere.visible  = true;
+    if (_moonSphere) _moonSphere.visible = true;
+
+    // ── Night Stage 2 lights ── bloom runs all day on a curve: a low daytime
+    // baseline (BLOOM_DAY_STRENGTH) easing up to the night peak (BLOOM_STRENGTH).
+    // The night contribution is eased in (nf²) so daylight stays near the subtle
+    // baseline and bloom only really blooms once the lit windows/neon appear.
+    // Scene dims to SCENE_COLOR_SCALE at full night; the bloom adds the energy back.
+    const bloomNight = nf * nf; // ease-in night ramp (gentle by day, strong at night)
+    if (_bloomPass)         _bloomPass.strength.value =
+      NCZ.BLOOM_DAY_STRENGTH + (NCZ.BLOOM_STRENGTH - NCZ.BLOOM_DAY_STRENGTH) * bloomNight;
+    // Haze is a night-only light-pollution effect — no daytime baseline.
+    if (_hazePass)          _hazePass.strength.value = bloomNight * NCZ.HAZE_STRENGTH;
+    if (_sceneScaleUniform) _sceneScaleUniform.value  = 1 - nf * (1 - NCZ.SCENE_COLOR_SCALE);
+    // Drive the building lit-window emissive (created lazily in buildBuildingMaterial).
+    if (_buildingNightFactor) _buildingNightFactor.value = nf;
+
+    // Re-render the shadow depth map only when the sun actually casts (fade > 0);
+    // at night the faded-out sun isn't worth a depth pass.
+    if (_sunShadowFade > 0) flagShadowUpdate();
+    requestRender(); // bloom/window uniforms changed → repaint under render-on-demand
   }
 
   // Re-fit the single shadow camera (the OrthographicCamera that renders the
@@ -3568,7 +4903,7 @@ const ThreeScene = (() => {
     // correct immediately, and updateShadowFrustumUniforms poisons the cull's shadow
     // frustum so off-screen casters stop being drawn into the main pass.
     if (_dirLight) {
-      _dirLight.shadow.intensity = enabled ? _shadowIntensity : 0;
+      applyShadowIntensity();   // enabled ? _shadowIntensity × _sunShadowFade : 0
       if (!enabled) _dirLight.shadow.needsUpdate = false;  // drop any pending re-render so the pass truly stops
     }
     if (enabled && renderer) {
@@ -3581,6 +4916,9 @@ const ThreeScene = (() => {
 
   function getShadowsEnabled() { return _shadowsOn; }
   function getSunElevation() { return _sunEl; }
+  // 0 = full day, 1 = full night (smoothstep on sun elevation). Read by later
+  // stages (district glow, lit windows, bloom) so they share one night ramp.
+  function getNightFactor() { return _nightFactor; }
 
   // Exposure setter — driven by the time-of-day curve (applySunTime /
   // updateFlyoverSun) and the metering harness.
@@ -3731,7 +5069,11 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, setFlyoverFrame, forceDistrictBand, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, setGradeEnabled, getGradeEnabled, setEdgeGlowEnabled, getEdgeGlowEnabled, setSunSphereVisible, getShadowSnapshot, getCameraState, setCameraState, isInitialized, getLeafletView, frameLeafletView, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive };
+  // Public: the per-building metadata table (records with centroid, dims, class,
+  // district tag). Built at load; the foundation the block-selection editor reads.
+  function getBuildingMeta() { return _buildingMeta; }
+
+  return { init, startRenderLoop, stopRenderLoop, requestRender, setContinuousRender, setFlyoverFrame, forceDistrictBand, resetCamera, setLayerVisibility, getLayerVisibility, updateMaterials, renderFrame, setControlsEnabled, getCanvasElement, captureColors, transitionMaterials, transitionToColors, setSunPosition, setMoonPosition, setShadowsEnabled, getShadowsEnabled, setSceneExposure, getLightingState, getSunElevation, getNightFactor, setGradeEnabled, getGradeEnabled, setEdgeGlowEnabled, getEdgeGlowEnabled, getShadowSnapshot, getCameraState, setCameraState, isInitialized, getLeafletView, frameLeafletView, getSceneColorVars, getRenderInfo, getCullCounts, setOverrideMaterial, dumpDebugInfo, isWebGPUActive, getBuildingMeta };
 })();
 
 window.NCZ.ThreeScene = ThreeScene;

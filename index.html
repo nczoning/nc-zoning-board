@@ -247,6 +247,16 @@
             <label class="overlay-toggle schema-only"><input type="checkbox" data-overlay="buildings" checked> Buildings</label>
             <label class="overlay-toggle schema-only" title="Real-time shadow mapping — always active during Showcase. May reduce performance on lower-end hardware."><input type="checkbox" id="overlay-shadows" data-overlay="shadows"> Shadows <span class="overlay-perf-warn">⚠</span></label>
         </div>
+        <!-- ?archdebug archetype-classification legend — sits left of the overlays
+             box, shown only when the ?archdebug URL flag is present (toggled in
+             app.js). Swatch colours mirror the shader's archdebug emissive. -->
+        <!-- Rows populated by app.js from NCZ.ARCHDEBUG_COLORS (shared with the
+             shader) so swatch colours match the render exactly. Hover a row for
+             its definition. -->
+        <div id="archdebug-legend" class="hidden" aria-hidden="true">
+            <span class="archdebug-legend-label">Archetype</span>
+            <div id="archdebug-legend-rows"></div>
+        </div>
         <div id="map-view-toggle">
             <button class="map-view-btn active" data-view="schema" title="3D schematic view">SCHEMA</button>
             <button class="map-view-btn" data-view="sat" title="Satellite tile view">SAT</button>

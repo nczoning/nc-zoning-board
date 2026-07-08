@@ -115,6 +115,24 @@ NCZ.exposureForSunElevation = function (elevationRad) {
 };
 
 /**
+ * Night blend factor [0..1] for a given SUN elevation: 0 = full day, 1 = full
+ * night. Smoothstep ramp between NCZ.NIGHT_FACTOR_DAY_DEG (→0) and
+ * NCZ.NIGHT_FACTOR_NIGHT_DEG (→1) — roughly civil twilight. The single source of
+ * truth for "how night is it"; drives the sun→moon key-light morph, the ambient
+ * day→night lerp, and (later stages) emissive neon ramps. Keyed on elevation
+ * (not clock time) so the slider and the flyover share it, exactly like
+ * NCZ.exposureForSunElevation above.
+ * @param {number} elevationRad sun elevation above the horizon, in radians
+ */
+NCZ.nightFactorForSunElevation = function (elevationRad) {
+  const deg = elevationRad * 180 / Math.PI;
+  const day = NCZ.NIGHT_FACTOR_DAY_DEG, night = NCZ.NIGHT_FACTOR_NIGHT_DEG;
+  // Normalise so t=0 at the DAY edge and t=1 at the NIGHT edge (day > night).
+  const t = Math.min(1, Math.max(0, (day - deg) / (day - night)));
+  return t * t * (3 - 2 * t); // smoothstep
+};
+
+/**
  * Chooses an anchor side and calculates a clamped box position + arrow anchor.
  * Consumers apply the returned values to their own DOM elements/styles.
  */
