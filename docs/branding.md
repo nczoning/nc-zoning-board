@@ -53,6 +53,7 @@ A four-tier scale. The tiers are additive: the display face sits **above** Orbit
 ### Logos & Branding
 - **Primary Logo:** `assets/img/nightcorp-logo.svg` (fill `#e6f1ff` so it reads on the navy header). Used in the `night-corp` theme header. Each theme swaps in its own logo file.
 - **Favicon:** The Cyan set in `assets/img/favicon/Cyan/` — SVG + `.ico` + 16/32px PNG + apple-touch + `site.webmanifest`. A Gold set exists (`assets/img/favicon/Gold/`) but is not currently wired up.
+- **Parked / source assets:** `assets/brand/` holds brand assets not currently wired into the site (the compact monogram, candidate shard icons). Kept version-controlled but out of the runtime `assets/img/` path. See `assets/brand/README.md`.
 
 ### Buttons & Toggles
 - Sharp corners, no border radius (0px). Night Corp doesn't do "soft."
