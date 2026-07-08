@@ -1,0 +1,176 @@
+#!/usr/bin/env node
+/**
+ * scripts/tune_analyze.js
+ * ─────────────────────────────────────────────────────────────────────────
+ * Diagnostic data for two structural questions (not param tuning):
+ *
+ *  1. "Red sections inside a building" — buildings show mixed archetype colours
+ *     because adjacent boxes DON'T all merge into one cluster; the thin/short
+ *     offshoots become their own clusters and classify red/grey. We quantify:
+ *       - cluster-size distribution (how fragmented is each .dds?)
+ *       - ABSORBABLE FRAGMENTS: thin/short clusters whose centroid sits inside a
+ *         taller building-class cluster's XZ footprint → should inherit it.
+ *
+ *  2. ".dds clouds span districts" — my_district / pacifica cover much of the map,
+ *     so "which .dds" is NOT "which district". We tag each building centroid to
+ *     the real subdistrict polygon (data/subdistricts.json, CET space) and report
+ *     how many districts each cloud actually spans + how many fall outside any
+ *     polygon (ocean / unzoned).
+ *
+ * Output: _lighting_demo/tune/ANALYSIS.md
+ * Run: node scripts/tune_analyze.js
+ */
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const L = require('./tune_lib.js');
+
+const OUT_DIR = path.join(L.ROOT, '_lighting_demo', 'tune');
+const GAP = L.NCZ.BUILDING_CLUSTER_GAP; // analyse at the live default
+const P = {
+  WINDOW_MIN_HEIGHT: L.NCZ.WINDOW_MIN_HEIGHT, WINDOW_HEIGHT_BAND: L.NCZ.WINDOW_HEIGHT_BAND,
+  ARCH_VERTICALITY_LO: L.NCZ.ARCH_VERTICALITY_LO, ARCH_VERTICALITY_HI: L.NCZ.ARCH_VERTICALITY_HI,
+  ARCH_FOOTPRINT_BIG: L.NCZ.ARCH_FOOTPRINT_BIG, ARCH_MIN_FOOTPRINT: L.NCZ.ARCH_MIN_FOOTPRINT,
+  ARCH_PODIUM_HEIGHT_LO: L.NCZ.ARCH_PODIUM_HEIGHT_LO, ARCH_PODIUM_HEIGHT_HI: L.NCZ.ARCH_PODIUM_HEIGHT_HI,
+  ARCH_MAX_ELONGATION: L.NCZ.ARCH_MAX_ELONGATION,
+};
+
+const BUILDING_CLASSES = new Set(['tower', 'block', 'podium']);
+const FRAGMENT_CLASSES = new Set(['thin', 'short', 'elongated']);
+
+function pointInAABB(x, z, a) { return x >= a.minX && x <= a.maxX && z >= a.minZ && z <= a.maxZ; }
+
+function analyzeDistrict(decoded, polys) {
+  const { agg, clusterCount } = L.clusterAggregates(decoded, GAP);
+  // classify each cluster
+  for (const a of agg) a.cls = L.classifyBuilding(a.h, a.fMax, a.fMin, P).cls;
+
+  // size distribution
+  const sizes = agg.map((a) => a.size);
+  const singletons = sizes.filter((s) => s === 1).length;
+  const tiny = sizes.filter((s) => s <= 3).length;
+  const sortedSizes = [...sizes].sort((a, b) => b - a);
+  const topSizes = sortedSizes.slice(0, 5);
+  const largestShare = sortedSizes[0] / Math.max(decoded.count, 1); // % of boxes in the biggest cluster
+  const bigClusters = sizes.filter((s) => s >= 50).length;
+  const classCounts = {};
+  for (const a of agg) classCounts[a.cls] = (classCounts[a.cls] || 0) + 1;
+
+  // absorbable fragments: a fragment-class cluster whose centroid lies in the
+  // footprint of a TALLER building-class cluster (so it's visually "inside" it).
+  const buildings = agg.filter((a) => BUILDING_CLASSES.has(a.cls));
+  const fragments = agg.filter((a) => FRAGMENT_CLASSES.has(a.cls));
+  let absorbable = 0;
+  for (const f of fragments) {
+    for (const b of buildings) {
+      if (b.h >= f.h && pointInAABB(f.cx, f.cz, b)) { absorbable++; break; }
+    }
+  }
+
+  // district tagging of each cluster centroid (cetX=cx, cetY=-cz)
+  const spanCounts = {};
+  let outside = 0;
+  for (const a of agg) {
+    const tag = L.tagDistrict(a.cx, -a.cz, polys);
+    if (!tag) { outside++; continue; }
+    const key = tag.parent || tag.id;
+    spanCounts[key] = (spanCounts[key] || 0) + 1;
+  }
+  const spannedDistricts = Object.keys(spanCounts).length;
+
+  return {
+    name: decoded.name, boxes: decoded.count, clusterCount,
+    singletons, tiny, classCounts, absorbable,
+    topSizes, largestShare, bigClusters,
+    fragmentTotal: fragments.length, buildingTotal: buildings.length,
+    spannedDistricts, outside, spanCounts,
+  };
+}
+
+function main() {
+  fs.mkdirSync(OUT_DIR, { recursive: true });
+  console.log(`Analyzing at gap=${GAP}, fBIG=${P.ARCH_FOOTPRINT_BIG}…`);
+  const polys = L.loadDistrictPolygons();
+  console.log(`Loaded ${polys.length} district/subdistrict polygons.`);
+
+  const rows = [];
+  for (const meta of L.DISTRICTS) {
+    const d = L.decodeDistrict(meta);
+    rows.push(analyzeDistrict(d, polys));
+    const r = rows[rows.length - 1];
+    console.log(`  ${r.name.padEnd(15)} ${String(r.boxes).padStart(6)} boxes → ${String(r.clusterCount).padStart(5)} clusters · ${String(r.absorbable).padStart(4)} absorbable frags · spans ${r.spannedDistricts} districts (${r.outside} outside)`);
+  }
+
+  writeReport(rows, polys.length);
+  console.log(`\nDone. See ${path.relative(L.ROOT, path.join(OUT_DIR, 'ANALYSIS.md'))}`);
+}
+
+function writeReport(rows, polyCount) {
+  const O = [];
+  O.push('# Structural analysis — clustering completeness & district spans\n');
+  O.push(`_Generated by \`scripts/tune_analyze.js\` at gap=${GAP}, fBIG=${P.ARCH_FOOTPRINT_BIG}. ${polyCount} polygons loaded._\n`);
+
+  O.push('## 0. THE HEADLINE — percolation: one megablob + a debris field\n');
+  O.push('At this gap, clustering does NOT yield individual buildings. In dense');
+  O.push('districts every box transitively touches its neighbours, so connectivity');
+  O.push('percolates into ONE giant cluster that swallows most boxes, while isolated');
+  O.push('detail boxes stay as singletons. `largest%` = share of the cloud\'s boxes in');
+  O.push('its single biggest cluster.\n');
+  O.push('| cloud | clusters | singletons | clusters≥50box | largest cluster | largest% | top-5 sizes |');
+  O.push('| --- | --- | --- | --- | --- | --- | --- |');
+  for (const r of rows) {
+    O.push(`| ${r.name} | ${r.clusterCount} | ${r.singletons} | ${r.bigClusters} | ${r.topSizes[0]} | **${(r.largestShare * 100).toFixed(0)}%** | ${r.topSizes.join(', ')} |`);
+  }
+  O.push('');
+  O.push('When one cluster holds 80% of the boxes, the archetype thresholds are just');
+  O.push('colouring that blob — they cannot separate towers from blocks because there');
+  O.push('is only one "building". This is the root cause to fix before further param');
+  O.push('tuning: a real building-segmentation step (watershed / seeded growth /');
+  O.push('height-stratified cut), not a single global gap.\n');
+
+  O.push('## 1. Cluster fragmentation (the "red sections inside a building" cause)\n');
+  O.push('A building shows mixed colours when its boxes split across clusters: the');
+  O.push('thin/short offshoots become their own clusters and classify red/grey.');
+  O.push('**Absorbable frags** = thin/short/elongated clusters whose centroid sits');
+  O.push('inside a TALLER building-class cluster — fragments that *should* inherit it.\n');
+  O.push('| cloud | boxes | clusters | singletons | ≤3-box | fragments | absorbable |');
+  O.push('| --- | --- | --- | --- | --- | --- | --- |');
+  let tAbs = 0, tFrag = 0, tClu = 0;
+  for (const r of rows) {
+    O.push(`| ${r.name} | ${r.boxes} | ${r.clusterCount} | ${r.singletons} | ${r.tiny} | ${r.fragmentTotal} | **${r.absorbable}** |`);
+    tAbs += r.absorbable; tFrag += r.fragmentTotal; tClu += r.clusterCount;
+  }
+  O.push(`| **total** |  | ${tClu} |  |  | ${tFrag} | **${tAbs}** |`);
+  O.push('');
+  O.push(`**${tAbs} fragments (${(100 * tAbs / Math.max(tFrag, 1)).toFixed(0)}% of all fragment-class clusters) sit inside a taller building** — these are the red bits poking out of real buildings. An absorption post-pass in clustering would re-home them.\n`);
+
+  O.push('## 2. District spans (the ".dds is not a district" problem)\n');
+  O.push('Each cloud\'s building centroids tagged to the real subdistrict polygon.');
+  O.push('`spans` = distinct parent-districts the cloud covers; `outside` = centroids');
+  O.push('in no polygon (ocean / unzoned).\n');
+  O.push('| cloud | clusters | spans N districts | outside | top districts (by count) |');
+  O.push('| --- | --- | --- | --- | --- |');
+  for (const r of rows) {
+    const top = Object.entries(r.spanCounts).sort((a, b) => b[1] - a[1]).slice(0, 4)
+      .map(([k, v]) => `${k}:${v}`).join(', ');
+    O.push(`| ${r.name} | ${r.clusterCount} | ${r.spannedDistricts} | ${r.outside} | ${top} |`);
+  }
+  O.push('');
+  O.push('If a cloud spans many districts, "which .dds" tells you almost nothing about');
+  O.push('zoning — confirming that per-building district tags from the polygons (not the');
+  O.push('cloud) are the right key for a metadata table.\n');
+
+  O.push('## Class distribution per cloud (current params)\n');
+  O.push('| cloud | short | thin | elongated | podium | tower | block |');
+  O.push('| --- | --- | --- | --- | --- | --- | --- |');
+  for (const r of rows) {
+    const c = r.classCounts;
+    O.push(`| ${r.name} | ${c.short||0} | ${c.thin||0} | ${c.elongated||0} | ${c.podium||0} | ${c.tower||0} | ${c.block||0} |`);
+  }
+  O.push('');
+
+  fs.writeFileSync(path.join(OUT_DIR, 'ANALYSIS.md'), O.join('\n'));
+}
+
+main();
