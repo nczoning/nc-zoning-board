@@ -1166,6 +1166,10 @@ const ThreeScene = (() => {
         .catch((e) => console.error('[NCZ] zone-tool failed to load', e));
     }
 
+    // ?colldebug — the GAME's own building decomposition, drawn over the scene.
+    // See loadColliderDebug().
+    if (new URLSearchParams(location.search).has('colldebug')) loadColliderDebug();
+
     // ?shapemark — SHAPE-DETECTION verification view (companion to ?facedebug /
     // ?archdebug): labelled beacon pillars at the shape-detector candidates so
     // detections can be verified against the live scene / in game. Colours:
@@ -2862,6 +2866,68 @@ const ThreeScene = (() => {
       if (Array.isArray(data?.zones)) return data.zones;
     } catch (e) { /* no baseline file yet */ }
     return [];
+  }
+
+  // ── ?colldebug — the game's own building decomposition ──────────────────────
+  // Draws the 10,166 `physicsColliderBox` shapes from 3dmap_coll_buildings{,2,3}
+  // (the meshes 3dmap_view.ent references) as translucent hash-coloured boxes
+  // over the scene. These are what the game tests when you point at the 3D map,
+  // so they encode CDPR's OWN answer to "what is one object here" — the question
+  // segmentBuildings infers from roof cliffs.
+  //
+  // Read it as: does one collider = one building, the way you'd draw the line?
+  // Known caveats, measured (see wiki learnings/game-3dmap-collision-boxes):
+  //   • They OVERLAP. Only 42% of render-box centres sit in exactly one collider,
+  //     43% in two or more. They're a coarse covering, not a partition.
+  //   • EP1 has none: Dogtown 37% / Spaceport 21% of boxes covered, vs 90–99%
+  //     for every base-game district. The entity references no EP1 collision.
+  //   • Matching is SPATIAL, so this data serves the Fixed and vanilla sets alike.
+  //
+  // Debug-only: the JSON is fetched solely under the flag. `?collalpha=` tunes
+  // opacity (default 0.3); `?collwire` renders unfilled so you can see inside.
+  async function loadColliderDebug() {
+    let data = null;
+    try {
+      data = await fetch('data/3dmap-colliders.json').then((r) => (r.ok ? r.json() : null));
+    } catch (e) { /* fall through to the warning below */ }
+    if (!data?.colliders?.length) {
+      console.warn('[NCZ] colldebug: data/3dmap-colliders.json missing or empty — run `node scripts/extract_colliders.js`');
+      return;
+    }
+    const q = new URLSearchParams(location.search);
+    const alpha = Number(q.get('collalpha') ?? 0.3);
+    const wire = q.has('collwire');
+
+    const mat = new THREE.MeshBasicNodeMaterial({
+      transparent: true,
+      depthWrite: false,        // a translucent cage over the city — never occlude it
+      side: THREE.DoubleSide,   // seen from inside when the camera is in a collider
+      wireframe: wire,
+    });
+    // Hash colour per collider so neighbours differ, matching ?segdebug's read.
+    const hsh = (a, b) => float(instanceIndex).mul(a).add(b).sin().mul(43758.5453).fract();
+    mat.colorNode = vec3(hsh(12.9898, 0.7), hsh(78.233, 2.3), hsh(37.719, 5.1)).mul(0.72).add(0.28);
+    mat.opacityNode = float(alpha);
+
+    const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, data.colliders.length);
+    const dummy = new THREE.Object3D();
+    for (let i = 0; i < data.colliders.length; i++) {
+      const [px, py, pz, qi, qj, qk, qr, hx, hy, hz] = data.colliders[i];
+      // CET (Z up) → Three (Y up), the same remap loadBuildings uses for the .dds:
+      // position (x, z, -y); quaternion (qx, qz, -qy, qw); extents X→X, Z→Y, Y→Z.
+      dummy.position.set(px, pz, -py);
+      dummy.quaternion.set(qi, qk, -qj, qr);
+      dummy.scale.set(hx * 2, hz * 2, hy * 2);
+      dummy.updateMatrix();
+      mesh.setMatrixAt(i, dummy.matrix);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+    mesh.name = 'colliderDebug';
+    mesh.frustumCulled = false;  // one instanced draw; the per-instance bounds aren't tracked
+    mesh.renderOrder = 3;        // after the opaque city and the see-through roads
+    scene.add(mesh);
+    console.log(`[NCZ] colldebug: ${data.colliders.length} game collision boxes (alpha ${alpha}${wire ? ', wireframe' : ''})`);
+    requestRender();
   }
 
   async function loadBuildings() {

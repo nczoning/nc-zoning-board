@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Per-district neon **sign density**: each subdistrict's signage matches its in-game character. Kabuki, Little China and Japantown blaze, the corpo/commercial cores stay dense, and industrial, rural and spaceport zones go dark.
 - Windows and signs now light only genuinely **exterior** block faces: a load-time occlusion pass marks faces buried inside a building (about 80% of all wall area) so the emissive stops stamping them. Fixes the "circuit-board" window noise. Debug view `?facedebug`; disable with `?facemask=0`.
 - Buildings now resolve into **parts** — a tower and the podium it rises from are separate strata, which is the unit night lighting will be classified on. Debug view `?partdebug`; tune with `?partdh=`.
+- Debug view `?colldebug` overlays the game's own 3D-map collision boxes (its internal decomposition of the map into solid objects), for comparison against our inferred building segmentation.
 
 ## [1.3.0] - 2026-07-09
 
