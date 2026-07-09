@@ -2654,7 +2654,8 @@ const ThreeScene = (() => {
     };
 
     // Clip the segment p + t·d, t∈[0,1], against a min/max box. Returns the exit
-    // fraction t1 of the covered interval, or -1 for a miss.
+    // fraction t1 of the covered interval (entry in `clipT0`), or -1 for a miss.
+    let clipT0 = 0;
     const clipSeg = (px, py, pz, dx, dy, dz, mnx, mny, mnz, mxx, mxy, mxz) => {
       let t0 = 0, t1 = 1;
       for (let a = 0; a < 3; a++) {
@@ -2669,10 +2670,13 @@ const ThreeScene = (() => {
         if (tb < t1) t1 = tb;
         if (t0 > t1) return -1;
       }
+      clipT0 = t0;
       return t1;
     };
 
     const seen = new Int32Array(count).fill(-1);   // candidate dedupe stamp
+    const candBuf = new Int32Array(512);           // per-face candidate list
+    const hitT = new Float32Array(256);            // per-column hit intervals (enter, exit)
     let probeId = 0, interiorFaces = 0, partialFaces = 0;
     const e = matrixData;
 
@@ -2703,55 +2707,86 @@ const ThreeScene = (() => {
         const fMinY = fcY - ey, fMaxY = fcY + ey;
         const fMinZ = fcZ - ez, fMaxZ = fcZ + ez;
         probeId++;
-        let yExp = 0;
+        // Gather candidates for THIS face once (hash cells + big-box overflow),
+        // deduped and AABB-prefiltered — the probe columns below share the list.
+        let candN = 0;
         const c0 = Math.max(0, Math.floor(fMinX / CELL) - col0);
         const c1 = Math.min(cols - 1, Math.floor(fMaxX / CELL) - col0);
         const r0 = Math.max(0, Math.floor(fMinZ / CELL) - row0);
         const r1 = Math.min(rows - 1, Math.floor(fMaxZ / CELL) - row0);
-        for (let pass = 0; pass < 2 && yExp < 0.995; pass++) {
-          // pass 0: hashed candidates; pass 1: the big-box overflow list.
-          let list, len;
-          if (pass === 1) { list = bigBoxes; len = bigBoxes.length; }
-          for (let r = r0; r <= (pass === 0 ? r1 : r0) && yExp < 0.995; r++) {
-            for (let c = c0; c <= (pass === 0 ? c1 : c0) && yExp < 0.995; c++) {
-              let s, eIdx;
-              if (pass === 0) { const k = r * cols + c; s = cellStart[k]; eIdx = cellStart[k + 1]; }
-              else { s = 0; eIdx = len; }
-              for (let q = s; q < eIdx; q++) {
-                const j = pass === 0 ? cellItems[q] : list[q];
-                if (j === i || seen[j] === probeId) continue;
-                seen[j] = probeId;
-                // AABB prefilter vs the face AABB.
-                if (cx[j] + hx[j] < fMinX || cx[j] - hx[j] > fMaxX ||
-                    cy[j] + hy[j] < fMinY || cy[j] - hy[j] > fMaxY ||
-                    cz[j] + hz[j] < fMinZ || cz[j] - hz[j] > fMaxZ) continue;
-                const inv = axisAligned[j] ? null : invOf(j);
-                for (const u of us) {
-                  // Column p0→p1 along the box's own up axis (1% end-shrink so a
-                  // same-height roof-touching neighbour doesn't clip the top).
-                  const bx = fcX + u * wdX, by = fcY + u * wdY, bz = fcZ + u * wdZ;
-                  const p0x = bx - 0.49 * upX, p0y = by - 0.49 * upY, p0z = bz - 0.49 * upZ;
-                  const dx = 0.98 * upX, dy = 0.98 * upY, dz = 0.98 * upZ;
-                  let tExit;
-                  if (!inv) {
-                    tExit = clipSeg(p0x, p0y, p0z, dx, dy, dz,
-                      cx[j] - hx[j], cy[j] - hy[j], cz[j] - hz[j],
-                      cx[j] + hx[j], cy[j] + hy[j], cz[j] + hz[j]);
-                  } else {
-                    const lx = inv[0] * p0x + inv[1] * p0y + inv[2] * p0z + inv[9];
-                    const ly = inv[3] * p0x + inv[4] * p0y + inv[5] * p0z + inv[10];
-                    const lz = inv[6] * p0x + inv[7] * p0y + inv[8] * p0z + inv[11];
-                    const ldx = inv[0] * dx + inv[1] * dy + inv[2] * dz;
-                    const ldy = inv[3] * dx + inv[4] * dy + inv[5] * dz;
-                    const ldz = inv[6] * dx + inv[7] * dy + inv[8] * dz;
-                    tExit = clipSeg(lx, ly, lz, ldx, ldy, ldz, -0.5, -0.5, -0.5, 0.5, 0.5, 0.5);
-                  }
-                  if (tExit > yExp) yExp = tExit;
-                }
-                if (yExp >= 0.995) break;
-              }
+        for (let r = r0; r <= r1; r++) {
+          for (let c = c0; c <= c1; c++) {
+            const k = r * cols + c;
+            for (let q = cellStart[k]; q < cellStart[k + 1]; q++) {
+              const j = cellItems[q];
+              if (j === i || seen[j] === probeId) continue;
+              seen[j] = probeId;
+              if (cx[j] + hx[j] < fMinX || cx[j] - hx[j] > fMaxX ||
+                  cy[j] + hy[j] < fMinY || cy[j] - hy[j] > fMaxY ||
+                  cz[j] + hz[j] < fMinZ || cz[j] - hz[j] > fMaxZ) continue;
+              if (candN < candBuf.length) candBuf[candN++] = j;
             }
           }
+        }
+        for (let q = 0; q < bigBoxes.length; q++) {
+          const j = bigBoxes[q];
+          if (j === i || seen[j] === probeId) continue;
+          seen[j] = probeId;
+          if (cx[j] + hx[j] < fMinX || cx[j] - hx[j] > fMaxX ||
+              cy[j] + hy[j] < fMinY || cy[j] - hy[j] > fMaxY ||
+              cz[j] + hz[j] < fMinZ || cz[j] - hz[j] > fMaxZ) continue;
+          if (candN < candBuf.length) candBuf[candN++] = j;
+        }
+        let yExp = 0;
+        for (const u of us) {
+          // Column p0→p1 along the box's own up axis (1% end-shrink so a
+          // same-height roof-touching neighbour doesn't clip the top).
+          const bx = fcX + u * wdX, by = fcY + u * wdY, bz = fcZ + u * wdZ;
+          const p0x = bx - 0.49 * upX, p0y = by - 0.49 * upY, p0z = bz - 0.49 * upZ;
+          const dx = 0.98 * upX, dy = 0.98 * upY, dz = 0.98 * upZ;
+          // Collect the covered [enter, exit] interval per candidate hit.
+          let hitN = 0;
+          for (let k = 0; k < candN && hitN * 2 < hitT.length; k++) {
+            const j = candBuf[k];
+            const inv = axisAligned[j] ? null : invOf(j);
+            let tExit;
+            if (!inv) {
+              tExit = clipSeg(p0x, p0y, p0z, dx, dy, dz,
+                cx[j] - hx[j], cy[j] - hy[j], cz[j] - hz[j],
+                cx[j] + hx[j], cy[j] + hy[j], cz[j] + hz[j]);
+            } else {
+              const lx = inv[0] * p0x + inv[1] * p0y + inv[2] * p0z + inv[9];
+              const ly = inv[3] * p0x + inv[4] * p0y + inv[5] * p0z + inv[10];
+              const lz = inv[6] * p0x + inv[7] * p0y + inv[8] * p0z + inv[11];
+              const ldx = inv[0] * dx + inv[1] * dy + inv[2] * dz;
+              const ldy = inv[3] * dx + inv[4] * dy + inv[5] * dz;
+              const ldz = inv[6] * dx + inv[7] * dy + inv[8] * dz;
+              tExit = clipSeg(lx, ly, lz, ldx, ldy, ldz, -0.5, -0.5, -0.5, 0.5, 0.5, 0.5);
+            }
+            if (tExit >= 0) {
+              // Fast path: one box alone buries the whole column from the base
+              // (the common fully-interior case) — no interval merge needed.
+              if (clipT0 <= 0.02 && tExit >= 0.995) { hitN = -1; break; }
+              hitT[hitN * 2] = clipT0; hitT[hitN * 2 + 1] = tExit; hitN++;
+            }
+          }
+          if (hitN < 0) { yExp = 1; break; }
+          // Burial must be CONTIGUOUS FROM THE BASE. A floating occluder (an
+          // AC box, ledge or sign board part-way up the wall) does NOT bury the
+          // open wall beneath it — the old max-exit logic did exactly that and
+          // painted whole facades dark from one greeble near the roof. Grow the
+          // covered span upward from t=0, chaining intervals that overlap it
+          // (0.02 tolerance bridges data seams); anything floating above the
+          // chain is ignored (that band stays lit — optimistic but far better).
+          let cover = 0, grew = true;
+          while (grew) {
+            grew = false;
+            for (let h = 0; h < hitN; h++) {
+              if (hitT[h * 2] <= cover + 0.02 && hitT[h * 2 + 1] > cover) { cover = hitT[h * 2 + 1]; grew = true; }
+            }
+          }
+          if (cover > yExp) yExp = cover;
+          if (yExp >= 0.995) break;
         }
         const v = yExp >= 0.995 ? INTERIOR : yExp;
         exposure[i * 4 + f] = v;

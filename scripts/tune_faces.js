@@ -107,13 +107,31 @@ function stackedBoxCheck() {
   return { pass: posX0 > 0.4 && posX0 < 0.6, posX0, exposure: [...r.exposure] };
 }
 
+// ── floating ledge: a small box attached PART-WAY up a tall face ─────────────
+// Burial must be contiguous from the base — a greeble at 60–80% height must
+// NOT bury the open wall beneath it (the max-exit bug painted it all dark).
+function floatingLedgeCheck() {
+  const m = new Float32Array(32);
+  // box 0: 20 wide (X) × 60 tall × 30 deep at origin
+  m[0] = 20; m[5] = 60; m[10] = 30; m[13] = 30; m[15] = 1;
+  // box 1: small 6×12×30 box pressed on box 0's +X face, spanning y 36..48 (60–80%)
+  m[16] = 6; m[21] = 12; m[26] = 30; m[28] = 13; m[29] = 42; m[31] = 1;
+  const r = computeFaceExposure(m,
+    new Float32Array([0, 13]), new Float32Array([30, 42]), new Float32Array([0, 0]),
+    new Float32Array([10, 3]), new Float32Array([30, 6]), new Float32Array([15, 15]), 2);
+  const posX0 = r.exposure[0];            // box 0, +X face — expect 0 (ledge floats)
+  return { pass: posX0 < 0.05, posX0, exposure: [...r.exposure] };
+}
+
 // ── run ──────────────────────────────────────────────────────────────────────
 console.log('computeFaceExposure — headless validation\n');
 
 const iso = isolatedBoxCheck();
 console.log(`isolated box: ${iso.pass ? 'PASS' : 'FAIL'} (all faces exposed) → [${iso.exposure.join(', ')}]`);
 const stk = stackedBoxCheck();
-console.log(`stacked pair: ${stk.pass ? 'PASS' : 'FAIL'} (+X exposed-above ≈ 0.5) → ${stk.posX0.toFixed(3)}\n`);
+console.log(`stacked pair: ${stk.pass ? 'PASS' : 'FAIL'} (+X exposed-above ≈ 0.5) → ${stk.posX0.toFixed(3)}`);
+const flt = floatingLedgeCheck();
+console.log(`floating ledge: ${flt.pass ? 'PASS' : 'FAIL'} (+X stays exposed under a mid-wall greeble) → ${flt.posX0.toFixed(3)}\n`);
 
 const rows = [];
 let totalMs = 0, totalBoxes = 0;
