@@ -1,30 +1,94 @@
 /**
  * scripts/tune_faces.js
  * ─────────────────────────────────────────────────────────────────────────
- * Headless validation of computeFaceExposure() — the exterior-face occlusion
- * mask precompute (see three-scene.js). Lifts the function VERBATIM from the
- * live source (anti-drift, same pattern as tune_lib's segmentBuildings) and
- * runs it over every district's decoded box set, reporting timing and
- * exposure statistics.
+ * Headless validation of computeFaceOccluders() — the exterior-face occlusion
+ * precompute (see three-scene.js). Lifts the function VERBATIM from the live
+ * source (anti-drift, same pattern as tune_lib's segmentBuildings), runs it
+ * over every district's decoded box set, and emulates the shader's
+ * per-fragment gate at sample points to verify the geometry cases that
+ * matter:
+ *   - isolated box        → every wall point lit
+ *   - stacked pair        → wall lit above the shorter neighbour, dark beside it
+ *   - floating ledge      → wall lit above AND below a mid-wall greeble
+ *   - interpenetrating slabs → wall lit exactly where it pokes past a sibling
  *
  * tune_lib's decode only keeps AABBs, so this script re-decodes with the full
- * per-box T·R·S matrices (the harness convention: scripts that need matrices
- * copy the decode loop — see tune_lib.js decodeDistrict for the canon).
+ * per-box T·R·S matrices (the harness convention).
  *
  * Run: node scripts/tune_faces.js
- * Sanity expectations: dense districts (city_center, watson) show HIGH
- * fully-interior %; ep1_spaceport LOW; zero NaN; a synthetic isolated box has
- * all four side faces fully exposed (0).
  */
 'use strict';
 
 const path = require('path');
 const { ROOT, NCZ, DISTRICTS, SCENE, sliceBalanced, loadDataDds } = require('./tune_lib');
 
-// ── lift computeFaceExposure verbatim ────────────────────────────────────────
-const faceSrc = sliceBalanced(SCENE, 'function computeFaceExposure', '{', '}');
+// ── lift computeFaceOccluders verbatim ───────────────────────────────────────
+const faceSrc = sliceBalanced(SCENE, 'function computeFaceOccluders', '{', '}');
 // eslint-disable-next-line no-eval
-const computeFaceExposure = eval(`(${faceSrc})`);
+const computeFaceOccluders = eval(`(${faceSrc})`);
+
+// ── shader-gate emulator ─────────────────────────────────────────────────────
+// Mirrors the TSL gate: probe = worldPos + FACE_EPS·normal; dark if the probe
+// is inside any of the box's 4 occluders (unit-cube test via inverse matrix).
+function gateAt(occ, i, wx, wy, wz, nx, ny, nz) {
+  const px = wx + NCZ.FACE_EPS * nx, py = wy + NCZ.FACE_EPS * ny, pz = wz + NCZ.FACE_EPS * nz;
+  for (let s = 0; s < 4; s++) {
+    const j = occ.idx[i * 4 + s];
+    const b = j * 16, m = occ.inv;
+    const lx = m[b] * px + m[b + 4] * py + m[b + 8] * pz + m[b + 12];
+    const ly = m[b + 1] * px + m[b + 5] * py + m[b + 9] * pz + m[b + 13];
+    const lz = m[b + 2] * px + m[b + 6] * py + m[b + 10] * pz + m[b + 14];
+    if (Math.max(Math.abs(lx), Math.abs(ly), Math.abs(lz)) < 0.5) return 0;
+  }
+  return 1;
+}
+
+// Axis-aligned test rigs: boxes given as [cx, cy, cz, hx, hy, hz].
+function rig(boxes) {
+  const n = boxes.length;
+  const M = new Float32Array(n * 16);
+  const cx = new Float32Array(n), cy = new Float32Array(n), cz = new Float32Array(n);
+  const hx = new Float32Array(n), hy = new Float32Array(n), hz = new Float32Array(n);
+  boxes.forEach(([x, y, z, a, b2, c], i) => {
+    const b = i * 16;
+    M[b] = a * 2; M[b + 5] = b2 * 2; M[b + 10] = c * 2;
+    M[b + 12] = x; M[b + 13] = y; M[b + 14] = z; M[b + 15] = 1;
+    cx[i] = x; cy[i] = y; cz[i] = z; hx[i] = a; hy[i] = b2; hz[i] = c;
+  });
+  return { occ: computeFaceOccluders(M, cx, cy, cz, hx, hy, hz, n) };
+}
+
+console.log('computeFaceOccluders — headless validation\n');
+
+{ // isolated box 20×60×30 at origin: every wall point lit
+  const { occ } = rig([[0, 30, 0, 10, 30, 15]]);
+  const pts = [[10, 5, 0], [10, 55, 0], [-10, 30, 10], [0, 30, 15], [0, 5, -15]];
+  const lit = pts.map(([x, y, z]) => gateAt(occ, 0, x, y, z, Math.sign(x) * (Math.abs(x) === 10 ? 1 : 0), 0, Math.sign(z) * (Math.abs(z) === 15 ? 1 : 0)));
+  console.log(`isolated box: ${lit.every((v) => v === 1) ? 'PASS' : 'FAIL'} (all wall points lit) → [${lit.join(',')}]`);
+}
+
+{ // stacked pair: 30-tall box pressed on the +X face of a 60-tall box
+  const { occ } = rig([[0, 30, 0, 10, 30, 15], [20, 15, 0, 10, 15, 15]]);
+  const below = gateAt(occ, 0, 10, 15, 0, 1, 0, 0);  // beside the neighbour → dark
+  const above = gateAt(occ, 0, 10, 45, 0, 1, 0, 0);  // above its roof → lit
+  console.log(`stacked pair: ${below === 0 && above === 1 ? 'PASS' : 'FAIL'} (dark beside, lit above) → below=${below} above=${above}`);
+}
+
+{ // floating ledge: small box at 60–80% height on the +X face
+  const { occ } = rig([[0, 30, 0, 10, 30, 15], [13, 42, 0, 3, 6, 15]]);
+  const under = gateAt(occ, 0, 10, 20, 0, 1, 0, 0);   // open wall under the ledge → lit
+  const behind = gateAt(occ, 0, 10, 42, 0, 1, 0, 0);  // behind the ledge → dark
+  const over = gateAt(occ, 0, 10, 55, 0, 1, 0, 0);    // above it → lit
+  console.log(`floating ledge: ${under === 1 && behind === 0 && over === 1 ? 'PASS' : 'FAIL'} (lit/dark/lit) → ${under}/${behind}/${over}`);
+}
+
+{ // interpenetrating slabs: A 100 wide, sibling B 80 wide overlapping same level
+  const { occ } = rig([[0, 10, 0, 50, 10, 30], [0, 12, 0, 40, 12, 28]]);
+  const poke = gateAt(occ, 0, 45, 10, 30, 0, 0, 1);   // A's +Z face where it pokes past B → lit
+  const covered = gateAt(occ, 0, 0, 10, 30, 0, 0, 1); // A's +Z face centre, B is 2 CET proud → dark? B half z 28 < A 30, so B is BEHIND A's face → lit
+  const insideB = gateAt(occ, 1, 0, 12, 28, 0, 0, 1); // B's +Z face centre sits INSIDE A → dark
+  console.log(`interpenetrating slabs: ${poke === 1 && covered === 1 && insideB === 0 ? 'PASS' : 'FAIL'} (poke lit, outer face lit, inner face dark) → ${poke}/${covered}/${insideB}`);
+}
 
 // ── decode WITH matrices (mirror of loadBuildings; tune_lib keeps AABBs only) ─
 function decodeDistrictMatrices(meta) {
@@ -82,57 +146,10 @@ function decodeDistrictMatrices(meta) {
   return { name: meta.name, count: n, matrixData, bcx, bcy, bcz, bhx, bhy, bhz };
 }
 
-// ── synthetic sanity check: one isolated axis-aligned box ────────────────────
-function isolatedBoxCheck() {
-  const m = new Float32Array(16);
-  m[0] = 20; m[5] = 60; m[10] = 30; m[12] = 0; m[13] = 30; m[14] = 0; m[15] = 1;
-  const r = computeFaceExposure(m, new Float32Array([0]), new Float32Array([30]), new Float32Array([0]),
-    new Float32Array([10]), new Float32Array([30]), new Float32Array([15]), 1);
-  const allExposed = [...r.exposure].every((v) => v === 0);
-  return { pass: allExposed, exposure: [...r.exposure] };
-}
-
-// ── two stacked boxes: tall slab behind a half-height neighbour ──────────────
-// The tall box's +X face is buried below the neighbour's roof → yExp ≈ 0.5.
-function stackedBoxCheck() {
-  const m = new Float32Array(32);
-  // box 0: 20 wide (X) × 60 tall × 30 deep at origin
-  m[0] = 20; m[5] = 60; m[10] = 30; m[13] = 30; m[15] = 1;
-  // box 1: same footprint, 30 tall, pressed against box 0's +X face
-  m[16] = 20; m[21] = 30; m[26] = 30; m[28] = 20; m[29] = 15; m[31] = 1;
-  const r = computeFaceExposure(m,
-    new Float32Array([0, 20]), new Float32Array([30, 15]), new Float32Array([0, 0]),
-    new Float32Array([10, 10]), new Float32Array([30, 15]), new Float32Array([15, 15]), 2);
-  const posX0 = r.exposure[0];            // box 0, +X face — expect ≈ 0.5
-  return { pass: posX0 > 0.4 && posX0 < 0.6, posX0, exposure: [...r.exposure] };
-}
-
-// ── floating ledge: a small box attached PART-WAY up a tall face ─────────────
-// Burial must be contiguous from the base — a greeble at 60–80% height must
-// NOT bury the open wall beneath it (the max-exit bug painted it all dark).
-function floatingLedgeCheck() {
-  const m = new Float32Array(32);
-  // box 0: 20 wide (X) × 60 tall × 30 deep at origin
-  m[0] = 20; m[5] = 60; m[10] = 30; m[13] = 30; m[15] = 1;
-  // box 1: small 6×12×30 box pressed on box 0's +X face, spanning y 36..48 (60–80%)
-  m[16] = 6; m[21] = 12; m[26] = 30; m[28] = 13; m[29] = 42; m[31] = 1;
-  const r = computeFaceExposure(m,
-    new Float32Array([0, 13]), new Float32Array([30, 42]), new Float32Array([0, 0]),
-    new Float32Array([10, 3]), new Float32Array([30, 6]), new Float32Array([15, 15]), 2);
-  const posX0 = r.exposure[0];            // box 0, +X face — expect 0 (ledge floats)
-  return { pass: posX0 < 0.05, posX0, exposure: [...r.exposure] };
-}
-
-// ── run ──────────────────────────────────────────────────────────────────────
-console.log('computeFaceExposure — headless validation\n');
-
-const iso = isolatedBoxCheck();
-console.log(`isolated box: ${iso.pass ? 'PASS' : 'FAIL'} (all faces exposed) → [${iso.exposure.join(', ')}]`);
-const stk = stackedBoxCheck();
-console.log(`stacked pair: ${stk.pass ? 'PASS' : 'FAIL'} (+X exposed-above ≈ 0.5) → ${stk.posX0.toFixed(3)}`);
-const flt = floatingLedgeCheck();
-console.log(`floating ledge: ${flt.pass ? 'PASS' : 'FAIL'} (+X stays exposed under a mid-wall greeble) → ${flt.posX0.toFixed(3)}\n`);
-
+// ── district stats ───────────────────────────────────────────────────────────
+// litSample: emulate the gate at each box's 4 face centres and report the lit
+// share among boxes poking above grade — the "visible wall points" proxy.
+console.log('');
 const rows = [];
 let totalMs = 0, totalBoxes = 0;
 for (const meta of DISTRICTS) {
@@ -140,25 +157,29 @@ for (const meta of DISTRICTS) {
   try { d = decodeDistrictMatrices(meta); } catch { continue; }
   if (!d.count) continue;
   const t0 = process.hrtime.bigint();
-  const r = computeFaceExposure(d.matrixData, d.bcx, d.bcy, d.bcz, d.bhx, d.bhy, d.bhz, d.count);
+  const occ = computeFaceOccluders(d.matrixData, d.bcx, d.bcy, d.bcz, d.bhx, d.bhy, d.bhz, d.count);
   const ms = Number(process.hrtime.bigint() - t0) / 1e6;
   totalMs += ms; totalBoxes += d.count;
-  let nan = 0, sum = 0, exposed = 0;
-  const hist = [0, 0, 0, 0, 0]; // [0], (0,.33), [.33,.66), [.66,1), [1+]
-  for (const v of r.exposure) {
-    if (Number.isNaN(v)) nan++;
-    sum += v;
-    if (v === 0) { exposed++; hist[0]++; }
-    else if (v >= 1) hist[4]++;
-    else hist[1 + Math.min(2, Math.floor(v * 3))]++;
+  let lit = 0, samples = 0, nan = 0;
+  for (let i = 0; i < d.count; i += 7) {          // sample every 7th box
+    if (d.bcy[i] + d.bhy[i] < 10) continue;        // above-grade boxes only
+    const b = i * 16, e = d.matrixData;
+    for (let f = 0; f < 4; f++) {
+      const axC = f < 2 ? 0 : 8, sgn = (f % 2 === 0) ? 1 : -1;
+      const ax = [e[b + axC], e[b + axC + 1], e[b + axC + 2]];
+      const al = Math.hypot(ax[0], ax[1], ax[2]) || 1;
+      const wx = e[b + 12] + sgn * 0.5 * ax[0], wy = e[b + 13] + sgn * 0.5 * ax[1], wz = e[b + 14] + sgn * 0.5 * ax[2];
+      const g = gateAt(occ, i, wx, wy, wz, sgn * ax[0] / al, sgn * ax[1] / al, sgn * ax[2] / al);
+      if (Number.isNaN(g)) nan++;
+      lit += g; samples++;
+    }
   }
   rows.push({
     district: d.name, boxes: d.count, ms: Math.round(ms),
-    'interior%': r.interiorPct, 'partial%': r.partialPct,
-    'exposed%': Math.round(100 * exposed / (d.count * 4)),
-    mean: (sum / (d.count * 4)).toFixed(3), nan,
-    hist: hist.map((h) => Math.round(100 * h / (d.count * 4))).join('/'),
+    'occluded%': occ.occludedPct,
+    'faceCentresLit%': samples ? Math.round(100 * lit / samples) : 0,
+    nan,
   });
 }
 console.table(rows);
-console.log(`total: ${totalBoxes} boxes, ${Math.round(totalMs)}ms (hist = %0 / low / mid / high / interior)`);
+console.log(`total: ${totalBoxes} boxes, ${Math.round(totalMs)}ms`);

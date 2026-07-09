@@ -654,26 +654,20 @@ NCZ.WINDOW_COLUMN_COHERENCE = 0.25;
 // ~0.6 keeps the shell. URL: ?night&winshell=
 NCZ.WINDOW_SHELL_GATE = -1.0;
 // EXTERIOR-FACE occlusion mask (the ground-truth replacement for the shell gate
-// above). At load, computeFaceExposure() tests each box's 4 side faces against
-// its neighbours (spatial hash, full matrices for tilted boxes) and stores, per
-// face, the box-local height fraction ABOVE WHICH the face is unoccluded
-// ("exposed-above-Y"): 0 = fully exposed, >1 = fully buried. The shader gates
-// windows AND all signage layers so only genuinely exterior wall area lights —
-// burial is dominantly from BELOW (podiums, lower neighbours), which this clips
-// spatially instead of dimming whole faces. 1.0 = full gate, 0 = OFF (compile-time
-// no-op, restores the pre-mask look). URL: ?facemask=
+// above). At load, computeFaceOccluders() finds each box's 4 largest-overlap
+// neighbour boxes; per fragment, the shader probes FACE_EPS in front of the wall
+// and darkens windows AND all signage layers where that probe sits INSIDE one of
+// those neighbours (exact OBB containment via per-box inverse matrices, so the
+// verdict is correct per fragment — a slab poking out past its interpenetrating
+// siblings lights exactly where it pokes). Errs LIT by design: a missed 5th+
+// occluder leaves a fragment lit BEHIND geometry, which the depth buffer hides.
+// 1.0 = full gate, 0 = OFF (compile-time no-op, restores the pre-mask look).
+// URL: ?facemask=
 NCZ.FACE_MASK_STRENGTH = 1.0;
-// Smoothstep half-band (box-local height fraction) around the exposed-above
-// height, so the lit/dark boundary on a partially buried face doesn't alias.
-// URL: ?facesoft=
-NCZ.FACE_MASK_SOFT = 0.04;
-// CET push-out of the occlusion probe along the face normal, so coplanar-abutting
-// AND overlapping neighbours count as occluders. Must stay below any plausible
-// box thickness or thin neighbours falsely bury faces. URL: ?faceeps=
+// CET push-out of the occlusion probe along the fragment normal, so coplanar-
+// abutting AND overlapping neighbours count as occluders. Must stay below any
+// plausible box thickness or thin neighbours falsely bury walls. URL: ?faceeps=
 NCZ.FACE_EPS = 0.35;
-// Max vertical probe columns per face (2 at the edges, +1 centre on faces wider
-// than 8 CET). More columns = more conservative (max wins). URL: ?facecols=
-NCZ.FACE_COLUMNS = 3;
 // Window light palette (sRGB hex) — interior light TEMPERATURES, not neon. Index 0
 // is the default warm-white "lamp" most windows use; the rest are a mix of warm
 // and cool whites picked per-window by hash (WINDOW_TINT_FRACTION), so the city's
@@ -980,9 +974,7 @@ NCZ.PIN_3D_SCALE_TARGET_PX          = 100; // ideal scale-bar width in pixels �
     winpaneh: "WINDOW_PANE_H",
     winshell: "WINDOW_SHELL_GATE",
     facemask: "FACE_MASK_STRENGTH",
-    facesoft: "FACE_MASK_SOFT",
     faceeps:  "FACE_EPS",
-    facecols: "FACE_COLUMNS",
     wincol:   "WINDOW_COLUMN_COHERENCE",
     winint:   "WINDOW_INTENSITY",
     signint:   "SIGN_INTENSITY",

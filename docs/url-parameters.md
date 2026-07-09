@@ -14,7 +14,7 @@ Query-string flags the app reads at load time. Append to the site URL, e.g.
 | `?archdebug` | flag | Colours every building box by its **discrete** archetype class (tower/block/podium/elongated/thin/short) and shows the legend (with hover definitions) left of the overlays box. See [`building-classification.md`](building-classification.md). | `three-scene.js`, `app.js` |
 | `?segdebug` | flag | **Structure** visualiser: colours every box by its **segmented building id** (hash colour), so adjacent buildings differ and you can see which boxes form one building — the result of the road / height / split segmentation. Complements `?archdebug` (which shows *class*, not *grouping*). Self-lit. See [`building-classification.md`](building-classification.md). | `three-scene.js`, `app.js` |
 | `?zonetool` | flag | Loads the in-3D **building-zone drawing tool** (draw/extrude/edit CET zones; merge/forceClass/exclude/forceLit; localStorage + file import/export). See [`building-classification.md`](building-classification.md). | `three-scene.js`, `zone-tool.js` |
-| `?facedebug` | flag | **Exterior-face mask** visualiser: renders the occlusion gate spatially, exactly as the night emissive sees it — green = wall area allowed to light, red = wall area gated as buried (a partially buried face shows its actual boundary line), grey = roofs/floors. Self-lit. | `three-scene.js` |
+| `?facedebug` | flag | **Exterior-face mask** visualiser: renders the per-fragment occlusion gate exactly as the night emissive sees it — green = wall area allowed to light, red = wall area whose in-front probe sits inside a neighbouring box (covered by that neighbour's surface), grey = roofs/floors. Self-lit. | `three-scene.js` |
 
 ## Live building-tuning overrides (with `?archdebug` / `?zonetool`)
 
@@ -30,8 +30,7 @@ hook) and consumed by `three-scene.js`. Absent = the committed default.
 | `vlo` / `vhi` | `ARCH_VERTICALITY_LO/HI` | `minf` | `ARCH_MIN_FOOTPRINT` |
 | `maxe` | `ARCH_MAX_ELONGATION` | `podlo` / `podhi` | `ARCH_PODIUM_HEIGHT_LO/HI` |
 | `winmin` / `winband` | `WINDOW_MIN_HEIGHT` / `_BAND` | `facemask` | `FACE_MASK_STRENGTH` (0 = mask off) |
-| `facesoft` | `FACE_MASK_SOFT` | `faceeps` | `FACE_EPS` |
-| `facecols` | `FACE_COLUMNS` | | |
+| `faceeps` | `FACE_EPS` | | |
 
 Example: `?archdebug&fbig=220&dh=24&keepwhole=2000`.
 
