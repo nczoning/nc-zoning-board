@@ -15,6 +15,7 @@ Query-string flags the app reads at load time. Append to the site URL, e.g.
 | `?segdebug` | flag | **Structure** visualiser: colours every box by its **segmented building id** (hash colour), so adjacent buildings differ and you can see which boxes form one building — the result of the road / height / split segmentation. Complements `?archdebug` (which shows *class*, not *grouping*). Self-lit. See [`building-classification.md`](building-classification.md). | `three-scene.js`, `app.js` |
 | `?zonetool` | flag | Loads the in-3D **building-zone drawing tool** (draw/extrude/edit CET zones; merge/forceClass/exclude/forceLit; localStorage + file import/export). See [`building-classification.md`](building-classification.md). | `three-scene.js`, `zone-tool.js` |
 | `?facedebug` | flag | **Exterior-face mask** visualiser: renders the per-fragment occlusion gate exactly as the night emissive sees it — green = wall area allowed to light, red = wall area whose in-front probe sits inside a neighbouring box (covered by that neighbour's surface), grey = roofs/floors. Self-lit. | `three-scene.js` |
+| `?shapemark` | flag | **Shape-detection** verification view: labelled beacon pillars (S/C/R/X + number) at every shape-detector candidate — red = sphere, cyan = cylinder, amber = ring, magenta = round-ish. Candidate list is currently the prototype detector's baked output; verdicts in `_lighting_demo/shape_candidates.txt`. | `three-scene.js` |
 
 ## Live building-tuning overrides (with `?archdebug` / `?zonetool`)
 

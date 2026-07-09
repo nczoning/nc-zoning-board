@@ -1166,6 +1166,60 @@ const ThreeScene = (() => {
         .catch((e) => console.error('[NCZ] zone-tool failed to load', e));
     }
 
+    // ?shapemark — SHAPE-DETECTION verification view (companion to ?facedebug /
+    // ?archdebug): labelled beacon pillars at the shape-detector candidates so
+    // detections can be verified against the live scene / in game. Colours:
+    // red = sphere, cyan = cylinder, amber = ring, magenta = round-ish.
+    // The list below is the PROTOTYPE detector's output (headless scan,
+    // 2026-07-09; ground-truth verdicts in _lighting_demo/shape_candidates.txt)
+    // — when the production detector lands it should feed this view live.
+    // CET coords → world x = cetX, z = -cetY.
+    if (new URLSearchParams(location.search).has('shapemark')) {
+      const MARKS = [
+        // [cetX, cetY, type]  type: 0 sphere, 1 cylinder, 2 ring, 3 round-ish
+        [-1153, 2633, 0], [-2841, 2500, 0], [-1683, 2477, 0], [-3466, 1192, 0],
+        [3541, -1273, 0], [4627, -564, 0], [3263, -263, 0], [3598, -1539, 0],
+        [3742, -1439, 0], [4540, -435, 0], [3417, -167, 0], [3858, -1907, 0],
+        [4839, -794, 0], [-1706, -1407, 0],
+        [-2197, -1135, 1], [-2147, -794, 1], [-2255, -988, 1], [-2300, -875, 1],
+        [-2108, -752, 1], [-1804, -527, 1], [-4190, -38, 1], [-4472, -364, 1],
+        [-5208, -41, 1], [-95, 514, 1], [-1371, 2690, 1], [-285, 2077, 1],
+        [-1112, 2028, 1], [-389, 2393, 1], [-1246, -3808, 1], [-1564, 1031, 1],
+        [15, 157, 1], [-111, 1191, 1],
+        [351, 1093, 2],
+        [-1374, -2681, 3], [-732, 616, 3], [-1090, 2274, 3], [-1383, -3613, 3],
+      ];
+      const COLS = [0xff3040, 0x00e0ff, 0xffb300, 0xd040ff];
+      const CSSCOLS = ['#ff3040', '#00e0ff', '#ffb300', '#d040ff'];
+      const PREFIX = ['S', 'C', 'R', 'X'];
+      const beamGeo = new THREE.BoxGeometry(10, 1, 10);
+      const typeCount = [0, 0, 0, 0];
+      const index = [];
+      for (const [cetX, cetY, type] of MARKS) {
+        const id = `${PREFIX[type]}${++typeCount[type]}`;
+        const m = new THREE.Mesh(beamGeo, new THREE.MeshBasicNodeMaterial({
+          color: COLS[type], transparent: true, opacity: 0.75, depthWrite: false,
+        }));
+        m.scale.y = 700;
+        m.position.set(cetX, 350, -cetY);
+        m.renderOrder = 3;
+        scene.add(m);
+        // ID tag at the pillar top — CSS2DObject rides ThreeMarkers' CSS2D pass
+        // (it traverses the whole scene), inline-styled so this stays throwaway.
+        const el = document.createElement('div');
+        el.textContent = id;
+        el.style.cssText = `color:${CSSCOLS[type]};background:rgba(4,10,20,.85);border:1px solid ${CSSCOLS[type]};` +
+          'padding:2px 7px;border-radius:4px;font:700 14px Rajdhani,sans-serif;letter-spacing:.05em;pointer-events:none;';
+        const css = new CSS2DObject(el);
+        css.position.set(cetX, 715, -cetY);
+        css.name = `shapemark-${id}`;
+        scene.add(css);
+        index.push({ id, cet: `${cetX}, ${cetY}` });
+      }
+      console.log(`[NCZ] shapemark: ${MARKS.length} beacons — S=sphere(red) C=cylinder(cyan) R=ring(amber) X=round-ish(magenta)`);
+      console.table(index);
+    }
+
     loadTerrain();
   }
 
