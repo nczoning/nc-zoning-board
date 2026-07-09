@@ -13,6 +13,7 @@ Query-string flags the app reads at load time. Append to the site URL, e.g.
 | `?only=<district>` | value | Renders **only** the named `DISTRICT_META` building cloud (e.g. `?only=my_district`, `?only=ugly_building`, `?only=watson`) — isolates one cloud for diagnosing placement/content. | `three-scene.js` |
 | `?archdebug` | flag | Colours every building box by its **discrete** archetype class (tower/block/podium/elongated/thin/short) and shows the legend (with hover definitions) left of the overlays box. See [`building-classification.md`](building-classification.md). | `three-scene.js`, `app.js` |
 | `?segdebug` | flag | **Structure** visualiser: colours every box by its **segmented building id** (hash colour), so adjacent buildings differ and you can see which boxes form one building — the result of the road / height / split segmentation. Complements `?archdebug` (which shows *class*, not *grouping*). Self-lit. See [`building-classification.md`](building-classification.md). | `three-scene.js`, `app.js` |
+| `?partdebug` | flag | **Part** visualiser — the twin of `?segdebug`, one level finer. Colours every box by its **part id** (hash colour), so a tower and the podium it rises from render as two colours *inside one building*, and a mast separates from its apron. Read the two together: `?segdebug` = what the segmenter calls one building, `?partdebug` = the strata inside it. Tune with `?partdh=`. Self-lit. See [`building-classification.md`](building-classification.md). | `three-scene.js` |
 | `?zonetool` | flag | Loads the in-3D **building-zone drawing tool** (draw/extrude/edit CET zones; merge/forceClass/exclude/forceLit; localStorage + file import/export). See [`building-classification.md`](building-classification.md). | `three-scene.js`, `zone-tool.js` |
 | `?facedebug` | flag | **Exterior-face mask** visualiser: renders the per-fragment occlusion gate exactly as the night emissive sees it — green = wall area allowed to light, red = wall area whose in-front probe sits inside a neighbouring box (covered by that neighbour's surface), grey = roofs/floors. Self-lit. | `three-scene.js` |
 | `?shapemark` | flag | **Shape-detection** verification view: labelled beacon pillars (S/C/R/X + number) at every shape-detector candidate — red = sphere, cyan = cylinder, amber = ring, magenta = round-ish. Candidate list is currently the prototype detector's baked output; verdicts in `_lighting_demo/shape_candidates.txt`. | `three-scene.js` |
@@ -28,6 +29,7 @@ hook) and consumed by `three-scene.js`. Absent = the committed default.
 | `gap` | `BUILDING_CLUSTER_GAP` (legacy) | `dh` | `BUILDING_SEG_DH` |
 | `cell` | `BUILDING_SEG_CELL` | `mincells` | `BUILDING_SEG_MIN_CELLS` |
 | `keepwhole` | `BUILDING_SEG_KEEP_WHOLE` | `fbig` | `ARCH_FOOTPRINT_BIG` |
+| `partdh` | `BUILDING_PART_DH` (with `?partdebug`) | | |
 | `vlo` / `vhi` | `ARCH_VERTICALITY_LO/HI` | `minf` | `ARCH_MIN_FOOTPRINT` |
 | `maxe` | `ARCH_MAX_ELONGATION` | `podlo` / `podhi` | `ARCH_PODIUM_HEIGHT_LO/HI` |
 | `winmin` / `winband` | `WINDOW_MIN_HEIGHT` / `_BAND` | `facemask` | `FACE_MASK_STRENGTH` (0 = mask off) |

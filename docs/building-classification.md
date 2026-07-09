@@ -80,6 +80,47 @@ boxes are packed in spatially-incoherent order, no separators) — segmentation
 | `BUILDING_SEG_MIN_CELLS` | 3 | regions smaller than this are absorbed |
 | `BUILDING_SEG_KEEP_WHOLE` | 1200 | footprint components ≤ this (cells) are never height-split |
 
+## 1.5 Parts — sub-building strata (`?partdebug`)
+
+A **building** is the unit a person names ("that tower"). A **part** is the unit
+that emits light coherently: a tower, the podium it rises from, a mast, a fuel
+sphere. Night City's look is a dark podium base with a lit tower rising out of it,
+and a single archetype per building cannot express that.
+
+Parts fall out of the segmenter almost for free. Step 2b already splits a tower
+from its podium on the roof cliff, and step 3.5 (`BUILDING_PODIUM_MERGE`)
+deliberately union-finds them back together, because the classifier needed one
+class per structure. The part pass keeps those labels instead of discarding them:
+
+```text
+Building = footprint CC + KEEP_WHOLE reprieve + roof cliff + podium merge
+           + zone merge + oversize split
+Part     = footprint CC + roof cliff (ALWAYS) + absorb,  ∩ building
+```
+
+Two differences from the building pass:
+
+1. **No `KEEP_WHOLE` reprieve.** The building pass exempts small (isolated)
+   footprint components from height splitting, so an isolated structure with a
+   varied roof (Kujira) stays whole. The part pass gates everything, so an
+   isolated tower-on-podium splits too.
+2. **Intersected with the final building label**, so a zone merge or the oversize
+   spatial chop can never leave one part straddling two buildings.
+
+`BUILDING_PART_DH` (default 18, `?partdh=`) is the part-level roof cliff. The
+podium merge stays **on** — it is still correct at the building level.
+
+**What parts do and do not resolve.** Parts separate *vertical* strata: a tower
+from its podium, a mast from its apron, the power-plant structures from their
+deck. They cannot separate *laterally adjacent, equal-height* objects, because the
+roof-cliff signal is flat across them — the three spaceport fuel spheres (S4) stay
+one part. Shape detection therefore still needs tight sub-clusters below the part
+level. Parts are necessary, not sufficient.
+
+`?partdebug` colours every box by part id (hash colour), the twin of `?segdebug`.
+Compile-time early-return, and the part-id storage buffer is allocated only when
+the flag is present, so the night material's 7-of-8 binding budget is untouched.
+
 ## 2. Classification — archetypes
 
 Each building is sorted into one of six archetypes from its aggregate dims. The

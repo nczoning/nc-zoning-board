@@ -528,6 +528,22 @@ NCZ.BUILDING_ROAD_DILATE    = 1;    // widen road coverage by N grid cells (road
 // one edge only (< FRAC) so they DON'T merge. URL: ?podmerge=0 / ?podfrac= .
 NCZ.BUILDING_PODIUM_MERGE      = 1;    // 0 = disable
 NCZ.BUILDING_PODIUM_MERGE_FRAC = 0.45; // min fraction of a segment's perimeter bordering its podium to merge
+// ── PART level (sub-building strata) ─────────────────────────────────────────
+// A building is the unit the user names ("that tower"); a PART is the unit that
+// emits light coherently — a tower, the podium it rises from, a mast, a fuel
+// sphere. Parts are the same roof-cliff region-grow the building pass runs, with
+// the BUILDING_SEG_KEEP_WHOLE reprieve REMOVED (isolated structures get split
+// too) and no podium merge, then intersected with the final building label so a
+// part never straddles a building boundary.
+//
+// Building = connectivity + keep-whole + DH + podium merge + zone merge + split.
+// Part     = connectivity + DH (always) + absorb, ∩ building.
+//
+// Parts exist because class is a per-PART property: the podium is dark, the tower
+// on it is lit. BUILDING_PODIUM_MERGE stays on — it is still correct for the
+// building level — but the labels it unions are exactly the parts we keep.
+// URL: ?partdh= (visualise with ?partdebug).
+NCZ.BUILDING_PART_DH = 18;   // roof-height cliff (CET) that separates two PARTS of one building
 // (A) World-region suppression — CET rects [minX, minY, maxX, maxY] where windows
 // are forced off (ocean / oil fields / industrial zones the geometry can't tell
 // apart). Empty = no-op. Compile-time (rebuild materials to apply). Fill from the
@@ -957,6 +973,7 @@ NCZ.PIN_3D_SCALE_TARGET_PX          = 100; // ideal scale-bar width in pixels �
     dh:      "BUILDING_SEG_DH",
     mincells:"BUILDING_SEG_MIN_CELLS",
     keepwhole:"BUILDING_SEG_KEEP_WHOLE",
+    partdh:  "BUILDING_PART_DH",
     splitcell:"BUILDING_SPLIT_CELL",
     splitmin: "BUILDING_SPLIT_MIN_SPAN",
     roadcarve:"BUILDING_ROAD_CARVE",

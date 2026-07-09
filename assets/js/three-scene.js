@@ -2427,54 +2427,75 @@ const ThreeScene = (() => {
 
     // 2b. region-grow: 8-adjacent occupied cells join iff they share a footprint
     //     component AND (that component is kept whole OR their roofs are within DH).
-    const label = new Int32Array(cols * rows).fill(-1);
-    const sizes = [];
-    const stack = [];
-    let next = 0;
-    for (let s = 0; s < occ.length; s++) {
-      if (!occ[s] || label[s] !== -1) continue;
-      const id = next++; label[s] = id; stack.length = 0; stack.push(s);
-      const big = ccBig[ccLabel[s]];
-      let size = 0;
-      while (stack.length) {
-        const k = stack.pop(); size++;
-        if (barrier[k]) continue; // road-barrier cells are singleton dead-ends — don't bridge a street
-        const r = (k / cols) | 0, c = k % cols, h = roof[k];
-        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
-          if (!dr && !dc) continue;
-          const nr = r + dr, nc = c + dc;
-          if (nr < 0 || nc < 0 || nr >= rows || nc >= cols) continue;
-          const nk = nr * cols + nc;
-          if (occ[nk] && !barrier[nk] && label[nk] === -1 && (!big || Math.abs(roof[nk] - h) < DH)) { label[nk] = id; stack.push(nk); }
+    //     `gateFor(cc)` decides whether the roof-cliff test applies to regions seeded
+    //     in footprint-component cc. The BUILDING pass exempts small (isolated)
+    //     components via KEEP_WHOLE; the PART pass below gates everything.
+    const growRegions = (dh, gateFor) => {
+      const label = new Int32Array(cols * rows).fill(-1);
+      const sizes = [];
+      const stack = [];
+      let next = 0;
+      for (let s = 0; s < occ.length; s++) {
+        if (!occ[s] || label[s] !== -1) continue;
+        const id = next++; label[s] = id; stack.length = 0; stack.push(s);
+        const gated = gateFor(ccLabel[s]);
+        let size = 0;
+        while (stack.length) {
+          const k = stack.pop(); size++;
+          if (barrier[k]) continue; // road-barrier cells are singleton dead-ends — don't bridge a street
+          const r = (k / cols) | 0, c = k % cols, h = roof[k];
+          for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+            if (!dr && !dc) continue;
+            const nr = r + dr, nc = c + dc;
+            if (nr < 0 || nc < 0 || nr >= rows || nc >= cols) continue;
+            const nk = nr * cols + nc;
+            if (occ[nk] && !barrier[nk] && label[nk] === -1 && (!gated || Math.abs(roof[nk] - h) < dh)) { label[nk] = id; stack.push(nk); }
+          }
         }
+        sizes.push(size);
       }
-      sizes.push(size);
-    }
+      return { label, sizes };
+    };
 
     // 3. absorb sub-MIN_CELLS regions into the neighbour they border most. (Road
     //    carving leaves barrier cells as singletons → many tiny regions; the pass
     //    cap bounds the work, the rest fold into their dominant block.)
-    let changed = true, absorbPass = 0;
-    while (changed && absorbPass++ < 20) {
-      changed = false;
-      for (let k = 0; k < occ.length; k++) {
-        if (!occ[k]) continue;
-        const id = label[k];
-        if (sizes[id] >= MIN_CELLS) continue;
-        const r = (k / cols) | 0, c = k % cols;
-        const tally = new Map();
-        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
-          if (!dr && !dc) continue;
-          const nr = r + dr, nc = c + dc;
-          if (nr < 0 || nc < 0 || nr >= rows || nc >= cols) continue;
-          const nk = nr * cols + nc;
-          if (occ[nk] && label[nk] !== id) tally.set(label[nk], (tally.get(label[nk]) || 0) + 1);
+    const absorbSmall = (label, sizes) => {
+      let changed = true, absorbPass = 0;
+      while (changed && absorbPass++ < 20) {
+        changed = false;
+        for (let k = 0; k < occ.length; k++) {
+          if (!occ[k]) continue;
+          const id = label[k];
+          if (sizes[id] >= MIN_CELLS) continue;
+          const r = (k / cols) | 0, c = k % cols;
+          const tally = new Map();
+          for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+            if (!dr && !dc) continue;
+            const nr = r + dr, nc = c + dc;
+            if (nr < 0 || nc < 0 || nr >= rows || nc >= cols) continue;
+            const nk = nr * cols + nc;
+            if (occ[nk] && label[nk] !== id) tally.set(label[nk], (tally.get(label[nk]) || 0) + 1);
+          }
+          let best = -1, bestN = 0;
+          for (const [lab, n] of tally) if (n > bestN) { best = lab; bestN = n; }
+          if (best >= 0) { sizes[best]++; sizes[id]--; label[k] = best; changed = true; }
         }
-        let best = -1, bestN = 0;
-        for (const [lab, n] of tally) if (n > bestN) { best = lab; bestN = n; }
-        if (best >= 0) { sizes[best]++; sizes[id]--; label[k] = best; changed = true; }
       }
-    }
+    };
+
+    const { label, sizes } = growRegions(DH, (cc) => ccBig[cc]);
+    absorbSmall(label, sizes);
+
+    // 3.25 PART labelling — the SAME region-grow with the KEEP_WHOLE reprieve
+    //      removed, so the roof-cliff gate fires on isolated structures too (an
+    //      isolated tower separates from the podium it rises from; a mast from its
+    //      apron). No podium merge. Intersected with the FINAL building label in
+    //      4c.5, so a part can never straddle a building boundary. Parts are what
+    //      the emissive classifier will read, buildings stay the naming unit.
+    const partGrow = growRegions(NCZ.BUILDING_PART_DH, () => true);
+    absorbSmall(partGrow.label, partGrow.sizes);
+    const partCell = partGrow.label;
 
     // 3.5 CONTAINMENT (tower-on-podium) MERGE. The height split cuts a tall column
     //     (tower) from the lower apron/base (podium) it rises from → "one building,
@@ -2513,11 +2534,13 @@ const ThreeScene = (() => {
       if (parent.size) for (let k = 0; k < occ.length; k++) if (occ[k]) label[k] = find(label[k]);
     }
 
-    // 4a. assign each box to its centroid cell's region label.
+    // 4a. assign each box to its centroid cell's region label (building AND part).
     const boxLabel = new Int32Array(count);
+    const partBoxLabel = new Int32Array(count);
     for (let i = 0; i < count; i++) {
       const c = Math.floor(cx[i] / CELL) - col0, r = Math.floor(cz[i] / CELL) - row0;
       boxLabel[i] = label[r * cols + c];
+      partBoxLabel[i] = partCell[r * cols + c];
     }
 
     // 4b. ZONE MERGE override: every box whose centroid falls inside a merge zone's
@@ -2603,7 +2626,22 @@ const ThreeScene = (() => {
       center[i*2+0] = (a.minX + a.maxX) * 0.5;  // building centre world X
       center[i*2+1] = (a.minZ + a.maxZ) * 0.5;  // building centre world Z
     }
-    return { attr, baseY, center, clusterCount: nextId };
+
+    // 4c.5 PART ids — the INTERSECTION of the part region (3.25) and the FINAL
+    //      building label (post zone-merge, post oversize-split). Intersecting
+    //      matters: without it a merge zone or a spatial chop could leave one part
+    //      spanning two buildings, and the part is meant to be the finer unit.
+    //      Dense-remapped: one id per (part region, building) pair.
+    const partDense = new Map();
+    const partId = new Float32Array(count);
+    let nextPart = 0;
+    for (let i = 0; i < count; i++) {
+      const key = partBoxLabel[i] + '|' + boxLabel[i];
+      let p = partDense.get(key);
+      if (p === undefined) { p = nextPart++; partDense.set(key, p); }
+      partId[i] = p;
+    }
+    return { attr, baseY, center, partId, clusterCount: nextId, partCount: nextPart };
   }
 
   // ── Exterior-face occlusion (per-fragment, v2) ──────────────────────────────
@@ -2951,11 +2989,20 @@ const ThreeScene = (() => {
         // (vec4: heightHalf, footMaxHalf, footMinHalf, clusterId). The shader
         // classifies + seeds window/sign hashing from THESE, not the per-box size,
         // so a thin slab inherits its building's class.
-        const { attr: buildingAttrData, baseY: buildingBaseData, center: buildingCenterData, clusterCount } = segmentBuildings(
+        const { attr: buildingAttrData, baseY: buildingBaseData, center: buildingCenterData, partId: partIdData, clusterCount, partCount } = segmentBuildings(
           bcx, bcy, bcz, bhx, bhy, bhz, validCount, _mergeZones, _roadGrid);
         const buildingAttrBuffer = instancedArray(validCount, 'vec4');
         buildingAttrBuffer.value.set(buildingAttrData.subarray(0, validCount * 4));
-        console.log(`[NCZ] ${meta.name}: ${validCount} boxes → ${clusterCount} buildings`);
+        console.log(`[NCZ] ${meta.name}: ${validCount} boxes → ${clusterCount} buildings → ${partCount} parts`);
+
+        // Per-instance PART id — built ONLY for ?partdebug. The night material sits
+        // at 7 of WebGPU's 8 storage buffers per stage (see the pack-vec4 learning);
+        // ?partdebug early-returns before the night nodes are built, so its material
+        // binds far fewer and this extra buffer is free. Do NOT hoist it out of the
+        // flag until partId replaces something in buildingAttrBuffer.
+        const _partDebug = new URLSearchParams(location.search).has('partdebug');
+        const partIdBuffer = _partDebug ? instancedArray(validCount, 'float') : null;
+        if (partIdBuffer) partIdBuffer.value.set(partIdData.subarray(0, validCount));
 
         // Per-building metadata records (centroid, dims, class, district tag).
         // Also returns each building's sign-density multiplier (subId → profile).
@@ -3102,7 +3149,7 @@ const ThreeScene = (() => {
         renderer.compute(initFn);
         _cullComputes.push({ reset: resetFn, cull: cullFn });
 
-        const mat  = buildBuildingMaterial(meta, await loadMDds(meta.mDds), matricesBuffer, visibleIndicesBuffer, buildingAttrBuffer, buildingOverrideBuffer, buildingCBSBuffer, faceOccIdxBuffer, faceInvBuffer);
+        const mat  = buildBuildingMaterial(meta, await loadMDds(meta.mDds), matricesBuffer, visibleIndicesBuffer, buildingAttrBuffer, buildingOverrideBuffer, buildingCBSBuffer, faceOccIdxBuffer, faceInvBuffer, partIdBuffer);
         mat.userData.instanceMatricesBuffer = matricesBuffer;
         mat.userData.visibleIndicesBuffer   = visibleIndicesBuffer;
         mat.userData.indirectAttribute      = indirectAttribute;
@@ -3196,7 +3243,7 @@ const ThreeScene = (() => {
   // Per-district `uniform()` node refs are stashed on `mat.userData.tslUniforms`
   // so the colour-binding registry (`getColorBindings.buildingsEdge`) can mutate
   // `.value` during theme switches and flyover beat-driven colour tweens.
-  function buildBuildingMaterial(meta, mTex, instanceMatricesBuffer, visibleIndicesBuffer, buildingAttrBuffer, buildingOverrideBuffer, buildingCBSBuffer, faceOccIdxBuffer, faceInvBuffer) {
+  function buildBuildingMaterial(meta, mTex, instanceMatricesBuffer, visibleIndicesBuffer, buildingAttrBuffer, buildingOverrideBuffer, buildingCBSBuffer, faceOccIdxBuffer, faceInvBuffer, partIdBuffer) {
     const mat = new THREE.MeshLambertNodeMaterial({
       color: readThemeColor('--scene-buildings', '#7a8fa0'),
     });
@@ -3663,6 +3710,24 @@ const ThreeScene = (() => {
       const seg = vec3(hsh(12.9898, 0.7), hsh(78.233, 2.3), hsh(37.719, 5.1)).mul(0.72).add(0.28);
       mat.colorNode = vec3(0.0, 0.0, 0.0);
       mat.emissiveNode = seg;
+      return mat;
+    }
+
+    // ── ?partdebug — PART (sub-building strata) visualiser ──────────────────
+    // The twin of ?segdebug, one level finer. Colours each box by its PART id, so
+    // a tower and the podium it rises from render as two colours INSIDE one
+    // building, and a mast separates from its apron. Read them together:
+    //   ?segdebug  = what the segmenter calls one building (post podium-merge)
+    //   ?partdebug = the strata inside it (the labels the podium merge unions)
+    // If a structure that should light as a whole is fragmented here, raise
+    // ?partdh=; if a tower stays fused to its podium, lower it. Self-lit, day or
+    // night. Compile-time early-return — zero cost when the flag is absent.
+    if (partIdBuffer && new URLSearchParams(location.search).has('partdebug')) {
+      const pid = partIdBuffer.element(realIndex);
+      const hsh = (a, b) => pid.mul(a).add(b).sin().mul(43758.5453).fract();
+      const prt = vec3(hsh(12.9898, 0.7), hsh(78.233, 2.3), hsh(37.719, 5.1)).mul(0.72).add(0.28);
+      mat.colorNode = vec3(0.0, 0.0, 0.0);
+      mat.emissiveNode = prt;
       return mat;
     }
 

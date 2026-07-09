@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Night-time** lighting: the time slider now runs a full day-night cycle. As the sun sets, a real moon on its own lunar arc lights the city with cool moonlight, with a smooth dusk/dawn transition and a cool night sky. The sun and moon are visible discs that rise and set along their real paths.
 - Per-district neon **sign density**: each subdistrict's signage matches its in-game character. Kabuki, Little China and Japantown blaze, the corpo/commercial cores stay dense, and industrial, rural and spaceport zones go dark.
 - Windows and signs now light only genuinely **exterior** block faces: a load-time occlusion pass marks faces buried inside a building (about 80% of all wall area) so the emissive stops stamping them. Fixes the "circuit-board" window noise. Debug view `?facedebug`; disable with `?facemask=0`.
+- Buildings now resolve into **parts** — a tower and the podium it rises from are separate strata, which is the unit night lighting will be classified on. Debug view `?partdebug`; tune with `?partdh=`.
 
 ## [1.3.0] - 2026-07-09
 
