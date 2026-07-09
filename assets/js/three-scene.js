@@ -2868,20 +2868,28 @@ const ThreeScene = (() => {
     return [];
   }
 
-  // ── ?colldebug — the game's own building decomposition ──────────────────────
+  // ── ?colldebug — the game's coarse collision boxes for the 3D map ───────────
   // Draws the 10,166 `physicsColliderBox` shapes from 3dmap_coll_buildings{,2,3}
   // (the meshes 3dmap_view.ent references) as translucent hash-coloured boxes
-  // over the scene. These are what the game tests when you point at the 3D map,
-  // so they encode CDPR's OWN answer to "what is one object here" — the question
-  // segmentBuildings infers from roof cliffs.
+  // over the scene. Same encoding as a _data.dds instance (position + quaternion
+  // + halfExtents), ~26x coarser: median 60 CET long side, 31 CET tall, ~11
+  // render boxes each.
   //
-  // Read it as: does one collider = one building, the way you'd draw the line?
-  // Known caveats, measured (see wiki learnings/game-3dmap-collision-boxes):
+  // What they are NOT: an object partition. No script reads them (zero `3dmap`
+  // references across the decompiled scripts; worldMap.swift hovers DISTRICTS and
+  // never raycasts). They sit beside 3dmap_cursor.ent and 3dmap_coll_roads, so
+  // their job is almost certainly a cheap solid surface for the custom-waypoint
+  // cursor to land on. Do NOT treat one collider as one building.
+  //
+  // Measured (see wiki learnings/game-3dmap-collision-boxes):
   //   • They OVERLAP. Only 42% of render-box centres sit in exactly one collider,
-  //     43% in two or more. They're a coarse covering, not a partition.
+  //     43% in two or more. A coarse covering, not a partition.
   //   • EP1 has none: Dogtown 37% / Spaceport 21% of boxes covered, vs 90–99%
   //     for every base-game district. The entity references no EP1 collision.
   //   • Matching is SPATIAL, so this data serves the Fixed and vanilla sets alike.
+  //
+  // Still useful: segmenting a soup where a whole tower is ONE box is a much
+  // easier problem than segmenting one where it is 288.
   //
   // Debug-only: the JSON is fetched solely under the flag. `?collalpha=` tunes
   // opacity (default 0.3); `?collwire` renders unfilled so you can see inside.

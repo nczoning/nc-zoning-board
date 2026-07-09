@@ -7,15 +7,17 @@
  *
  * Where they come from
  * ───────────────────
- * `base\entities\cameras\3dmap\3dmap_coll_buildings{,2,3}.mesh` are the shapes
- * the game tests when you point at the 3D map (they sit beside 3dmap_cursor.ent
- * and 3dmap_highlight_on.effect). Their RENDER buffers are 6-vertex stubs; the
- * payload is `parameters[0].physicsData.bodies[0].collisionShapes`, an array of
+ * `base\entities\cameras\3dmap\3dmap_coll_buildings{,2,3}.mesh`. Their RENDER
+ * buffers are 6-vertex stubs; the payload is
+ * `parameters[0].physicsData.bodies[0].collisionShapes`, an array of
  * `physicsColliderBox` — position + quaternion + halfExtents, i.e. the SAME
  * encoding as a `_data.dds` instance, ~26× coarser.
  *
- * They are the game's own coarse decomposition of the map into solid objects,
- * which is the grouping our roof-cliff segmentation has been inferring.
+ * They are a coarse COLLISION SURFACE, not an object partition. No decompiled
+ * script references `3dmap` at all, and they sit beside 3dmap_cursor.ent and
+ * 3dmap_coll_roads — almost certainly what the custom-waypoint cursor lands on.
+ * They overlap heavily (43% of render boxes sit in 2+ colliders). Useful because
+ * they are structure-scale, not because they carry identity.
  *
  * IMPORTANT — which files
  * ──────────────────────
