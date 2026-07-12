@@ -83,6 +83,36 @@ const HUE_NAMES = ['red', 'orange', 'amber', 'yellow-green', 'green', 'teal',
 const MOODS = ['dark', 'foggy', 'rainy', 'gaudy', 'neon-dense', 'clean', 'corpo',
   'industrial', 'residential', 'ruined', 'sparse', 'bright'];
 
+// ── Subdistrict identity ─────────────────────────────────────────────────────
+// The id comes from the FILENAME stem (`japantown_roof` → `japantown`), not the
+// folder name. Folders are human-facing and drift: "Araska Waterfront" is a typo,
+// and "Spaceport" is really `ncx_morro_rock`. Filenames were written to the capture
+// list, so they're closer to canonical — but not perfectly, hence the aliases.
+//
+// Anything that doesn't resolve to a real id in data/subdistricts.json is a LOUD
+// error, never a silent skip: an unjoined profile is worse than no profile, because
+// the district just quietly keeps its old hand-guessed density.
+const ID_ALIASES = {
+  japantown: 'japan_town',       // subdistricts.json calls it japan_town
+};
+const PASS_SUFFIX = /_(roof|street\d*|sky|aerial|ground)$/;
+
+function loadSubdistrictIds() {
+  const j = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'subdistricts.json'), 'utf8'));
+  const ids = new Set();
+  for (const d of j.districts) {
+    ids.add(d.id);
+    for (const s of (d.subdistricts || [])) ids.add(s.id);
+  }
+  return ids;
+}
+
+function resolveId(stem, validIds) {
+  const raw = stem.replace(PASS_SUFFIX, '');
+  const id = ID_ALIASES[raw] || raw;
+  return validIds.has(id) ? id : null;
+}
+
 const args = process.argv.slice(2);
 const NO_MODEL = args.includes('--no-model');
 const FILTER = args.find((a) => !a.startsWith('--'));
@@ -214,6 +244,9 @@ function findFrameDirs(dir, out = []) {
   if (!dirs.length) { console.log('[feel] no frames/ dirs — run feel_extract.js first.'); return; }
   if (!NO_MODEL) await preflight();
 
+  const VALID_IDS = loadSubdistrictIds();
+  const unresolved = [];
+
   const profiles = [];
 
   for (const framesDir of dirs) {
@@ -255,7 +288,16 @@ function findFrameDirs(dir, out = []) {
       (passes[pass] ||= []).push(f);
     }
 
-    const rec = { label, passes: {} };
+    // Resolve the canonical subdistrict id from the clip stems in this folder.
+    const stems = [...new Set(files.map((f) => f.split('__t')[0]))];
+    const resolved = [...new Set(stems.map((s) => resolveId(s, VALID_IDS)).filter(Boolean))];
+    if (resolved.length !== 1) {
+      const raws = stems.map((s) => s.replace(PASS_SUFFIX, ''));
+      unresolved.push({ label, stems, raws, resolved });
+    }
+    const subId = resolved.length === 1 ? resolved[0] : null;
+
+    const rec = { label, subId, passes: {} };
     for (const [pass, list] of Object.entries(passes)) {
       // Crop the road out of street frames — see STREET_TOP_FRAC.
       const topFrac = pass === 'street' ? STREET_TOP_FRAC : 1;
@@ -336,5 +378,16 @@ function findFrameDirs(dir, out = []) {
       console.log(`   ${p.label.padEnd(40)} ${(s / loudest).toFixed(2)}`);
     }
   }
-  console.log(`\n[feel] wrote _feel.json for ${profiles.length} subdistrict(s).`);
+  if (unresolved.length) {
+    console.log('\n[feel] ⚠ UNRESOLVED SUBDISTRICT IDs — these profiles cannot be joined to');
+    console.log('        the lighting constants, so those districts would silently keep their');
+    console.log('        old hand-guessed density. Fix the filename, or add an ID_ALIASES entry.');
+    for (const u of unresolved) {
+      console.log(`   ${u.label}`);
+      console.log(`      clip stems : ${u.stems.join(', ')}`);
+      console.log(`      → id       : ${u.raws.join(', ')}  (not in data/subdistricts.json)`);
+    }
+  }
+  console.log(`\n[feel] wrote _feel.json for ${profiles.length} subdistrict(s)` +
+    `, ${profiles.filter((p) => p.subId).length} with a resolved id.`);
 })();
