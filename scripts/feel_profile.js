@@ -41,11 +41,40 @@ const ROOT = path.join(__dirname, '..', '_lighting_demo', 'game_examples');
 const OLLAMA = process.env.OLLAMA_URL || 'http://localhost:11434';
 const MODEL = process.env.OLLAMA_MODEL || 'qwen3.5:9b';
 
+// THE ARCHIVE IS THE SOURCE OF TRUTH FOR CULLING.
+// Full-size frames are archived to E:\Cyberpunk Cityscapes, and that is where you
+// actually browse them — so that is where map/menu frames get deleted. If a working
+// frame has no counterpart in the archive, it was culled: skip it.
+//
+// This is not a nicety. The first street run silently included 10 world-map frames
+// because they had been deleted from the archive but not from frames/, and a map
+// screen is a full-frame wall of the exact cyan and red we are measuring.
+const ARCHIVE = process.env.ARCHIVE === 'off' ? null
+  : (process.env.ARCHIVE || 'E:\\Cyberpunk Cityscapes');
+
 // ── Pixel-pass thresholds ────────────────────────────────────────────────────
 const V_LIGHT = 0.55;   // brightness: pixel is a light source (density metrics)
 const S_WHITE = 0.25;   // below this saturation, a lit pixel is a WINDOW white
 const V_HUE   = 0.40;   // hue extraction: modest brightness floor …
 const S_HUE   = 0.65;   // … and a HIGH saturation gate (defeats bloom + haze)
+
+// ROAD CROP (street pass only). At street level the road surface fills the lower
+// frame, and the saturated pixels there are STREETLIGHT POOLS on wet tarmac —
+// large, bright, and warm. Measured on Kabuki they swamped everything:
+//
+//   street, whole frame : orange 39  red 37  teal 13  cyan  7    <- streetlights
+//   street, top 60%     : red 39  orange 20  teal 18  cyan 12
+//   street, top 45%     : red 36  teal 18  orange 16  cyan 15  hot-pink 6
+//   roof,   whole frame : red 24  teal 19  cyan 19  hot-pink 18  orange 14
+//
+// Cropping the road makes the street pass CONVERGE on the roof pass, and both then
+// match the human-verified reference (magenta/cyan/red). Streetlights and tarmac
+// are furniture the 3D map does not render — we render buildings — so excluding
+// them is not a fudge, it is measuring the thing we actually reproduce.
+//
+// A local-contrast gate was tried first and made it WORSE (orange 55): the warm
+// pools are genuinely bright emitters, not a dim wash, so contrast can't reject them.
+const STREET_TOP_FRAC = 0.55;   // fraction of frame height kept, from the top
 
 const BINS = 12;
 const HUE_NAMES = ['red', 'orange', 'amber', 'yellow-green', 'green', 'teal',
@@ -59,11 +88,12 @@ const NO_MODEL = args.includes('--no-model');
 const FILTER = args.find((a) => !a.startsWith('--'));
 
 // ── Pixel pass ───────────────────────────────────────────────────────────────
-async function measureFrame(file) {
+async function measureFrame(file, topFrac = 1) {
   const { data, info } = await sharp(file).resize(480, null, { fit: 'inside' })
     .raw().toBuffer({ resolveWithObject: true });
   const { width: w, height: h, channels: c } = info;
-  const total = w * h;
+  const maxRow = Math.max(1, Math.floor(h * topFrac));   // road crop (street pass)
+  const total = w * maxRow;
   const hue = new Float64Array(BINS);
   let lit = 0, white = 0, warm = 0, cool = 0, coloured = 0;
 
@@ -189,8 +219,28 @@ function findFrameDirs(dir, out = []) {
   for (const framesDir of dirs) {
     const subDir = path.dirname(framesDir);
     const label = path.relative(ROOT, subDir).replace(/\\/g, '/');
-    const files = fs.readdirSync(framesDir).filter((f) => /\.jpg$/i.test(f)).sort();
+    let files = fs.readdirSync(framesDir).filter((f) => /\.jpg$/i.test(f)).sort();
     if (!files.length) continue;
+
+    // Honour the archive cull (see ARCHIVE above). Applied PER CLIP: a clip that
+    // was extracted before archiving existed has no counterparts at all, and must
+    // not be mistaken for "everything was culled".
+    if (ARCHIVE) {
+      const archDir = path.join(ARCHIVE, path.relative(ROOT, subDir));
+      if (fs.existsSync(archDir)) {
+        const kept = new Set(fs.readdirSync(archDir)
+          .filter((f) => f.endsWith('.webp'))
+          .map((f) => f.replace(/\.webp$/, '')));
+        const stemOf = (f) => f.split('__t')[0];
+        const archivedStems = new Set([...kept].map(stemOf));
+        const before = files.length;
+        files = files.filter((f) => !archivedStems.has(stemOf(f)) || kept.has(f.replace(/\.jpg$/, '')));
+        const dropped = before - files.length;
+        if (dropped) console.log(`[feel] ${label}: skipping ${dropped} frame(s) culled from the archive`);
+        const unarchived = [...new Set(files.map(stemOf))].filter((s) => !archivedStems.has(s));
+        if (unarchived.length) console.log(`[feel] ${label}: ${unarchived.join(', ')} not in the archive — no cull applied (re-extract to archive it)`);
+      }
+    }
 
     // Group by pass (roof / street). Permissive on separators: `kabuki__roof`,
     // `kabuki_roof` and `kabuki-roof-2` all resolve. Anything with no recognisable
@@ -207,9 +257,11 @@ function findFrameDirs(dir, out = []) {
 
     const rec = { label, passes: {} };
     for (const [pass, list] of Object.entries(passes)) {
+      // Crop the road out of street frames — see STREET_TOP_FRAC.
+      const topFrac = pass === 'street' ? STREET_TOP_FRAC : 1;
       const agg = { total: 0, lit: 0, white: 0, warm: 0, cool: 0, coloured: 0, hue: new Array(BINS).fill(0) };
       for (const f of list) {
-        const m = await measureFrame(path.join(framesDir, f));
+        const m = await measureFrame(path.join(framesDir, f), topFrac);
         for (const k of ['total', 'lit', 'white', 'warm', 'cool', 'coloured']) agg[k] += m[k];
         for (let i = 0; i < BINS; i++) agg.hue[i] += m.hue[i];
       }
@@ -261,16 +313,25 @@ function findFrameDirs(dir, out = []) {
     fs.writeFileSync(path.join(subDir, '_feel.json'), JSON.stringify(rec, null, 2));
   }
 
-  // ── Ordinal normalisation: loudest street-pass sign density = 1.0 ──────────
-  // Per the reference model, Kabuki is the loudest and everything scales DOWN.
-  // Colour is taken from the STREET pass (signs seen directly); the ROOF pass is
-  // haze-dominated at distance and its hue is not trustworthy — see the wiki.
-  const streetSign = profiles.map((p) => p.passes.street?.sign_pct).filter((x) => x > 0);
-  const loudest = Math.max(...streetSign, 0);
+  // ── Ordinal normalisation: loudest = 1.0 ──────────────────────────────────
+  // Kabuki is the loudest and everything scales DOWN from it (matches the existing
+  // SIGN_DENSITY_PROFILE model).
+  //
+  // WHICH PASS OWNS COLOUR: the ROOF pass. An earlier guess said the street pass
+  // ("you see the signs directly") — the data killed it. What the 3D map RENDERS is
+  // buildings: facade windows and roof/facade signage, seen from above and afar. The
+  // roof pass samples exactly that. The street pass samples streetlights, tarmac and
+  // eye-level shop fronts, most of which we don't model — hence the road crop, after
+  // which the two passes converge.
+  //
+  // The street pass still earns its keep: it feeds the STREET-LEVEL signage layer
+  // (SIGN_STREET_*) and it reads the semantic fields far better up close.
+  const roofSign = profiles.map((p) => p.passes.roof?.sign_pct).filter((x) => x > 0);
+  const loudest = Math.max(...roofSign, 0);
   if (loudest > 0) {
-    console.log(`\n[feel] ordinal sign density (street pass, loudest = 1.0):`);
+    console.log(`\n[feel] ordinal sign density (roof pass, loudest = 1.0):`);
     for (const p of profiles) {
-      const s = p.passes.street?.sign_pct;
+      const s = p.passes.roof?.sign_pct;
       if (s == null) continue;
       console.log(`   ${p.label.padEnd(40)} ${(s / loudest).toFixed(2)}`);
     }

@@ -36,12 +36,27 @@ const { execFileSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..', '_lighting_demo', 'game_examples');
 const FPS = 2;            // frames per second of clip — the pixel pass wants density, it is cheap
-const WIDTH = 640;        // downscale; hue + area fractions are scale-invariant
+const WIDTH = 640;        // working downscale; hue + area fractions are scale-invariant
 const QUALITY = 3;        // ffmpeg -q:v (2 = best, 5 = meh). 3 keeps neon edges clean.
 const VIDEO_RE = /\.(mp4|mkv|mov|avi)$/i;
 
+// FULL-SIZE ARCHIVE. The working frames/ are 640 px (all the pixel pass needs, and
+// the model is no better at 1280 — measured). The originals are worth keeping
+// anyway: they're a reusable Night City reference library, and a candidate for a
+// public gallery. WebP q88 at native 1440p is ~6x smaller than PNG with no visible
+// loss on neon, and is directly web-servable.
+// Set ARCHIVE=off to skip, or ARCHIVE=<path> to relocate.
+const ARCHIVE = process.env.ARCHIVE === 'off' ? null
+  : (process.env.ARCHIVE || 'E:\\Cyberpunk Cityscapes');
+const ARCHIVE_QUALITY = 88;
+
 const args = process.argv.slice(2);
 const FORCE = args.includes('--force');
+// --archive-only: build the full-size archive for a clip whose working frames/
+// already exist, WITHOUT re-extracting (and thereby resurrecting) frames that have
+// already been culled by hand. The archive is then pruned to match frames/, so the
+// two stay in step and the archive remains the cull's source of truth.
+const ARCHIVE_ONLY = args.includes('--archive-only');
 const FILTER = args.find((a) => !a.startsWith('--'));
 
 function findVideos(dir, out = []) {
@@ -76,35 +91,76 @@ for (const video of videos) {
   fs.mkdirSync(framesDir, { recursive: true });
 
   const existing = fs.readdirSync(framesDir).filter((f) => f.startsWith(stem + '__t'));
-  if (existing.length && !FORCE) {
+  if (existing.length && !FORCE && !ARCHIVE_ONLY) {
     console.log(`[feel] skip ${stem} — ${existing.length} frames already extracted (--force to redo)`);
     totalFrames += existing.length;
     continue;
   }
-  for (const f of existing) fs.unlinkSync(path.join(framesDir, f));
 
-  // %04d counts extracted frames, not seconds — so at FPS=2, frame N is at
-  // t = (N-1)/FPS. We rename to the real timestamp below so the filename means
-  // something when culling by eye.
-  const tmp = path.join(framesDir, `.tmp_${stem}_%05d.jpg`);
-  execFileSync('ffmpeg', [
-    '-v', 'error', '-i', video,
-    '-vf', `fps=${FPS},scale=${WIDTH}:-1`,
-    '-q:v', String(QUALITY),
-    tmp,
-  ], { stdio: 'inherit' });
+  let n = existing.length;
+  if (!ARCHIVE_ONLY) {
+    for (const f of existing) fs.unlinkSync(path.join(framesDir, f));
 
-  const tmps = fs.readdirSync(framesDir).filter((f) => f.startsWith(`.tmp_${stem}_`)).sort();
-  let n = 0;
-  for (const f of tmps) {
-    const idx = Number(f.match(/_(\d+)\.jpg$/)[1]);          // 1-based
-    const secs = (idx - 1) / FPS;
-    const name = `${stem}__t${String(Math.round(secs)).padStart(4, '0')}_${String(idx).padStart(5, '0')}.jpg`;
-    fs.renameSync(path.join(framesDir, f), path.join(framesDir, name));
-    n++;
+    // ffmpeg's %05d counts extracted frames, not seconds — at FPS=2, frame N is at
+    // t = (N-1)/FPS. We rename to the real timestamp below so the filename means
+    // something when culling by eye.
+    const tmp = path.join(framesDir, `.tmp_${stem}_%05d.jpg`);
+    execFileSync('ffmpeg', [
+      '-v', 'error', '-i', video,
+      '-vf', `fps=${FPS},scale=${WIDTH}:-1`,
+      '-q:v', String(QUALITY),
+      tmp,
+    ], { stdio: 'inherit' });
+
+    const tmps = fs.readdirSync(framesDir).filter((f) => f.startsWith(`.tmp_${stem}_`)).sort();
+    n = 0;
+    for (const f of tmps) {
+      const idx = Number(f.match(/_(\d+)\.jpg$/)[1]);          // 1-based
+      const secs = (idx - 1) / FPS;
+      const name = `${stem}__t${String(Math.round(secs)).padStart(4, '0')}_${String(idx).padStart(5, '0')}.jpg`;
+      fs.renameSync(path.join(framesDir, f), path.join(framesDir, name));
+      n++;
+    }
+  }
+
+  // Full-size archive, mirroring the district/subdistrict tree. Same filenames as
+  // the working frames (minus the extension), so a culled working frame can always
+  // be traced back to its original.
+  if (ARCHIVE) {
+    const rel = path.relative(ROOT, dir);
+    const archDir = path.join(ARCHIVE, rel);
+    fs.mkdirSync(archDir, { recursive: true });
+    execFileSync('ffmpeg', [
+      '-v', 'error', '-i', video,
+      '-vf', `fps=${FPS}`,                       // native resolution — no scale filter
+      '-c:v', 'libwebp', '-quality', String(ARCHIVE_QUALITY), '-compression_level', '5',
+      path.join(archDir, `.tmp_${stem}_%05d.webp`),
+    ], { stdio: 'inherit' });
+
+    const atmps = fs.readdirSync(archDir).filter((f) => f.startsWith(`.tmp_${stem}_`)).sort();
+    // If frames/ was already culled by hand (--archive-only on an existing clip),
+    // don't resurrect those frames in the archive: keep only what frames/ still has.
+    const keep = ARCHIVE_ONLY
+      ? new Set(fs.readdirSync(framesDir).filter((f) => f.startsWith(stem + '__t')).map((f) => f.replace(/\.jpg$/, '')))
+      : null;
+    let bytes = 0, kept = 0, pruned = 0;
+    for (const f of atmps) {
+      const idx = Number(f.match(/_(\d+)\.webp$/)[1]);
+      const secs = (idx - 1) / FPS;
+      const out = `${stem}__t${String(Math.round(secs)).padStart(4, '0')}_${String(idx).padStart(5, '0')}.webp`;
+      if (keep && !keep.has(out.replace(/\.webp$/, ''))) {
+        fs.unlinkSync(path.join(archDir, f)); pruned++; continue;
+      }
+      fs.renameSync(path.join(archDir, f), path.join(archDir, out));
+      bytes += fs.statSync(path.join(archDir, out)).size;
+      kept++;
+    }
+    console.log(`[feel] ${stem}: ${n} frames → frames/ (${WIDTH}px)  +  ${kept} full-size → ${archDir} (${(bytes / 1e6).toFixed(0)} MB)` +
+      (pruned ? `  [${pruned} pruned to match the existing cull]` : ''));
+  } else {
+    console.log(`[feel] ${stem}: ${n} frames → ${path.relative(process.cwd(), framesDir)}`);
   }
   totalFrames += n;
-  console.log(`[feel] ${stem}: ${n} frames → ${path.relative(process.cwd(), framesDir)}`);
 }
 
 console.log(`\n[feel] ${videos.length} clip(s), ${totalFrames} frames.`);
