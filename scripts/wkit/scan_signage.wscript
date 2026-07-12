@@ -12,24 +12,28 @@
 // not rescue it either — saturation cannot tell commercial neon from an industrial
 // floodlight, so Northside Industrial scored highest in the city.
 //
-// The sectors contain the signs and windows THEMSELVES: named assets, with world
-// positions. Validated on one 64 m cell each, ranked exactly as the human-verified
-// reference says they should be:
+// The sectors contain the signs and facade pieces THEMSELVES: named assets, with
+// world positions. Validated on one 64 m cell each, ranked exactly as the
+// human-verified reference says they should be:
 //
-//   district    rated   emissive signs   windows / walls   window share
-//   Kabuki       1.0        237            91 / 143           38.9%
-//   Arroyo       0.3          1             2 /  17           10.5%
-//   Northside    0.0          0             0 /  19            0.0%
+//   district    rated   emissive signs   window panels / walls
+//   Kabuki       1.0        237                91 / 143
+//   Arroyo       0.3          1                 2 /  17
+//   Northside    0.0          0                 0 /  19   (a windowless factory district)
 //
 // WHAT IT WRITES
 // ──────────────
 // Two CSVs into the WolvenKit RAW folder:
 //   ncz_signage_nodes.csv   one row per EMISSIVE sign: x, y, z, class, asset
-//   ncz_sector_totals.csv   one row per sector: signs, inert_ad, windows, walls, …
+//   ncz_sector_totals.csv   one row per sector: signs, inert_ad, windows, windows_off,
+//                           walls, dominant style_use, ads, lights
 //
-// The map project bins these into subdistrict polygons (data/subdistricts.json):
-//   SIGN density   = emissive signs / polygon area
-//   WINDOW density = windows / (windows + walls)   — area-free, no camera in the loop
+// Bin into subdistrict polygons (data/subdistricts.json):
+//   SIGN density  = emissive signs / polygon area          <- direct, trustworthy
+//   WINDOW density: window PANELS are kit pieces holding dozens of windows each, so
+//                   panel counts are a PROXY for facade glassiness, not a window count.
+//                   The lit fraction itself is a GLOBAL 0.5 (see the Windows section);
+//                   district variation lives in panel count + `windows_off` usage.
 //
 // RUN
 // ───
@@ -85,15 +89,38 @@ function subclass(p) {
   return 'advertising';
 }
 
-// ── Windows: buildings are KIT-BASHED from modular facade pieces ─────────────
-// …\wat_kab_building_d_window_w300_h400_ac.mesh   (a window panel)
-// …\wat_kab_building_f_wall_cornice_w300_aa.mesh  (a blank wall panel)
-// So WINDOW SHARE = windows / (windows + walls) is a direct, area-free measure of
-// how glassy a district's facades are — exactly what the renderer's window density
-// means. Validated: Kabuki 38.9%, Arroyo 10.5%, Northside 0.0% (a genuinely
-// windowless industrial district).
+// ── Windows ─────────────────────────────────────────────────────────────────
+// A "window" mesh is a KIT PIECE — a facade module holding dozens of individual
+// windows (wat_kab_building_d_window_corner_w300_aa_merged.mesh is a corner with
+// 4 rows x 9 windows on two faces). So counting meshes counts PANELS, not windows,
+// and says nothing about which light up.
+//
+// WHAT ACTUALLY LIGHTS UP is a material: base\materials\window_parallax_interior.mt
+// (a parallax shader faking a lit room behind the glass). Its night parameters:
+//   AmountTurnOffAtNight  = 0.5   <- half the windows go dark. IDENTICAL for every
+//                                    archetype (ent apartment/office/industrial,
+//                                    mlt office, nkt apartment). NOT per-district.
+//   TintColorAtNight, LightsTempVariationAtNight (1.0), EmissiveEV (4)
+//   roomWidth 3 x roomHeight 4 m  <- the real window cell size
+// The "off" counterpart is engine\materials\metal_base.remt — plain dark glass,
+// no interior, no emission.
+//
+// So per-district variation is STRUCTURAL, from three things, and this is what we
+// count here:
+//   1. how many window PANELS the district's buildings carry     (windows)
+//   2. how many placed instances choose the `windows_off` mesh
+//      appearance, killing their windows entirely                (windows_off)
+//   3. which style x use-type the district uses — the whole city
+//      is served by just 12 base materials:
+//        entropy{apartment,industrial,office} x militarism{office} x neokitsch{apartment}
+//                                                                  (style/use tally)
 const WINDOW = /_window_|_window\.|^window_/;
 const WALL   = /_wall_|_wall\./;
+// meshAppearance values that mean "this building's windows are DARK".
+const APPEARANCE_OFF = /windows_off|_off$/;
+// Style x use-type, from the window material naming convention:
+//   wat_kab_building_d_2x1_h400_w600_ent_apt.mi  ->  ent / apt
+const STYLE = /_(ent|mlt|nkt|kts)_(apt|off|ind|apartment|office|industrial)/;
 
 // Validated at LOD0 against the human-verified reference (one 64 m cell each):
 //   Kabuki    (1.0)  237 emissive signs (+38 inert)   91 windows / 143 walls = 38.9%
@@ -119,7 +146,7 @@ const limit = MAX_SECTORS > 0 ? Math.min(MAX_SECTORS, sectors.length) : sectors.
 
 // ── Scan ─────────────────────────────────────────────────────────────────────
 const nodeRows = ['x,y,z,class,type,asset,sector'];
-const sectorRows = ['sector,gx,gy,nodes,assets,signs,inert_ad,windows,walls,ads,lights'];
+const sectorRows = ['sector,gx,gy,nodes,assets,signs,inert_ad,windows,windows_off,walls,style_use,ads,lights'];
 let done = 0, totalSigns = 0, totalWin = 0, failed = 0;
 
 for (let i = 0; i < limit; i++) {
@@ -149,7 +176,8 @@ for (let i = 0; i < limit; i++) {
     if (d && d.Position && typeof d.NodeIndex === 'number') posByIndex[d.NodeIndex] = d.Position;
   }
 
-  let assets = 0, signs = 0, inertAd = 0, windows = 0, walls = 0, ads = 0, lights = 0;
+  let assets = 0, signs = 0, inertAd = 0, windows = 0, windowsOff = 0, walls = 0, ads = 0, lights = 0;
+  const styles = {};
 
   for (let n = 0; n < nodes.length; n++) {
     const d = nodes[n].Data;
@@ -168,9 +196,18 @@ for (let i = 0; i < limit; i++) {
     const lower = dp.toLowerCase();
     const base = lower.split('\\').pop();
 
-    // Facade pieces → window share.
-    if (WINDOW.test(base)) windows++;
-    else if (WALL.test(base)) walls++;
+    // Facade pieces. A window PANEL whose instance chose a `windows_off` appearance
+    // is dark no matter how many windows it contains — count it separately.
+    if (WINDOW.test(base)) {
+      const app = (d.meshAppearance && d.meshAppearance.$value) || '';
+      if (APPEARANCE_OFF.test(app.toLowerCase())) windowsOff++;
+      else windows++;
+      const st = lower.match(STYLE);
+      if (st) {
+        const key = st[1] + '_' + st[2].slice(0, 3);
+        styles[key] = (styles[key] || 0) + 1;
+      }
+    } else if (WALL.test(base)) walls++;
 
     // Signage. Inert ad furniture is counted but NOT treated as a light source.
     const named = SIGN_NAME.test(base);
@@ -188,7 +225,11 @@ for (let i = 0; i < limit; i++) {
     nodeRows.push(`${x},${y},${z},${cls},${t},"${dp}",${s.gx}_${s.gy}`);
   }
 
-  sectorRows.push(`${s.gx}_${s.gy},${s.gx},${s.gy},${nodes.length},${assets},${signs},${inertAd},${windows},${walls},${ads},${lights}`);
+  // Dominant style_use for the sector (e.g. ent_apt, mlt_off) — '' if no windows.
+  let topStyle = '', topN = 0;
+  for (const k in styles) if (styles[k] > topN) { topN = styles[k]; topStyle = k; }
+
+  sectorRows.push(`${s.gx}_${s.gy},${s.gx},${s.gy},${nodes.length},${assets},${signs},${inertAd},${windows},${windowsOff},${walls},${topStyle},${ads},${lights}`);
   totalSigns += signs;
   totalWin += windows;
   done++;

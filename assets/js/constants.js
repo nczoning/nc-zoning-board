@@ -640,8 +640,24 @@ NCZ.signDensityFor = function (subId, districtId) {
   return NCZ.SIGN_DENSITY_DEFAULT;
 };
 
-NCZ.WINDOW_LIT_FRACTION_TOWER = 0.020;  // fraction of a tower's windows that are lit (cut hard — density scales with box count, see ?night&winlit=)
-NCZ.WINDOW_LIT_FRACTION_BLOCK = 0.006;  // fraction of a block's windows that are lit (sparser, more "off")
+// Fraction of a building's window cells that are LIT at night.
+//
+// GROUND TRUTH: the game's own window shader (base\materials\window_parallax_interior.mt,
+// the material behind every lit window in Night City) exposes `AmountTurnOffAtNight`,
+// and every archetype sets it to **0.5** — Entropism apartments, Militarism offices,
+// Entropism industrial, all of them. CDPR does NOT vary this by district; half the
+// windows are dark, everywhere. The per-district variation comes from STRUCTURE
+// (how many window panels a district's buildings have, and whether a placed building
+// uses the `windows_off` mesh appearance), not from this number.
+//
+// These were 0.020 / 0.006 — twenty-five times too dark. The old comment said it all:
+// "cut hard — density scales with box count". That was compensation for the
+// interior-face bug, where the emissive stamped windows onto every buried face of the
+// box soup (~80% of all wall area). Facemask v2 FIXED that bug and nobody undid the
+// compensation, so the city stayed dark for the wrong reason.
+// URL: ?night&winlit= / &winlitb=
+NCZ.WINDOW_LIT_FRACTION_TOWER = 0.50;
+NCZ.WINDOW_LIT_FRACTION_BLOCK = 0.50;
 // Floor/column COHERENCE (0..1). 0 = each window cell lights independently (pure
 // per-cell hash — reads as scattered noise). 1 = lit windows cluster into lit
 // FLOORS and COLUMNS (a per-row × per-column occupancy scales the local lit
