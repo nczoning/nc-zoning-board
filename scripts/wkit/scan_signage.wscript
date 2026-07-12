@@ -12,24 +12,31 @@
 // not rescue it either — saturation cannot tell commercial neon from an industrial
 // floodlight, so Northside Industrial scored highest in the city.
 //
-// The sectors contain the signs THEMSELVES: named assets, with world positions.
-// Kabuki 7.5% sign-like assets vs Northside 0.3% — a 25x separation that ranks
-// exactly as the human-verified reference says it should.
+// The sectors contain the signs and windows THEMSELVES: named assets, with world
+// positions. Validated on one 64 m cell each, ranked exactly as the human-verified
+// reference says they should be:
+//
+//   district    rated   emissive signs   windows / walls   window share
+//   Kabuki       1.0        237            91 / 143           38.9%
+//   Arroyo       0.3          1             2 /  17           10.5%
+//   Northside    0.0          0             0 /  19            0.0%
 //
 // WHAT IT WRITES
 // ──────────────
 // Two CSVs into the WolvenKit RAW folder:
-//   ncz_signage_nodes.csv    one row per sign-like asset: x, y, z, class, asset
-//   ncz_sector_totals.csv    one row per sector: counts, for density-per-area
+//   ncz_signage_nodes.csv   one row per EMISSIVE sign: x, y, z, class, asset
+//   ncz_sector_totals.csv   one row per sector: signs, inert_ad, windows, walls, …
 //
-// The map project bins these into subdistrict polygons (data/subdistricts.json)
-// and divides by polygon area to get a true per-subdistrict density.
+// The map project bins these into subdistrict polygons (data/subdistricts.json):
+//   SIGN density   = emissive signs / polygon area
+//   WINDOW density = windows / (windows + walls)   — area-free, no camera in the loop
 //
 // RUN
 // ───
-// WolvenKit → Script Manager → run this. Expect a long run (thousands of sectors);
-// progress is logged every 200. Set LOD_LEVELS / MAX_SECTORS to test on a subset
-// first.
+// WolvenKit → Script Manager → run this. ~6,500 sectors; progress logged every 200.
+// SET MAX_SECTORS = 50 FOR A SMOKE TEST FIRST — this script has not been executed in
+// WolvenKit's engine, only written against the API docs, so the first run may need a
+// fix (most likely `f.Name`, the property holding a file's game path).
 
 import * as Logger from 'Logger';
 
@@ -49,28 +56,49 @@ const LOD_LEVELS = [0];
 const MAX_SECTORS = 0;         // 0 = all (~6,517). Set e.g. 50 for a smoke test first.
 const LOG_EVERY = 200;
 
-// Sign-like asset classes, checked in order — first match wins, so the specific
-// patterns must precede the generic ones. These map onto the renderer's signage
-// layers: `neon` and `signage` are facade/street level, `screen`/`billboard` are
-// the big emitters, `advert_frame` is the mounting furniture.
-// Validated at LOD0 against the human-verified reference:
-//   Kabuki    (rated 1.0)  279 signs, 10.5% of assets  — neon 105, signage 92, billboard 39,
-//                                                         advertising 34, screen 8
-//   Arroyo    (rated 0.3)    2 signs,  0.5%
-//   Northside (rated 0.0)    0 signs,  0.0%
-const CLASSES = [
-  ['billboard',  /billboard/],
-  ['screen',     /screen_\d|_screen|digital_screen|led_screen/],
-  ['neon',       /neon/],
-  ['signage',    /signage|_sign_/],
-  ['advertising',/advertis|advert/],
-  ['hologram',   /hologram|holo_/],
-];
+// ── Signage: use the GAME'S OWN taxonomy, not keyword guessing ───────────────
+// base\environment\decoration\advertising\<kind>\... splits cleanly into:
+//   EMISSIVE : signage (neon shop signs), digital (screens/billboards), holograms
+//   INERT    : posters (paper), streamers (cloth banners), frames (bare mounts),
+//              ground (stands). These EMIT NO LIGHT.
+// A naive /advert/ on the path counts all of them — it would have added 38 paper
+// posters and cloth banners to Kabuki's neon count. Count the inert ones separately
+// so the mistake stays visible rather than silently inflating the density.
+const AD_EMISSIVE = /[\\/]advertising[\\/](signage|digital|holograms)[\\/]/;
+const AD_INERT    = /[\\/]advertising[\\/](posters|streamers|frames|ground)[\\/]/;
+// Sector-local proxy copies live OUTSIDE the advertising tree (…\sectors\_external\
+// proxy\…\signage_city_diner_zuru_zuru.mesh), so also match on the asset name.
+const SIGN_NAME   = /signage_|signboard|neon_|billboard|screen_\d|hologram/;
 
-function classify(p) {
-  for (const [name, re] of CLASSES) if (re.test(p)) return name;
-  return null;
+// Sub-class an emissive sign. Maps onto the renderer's signage layers:
+//   digital/screen/billboard → the big roof + facade emitters
+//   neon/signage             → street-level shopfront neon
+const SUBCLASS = [
+  ['billboard', /billboard/],
+  ['screen',    /screen_\d|_screen|digital[\\/]/],
+  ['hologram',  /hologram|holo_/],
+  ['neon',      /neon/],
+  ['signage',   /signage|signboard/],
+];
+function subclass(p) {
+  for (const [name, re] of SUBCLASS) if (re.test(p)) return name;
+  return 'advertising';
 }
+
+// ── Windows: buildings are KIT-BASHED from modular facade pieces ─────────────
+// …\wat_kab_building_d_window_w300_h400_ac.mesh   (a window panel)
+// …\wat_kab_building_f_wall_cornice_w300_aa.mesh  (a blank wall panel)
+// So WINDOW SHARE = windows / (windows + walls) is a direct, area-free measure of
+// how glassy a district's facades are — exactly what the renderer's window density
+// means. Validated: Kabuki 38.9%, Arroyo 10.5%, Northside 0.0% (a genuinely
+// windowless industrial district).
+const WINDOW = /_window_|_window\.|^window_/;
+const WALL   = /_wall_|_wall\./;
+
+// Validated at LOD0 against the human-verified reference (one 64 m cell each):
+//   Kabuki    (1.0)  237 emissive signs (+38 inert)   91 windows / 143 walls = 38.9%
+//   Arroyo    (0.3)    1                               2 /  17 = 10.5%
+//   Northside (0.0)    0                               0 /  19 =  0.0%
 
 // ── Gather the sector list ───────────────────────────────────────────────────
 const all = wkit.GetArchiveFiles();
@@ -91,8 +119,8 @@ const limit = MAX_SECTORS > 0 ? Math.min(MAX_SECTORS, sectors.length) : sectors.
 
 // ── Scan ─────────────────────────────────────────────────────────────────────
 const nodeRows = ['x,y,z,class,type,asset,sector'];
-const sectorRows = ['sector,gx,gy,nodes,assets,signs,ads,lights,decals'];
-let done = 0, totalSigns = 0, failed = 0;
+const sectorRows = ['sector,gx,gy,nodes,assets,signs,inert_ad,windows,walls,ads,lights'];
+let done = 0, totalSigns = 0, totalWin = 0, failed = 0;
 
 for (let i = 0; i < limit; i++) {
   const s = sectors[i];
@@ -121,7 +149,7 @@ for (let i = 0; i < limit; i++) {
     if (d && d.Position && typeof d.NodeIndex === 'number') posByIndex[d.NodeIndex] = d.Position;
   }
 
-  let assets = 0, signs = 0, ads = 0, lights = 0, decals = 0;
+  let assets = 0, signs = 0, inertAd = 0, windows = 0, walls = 0, ads = 0, lights = 0;
 
   for (let n = 0; n < nodes.length; n++) {
     const d = nodes[n].Data;
@@ -130,7 +158,6 @@ for (let i = 0; i < limit; i++) {
 
     if (t === 'worldAdvertisementNode') ads++;
     else if (t === 'worldStaticLightNode') lights++;
-    else if (t === 'worldStaticDecalNode') decals++;
 
     const dp = (d.mesh && d.mesh.DepotPath && d.mesh.DepotPath.$value)
             || (d.material && d.material.DepotPath && d.material.DepotPath.$value)
@@ -139,10 +166,20 @@ for (let i = 0; i < limit; i++) {
     assets++;
 
     const lower = dp.toLowerCase();
-    const cls = t === 'worldAdvertisementNode' ? 'billboard' : classify(lower);
-    if (!cls) continue;
-    signs++;
+    const base = lower.split('\\').pop();
 
+    // Facade pieces → window share.
+    if (WINDOW.test(base)) windows++;
+    else if (WALL.test(base)) walls++;
+
+    // Signage. Inert ad furniture is counted but NOT treated as a light source.
+    const named = SIGN_NAME.test(base);
+    if (AD_INERT.test(lower) && !named) { inertAd++; continue; }
+    const isSign = AD_EMISSIVE.test(lower) || t === 'worldAdvertisementNode' || named;
+    if (!isSign) continue;
+
+    signs++;
+    const cls = t === 'worldAdvertisementNode' ? 'billboard' : subclass(lower);
     const p = posByIndex[n];
     const x = p ? p.X.toFixed(2) : '';
     const y = p ? p.Y.toFixed(2) : '';
@@ -151,17 +188,18 @@ for (let i = 0; i < limit; i++) {
     nodeRows.push(`${x},${y},${z},${cls},${t},"${dp}",${s.gx}_${s.gy}`);
   }
 
-  sectorRows.push(`${s.gx}_${s.gy},${s.gx},${s.gy},${nodes.length},${assets},${signs},${ads},${lights},${decals}`);
+  sectorRows.push(`${s.gx}_${s.gy},${s.gx},${s.gy},${nodes.length},${assets},${signs},${inertAd},${windows},${walls},${ads},${lights}`);
   totalSigns += signs;
+  totalWin += windows;
   done++;
 
   if (done % LOG_EVERY === 0) {
-    Logger.Info(`[ncz] ${done}/${limit} sectors — ${totalSigns} sign assets so far`);
+    Logger.Info(`[ncz] ${done}/${limit} sectors — ${totalSigns} signs, ${totalWin} window panels`);
   }
 }
 
 wkit.SaveToRaw('ncz_signage_nodes.csv', nodeRows.join('\n'));
 wkit.SaveToRaw('ncz_sector_totals.csv', sectorRows.join('\n'));
 
-Logger.Success(`[ncz] done — ${done} sectors scanned, ${failed} failed, ${totalSigns} sign assets`);
+Logger.Success(`[ncz] done — ${done} sectors, ${failed} failed, ${totalSigns} signs, ${totalWin} window panels`);
 Logger.Info('[ncz] wrote ncz_signage_nodes.csv + ncz_sector_totals.csv to the RAW folder');
