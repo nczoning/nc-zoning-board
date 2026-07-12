@@ -75,7 +75,18 @@ const ASSET_COLOURS = true;  // PASS 2: open each unique sign mesh for its mater
 const AD_EMISSIVE = /[\\/]advertising[\\/](signage|digital|holograms)[\\/]/;
 const AD_INERT    = /[\\/]advertising[\\/](posters|streamers|frames|ground)[\\/]/;
 const SIGN_NAME   = /signage_|signboard|neon_|billboard|screen_\d|hologram/;
+
+// BLANK PANELS ARE AMBIGUOUS — classed separately, never merged into the emissive
+// count. advertising\signage\blank_panels\ is a GENERIC carrier: the same
+// signage_blank_panel_*.mesh is reused by thousands of signs and dressed with a
+// texture. Some are backlit shopfronts (emissive); some are painted boards that are
+// merely lit from outside — the maintainer's Pierogi World sign is one of the latter.
+// The mesh cannot tell us which. So they get their own class and their own column;
+// decide what to do with them once we can see how many there are and where.
+const BLANK_PANEL = /[\\/]blank_panels[\\/]|blank_panel/;
+
 const SUBCLASS = [
+    ['blank',     BLANK_PANEL],          // FIRST — must win over the generic 'signage'
     ['billboard', /billboard/],
     ['screen',    /screen_\d|_screen|digital[\\/]/],
     ['hologram',  /hologram|holo_/],
@@ -109,9 +120,26 @@ function prefabRef(o) {
     }
     return null;
 }
-// $/03_night_city/c_watson/kabuki/... -> "watson/kabuki"
+// The game's own district/subdistrict, straight from the prefab path:
+//     $/03_night_city/c_watson/kabuki/wk_04/...
+//
+// DO NOT NORMALISE THIS, AND DO NOT MAP IT HERE. The game's names do NOT match our
+// subdistrict ids one-for-one, and the drift is not uniform:
+//     c_watson / kabuki          (plain)
+//     #c_santo_domingo / arroyo  (leading '#')
+// An earlier regex required a `c_` prefix and would have SILENTLY DROPPED every
+// '#c_' district — the same class of bug as japantown-vs-japan_town, which nearly
+// unjoined one of the three loudest districts with no error anywhere.
+//
+// We have also hand-adjusted our own subdistricts (Biotechnica Flats split out, the
+// Araska/Arasaka spelling) to match what the game actually renders — things the game
+// files never had to care about. So the mapping is a real, human decision.
+//
+// Therefore: emit the RAW string, verbatim. Every distinct value also goes to
+// ncz_districts.csv with its count, so the mapping is built from what is actually
+// there, and anything unmapped is LOUD rather than absent.
 function districtOf(ref) {
-    const m = ref && ref.match(/^\$\/[^/]+\/c_([^/]+)\/([^/]+)\//);
+    const m = ref && ref.match(/^\$\/[^/]+\/([^/]+)\/([^/]+)\//);
     return m ? (m[1] + '/' + m[2]) : '';
 }
 const f2 = (v) => (typeof v === 'number' ? v.toFixed(2) : '');
@@ -136,6 +164,7 @@ const sectorRows = ['sector,gx,gy,nodes,glass,glass_off,wall,glass_share,style_u
 const lightRows  = ['x,y,z,r,g,b,intensity,radius,temperature,type,name,sector'];
 const skipped    = [];
 const signAssets = {};    // depot path -> placements (PASS 2 input)
+const districts  = {};    // RAW game district string -> sign placements (see districtOf)
 
 let done = 0, totalSigns = 0, totalGlass = 0;
 
@@ -231,9 +260,11 @@ for (let i = 0; i < limit; i++) {
         const g = groups[key];
         placements++;
         const c = g.pivot || { X: g.sumX / g.parts, Y: g.sumY / g.parts, Z: g.sumZ / g.parts };
+        const dist = districtOf(g.ref);
+        districts[dist] = (districts[dist] || 0) + 1;
         signRows.push([
             f2(c.X), f2(c.Y), f2(c.Z), g.parts, g.cls,
-            '"' + districtOf(g.ref) + '"', g.pivot ? 'pivot' : 'centroid',
+            '"' + dist + '"', g.pivot ? 'pivot' : 'centroid',
             '"' + g.asset + '"', tag,
         ].join(','));
     }
@@ -276,13 +307,24 @@ if (ASSET_COLOURS) {
     }
 }
 
+// Every distinct RAW district string the game used, with its sign count. This is the
+// input to the mapping decision (game names vs our subdistrict ids) — build it from
+// what is actually there, never from a guess. Anything that fails to map will be
+// visible here rather than silently missing from a district's profile.
+const districtRows = ['game_district,sign_placements'];
+for (const k in districts) districtRows.push(`"${k}",${districts[k]}`);
+
 wkit.SaveToRaw('ncz_signs.csv',       signRows.join('\n'));
 wkit.SaveToRaw('ncz_sectors.csv',     sectorRows.join('\n'));
 wkit.SaveToRaw('ncz_sign_assets.csv', assetRows.join('\n'));
 wkit.SaveToRaw('ncz_lights.csv',      lightRows.join('\n'));
+wkit.SaveToRaw('ncz_districts.csv',   districtRows.join('\n'));
 wkit.SaveToRaw('ncz_skipped.csv',     ['sector'].concat(skipped).join('\n'));
 
 Logger.Success(`[ncz] ${done} sectors — ${totalSigns} sign placements, ${totalGlass} glass panels, ` +
     `${Object.keys(signAssets).length} unique sign assets`);
 if (skipped.length) Logger.Warning(`[ncz] ${skipped.length} sectors could NOT be parsed and were NOT scanned — see ncz_skipped.csv`);
-Logger.Info('[ncz] wrote ncz_signs / ncz_sectors / ncz_sign_assets / ncz_lights / ncz_skipped .csv');
+Logger.Warning(`[ncz] ${Object.keys(districts).length} distinct game-district strings — see ncz_districts.csv. ` +
+    `CROSS-CHECK these against data/subdistricts.json before joining: the names do NOT match ours ` +
+    `one-for-one ('#c_santo_domingo' vs 'c_watson'), and we have hand-adjusted our own ids.`);
+Logger.Info('[ncz] wrote ncz_signs / ncz_sectors / ncz_sign_assets / ncz_lights / ncz_districts / ncz_skipped .csv');
