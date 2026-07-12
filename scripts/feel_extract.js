@@ -62,6 +62,14 @@ const ARCHIVE_ONLY = args.includes('--archive-only');
 const RESET = args.includes('--reset');
 const FILTER = args.find((a) => !a.startsWith('--'));
 
+// The committed cull manifest (scripts/feel-culled-frames.json). Authoritative
+// record of every frame culled by hand — see scripts/feel_cull.js.
+const MANIFEST_PATH = path.join(__dirname, 'feel-culled-frames.json');
+const MANIFEST = fs.existsSync(MANIFEST_PATH)
+  ? JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'))
+  : { culled: {} };
+const posix = (p) => p.split(path.sep).join('/');
+
 function findVideos(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
@@ -100,26 +108,41 @@ for (const video of videos) {
     continue;
   }
 
-  // PRESERVE THE HAND-CULL ACROSS --force.
-  // The archive is the cull's source of truth (feel_profile skips working frames
-  // with no archive counterpart). A naive --force re-extracts BOTH outputs and
-  // silently resurrects every map/menu frame that was deleted — and because the
-  // archive comes back too, the profiler would have no way to know. So: snapshot
-  // what the archive currently holds for this clip, and prune the fresh extraction
-  // back down to it. Pass --reset to deliberately start over from the raw video.
-  let culled = null;
-  if (FORCE && !RESET && ARCHIVE) {
-    const archDir = path.join(ARCHIVE, path.relative(ROOT, dir));
-    if (fs.existsSync(archDir)) {
-      const have = fs.readdirSync(archDir)
-        .filter((f) => f.startsWith(stem + '__t') && f.endsWith('.webp'))
-        .map((f) => f.replace(/\.webp$/, ''));
-      if (have.length) {
-        culled = new Set(have);
-        console.log(`[feel] ${stem}: --force will preserve the existing cull (${have.length} frames kept; --reset to discard it)`);
+  // PRESERVE THE HAND-CULL ACROSS A RE-EXTRACT.
+  // Frames showing the world map / menus / glitches are culled by eye. A naive
+  // re-extract resurrects every one of them, in BOTH outputs, silently — and a map
+  // screen is a full-frame wall of the exact cyan and red we measure.
+  //
+  // Two sources, checked in order:
+  //   1. scripts/feel-culled-frames.json — the COMMITTED manifest, keyed by clip
+  //      stem and holding ffmpeg FRAME INDICES. Authoritative, and the only source
+  //      that survives an archive rebuild or a fresh clone.
+  //   2. whatever the archive currently holds — the fallback when a clip has been
+  //      culled but not yet recorded (run `node scripts/feel_cull.js`).
+  // --reset deliberately discards the cull and starts over from the raw video.
+  let dropIdx = null;     // Set of frame INDICES to delete after extraction
+  let keepIdx = null;     // Set of frame INDICES to keep (archive-derived fallback)
+  if (!RESET) {
+    const listed = MANIFEST.culled?.[posix(path.relative(ROOT, dir))]?.[stem];
+    if (listed?.length) {
+      dropIdx = new Set(listed);
+      console.log(`[feel] ${stem}: honouring the cull manifest (${listed.length} frames will be dropped)`);
+    } else if (FORCE && ARCHIVE) {
+      const archDir = path.join(ARCHIVE, path.relative(ROOT, dir));
+      if (fs.existsSync(archDir)) {
+        const have = fs.readdirSync(archDir)
+          .filter((f) => f.startsWith(stem + '__t') && f.endsWith('.webp'))
+          .map((f) => Number(f.match(/_(\d+)\.webp$/)[1]));
+        if (have.length) {
+          keepIdx = new Set(have);
+          console.log(`[feel] ${stem}: --force preserving the archive's cull (${have.length} kept; run feel_cull.js to record it properly)`);
+        }
       }
     }
   }
+  // Unified predicate, by frame index — the index is what ffmpeg hands us, and it
+  // is stable across the timestamp-rounding in the filename.
+  const isCulled = (idx) => (dropIdx ? dropIdx.has(idx) : keepIdx ? !keepIdx.has(idx) : false);
 
   let n = existing.length;
   if (!ARCHIVE_ONLY) {
@@ -142,7 +165,7 @@ for (const video of videos) {
       const idx = Number(f.match(/_(\d+)\.jpg$/)[1]);          // 1-based
       const secs = (idx - 1) / FPS;
       const name = `${stem}__t${String(Math.round(secs)).padStart(4, '0')}_${String(idx).padStart(5, '0')}.jpg`;
-      if (culled && !culled.has(name.replace(/\.jpg$/, ''))) {   // previously hand-culled — don't resurrect
+      if (isCulled(idx)) {   // previously hand-culled — don't resurrect
         fs.unlinkSync(path.join(framesDir, f));
         continue;
       }
@@ -166,19 +189,19 @@ for (const video of videos) {
     ], { stdio: 'inherit' });
 
     const atmps = fs.readdirSync(archDir).filter((f) => f.startsWith(`.tmp_${stem}_`)).sort();
-    // Never resurrect a hand-culled frame in the archive either — the archive is the
-    // cull's source of truth, so writing it back would defeat feel_profile's skip.
-    //   --archive-only : keep what frames/ still has (frames/ carries the cull)
-    //   --force        : keep what the archive already had (snapshotted above)
-    const keep = ARCHIVE_ONLY
+    // Never resurrect a hand-culled frame in the archive either. With --archive-only
+    // the working frames/ already carries the cull, so mirror that; otherwise use the
+    // same manifest/archive predicate the working extraction used.
+    const onlyKeep = ARCHIVE_ONLY
       ? new Set(fs.readdirSync(framesDir).filter((f) => f.startsWith(stem + '__t')).map((f) => f.replace(/\.jpg$/, '')))
-      : culled;
+      : null;
     let bytes = 0, kept = 0, pruned = 0;
     for (const f of atmps) {
       const idx = Number(f.match(/_(\d+)\.webp$/)[1]);
       const secs = (idx - 1) / FPS;
       const out = `${stem}__t${String(Math.round(secs)).padStart(4, '0')}_${String(idx).padStart(5, '0')}.webp`;
-      if (keep && !keep.has(out.replace(/\.webp$/, ''))) {
+      const drop = onlyKeep ? !onlyKeep.has(out.replace(/\.webp$/, '')) : isCulled(idx);
+      if (drop) {
         fs.unlinkSync(path.join(archDir, f)); pruned++; continue;
       }
       fs.renameSync(path.join(archDir, f), path.join(archDir, out));
