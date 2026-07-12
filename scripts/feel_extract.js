@@ -57,6 +57,9 @@ const FORCE = args.includes('--force');
 // already been culled by hand. The archive is then pruned to match frames/, so the
 // two stay in step and the archive remains the cull's source of truth.
 const ARCHIVE_ONLY = args.includes('--archive-only');
+// --reset: with --force, deliberately DISCARD the existing hand-cull and start over
+// from the raw video. Without it, --force preserves the cull (see below).
+const RESET = args.includes('--reset');
 const FILTER = args.find((a) => !a.startsWith('--'));
 
 function findVideos(dir, out = []) {
@@ -86,7 +89,7 @@ if (!videos.length) {
 let totalFrames = 0;
 for (const video of videos) {
   const dir = path.dirname(video);
-  const stem = path.basename(video).replace(VIDEO_RE, '');   // e.g. kabuki__roof
+  const stem = path.basename(video).replace(VIDEO_RE, '');   // e.g. kabuki_roof
   const framesDir = path.join(dir, 'frames');
   fs.mkdirSync(framesDir, { recursive: true });
 
@@ -95,6 +98,27 @@ for (const video of videos) {
     console.log(`[feel] skip ${stem} — ${existing.length} frames already extracted (--force to redo)`);
     totalFrames += existing.length;
     continue;
+  }
+
+  // PRESERVE THE HAND-CULL ACROSS --force.
+  // The archive is the cull's source of truth (feel_profile skips working frames
+  // with no archive counterpart). A naive --force re-extracts BOTH outputs and
+  // silently resurrects every map/menu frame that was deleted — and because the
+  // archive comes back too, the profiler would have no way to know. So: snapshot
+  // what the archive currently holds for this clip, and prune the fresh extraction
+  // back down to it. Pass --reset to deliberately start over from the raw video.
+  let culled = null;
+  if (FORCE && !RESET && ARCHIVE) {
+    const archDir = path.join(ARCHIVE, path.relative(ROOT, dir));
+    if (fs.existsSync(archDir)) {
+      const have = fs.readdirSync(archDir)
+        .filter((f) => f.startsWith(stem + '__t') && f.endsWith('.webp'))
+        .map((f) => f.replace(/\.webp$/, ''));
+      if (have.length) {
+        culled = new Set(have);
+        console.log(`[feel] ${stem}: --force will preserve the existing cull (${have.length} frames kept; --reset to discard it)`);
+      }
+    }
   }
 
   let n = existing.length;
@@ -118,6 +142,10 @@ for (const video of videos) {
       const idx = Number(f.match(/_(\d+)\.jpg$/)[1]);          // 1-based
       const secs = (idx - 1) / FPS;
       const name = `${stem}__t${String(Math.round(secs)).padStart(4, '0')}_${String(idx).padStart(5, '0')}.jpg`;
+      if (culled && !culled.has(name.replace(/\.jpg$/, ''))) {   // previously hand-culled — don't resurrect
+        fs.unlinkSync(path.join(framesDir, f));
+        continue;
+      }
       fs.renameSync(path.join(framesDir, f), path.join(framesDir, name));
       n++;
     }
@@ -138,11 +166,13 @@ for (const video of videos) {
     ], { stdio: 'inherit' });
 
     const atmps = fs.readdirSync(archDir).filter((f) => f.startsWith(`.tmp_${stem}_`)).sort();
-    // If frames/ was already culled by hand (--archive-only on an existing clip),
-    // don't resurrect those frames in the archive: keep only what frames/ still has.
+    // Never resurrect a hand-culled frame in the archive either — the archive is the
+    // cull's source of truth, so writing it back would defeat feel_profile's skip.
+    //   --archive-only : keep what frames/ still has (frames/ carries the cull)
+    //   --force        : keep what the archive already had (snapshotted above)
     const keep = ARCHIVE_ONLY
       ? new Set(fs.readdirSync(framesDir).filter((f) => f.startsWith(stem + '__t')).map((f) => f.replace(/\.jpg$/, '')))
-      : null;
+      : culled;
     let bytes = 0, kept = 0, pruned = 0;
     for (const f of atmps) {
       const idx = Number(f.match(/_(\d+)\.webp$/)[1]);
