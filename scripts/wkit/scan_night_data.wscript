@@ -1,266 +1,288 @@
-// scan_night_data.wscript — WolvenKit Script Manager
-// ═════════════════════════════════════════════════════════════════════════════
-// GROUND-TRUTH data pull for the NC Zoning Board night-lighting rebuild.
-// Replaces scan_signage.wscript (which counted nodes, not instances — see below).
+// =============================================================================
+//  scan_night_data.wscript
+//  ---------------------------------------------------------------------------
+//  GROUND-TRUTH data pull for the NC Zoning Board night-lighting rebuild.
+//  Run once; four CSVs into the project RAW folder. A 6,500-sector scan is not
+//  something you want to repeat, so this is deliberately complete.
 //
-// Run once. Writes four CSVs to the WolvenKit RAW folder. Everything the window
-// and signage engines need should be in them; the point of doing this in one pass
-// is that a 6,500-sector scan is not something you want to repeat.
-//
-//
-// WHAT WE LEARNED THAT SHAPED THIS
-// ────────────────────────────────
-// • LOD0 ONLY. LOD0 (64 m cells) holds real geometry; LOD1+ holds PROXIES. Scanned
-//   at LOD1, Kabuki appears to have ZERO advertisement nodes — at LOD0 it has 16 in
-//   one cell. The proxy tier gives a plausible, wrong answer.
-//
-// • COUNT INSTANCES, NOT NODES. A worldInstancedMeshNode is N placed copies;
-//   `worldTransformsBuffer.numElements` is N. Counting the node as 1 undercounts
-//   badly — Kabuki's window-panel share moved 38.6% → 29.2% and its sign count
-//   238 → 397 once weighted. EVERY count here is instance-weighted.
-//
-// • WINDOWS ARE TWO NUMBERS, NOT ONE.
-//     base\materials\window_parallax_interior.mt → AmountTurnOffAtNight = 0.5,
-//     identical for every archetype. CDPR does NOT vary the lit fraction by district.
-//   But a window panel is only PART of a facade — the rest is solid wall. So:
-//        effective lit  =  glass_share(district)  ×  0.5
-//   The district variable is the GLASS SHARE, and that is what this measures.
-//   Also from that material: roomWidth 3 × roomHeight 4 m (the real window cell),
-//   TintColorAtNight, LightsTempVariationAtNight = 1.0, EmissiveEV = 4.
-//   The "off" counterpart is engine\materials\metal_base.remt — plain dark glass.
-//
-// • EMISSIVE SIGNS ONLY. base\environment\decoration\advertising\ splits into
-//   {signage, digital, holograms} (emit light) and {posters, streamers, frames,
-//   ground} (paper, cloth, bare mounts — emit nothing). A naive /advert/ match adds
-//   38 pieces of cardboard to Kabuki's neon count. Inert ones are counted separately
-//   so the mistake stays visible.
-//
-// • SIGN COLOUR IS IN THE MATERIAL NAME. neon_kiroshi_optics_logo.mesh has chunk
-//   materials `neon_green_v1`, `neon_pink_v2`, … The material VALUES are in a raw
-//   buffer WolvenKit won't expand, but the NAMES are enough. Hence PASS 2.
+//  API conventions here follow find_pierogi_signs.wscript (a script known to run):
+//  Logger.wscript import, f.FileName ?? f.Name, GetFileFromArchive → JSON *string*,
+//  try/catch around sectors WolvenKit rejects, SaveToRaw at the end.
 //
 //
-// KNOWN LIMITATION — read before trusting sign PLACEMENT
-// ─────────────────────────────────────────────────────
-// Per-instance transforms for worldInstancedMeshNode live in a binary buffer that
-// the JSON export does not expand. So:
-//   • non-instanced signs (worldStaticMeshNode / worldAdvertisementNode) get EXACT
-//     position + orientation + bounds — these are the big billboards and screens.
-//   • instanced signs get their COUNT and the node's bounds, not individual copies.
-// Roughly half of Kabuki's signs are instanced. For density that is fine (counts are
-// exact). For exact placement, the instanced ones would need to be distributed within
-// the node's bounds, or the buffer read via the CR2W object model (untried).
+//  THE FOUR THINGS THAT MADE PREVIOUS ATTEMPTS WRONG
+//  -------------------------------------------------
+//  1. LOD0 ONLY. LOD0 (64 m cells) holds real geometry; LOD1+ holds PROXIES.
+//     Scanned at LOD1, Kabuki appears to have ZERO advertisement nodes; at LOD0 it
+//     has 16 in one cell. The proxy tier gives a plausible, wrong answer.
+//
+//  2. A SIGN IS NOT A NODE. Compiled sectors flatten prefabs into individual mesh
+//     nodes -- panel, letters, frame -- so one shopfront sign is ~10 nodes. Kabuki's
+//     275 sign NODES in one cell are only 26 actual SIGNS. Counting nodes overcounts
+//     by ~10x, and unevenly: a district of small multi-part neon signs inflates
+//     against one of single-node billboards. So signs are grouped by PREFAB REF.
+//
+//  3. A NODE IS NOT AN INSTANCE. worldInstancedMeshNode is N placed copies;
+//     `worldTransformsBuffer.numElements` is N. Facade counts are instance-weighted
+//     (Kabuki's glass share moved 38.6% -> 29.2% once corrected).
+//
+//  4. WINDOWS ARE TWO NUMBERS. base\materials\window_parallax_interior.mt sets
+//     AmountTurnOffAtNight = 0.5 for EVERY archetype -- CDPR does not vary the lit
+//     fraction by district. But a window panel is only part of a facade; the rest is
+//     solid wall. So:   effective lit = glass_share(district) x 0.5
+//     The district variable is the GLASS SHARE. That is what this measures.
+//     (Same material: roomWidth 3 x roomHeight 4 m = the real window cell;
+//      TintColorAtNight; LightsTempVariationAtNight = 1.0; EmissiveEV = 4.)
 //
 //
-// OUTPUT
-// ──────
-//   ncz_signs.csv      one row per PLACED sign (exact where available)
-//   ncz_sectors.csv    per-sector totals — glass share, signs, lights, style mix
-//   ncz_sign_assets.csv one row per UNIQUE sign mesh + its material names (COLOUR)
-//   ncz_lights.csv     worldStaticLightNode: colour, intensity, radius, position
+//  BONUS: THE PREFAB REF CARRIES THE DISTRICT
+//  ------------------------------------------
+//    $/03_night_city/c_watson/kabuki/wk_04/.../digital_billboard_33_10_021_prefab...
+//                    ^district ^subdistrict
+//  So we do not have to bin by polygon -- the game already knows. Recorded per sign.
 //
 //
-// RUN
-// ───
-// SET MAX_SECTORS = 50 FIRST and check the output looks sane. This script has NOT
-// been executed in WolvenKit's engine — it is written against the API docs, so the
-// first run may need a fix. The likeliest breakage is `f.Name` (the property holding
-// a file's game path on the objects GetArchiveFiles() returns).
+//  OUTPUT
+//  ------
+//    ncz_signs.csv        one row per SIGN PLACEMENT (grouped by prefabRef):
+//                         pivot position, part count, class, district, asset
+//    ncz_sectors.csv      per sector: glass vs wall panels (instance-weighted),
+//                         glass_off, dominant style x use, sign placements, lights
+//    ncz_sign_assets.csv  each unique sign mesh -> its chunk material NAMES.
+//                         Sign COLOUR lives here: neon_kiroshi_optics_logo.mesh has
+//                         materials `neon_green_v1`, `neon_pink_v2`. (Material VALUES
+//                         sit in a raw buffer WolvenKit won't expand; names suffice.)
+//    ncz_lights.csv       worldStaticLightNode: colour, intensity, radius, position
+//    ncz_skipped.csv      sectors WolvenKit could not parse -- NOT scanned. Explicit,
+//                         so a silent miss can't masquerade as a zero.
+//
+//  SET MAX_SECTORS = 50 FOR A SMOKE TEST FIRST.
+// =============================================================================
 
-import * as Logger from 'Logger';
+import * as Logger from 'Logger.wscript';
 
-// ── Config ───────────────────────────────────────────────────────────────────
-const WORLD = 'worlds\\03_night_city\\_compiled\\default\\';
-const LOD = 0;                 // LOD0 only. See above — this is not a preference.
-const MAX_SECTORS = 0;         // 0 = all (~6,517). Set 50 for a smoke test.
-const LOG_EVERY = 200;
-const COLLECT_ASSETS = true;   // PASS 2: open each unique sign mesh for its colours
+// ===================== CONFIG =====================
+const LOD          = 0;      // see note 1. Do not change.
+const MAX_SECTORS  = 0;      // 0 = all (~6,500). Set 50 to smoke-test.
+const LOG_EVERY    = 250;
+const ASSET_COLOURS = true;  // PASS 2: open each unique sign mesh for its materials
+// ==================================================
 
-// ── Signage taxonomy (the game's own folders, not keyword guessing) ──────────
+// ---- Signage taxonomy: the game's own folders, not keyword guessing ----------
+// advertising\{signage,digital,holograms}\ EMIT LIGHT.
+// advertising\{posters,streamers,frames,ground}\ are paper, cloth and bare mounts —
+// they emit nothing. A naive /advert/ match adds 38 pieces of cardboard to Kabuki.
 const AD_EMISSIVE = /[\\/]advertising[\\/](signage|digital|holograms)[\\/]/;
 const AD_INERT    = /[\\/]advertising[\\/](posters|streamers|frames|ground)[\\/]/;
 const SIGN_NAME   = /signage_|signboard|neon_|billboard|screen_\d|hologram/;
 const SUBCLASS = [
-  ['billboard', /billboard/],
-  ['screen',    /screen_\d|_screen|digital[\\/]/],
-  ['hologram',  /hologram|holo_/],
-  ['neon',      /neon/],
-  ['signage',   /signage|signboard/],
+    ['billboard', /billboard/],
+    ['screen',    /screen_\d|_screen|digital[\\/]/],
+    ['hologram',  /hologram|holo_/],
+    ['neon',      /neon/],
+    ['signage',   /signage|signboard/],
 ];
 function subclass(p) {
-  for (let i = 0; i < SUBCLASS.length; i++) if (SUBCLASS[i][1].test(p)) return SUBCLASS[i][0];
-  return 'advertising';
+    for (const [name, re] of SUBCLASS) if (re.test(p)) return name;
+    return 'advertising';
 }
 
-// ── Facade pieces ────────────────────────────────────────────────────────────
+// ---- Facade pieces -----------------------------------------------------------
 const WINDOW = /_window_|_window\./;
 const WALL   = /_wall_|_wall\./;
 const APPEARANCE_OFF = /windows_off|_off$/;   // this instance's windows are DARK
-// wat_kab_building_d_2x1_h400_w600_ent_apt → style `ent`, use `apt`
-const STYLE = /_(ent|mlt|nkt|kts)_(apt|off|ind|apartment|office|industrial)/;
+const STYLE  = /_(ent|mlt|nkt|kts)_(apt|off|ind|apartment|office|industrial)/;
 
-// A node is N placed copies, not one. THIS IS THE FIX — see the header.
+// ---- Helpers -----------------------------------------------------------------
+// A node is N placed copies, not one (note 3).
 function instances(d) {
-  const b = d.worldTransformsBuffer;
-  if (b && typeof b.numElements === 'number' && b.numElements > 0) return b.numElements;
-  return 1;
+    const b = d.worldTransformsBuffer;
+    return (b && typeof b.numElements === 'number' && b.numElements > 0) ? b.numElements : 1;
+}
+// The readable prefab path on a worldNodeData entry (QuestPrefabRefHash / UkHash1).
+function prefabRef(o) {
+    for (const k in o) {
+        const v = o[k];
+        if (v && typeof v === 'object' && v.$type === 'NodeRef' && typeof v.$value === 'string' && v.$value.length > 3) {
+            return v.$value;
+        }
+    }
+    return null;
+}
+// $/03_night_city/c_watson/kabuki/... -> "watson/kabuki"
+function districtOf(ref) {
+    const m = ref && ref.match(/^\$\/[^/]+\/c_([^/]+)\/([^/]+)\//);
+    return m ? (m[1] + '/' + m[2]) : '';
 }
 const f2 = (v) => (typeof v === 'number' ? v.toFixed(2) : '');
-const f4 = (v) => (typeof v === 'number' ? v.toFixed(4) : '');
+const nz = (p) => p && !(p.X === 0 && p.Y === 0 && p.Z === 0);
 
-// ── Sector list ──────────────────────────────────────────────────────────────
+// ---- Sector list -------------------------------------------------------------
 const sectors = [];
-const all = wkit.GetArchiveFiles();
-for (const f of all) {
-  const p = f.Name;
-  if (!p || p.indexOf(WORLD) === -1 || !p.endsWith('.streamingsector')) continue;
-  const m = p.match(/exterior_(-?\d+)_(-?\d+)_(-?\d+)_(\d+)\.streamingsector$/);
-  if (!m || parseInt(m[4], 10) !== LOD) continue;
-  sectors.push({ path: p, gx: parseInt(m[1], 10), gy: parseInt(m[2], 10) });
+for (const f of wkit.GetArchiveFiles()) {
+    const name = (typeof f === 'string') ? f : (f.FileName ?? f.Name);
+    if (!name || !name.endsWith('.streamingsector')) continue;
+    if (name.indexOf('03_night_city') === -1) continue;
+    const m = name.match(/exterior_(-?\d+)_(-?\d+)_(-?\d+)_(\d+)\.streamingsector$/);
+    if (!m || parseInt(m[4], 10) !== LOD) continue;
+    sectors.push({ path: name, gx: parseInt(m[1], 10), gy: parseInt(m[2], 10) });
 }
 const limit = MAX_SECTORS > 0 ? Math.min(MAX_SECTORS, sectors.length) : sectors.length;
-Logger.Info(`[ncz] ${sectors.length} LOD${LOD} sectors; scanning ${limit}`);
+Logger.Info(`[ncz] ${sectors.length} LOD${LOD} sectors in Night City; scanning ${limit}`);
 
-// ── PASS 1: sectors ──────────────────────────────────────────────────────────
-const signRows   = ['x,y,z,qi,qj,qk,qr,sx,sy,sz,bw,bh,bd,class,node,instances,asset,sector'];
-const sectorRows = ['sector,gx,gy,nodes,assets,signs,inert_ad,glass,glass_off,wall,style_use,ads,lights'];
+// ---- PASS 1 ------------------------------------------------------------------
+const signRows   = ['x,y,z,parts,class,district,coordSource,asset,sector'];
+const sectorRows = ['sector,gx,gy,nodes,glass,glass_off,wall,glass_share,style_use,sign_placements,sign_parts,inert_ad,lights'];
 const lightRows  = ['x,y,z,r,g,b,intensity,radius,temperature,type,name,sector'];
-const signAssets = {};   // depot path → count (PASS 2 input)
+const skipped    = [];
+const signAssets = {};    // depot path -> placements (PASS 2 input)
 
-let done = 0, failed = 0, totSigns = 0, totGlass = 0;
+let done = 0, totalSigns = 0, totalGlass = 0;
 
 for (let i = 0; i < limit; i++) {
-  const s = sectors[i];
-  let rc;
-  try {
-    const json = wkit.GetFileFromArchive(s.path, OpenAs.Json);
-    if (!json) { failed++; continue; }
-    rc = JSON.parse(json).Data.RootChunk;
-  } catch (e) { failed++; continue; }
+    const s = sectors[i];
+    if (++done % LOG_EVERY === 0) Logger.Info(`[ncz] ${done}/${limit} — ${totalSigns} signs, ${totalGlass} glass panels`);
 
-  const nodes = rc.nodes || [];
-  const nd = (rc.nodeData && (rc.nodeData.Data || rc.nodeData)) || [];
-  const xf = {};   // NodeIndex → full transform (position, orientation, scale, bounds)
-  for (let k = 0; k < nd.length; k++) {
-    const d = nd[k];
-    if (d && typeof d.NodeIndex === 'number') xf[d.NodeIndex] = d;
-  }
+    // WolvenKit rejects some device-heavy sectors ("not a CR2W file"). Record the
+    // miss explicitly — a skipped sector must never look like a district with no signs.
+    let raw;
+    try { raw = wkit.GetFileFromArchive(s.path, OpenAs.Json); }
+    catch { skipped.push(s.path); continue; }
+    if (!raw) { skipped.push(s.path); continue; }
 
-  let assets = 0, signs = 0, inertAd = 0, glass = 0, glassOff = 0, wall = 0, ads = 0, lights = 0;
-  const styles = {};
-  const tag = s.gx + '_' + s.gy;
+    let rc;
+    try { rc = JSON.parse(raw).Data.RootChunk; }
+    catch { skipped.push(s.path); continue; }
 
-  for (let n = 0; n < nodes.length; n++) {
-    const d = nodes[n].Data;
-    if (!d) continue;
-    const t = d.$type;
-    const N = instances(d);
-    const tr = xf[n];
+    const nodes = rc.nodes || [];
+    const nd = (rc.nodeData && (rc.nodeData.Data || rc.nodeData)) || [];
+    const byIndex = {};
+    for (const o of nd) if (o && typeof o.NodeIndex === 'number') byIndex[o.NodeIndex] = o;
 
-    // ── Light sources (for the city-glow term) ──
-    if (t === 'worldStaticLightNode') {
-      lights += N;
-      const c = d.color || {};
-      const p = tr && tr.Position;
-      lightRows.push([
-        p ? f2(p.X) : '', p ? f2(p.Y) : '', p ? f2(p.Z) : '',
-        c.Red || 0, c.Green || 0, c.Blue || 0,
-        d.intensity || 0, d.radius || 0, d.temperature || 0, d.type || '',
-        '"' + ((d.debugName && d.debugName.$value) || '') + '"', tag,
-      ].join(','));
-      continue;
-    }
-    if (t === 'worldAdvertisementNode') ads += N;
+    const tag = s.gx + '_' + s.gy;
+    let glass = 0, glassOff = 0, wall = 0, inertAd = 0, lights = 0, signParts = 0;
+    const styles = {};
+    const groups = {};   // prefabRef -> one SIGN PLACEMENT (note 2)
 
-    const dp = (d.mesh && d.mesh.DepotPath && d.mesh.DepotPath.$value)
-            || (d.material && d.material.DepotPath && d.material.DepotPath.$value) || '';
-    if (!dp) continue;
-    assets += N;
+    for (let n = 0; n < nodes.length; n++) {
+        const d = nodes[n].Data;
+        if (!d) continue;
+        const t = d.$type;
+        const N = instances(d);
+        const o = byIndex[n];
 
-    const lower = dp.toLowerCase();
-    const base = lower.split('\\').pop();
-    const app = ((d.meshAppearance && d.meshAppearance.$value) || '').toLowerCase();
-
-    // ── Facade: glass panels vs solid wall. GLASS SHARE is the district variable. ──
-    if (WINDOW.test(base)) {
-      if (APPEARANCE_OFF.test(app)) glassOff += N; else glass += N;
-      const st = lower.match(STYLE);
-      if (st) {
-        const key = st[1] + '_' + st[2].substring(0, 3);
-        styles[key] = (styles[key] || 0) + N;
-      }
-    } else if (WALL.test(base)) {
-      wall += N;
-    }
-
-    // ── Signage ──
-    const named = SIGN_NAME.test(base);
-    if (AD_INERT.test(lower) && !named) { inertAd += N; continue; }
-    if (!(AD_EMISSIVE.test(lower) || t === 'worldAdvertisementNode' || named)) continue;
-
-    signs += N;
-    signAssets[dp] = (signAssets[dp] || 0) + N;
-
-    const cls = t === 'worldAdvertisementNode' ? 'billboard' : subclass(lower);
-    const p = tr && tr.Position, q = tr && tr.Orientation, sc = tr && tr.Scale, bb = tr && tr.Bounds;
-    // Bounds → physical size. For an instanced node this covers ALL its copies (see
-    // the header limitation), so trust it only when instances == 1.
-    let bw = '', bh = '', bd = '';
-    if (bb && bb.Max && bb.Min) {
-      bw = f2(bb.Max.X - bb.Min.X); bh = f2(bb.Max.Y - bb.Min.Y); bd = f2(bb.Max.Z - bb.Min.Z);
-    }
-    signRows.push([
-      p ? f2(p.X) : '', p ? f2(p.Y) : '', p ? f2(p.Z) : '',
-      q ? f4(q.i) : '', q ? f4(q.j) : '', q ? f4(q.k) : '', q ? f4(q.r) : '',
-      sc ? f2(sc.X) : '', sc ? f2(sc.Y) : '', sc ? f2(sc.Z) : '',
-      bw, bh, bd,
-      cls, t, N, '"' + dp + '"', tag,
-    ].join(','));
-  }
-
-  let topStyle = '', topN = 0;
-  for (const k in styles) if (styles[k] > topN) { topN = styles[k]; topStyle = k; }
-
-  sectorRows.push([tag, s.gx, s.gy, nodes.length, assets, signs, inertAd,
-    glass, glassOff, wall, topStyle, ads, lights].join(','));
-
-  totSigns += signs; totGlass += glass; done++;
-  if (done % LOG_EVERY === 0) Logger.Info(`[ncz] ${done}/${limit} — ${totSigns} signs, ${totGlass} glass panels`);
-}
-
-// ── PASS 2: unique sign assets → their material names (= COLOUR) ─────────────
-// neon_kiroshi_optics_logo.mesh → chunk materials neon_green_v1, neon_pink_v2, …
-const assetRows = ['asset,placements,materials'];
-if (COLLECT_ASSETS) {
-  const keys = Object.keys(signAssets);
-  Logger.Info(`[ncz] PASS 2: ${keys.length} unique sign assets`);
-  let a = 0;
-  for (const path of keys) {
-    let mats = '';
-    if (path.endsWith('.mesh')) {
-      try {
-        const j = wkit.GetFileFromArchive(path, OpenAs.Json);
-        if (j) {
-          const mrc = JSON.parse(j).Data.RootChunk;
-          const names = [];
-          for (const e of (mrc.materialEntries || [])) {
-            const nm = e.name && e.name.$value;
-            if (nm && names.indexOf(nm) === -1) names.push(nm);
-          }
-          mats = names.join('|');
+        if (t === 'worldStaticLightNode') {
+            lights += N;
+            const c = d.color || {};
+            const p = o && o.Position;
+            lightRows.push([
+                p ? f2(p.X) : '', p ? f2(p.Y) : '', p ? f2(p.Z) : '',
+                c.Red || 0, c.Green || 0, c.Blue || 0,
+                d.intensity || 0, d.radius || 0, d.temperature || 0, d.type || '',
+                '"' + ((d.debugName && d.debugName.$value) || '') + '"', tag,
+            ].join(','));
+            continue;
         }
-      } catch (e) { /* leave blank */ }
+
+        const dp = (d.mesh && d.mesh.DepotPath && d.mesh.DepotPath.$value)
+                || (d.material && d.material.DepotPath && d.material.DepotPath.$value) || '';
+        if (!dp) continue;
+        const lower = dp.toLowerCase();
+        const base  = lower.split('\\').pop();
+        const app   = ((d.meshAppearance && d.meshAppearance.$value) || '').toLowerCase();
+
+        // -- Facade: glass vs wall. GLASS SHARE is the district variable (note 4). --
+        if (WINDOW.test(base)) {
+            if (APPEARANCE_OFF.test(app)) glassOff += N; else glass += N;
+            const st = lower.match(STYLE);
+            if (st) {
+                const key = st[1] + '_' + st[2].substring(0, 3);
+                styles[key] = (styles[key] || 0) + N;
+            }
+        } else if (WALL.test(base)) {
+            wall += N;
+        }
+
+        // -- Signage --
+        const named = SIGN_NAME.test(base);
+        if (AD_INERT.test(lower) && !named) { inertAd += N; continue; }
+        if (!(AD_EMISSIVE.test(lower) || t === 'worldAdvertisementNode' || named)) continue;
+
+        signParts += N;
+        signAssets[dp] = (signAssets[dp] || 0) + N;
+
+        // Group parts into one placement by prefab ref. No ref (rare) => its own group.
+        const ref = o ? prefabRef(o) : null;
+        const key = ref || ('node#' + n);
+        const g = groups[key] || (groups[key] = {
+            ref, parts: 0, sumX: 0, sumY: 0, sumZ: 0, pivot: null,
+            cls: subclass(lower), asset: dp,
+        });
+        g.parts += N;
+        if (o && o.Position) { g.sumX += o.Position.X; g.sumY += o.Position.Y; g.sumZ += o.Position.Z; }
+        // The pivot is the sign's AUTHORED anchor — exact. Prefer it over a centroid.
+        if (!g.pivot && o && nz(o.Pivot)) g.pivot = o.Pivot;
+        // Prefer the most specific class seen among the parts.
+        if (g.cls === 'advertising') g.cls = subclass(lower);
     }
-    assetRows.push(`"${path}",${signAssets[path]},"${mats}"`);
-    if (++a % 200 === 0) Logger.Info(`[ncz] PASS 2: ${a}/${keys.length}`);
-  }
+
+    let placements = 0;
+    for (const key in groups) {
+        const g = groups[key];
+        placements++;
+        const c = g.pivot || { X: g.sumX / g.parts, Y: g.sumY / g.parts, Z: g.sumZ / g.parts };
+        signRows.push([
+            f2(c.X), f2(c.Y), f2(c.Z), g.parts, g.cls,
+            '"' + districtOf(g.ref) + '"', g.pivot ? 'pivot' : 'centroid',
+            '"' + g.asset + '"', tag,
+        ].join(','));
+    }
+
+    const share = (glass + wall) ? (glass / (glass + wall)).toFixed(4) : '0';
+    let topStyle = '', topN = 0;
+    for (const k in styles) if (styles[k] > topN) { topN = styles[k]; topStyle = k; }
+
+    sectorRows.push([tag, s.gx, s.gy, nodes.length, glass, glassOff, wall, share,
+        topStyle, placements, signParts, inertAd, lights].join(','));
+
+    totalSigns += placements;
+    totalGlass += glass;
 }
 
-wkit.SaveToRaw('ncz_signs.csv', signRows.join('\n'));
-wkit.SaveToRaw('ncz_sectors.csv', sectorRows.join('\n'));
-wkit.SaveToRaw('ncz_sign_assets.csv', assetRows.join('\n'));
-wkit.SaveToRaw('ncz_lights.csv', lightRows.join('\n'));
+// ---- PASS 2: unique sign assets -> material names (= COLOUR) ------------------
+const assetRows = ['asset,placements,materials'];
+if (ASSET_COLOURS) {
+    const keys = Object.keys(signAssets);
+    Logger.Info(`[ncz] PASS 2: ${keys.length} unique sign assets`);
+    let a = 0;
+    for (const path of keys) {
+        let mats = '';
+        if (path.toLowerCase().endsWith('.mesh')) {
+            try {
+                const j = wkit.GetFileFromArchive(path, OpenAs.Json);
+                if (j) {
+                    const mrc = JSON.parse(j).Data.RootChunk;
+                    const names = [];
+                    for (const e of (mrc.materialEntries || [])) {
+                        const nm = e.name && e.name.$value;
+                        if (nm && names.indexOf(nm) === -1) names.push(nm);
+                    }
+                    mats = names.join('|');
+                }
+            } catch { /* leave blank */ }
+        }
+        assetRows.push(`"${path}",${signAssets[path]},"${mats}"`);
+        if (++a % 250 === 0) Logger.Info(`[ncz] PASS 2: ${a}/${keys.length}`);
+    }
+}
 
-Logger.Success(`[ncz] done — ${done} sectors (${failed} failed), ${totSigns} signs, ` +
-  `${totGlass} glass panels, ${Object.keys(signAssets).length} unique sign assets`);
-Logger.Info('[ncz] wrote ncz_signs.csv, ncz_sectors.csv, ncz_sign_assets.csv, ncz_lights.csv');
+wkit.SaveToRaw('ncz_signs.csv',       signRows.join('\n'));
+wkit.SaveToRaw('ncz_sectors.csv',     sectorRows.join('\n'));
+wkit.SaveToRaw('ncz_sign_assets.csv', assetRows.join('\n'));
+wkit.SaveToRaw('ncz_lights.csv',      lightRows.join('\n'));
+wkit.SaveToRaw('ncz_skipped.csv',     ['sector'].concat(skipped).join('\n'));
+
+Logger.Success(`[ncz] ${done} sectors — ${totalSigns} sign placements, ${totalGlass} glass panels, ` +
+    `${Object.keys(signAssets).length} unique sign assets`);
+if (skipped.length) Logger.Warning(`[ncz] ${skipped.length} sectors could NOT be parsed and were NOT scanned — see ncz_skipped.csv`);
+Logger.Info('[ncz] wrote ncz_signs / ncz_sectors / ncz_sign_assets / ncz_lights / ncz_skipped .csv');
