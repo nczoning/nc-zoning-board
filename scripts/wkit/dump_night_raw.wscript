@@ -52,6 +52,14 @@
 //                      for every archetype), TintColorAtNight, LightsTempVariationAtNight,
 //                      EmissiveEV, roomWidth/roomHeight (the real 3x4 m window cell).
 //
+//  OBJECT SIZE COMES FROM ncz_assets.csv (bbx0..bbz1), NOT from the node's Bounds.
+//  The node `Bounds` field is populated on only 1.9% of placed nodes (0.0% of
+//  InstancedMesh, 4.7% of StaticMesh) and is NEGATIVE on another 15%. It is kept
+//  because it costs nothing and is correct where present, but anything that needs an
+//  object's size must join to the ASSET's bounding box, which is exact and universal.
+//  Measured 2026-07-13, after a 2%-sample size estimate silently swung the district
+//  glass shares by 2x.
+//
 //   ncz_assets.csv     every unique mesh placed in a sector -> the materials it references
 //                      (chunk names + external .mi paths + local-buffer base materials).
 //                      Join to ncz_materials to learn if it is glass, and in what style.
@@ -266,19 +274,44 @@ Logger.Info(`[ncz] PASS B done — ${emitted} nodes, ${nextAsset} unique assets,
 // Chunk-material NAMES, external .mi PATHS, and local-buffer BASE materials. Join these
 // to ncz_materials.csv (PASS A) to learn whether a mesh carries glass — definitionally,
 // by root shader, not by its name.
-const assetRows = ['id,path,chunks,mat_names,mat_paths'];
+// THE MESH'S OWN BOUNDING BOX — and this is the fix for the whole size story.
+//
+// PASS B writes each NODE's `Bounds`, and that field is a lie of omission: it is
+// populated on 1.9% of placed nodes and ZERO on 82.7% of them (InstancedMesh: 0.0%,
+// StaticMesh: 4.7%). Everything downstream that needed an object's SIZE — the
+// area-weighted glass share, the panel/roof orientation split, the .dds alignment test
+// — was therefore learned from a 2% sample that nobody had checked was a sample. It
+// swung the measured glass shares by 2x when a single filter changed, which is what
+// finally gave it away.
+//
+// A mesh knows its own size. `boundingBox` is on the CMesh itself — exact, LOCAL, and
+// present for every asset — and PASS C is ALREADY opening every mesh file to read its
+// materials, so this costs no extra I/O at all. Six columns, one re-scan, and the
+// object-size problem is simply gone: area from the box, orientation from its thin
+// axis, world footprint from box x node scale x node quaternion.
+//
+// Keep the node Bounds columns in PASS B (they cost nothing and are right when present),
+// but the ASSET box is the source of truth. Prefer it.
+const assetRows = ['id,path,chunks,bbx0,bby0,bbz0,bbx1,bby1,bbz1,mat_names,mat_paths'];
 {
     const paths = Object.keys(assetId);
-    Logger.Info(`[ncz] PASS C: reading materials for ${paths.length} unique meshes`);
-    let a = 0;
+    Logger.Info(`[ncz] PASS C: reading materials + bounding boxes for ${paths.length} unique meshes`);
+    let a = 0, boxed = 0;
     for (const path of paths) {
         const names = [], refs = [];
         let chunks = 0;
+        let bb = ['', '', '', '', '', ''];
         if (path.toLowerCase().endsWith('.mesh')) {
             try {
                 const j = wkit.GetFileFromArchive(path, OpenAs.Json);
                 if (j) {
                     const mrc = JSON.parse(j).Data.RootChunk;
+                    const box = mrc.boundingBox;
+                    if (box && box.Min && box.Max) {
+                        bb = [f2(box.Min.X), f2(box.Min.Y), f2(box.Min.Z),
+                              f2(box.Max.X), f2(box.Max.Y), f2(box.Max.Z)];
+                        boxed++;
+                    }
                     for (const e of (mrc.materialEntries || [])) {
                         const nm = e.name && e.name.$value;
                         chunks++;
@@ -298,9 +331,12 @@ const assetRows = ['id,path,chunks,mat_names,mat_paths'];
                 }
             } catch { /* leave blank — the node rows still stand */ }
         }
-        assetRows.push([assetId[path], csv(path), chunks, csv(names.join('|')), csv(refs.join('|'))].join(','));
+        assetRows.push([assetId[path], csv(path), chunks, bb.join(','), csv(names.join('|')), csv(refs.join('|'))].join(','));
         if (++a % 500 === 0) Logger.Info(`[ncz] PASS C: ${a}/${paths.length}`);
     }
+    // Say the coverage OUT LOUD. The whole reason the node-Bounds hole went unnoticed for
+    // so long is that nothing ever printed how much of it was actually there.
+    Logger.Info(`[ncz] PASS C done — ${boxed}/${paths.length} meshes have a bounding box (${(100 * boxed / paths.length).toFixed(1)}%)`);
 }
 
 const prefabRows = ['id,ref'];
