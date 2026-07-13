@@ -1,0 +1,7 @@
+{
+  "count": 619324,
+  "stride": 9,
+  "layout": "px,py,pz,qx,qy,qz,qw,sw,sh",
+  "space": "three",
+  "roof": false
+}

@@ -54,3 +54,7 @@ assets/lut-source/
 
 # Wrangler local dev state
 worker/.wrangler/
+
+# Route A panel bake — 22 MB, regenerate with:
+#   node scripts/window_panels.js --bake
+data/window-panels.bin

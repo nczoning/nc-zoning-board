@@ -56,12 +56,22 @@
 //  The old "an InstancedMesh node's transforms live in a buffer WolvenKit will not expand"
 //  is FALSE. It was inherited, never tested, and it cost us the position of 2,172,830
 //  placed instances (54% of the city, incl. 139,613 window panes), which were being binned
-//  at their sector's centre (+-32 m) instead. WolvenKit expands the buffer fully:
-//      worldTransformsBuffer.startIndex           <- the field nobody read
-//                           .numElements
-//                           .sharedDataBuffer.Data.buffer.Data.Transforms[]
+//  at their sector's centre (+-32 m) instead. WolvenKit expands the buffer fully — but it
+//  takes TWO reads, and missing either one looks like "the data isn't there":
+//
+//      worldTransformsBuffer.startIndex     <- where this node's slice begins
+//                           .numElements    <- how long it is
+//                           .sharedDataBuffer
+//                                { HandleId: "491", Data: {...} }   <- the OWNER node
+//                                { HandleRefId: "491" }             <- EVERY OTHER NODE
+//
+//  A handle's payload is serialised EXACTLY ONCE, on the first node that references it.
+//  Read `sharedDataBuffer.Data` per-node and you find a pool on ~1% of nodes and conclude
+//  the rest are empty (measured: 21,127 found, 2,149,687 "missing"). So resolve the
+//  sector's HandleId -> pool table first, then let HandleRefId nodes index into it.
 //  The pool is SECTOR-SHARED and the slices are contiguous, so without startIndex every
-//  node appears to own the same few thousand transforms. Verified 2026-07-13.
+//  node also appears to own the same few thousand transforms. Both reads, or nothing.
+//  Verified against exterior_0_-34_0_0 on 2026-07-13.
 //
 //  OBJECT SIZE COMES FROM ncz_assets.csv (bbx0..bbz1), NOT from the node's Bounds.
 //  The node `Bounds` field is populated on only 1.9% of placed nodes (0.0% of
@@ -95,8 +105,10 @@
 import * as Logger from 'Logger.wscript';
 
 // ===================== CONFIG =====================
-const LOD         = 0;
-const MAX_SECTORS = 0;      // 0 = all (~7,159). Set 50 to smoke-test.
+// -1 = EVERY streaming level (the correct setting — a tower lives in level 4 or 6, a prop in
+// level 0; filtering to one level reads only objects of one SIZE). Set 0..6 to isolate one.
+const LOD         = -1;
+const MAX_SECTORS = 0;      // 0 = all (~15,119 across all levels). Set 50 to smoke-test.
 const LOG_EVERY   = 250;
 // ==================================================
 //
@@ -203,22 +215,53 @@ function prefabRef(o) {
     return null;
 }
 
-// ---- Sector list (deduped; Z is part of the identity — the city stacks) -------
+// ---- Sector list — EVERY STREAMING LEVEL, NOT JUST LEVEL 0 --------------------
+//
+// THE FILTER THAT COST US THE CITY'S BUILDINGS.
+//
+// `exterior_X_Y_Z_L.streamingsector` — the trailing L is NOT a level of detail. It is the
+// STREAMING LEVEL, and it sets the sector's CELL SIZE. Cyberpunk files each object into the
+// level whose cell is big enough to contain it:
+//
+//     level 0   64 m cells   ->  props, street kit, small facade panels
+//     level 1-2              ->  houses, mid-rise
+//     level 3-6              ->  MEGABUILDINGS AND TOWERS
+//
+// Read it off the grid indices and it is obvious in hindsight: a level-0 sector is
+// `exterior_-62_39_0_0` (small cells, big indices); a Corpo Plaza tower lives in
+// `exterior_-1_-1_0_6` (huge cells, tiny indices). Verified in-game with World Inspector —
+// every tall building sampled sits in level 2, 3, 4 or 6. NOT ONE was in level 0.
+//
+// This extractor filtered to `L === 0` and therefore read Night City's SMALL OBJECTS and
+// none of its LARGE BUILDINGS. It is why Corpo Plaza's window panels stopped dead at 153 m
+// while the towers are 300 m+, why the whole city measured a scarcely-credible 996k m2 of
+// glass, and why every tall building rendered dark.
+//
+// 6,517 level-0 sectors were read. There are 15,119.
+//
+// The Z index stays part of the sector tag (the city stacks), but the tag is now only a
+// label — positions come from the node transforms, which are exact at every level.
 const seenPath = {};
 const sectors = [];
+const byLevel = {};
 for (const f of wkit.GetArchiveFiles()) {
     const name = (typeof f === 'string') ? f : (f.FileName ?? f.Name);
     if (!name || !name.endsWith('.streamingsector')) continue;
     if (name.indexOf('03_night_city') === -1) continue;
     const m = name.match(/exterior_(-?\d+)_(-?\d+)_(-?\d+)_(\d+)\.streamingsector$/);
-    if (!m || parseInt(m[4], 10) !== LOD) continue;
+    if (!m) continue;
+    const lvl = parseInt(m[4], 10);
+    if (LOD >= 0 && lvl !== LOD) continue;   // LOD = -1 (the default now) means ALL LEVELS
     const key = name.toLowerCase();
     if (seenPath[key]) continue;
     seenPath[key] = 1;
-    sectors.push({ path: name, tag: m[1] + '_' + m[2] + '_' + m[3] });
+    byLevel[lvl] = (byLevel[lvl] || 0) + 1;
+    sectors.push({ path: name, tag: m[1] + '_' + m[2] + '_' + m[3] + '_L' + lvl });
 }
 const limit = MAX_SECTORS > 0 ? Math.min(MAX_SECTORS, sectors.length) : sectors.length;
-Logger.Info(`[ncz] ${sectors.length} LOD${LOD} sectors (deduped); dumping ${limit}`);
+Logger.Info(`[ncz] ${sectors.length} exterior sectors (deduped); dumping ${limit}`);
+Logger.Info('[ncz] by streaming level: ' + Object.keys(byLevel).sort((a, b) => a - b)
+    .map((l) => `L${l}=${byLevel[l]}`).join('  '));
 
 // ---- PASS B: every placed node, raw -------------------------------------------
 const nodeRows = ['sector,type,asset,prefab,x,y,z,qi,qj,qk,qr,sx,sy,sz,bw,bh,bd,inst,app'];
@@ -236,23 +279,72 @@ const nodeRows = ['sector,type,asset,prefab,x,y,z,qi,qj,qk,qr,sx,sy,sz,bw,bh,bd,
 //   node.worldTransformsBuffer
 //     .startIndex        <- WHERE this node's slice begins   (the part nobody read)
 //     .numElements       <- how long it is                   (the part we did read)
-//     .sharedDataBuffer.Data.buffer.Data.Transforms[]        <- the SECTOR's shared pool
+//     .sharedDataBuffer  <- a HANDLE into the SECTOR's shared pool
 //         { translation:{X,Y,Z}, rotation:{i,j,k,r}, scale:{X,Y,Z} }
 //
 // The pool is shared across the sector and the slices are contiguous — node A at
 // startIndex 717 x96, node B at 813 x3, node C at 816 x24. Read it as
 // Transforms[startIndex .. startIndex + numElements - 1].
 //
-// One row per COPY. This is the file that makes window PLACEMENT possible: not "what
-// fraction of this district is glass" but "this pane of glass is at exactly (x, y, z)".
-const instRows = ['sector,type,asset,prefab,x,y,z,qi,qj,qk,qr,sx,sy,sz,app'];
+// AND THE HANDLE IS THE SECOND HALF OF THE TRICK. `sharedDataBuffer` carries its `Data`
+// on exactly ONE node — the handle's owner ({HandleId, Data}). Every other node that
+// shares the pool holds only {HandleRefId}, a pointer with no payload. Chasing
+// `sharedDataBuffer.Data` node-by-node therefore recovers ~1% of copies and makes the
+// other 99% look absent, which is a very convincing way to re-derive a limitation that
+// does not exist. Resolve HandleId -> pool for the sector, then index by startIndex.
+//
+// ONE ROW PER PLACED COPY — *EVERY* COPY, INSTANCED OR NOT.
+//
+// This file is the answer to "where is everything", and it is deliberately COMPLETE, so
+// that answering that question can never again require a union of two files. An earlier
+// draft emitted only instanced copies, which made the contract:
+//
+//     "instanced copies are in ncz_instances.csv; the ones that were never instanced are
+//      in ncz_nodes.csv with inst==1 and their transform on the node — and if you forget
+//      the second half you silently lose 17,849 window panes (11% of the city's glass)"
+//
+// That is a rule that lives in somebody's head, and the entire history of this extractor is
+// data quietly going missing because a rule like that was forgotten. So: single node or
+// instanced copy, it gets a row, and `src` says which it was. Read ONE file, get the city.
+//
+//     src = i   a copy out of the sector's shared transform pool  (was: inst > 1)
+//     src = n   a node placed once, transform on the node itself  (was: inst == 1)
+//
+// Not "what fraction of this district is glass" but "this pane of glass is at exactly
+// (x, y, z), facing that way, and it belongs to that building".
+const instRows = ['sector,src,type,asset,prefab,x,y,z,qi,qj,qk,qr,sx,sy,sz,app'];
 
 const skipped = [];
-let done = 0, emitted = 0, instEmitted = 0, instMissing = 0;
+let done = 0, emitted = 0, instEmitted = 0, instMissing = 0, singleEmitted = 0, noPlace = 0, poolNodes = 0;
+
+// ---- CHUNKED FLUSH — or the process dies before it writes anything ------------
+//
+// This script used to hold EVERY output row in memory as a string and join it at the end.
+// At 7,159 level-0 sectors that was already a 274 MB ncz_nodes.csv. Reading all 16,208
+// sectors (every streaming level — see the sector list above) roughly doubles it, and adds a
+// ~2.2M-row instances table on top. WolvenKit ran out of memory and took the whole 20-minute
+// run with it.
+//
+// So write PART FILES as we go and drop the rows. Memory stays flat regardless of how many
+// sectors there are, and a crash costs you one chunk instead of the entire run.
+//
+// Merge them afterwards with:  node scripts/merge_dump_parts.js
+const FLUSH_EVERY = 2000;   // sectors
+let partNo = 0;
+function flushChunk() {
+    // Row 0 of each array is its header; keep it, drop everything else.
+    wkit.SaveToRaw(`ncz_nodes_p${partNo}.csv`,     nodeRows.join('\n'));
+    wkit.SaveToRaw(`ncz_instances_p${partNo}.csv`, instRows.join('\n'));
+    Logger.Info(`[ncz] flushed part ${partNo} — ${nodeRows.length - 1} nodes, ${instRows.length - 1} placements`);
+    nodeRows.length = 1;
+    instRows.length = 1;
+    partNo++;
+}
 
 for (let i = 0; i < limit; i++) {
     const s = sectors[i];
     if (++done % LOG_EVERY === 0) Logger.Info(`[ncz] PASS B: ${done}/${limit} sectors — ${emitted} nodes`);
+    if (done % FLUSH_EVERY === 0) flushChunk();   // keep memory flat; see FLUSH_EVERY above
 
     let raw;
     try { raw = wkit.GetFileFromArchive(s.path, OpenAs.Json); }
@@ -266,6 +358,33 @@ for (let i = 0; i < limit; i++) {
     const nd = (rc.nodeData && (rc.nodeData.Data || rc.nodeData)) || [];
     const byIndex = {};
     for (const o of nd) if (o && typeof o.NodeIndex === 'number') byIndex[o.NodeIndex] = o;
+
+    // ── THE SECTOR'S SHARED TRANSFORM POOLS ───────────────────────────────────
+    // `sharedDataBuffer` is a HANDLE, and WolvenKit serialises a handle's payload EXACTLY
+    // ONCE — on the first node that references it. That node gets
+    //
+    //     sharedDataBuffer: { HandleId: "491", Data: { ...202 Transforms... } }
+    //
+    // and every other node referencing the same buffer gets a bare POINTER:
+    //
+    //     sharedDataBuffer: { HandleRefId: "491" }        <- no Data. None.
+    //
+    // Reading the pool off each node in isolation therefore finds it on the ~1% of nodes
+    // that happen to OWN their handle, and reports the other 99% as "missing their slice".
+    // (Measured: 21,127 copies recovered, 2,149,687 missing. The shape is not subtle once
+    // you look — one node with `Data+HandleId`, fifty-four with `HandleRefId`.)
+    //
+    // So resolve the handles for the whole sector FIRST, then let every node index into
+    // the pool it points at. `startIndex` was never the problem — it was right all along.
+    const pools = {};
+    for (let n = 0; n < nodes.length; n++) {
+        const dd = nodes[n].Data;
+        const sdb = dd && dd.worldTransformsBuffer && dd.worldTransformsBuffer.sharedDataBuffer;
+        if (!sdb || !sdb.HandleId) continue;
+        const T = sdb.Data && sdb.Data.buffer && sdb.Data.buffer.Data
+               && sdb.Data.buffer.Data.Transforms;
+        if (T) pools[sdb.HandleId] = T;
+    }
 
     for (let n = 0; n < nodes.length; n++) {
         const d = nodes[n].Data;
@@ -294,19 +413,31 @@ for (let i = 0; i < limit; i++) {
         // Walk the shared pool and emit one row per real copy. `startIndex` is the field
         // the old code never touched; without it the pool looks like the same 2,086
         // transforms repeated on every node, and with it each node takes its own slice.
-        if (tb && inst > 1) {
-            const pool = tb.sharedDataBuffer && tb.sharedDataBuffer.Data
-                      && tb.sharedDataBuffer.Data.buffer && tb.sharedDataBuffer.Data.buffer.Data
-                      && tb.sharedDataBuffer.Data.buffer.Data.Transforms;
+        const nType = d.$type.replace('world', '').replace('Node', '');
+
+        // A node's transform is in the POOL if it has a transforms buffer at all — and that
+        // includes buffers holding a SINGLE element. The old guard was `inst > 1`, which
+        // dropped exactly 2,016 nodes whose buffer has numElements == 1: excluded from this
+        // file for not being "instanced", and useless in ncz_nodes.csv because an instanced
+        // node's own Position is (0,0,0). Placed, real, and invisible in both files. `tb`
+        // is the question — "is it instanced" never was.
+        if (tb) {
+            poolNodes++;
+            // Follow the handle. The node either OWNS the pool (HandleId) or POINTS at
+            // one (HandleRefId) — both resolve through the sector table built above.
+            const sdb = tb.sharedDataBuffer;
+            const hid = sdb && (sdb.HandleId || sdb.HandleRefId);
+            const pool = hid ? pools[hid] : null;
             const start = (typeof tb.startIndex === 'number') ? tb.startIndex : 0;
             if (pool && pool.length >= start + inst) {
-                const nType = d.$type.replace('world', '').replace('Node', '');
                 for (let k = 0; k < inst; k++) {
                     const t = pool[start + k];
-                    if (!t) continue;
+                    // A null slot is a copy we cannot place. COUNT it — do not `continue`
+                    // past it. Every hole in this extractor's history was a quiet `continue`.
+                    if (!t) { instMissing++; continue; }
                     const tp = t.translation, tq = t.rotation, ts = t.scale;
                     instRows.push([
-                        s.tag, nType,
+                        s.tag, 'i', nType,
                         dp ? assetId[dp] : '',
                         ref ? prefabId[ref] : '',
                         tp ? f2(tp.X) : '', tp ? f2(tp.Y) : '', tp ? f2(tp.Z) : '',
@@ -320,6 +451,24 @@ for (let i = 0; i < limit; i++) {
                 // Say it out loud. A silently-missing slice is how the last hole survived.
                 instMissing += inst;
             }
+        } else if (p && (p.X !== 0 || p.Y !== 0 || p.Z !== 0)) {
+            // NOT instanced: placed once, transform on the node itself. It belongs in this
+            // file too. Emitting only pool-backed copies is what forced every consumer to
+            // union two files and remember which half held what — and forgetting the second
+            // half silently costs 17,849 window panes, 11% of the city's glass.
+            instRows.push([
+                s.tag, 'n', nType,
+                dp ? assetId[dp] : '',
+                ref ? prefabId[ref] : '',
+                f2(p.X), f2(p.Y), f2(p.Z),
+                q ? f3(q.i) : '', q ? f3(q.j) : '', q ? f3(q.k) : '', q ? f3(q.r) : '',
+                sc ? f3(sc.X) : '', sc ? f3(sc.Y) : '', sc ? f3(sc.Z) : '',
+                app ? appId[app] : '',
+            ].join(','));
+            singleEmitted++;
+        } else {
+            // No buffer AND no position. Not placeable. Counted, never dropped.
+            noPlace++;
         }
 
         nodeRows.push([
@@ -337,7 +486,15 @@ for (let i = 0; i < limit; i++) {
     }
 }
 Logger.Info(`[ncz] PASS B done — ${emitted} nodes, ${nextAsset} unique assets, ${nextPrefab} unique prefabs`);
-Logger.Info(`[ncz] PASS B: ${instEmitted} INSTANCED COPIES with a real transform` + (instMissing ? `, ${instMissing} MISSING their slice` : ', none missing'));
+// THE PLACEMENT LEDGER, and it balances at NODE level — not copy level, because one
+// pool-backed node emits many copies and the two counts are not the same currency.
+// Every node this pass accepted is in exactly one of three buckets. If they stop adding
+// up to `emitted`, data is going quietly missing, which is the one failure this extractor
+// is not allowed to have.
+const ledger = poolNodes + singleEmitted + noPlace;
+Logger.Info(`[ncz] PASS B: ${instEmitted} POOL COPIES from ${poolNodes} nodes, + ${singleEmitted} single placements = ${instEmitted + singleEmitted} PLACED COPIES`);
+Logger.Info(`[ncz] PASS B: ${noPlace} nodes with no transform at all` + (instMissing ? `, ${instMissing} COPIES MISSING their slice` : ', no copies missing'));
+Logger.Info(`[ncz] PASS B: LEDGER ${poolNodes} + ${singleEmitted} + ${noPlace} = ${ledger} vs ${emitted} nodes — ` + (ledger === emitted ? 'BALANCED' : `OFF BY ${emitted - ledger}, INVESTIGATE`));
 
 // ---- PASS C: unique meshes -> the materials they reference ---------------------
 // Chunk-material NAMES, external .mi PATHS, and local-buffer BASE materials. Join these
@@ -415,14 +572,14 @@ appList.forEach((a, i) => appRows.push(`${i},${csv(a)}`));
 
 wkit.SaveToRaw('ncz_materials.csv',   matRows.join('\n'));
 wkit.SaveToRaw('ncz_assets.csv',      assetRows.join('\n'));
-wkit.SaveToRaw('ncz_nodes.csv',       nodeRows.join('\n'));
-// One row per INSTANCED COPY, with its exact world transform. ~2.17M rows — the 54% of
-// Night City that the pipeline has been binning at a sector centre because a never-tested
-// assumption said these transforms could not be read. They can.
-wkit.SaveToRaw('ncz_instances.csv',   instRows.join('\n'));
 wkit.SaveToRaw('ncz_prefabs.csv',     prefabRows.join('\n'));
 wkit.SaveToRaw('ncz_appearances.csv', appRows.join('\n'));
 wkit.SaveToRaw('ncz_skipped.csv',     ['sector'].concat(skipped).join('\n'));
+
+// The last, partial chunk. ncz_nodes.csv / ncz_instances.csv are NOT written here — they are
+// assembled from the part files, because holding them whole is what killed the process.
+flushChunk();
+Logger.Info(`[ncz] wrote ${partNo} part files. NOW RUN:  node scripts/merge_dump_parts.js`);
 
 Logger.Success(`[ncz] ${done} sectors — ${emitted} nodes, ${nextAsset} meshes, ${nextPrefab} prefabs`);
 if (skipped.length) Logger.Warning(`[ncz] ${skipped.length} sectors could NOT be parsed — see ncz_skipped.csv`);

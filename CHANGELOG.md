@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Debug view `?colldebug` overlays the game's own 3D-map collision boxes (its internal decomposition of the map into solid objects), for comparison against our inferred building segmentation.
 - **Lights** control in the Overlays box (`auto` / `on` / `off`, or `?lights=`). Night City's windows never actually switch off — the game's material is always lit and *night* is when half of it turns off — so the lights are no longer tied to the sun. `auto` keeps the old dusk ramp.
 - Windows rebuilt on the game's **measured** rules: each subdistrict's glass share (from the streaming sectors, `data/night-profile.json`) sets the window size, and the game's own `AmountTurnOffAtNight` sets how many are lit. Replaces a single hand-tuned lit fraction applied to the whole city. Debug view `?glassdebug`; A/B against the old look with `?winmodel=legacy`.
+- Windows are now **placed, not estimated**: every building's glass is measured from where the game actually puts it, per building rather than per district. Buildings with no real glass — highway pylons, oil tanks, silos — go dark on their own, with no classification step.
+- Signage is **out of the night engine**, to be rebuilt on the same placement data.
 
 ## [1.3.0] - 2026-07-09
 

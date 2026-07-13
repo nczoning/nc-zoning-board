@@ -346,10 +346,20 @@ const ARCH = /[\\/]architecture[\\/]|[\\/]megabuilding[\\/]/i;
 // So the shader says WHETHER it emits; the asset tree says WHAT it is. Our map renders
 // buildings, windows and signage — it does not render vending machines.
 const SIGNAGE = /[\\/]advertising[\\/]|signage|billboard|neon_|screen_\d/i;
-// LOD0 streaming-sector cell size in CET metres. Verified: sector exterior_-15_-2_0_1's
-// own node positions fall inside [-15*128, -14*128] — the grid coord times the cell size.
-// LOD0 is half that: 64 m.
-const SECTOR_M = 64;
+// SECTOR_M IS GONE, and the note that used to be here had the answer in it the whole time:
+//
+//   "sector exterior_-15_-2_0_1's own node positions fall inside [-15*128, -14*128] — the
+//    grid coord times the cell size. LOD0 is half that: 64 m."
+//
+// A LEVEL-1 sector has 128 m cells and a level-0 sector has 64 m. The cell size DOUBLES per
+// streaming level — so a level-6 cell is 64 x 2^6 = 4,096 m, a quarter of Night City in one
+// sector. That is not a level of DETAIL, it is a level of SIZE: the game files each object
+// into the level whose cell can contain it, which is why every megabuilding lives in levels
+// 3-6 and why filtering the dump to level 0 read the city's props and none of its towers.
+//
+// Nothing may bin a node by its sector grid coords any more: those indices are
+// level-relative and mean different distances in different sectors. Positions are exact now;
+// use them.
 const APPEARANCE_OFF = /windows_off|_off$/i;
 
 // ── Quaternion (CET: x,y,z,w with Z UP) ─────────────────────────────────────
@@ -461,32 +471,27 @@ async function main() {
     if (!mesh) return;
     const inst = Math.max(1, +f[COL.inst] || 1);
 
-    // POSITION, OR THE SECTOR IF THERE ISN'T ONE.
+    // POSITION. NO FALLBACK — AND THE FALLBACK THAT WAS HERE IS NOW A HAZARD.
     //
-    // An InstancedMesh node has NO position: nodeData.Position is (0,0,0), because the
-    // real per-instance transforms live in a binary buffer WolvenKit will not expand.
-    // That is 602,812 nodes — 24% of the city, but carrying 2,172,830 instances, i.e.
-    // 54% of EVERY placed instance, and essentially all the kit-bashed facade panels.
+    // This used to bin position-less (instanced) nodes at their SECTOR CENTRE, on the
+    // reasoning that "a LOD0 sector is a 64 m cell, so its centre is a ±32 m position".
+    // BOTH halves of that are now dead:
     //
-    // Binning them at (0,0) silently dumped the entire lot into whichever subdistrict
-    // contains the origin (Charter Hill), which read 975,883 wall instances — an order
-    // of magnitude more than every other district combined — and made Dogtown the
-    // loudest sign district and empty Badlands the second. Obvious nonsense, which is
-    // the only reason it got caught.
+    //   1. Instanced nodes are NOT position-less. Their transforms were always in the
+    //      sector's shared pool, behind a handle nobody dereferenced. Every copy has an
+    //      exact XYZ — see ncz_instances.csv and
+    //      [[instanced-transforms-were-always-readable]].
     //
-    // The node still knows its SECTOR, and a LOD0 sector is a 64 m cell. Its centre is a
-    // ±32 m position — far finer than districts, which are hundreds of metres across. So
-    // fall back to it. Exact placement of instanced copies is still unavailable (that
-    // needs the transforms buffer), but DENSITY per district is fully recovered.
-    let x = +f[COL.x], y = +f[COL.y];
-    if (!Number.isFinite(x) || !Number.isFinite(y) || (x === 0 && y === 0)) {
-      const g = (f[COL.sector] || '').split('_');
-      const gx = +g[0], gy = +g[1];
-      if (!Number.isFinite(gx) || !Number.isFinite(gy)) return;
-      x = (gx + 0.5) * SECTOR_M;
-      y = (gy + 0.5) * SECTOR_M;
-      viaSector++;
-    }
+    //   2. "A sector is a 64 m cell" is only true of STREAMING LEVEL 0. The trailing digit
+    //      of `exterior_X_Y_Z_L` is the level, and it sets the CELL SIZE — level 0 holds
+    //      props, levels 3-6 hold megabuildings in enormous cells. The dump now reads all
+    //      of them, so `(gx + 0.5) * 64` is not merely imprecise across levels, it points
+    //      at the wrong part of the city entirely.
+    //
+    // So a node with no position is DROPPED and COUNTED. Its copies are in the instances
+    // file with real transforms; guessing at it here would invent geometry.
+    const x = +f[COL.x], y = +f[COL.y];
+    if (!Number.isFinite(x) || !Number.isFinite(y) || (x === 0 && y === 0)) { viaSector++; return; }
 
     let hit = null;
     for (const p of polys) {

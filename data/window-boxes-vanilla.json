@@ -1,0 +1,58 @@
+{
+  "shareMax": 0.5,
+  "margin": 2,
+  "assign": "volume",
+  "set": "vanilla",
+  "districts": [
+    {
+      "name": "westbrook",
+      "count": 38544,
+      "offset": 0
+    },
+    {
+      "name": "city_center",
+      "count": 41291,
+      "offset": 38544
+    },
+    {
+      "name": "heywood",
+      "count": 41683,
+      "offset": 79835
+    },
+    {
+      "name": "pacifica",
+      "count": 22642,
+      "offset": 121518
+    },
+    {
+      "name": "santo_domingo",
+      "count": 38006,
+      "offset": 144160
+    },
+    {
+      "name": "watson",
+      "count": 42062,
+      "offset": 182166
+    },
+    {
+      "name": "ep1_dogtown",
+      "count": 18864,
+      "offset": 224228
+    },
+    {
+      "name": "ep1_spaceport",
+      "count": 8730,
+      "offset": 243092
+    },
+    {
+      "name": "my_district",
+      "count": 19200,
+      "offset": 251822
+    },
+    {
+      "name": "ugly_building",
+      "count": 522,
+      "offset": 271022
+    }
+  ]
+}
