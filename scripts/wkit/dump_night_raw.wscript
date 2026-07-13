@@ -52,6 +52,17 @@
 //                      for every archetype), TintColorAtNight, LightsTempVariationAtNight,
 //                      EmissiveEV, roomWidth/roomHeight (the real 3x4 m window cell).
 //
+//  INSTANCED COPIES HAVE EXACT POSITIONS — see ncz_instances.csv.
+//  The old "an InstancedMesh node's transforms live in a buffer WolvenKit will not expand"
+//  is FALSE. It was inherited, never tested, and it cost us the position of 2,172,830
+//  placed instances (54% of the city, incl. 139,613 window panes), which were being binned
+//  at their sector's centre (+-32 m) instead. WolvenKit expands the buffer fully:
+//      worldTransformsBuffer.startIndex           <- the field nobody read
+//                           .numElements
+//                           .sharedDataBuffer.Data.buffer.Data.Transforms[]
+//  The pool is SECTOR-SHARED and the slices are contiguous, so without startIndex every
+//  node appears to own the same few thousand transforms. Verified 2026-07-13.
+//
 //  OBJECT SIZE COMES FROM ncz_assets.csv (bbx0..bbz1), NOT from the node's Bounds.
 //  The node `Bounds` field is populated on only 1.9% of placed nodes (0.0% of
 //  InstancedMesh, 4.7% of StaticMesh) and is NEGATIVE on another 15%. It is kept
@@ -211,8 +222,33 @@ Logger.Info(`[ncz] ${sectors.length} LOD${LOD} sectors (deduped); dumping ${limi
 
 // ---- PASS B: every placed node, raw -------------------------------------------
 const nodeRows = ['sector,type,asset,prefab,x,y,z,qi,qj,qk,qr,sx,sy,sz,bw,bh,bd,inst,app'];
+
+// EVERY INSTANCED COPY, WITH ITS REAL TRANSFORM.
+//
+// The long-standing "known limitation" — that an InstancedMesh node has no position and
+// its per-copy transforms live in a buffer WolvenKit will not expand — IS FALSE. It was
+// inherited, never tested, and it shaped the whole night model: 2,172,830 placed instances
+// (54% of everything in Night City, and 139,613 of its window panes) were being binned at
+// their sector's CENTRE, +-32 m, because of it.
+//
+// WolvenKit expands the buffer completely. The transforms were two properties deeper:
+//
+//   node.worldTransformsBuffer
+//     .startIndex        <- WHERE this node's slice begins   (the part nobody read)
+//     .numElements       <- how long it is                   (the part we did read)
+//     .sharedDataBuffer.Data.buffer.Data.Transforms[]        <- the SECTOR's shared pool
+//         { translation:{X,Y,Z}, rotation:{i,j,k,r}, scale:{X,Y,Z} }
+//
+// The pool is shared across the sector and the slices are contiguous — node A at
+// startIndex 717 x96, node B at 813 x3, node C at 816 x24. Read it as
+// Transforms[startIndex .. startIndex + numElements - 1].
+//
+// One row per COPY. This is the file that makes window PLACEMENT possible: not "what
+// fraction of this district is glass" but "this pane of glass is at exactly (x, y, z)".
+const instRows = ['sector,type,asset,prefab,x,y,z,qi,qj,qk,qr,sx,sy,sz,app'];
+
 const skipped = [];
-let done = 0, emitted = 0;
+let done = 0, emitted = 0, instEmitted = 0, instMissing = 0;
 
 for (let i = 0; i < limit; i++) {
     const s = sectors[i];
@@ -254,6 +290,38 @@ for (let i = 0; i < limit; i++) {
         const app = (d.meshAppearance && d.meshAppearance.$value) || '';
         if (app && appId[app] === undefined) { appId[app] = appList.length; appList.push(app); }
 
+        // ── THE INSTANCED COPIES ──────────────────────────────────────────────
+        // Walk the shared pool and emit one row per real copy. `startIndex` is the field
+        // the old code never touched; without it the pool looks like the same 2,086
+        // transforms repeated on every node, and with it each node takes its own slice.
+        if (tb && inst > 1) {
+            const pool = tb.sharedDataBuffer && tb.sharedDataBuffer.Data
+                      && tb.sharedDataBuffer.Data.buffer && tb.sharedDataBuffer.Data.buffer.Data
+                      && tb.sharedDataBuffer.Data.buffer.Data.Transforms;
+            const start = (typeof tb.startIndex === 'number') ? tb.startIndex : 0;
+            if (pool && pool.length >= start + inst) {
+                const nType = d.$type.replace('world', '').replace('Node', '');
+                for (let k = 0; k < inst; k++) {
+                    const t = pool[start + k];
+                    if (!t) continue;
+                    const tp = t.translation, tq = t.rotation, ts = t.scale;
+                    instRows.push([
+                        s.tag, nType,
+                        dp ? assetId[dp] : '',
+                        ref ? prefabId[ref] : '',
+                        tp ? f2(tp.X) : '', tp ? f2(tp.Y) : '', tp ? f2(tp.Z) : '',
+                        tq ? f3(tq.i) : '', tq ? f3(tq.j) : '', tq ? f3(tq.k) : '', tq ? f3(tq.r) : '',
+                        ts ? f3(ts.X) : '', ts ? f3(ts.Y) : '', ts ? f3(ts.Z) : '',
+                        app ? appId[app] : '',
+                    ].join(','));
+                    instEmitted++;
+                }
+            } else {
+                // Say it out loud. A silently-missing slice is how the last hole survived.
+                instMissing += inst;
+            }
+        }
+
         nodeRows.push([
             s.tag,
             d.$type.replace('world', '').replace('Node', ''),
@@ -269,6 +337,7 @@ for (let i = 0; i < limit; i++) {
     }
 }
 Logger.Info(`[ncz] PASS B done — ${emitted} nodes, ${nextAsset} unique assets, ${nextPrefab} unique prefabs`);
+Logger.Info(`[ncz] PASS B: ${instEmitted} INSTANCED COPIES with a real transform` + (instMissing ? `, ${instMissing} MISSING their slice` : ', none missing'));
 
 // ---- PASS C: unique meshes -> the materials they reference ---------------------
 // Chunk-material NAMES, external .mi PATHS, and local-buffer BASE materials. Join these
@@ -347,6 +416,10 @@ appList.forEach((a, i) => appRows.push(`${i},${csv(a)}`));
 wkit.SaveToRaw('ncz_materials.csv',   matRows.join('\n'));
 wkit.SaveToRaw('ncz_assets.csv',      assetRows.join('\n'));
 wkit.SaveToRaw('ncz_nodes.csv',       nodeRows.join('\n'));
+// One row per INSTANCED COPY, with its exact world transform. ~2.17M rows — the 54% of
+// Night City that the pipeline has been binning at a sector centre because a never-tested
+// assumption said these transforms could not be read. They can.
+wkit.SaveToRaw('ncz_instances.csv',   instRows.join('\n'));
 wkit.SaveToRaw('ncz_prefabs.csv',     prefabRows.join('\n'));
 wkit.SaveToRaw('ncz_appearances.csv', appRows.join('\n'));
 wkit.SaveToRaw('ncz_skipped.csv',     ['sector'].concat(skipped).join('\n'));
