@@ -174,6 +174,23 @@ const inPoly = (x, y, r) => {
 // A WALL is a facade piece that is NOT glass. The glass share is glass/(glass+wall),
 // and only architecture counts — props, vehicles and street furniture are not facade.
 const ARCH = /[\\/]architecture[\\/]|[\\/]megabuilding[\\/]/i;
+
+// SIGNAGE = it EMITS *and* it IS SIGNAGE. Both tests are needed, and neither is a fudge.
+//
+// The material answers "does it glow" — definitionally, via the shader chain. It does not
+// answer "is it a sign". Emissive alone counts vending machines (39,780 m2 — the single
+// largest emitter in the city), servers (38,481), stand generators, spotlights, wall lamps
+// and BEER KEGS. 98.4% of all emissive area is environment\decoration\ props. The material
+// never lied: a vending machine really does have a glowing screen. I asked the wrong
+// question. It ranked empty Badlands (Red Peaks) as the city's second-loudest district.
+//
+// So the shader says WHETHER it emits; the asset tree says WHAT it is. Our map renders
+// buildings, windows and signage — it does not render vending machines.
+const SIGNAGE = /[\\/]advertising[\\/]|signage|billboard|neon_|screen_\d/i;
+// LOD0 streaming-sector cell size in CET metres. Verified: sector exterior_-15_-2_0_1's
+// own node positions fall inside [-15*128, -14*128] — the grid coord times the cell size.
+// LOD0 is half that: 64 m.
+const SECTOR_M = 64;
 const APPEARANCE_OFF = /windows_off|_off$/i;
 
 async function main() {
@@ -183,8 +200,38 @@ async function main() {
   const apps = {};
   for (const a of readCsv('ncz_appearances.csv')) apps[a.id] = a.appearance;
 
+  // ── PRE-PASS: learn each asset's TRUE size from its non-instanced placements ──
+  // An instanced node's bounds enclose all its copies, so they cannot size one copy. But
+  // most assets also appear singly somewhere in the city, and there the bounds ARE the
+  // object. Take the median across those (median, not mean: a few nodes have degenerate
+  // zero bounds, and one bad outlier should not set an asset's size).
+  const assetArea = {};
+  {
+    const samples = {};
+    const rl0 = require('readline').createInterface({
+      input: fs.createReadStream(path.join(RAW, 'ncz_nodes.csv')), crlfDelay: Infinity,
+    });
+    let f0 = true; const C0 = {};
+    rl0.on('line', (line) => {
+      if (!line) return;
+      if (f0) { line.split(',').forEach((h, i) => { C0[h] = i; }); f0 = false; return; }
+      const f = line.split(',');
+      if ((+f[C0.inst] || 1) !== 1) return;          // only singly-placed copies can size an asset
+      const bw = +f[C0.bw] || 0, bh = +f[C0.bh] || 0, bd = +f[C0.bd] || 0;
+      const face = Math.max(bw * bh, bw * bd, bh * bd);
+      if (!(face > 0)) return;
+      (samples[f[C0.asset]] || (samples[f[C0.asset]] = [])).push(face);
+    });
+    await new Promise((res) => rl0.on('close', res));
+    for (const id in samples) {
+      const s = samples[id].sort((a, b) => a - b);
+      assetArea[id] = s[Math.floor(s.length / 2)];
+    }
+    console.log(`asset sizes: ${Object.keys(assetArea).length} learned from single placements\n`);
+  }
+
   const tally = {};
-  let total = 0, n = 0, outside = 0;
+  let total = 0, n = 0, outside = 0, viaSector = 0, noArea = 0;
 
   // ncz_nodes.csv is ~2.4M rows / ~270 MB. Parsing it into objects would cost GBs, so
   // it is STREAMED line-by-line with positional field access. The columns are fixed and
@@ -205,11 +252,36 @@ async function main() {
     }
     total++;
     const f = line.split(',');
-    const x = +f[COL.x], y = +f[COL.y];
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
     const mesh = meshById[f[COL.asset]];
     if (!mesh) return;
     const inst = Math.max(1, +f[COL.inst] || 1);
+
+    // POSITION, OR THE SECTOR IF THERE ISN'T ONE.
+    //
+    // An InstancedMesh node has NO position: nodeData.Position is (0,0,0), because the
+    // real per-instance transforms live in a binary buffer WolvenKit will not expand.
+    // That is 602,812 nodes — 24% of the city, but carrying 2,172,830 instances, i.e.
+    // 54% of EVERY placed instance, and essentially all the kit-bashed facade panels.
+    //
+    // Binning them at (0,0) silently dumped the entire lot into whichever subdistrict
+    // contains the origin (Charter Hill), which read 975,883 wall instances — an order
+    // of magnitude more than every other district combined — and made Dogtown the
+    // loudest sign district and empty Badlands the second. Obvious nonsense, which is
+    // the only reason it got caught.
+    //
+    // The node still knows its SECTOR, and a LOD0 sector is a 64 m cell. Its centre is a
+    // ±32 m position — far finer than districts, which are hundreds of metres across. So
+    // fall back to it. Exact placement of instanced copies is still unavailable (that
+    // needs the transforms buffer), but DENSITY per district is fully recovered.
+    let x = +f[COL.x], y = +f[COL.y];
+    if (!Number.isFinite(x) || !Number.isFinite(y) || (x === 0 && y === 0)) {
+      const g = (f[COL.sector] || '').split('_');
+      const gx = +g[0], gy = +g[1];
+      if (!Number.isFinite(gx) || !Number.isFinite(gy)) return;
+      x = (gx + 0.5) * SECTOR_M;
+      y = (gy + 0.5) * SECTOR_M;
+      viaSector++;
+    }
 
     let hit = null;
     for (const p of polys) {
@@ -227,17 +299,23 @@ async function main() {
       if (mesh.isGlass) { if (off) t.glassOff += inst; else t.glass += inst; }
       else t.wall += inst;
     }
-    // Emissive, non-facade → signage. Weight by AREA: the largest cross-section of its
-    // bounds, which is the emitting face.
-    if (mesh.isEmissive && !isArch) {
-      const bw = +f[COL.bw] || 0, bh = +f[COL.bh] || 0, bd = +f[COL.bd] || 0;
-      const face = Math.max(bw * bh, bw * bd, bh * bd);
-      t.signArea += face * inst;
-      t.signs += inst;
+    // EMITS *and* IS SIGNAGE (see SIGNAGE above). Weighted by AREA — a billboard is ~30 m2
+    // against a shopfront neon's ~2 m2; counting them equally is meaningless.
+    //
+    // AREA COMES FROM THE ASSET, NOT THE NODE'S BOUNDS. On an INSTANCED node the bounds
+    // enclose ALL its copies spread across a block, so `bounds x instances` double-counts
+    // wildly: it gave a single deco-font LETTER 32 m2, and a grocery sign 667 m2. Instead
+    // each asset's true size is learned from its non-instanced (inst == 1) placements —
+    // see `assetArea` — and multiplied by the instance count.
+    if (mesh.isEmissive && !isArch && SIGNAGE.test(mesh.path)) {
+      const a = assetArea[f[COL.asset]];
+      if (a !== undefined) { t.signArea += a * inst; t.signs += inst; }
+      else noArea += inst;   // never seen singly — cannot size it. Counted, not measured.
     }
   });
   await new Promise((res) => rl.on('close', res));
-  console.log(`nodes:     ${total}  |  binned ${n}  |  outside all polygons ${outside}\n`);
+  console.log(`nodes:     ${total}  |  binned ${n}  |  outside all polygons ${outside}`);
+  console.log(`           ${viaSector} placed by SECTOR CENTRE (instanced nodes carry no position) — +-32 m, fine for districts\n`);
 
   const rows = Object.entries(tally).map(([id, t]) => ({
     id,
