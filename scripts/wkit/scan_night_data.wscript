@@ -103,6 +103,9 @@ const WINDOW = /_window_|_window\./;
 const WALL   = /_wall_|_wall\./;
 const APPEARANCE_OFF = /windows_off|_off$/;   // this instance's windows are DARK
 const STYLE  = /_(ent|mlt|nkt|kts)_(apt|off|ind|apartment|office|industrial)/;
+// Any building-facade mesh — the PASS 3 population. Bespoke towers included, which is
+// the whole point: they are exactly what the name-based WINDOW/WALL test misses.
+const ARCH   = /[\\/]architecture[\\/]|[\\/]megabuilding[\\/]/;
 
 // ---- Helpers -----------------------------------------------------------------
 // A node is N placed copies, not one (note 3).
@@ -146,6 +149,19 @@ const f2 = (v) => (typeof v === 'number' ? v.toFixed(2) : '');
 const nz = (p) => p && !(p.X === 0 && p.Y === 0 && p.Z === 0);
 
 // ---- Sector list -------------------------------------------------------------
+// DEDUPE THE PATHS. GetArchiveFiles() returns EVERY COPY of a file — a sector that
+// exists in the base archive plus a patch plus an EP1 override comes back 2, 4, even
+// 80 times, and each copy gets scanned, emitting its signs again. The first run
+// produced 80,702 sign rows of which only 33,202 were distinct: a 2.4x inflation,
+// and an UNEVEN one (it scales with however many archives happen to carry a sector),
+// so it would have skewed the district ranking, not just the totals.
+//
+// (find_pierogi_signs.wscript is immune to this by accident: it groups by prefabRef
+//  GLOBALLY, across all sectors, so re-scans collapse into the same group.)
+//
+// The Z coordinate is also part of the sector identity — exterior_X_Y_Z_LOD. The city
+// stacks vertically (underground / ground / elevated), so gx_gy alone is ambiguous.
+const seenPath = {};
 const sectors = [];
 for (const f of wkit.GetArchiveFiles()) {
     const name = (typeof f === 'string') ? f : (f.FileName ?? f.Name);
@@ -153,17 +169,30 @@ for (const f of wkit.GetArchiveFiles()) {
     if (name.indexOf('03_night_city') === -1) continue;
     const m = name.match(/exterior_(-?\d+)_(-?\d+)_(-?\d+)_(\d+)\.streamingsector$/);
     if (!m || parseInt(m[4], 10) !== LOD) continue;
-    sectors.push({ path: name, gx: parseInt(m[1], 10), gy: parseInt(m[2], 10) });
+    const key = name.toLowerCase();
+    if (seenPath[key]) continue;
+    seenPath[key] = 1;
+    sectors.push({
+        path: name,
+        gx: parseInt(m[1], 10), gy: parseInt(m[2], 10), gz: parseInt(m[3], 10),
+    });
 }
 const limit = MAX_SECTORS > 0 ? Math.min(MAX_SECTORS, sectors.length) : sectors.length;
 Logger.Info(`[ncz] ${sectors.length} LOD${LOD} sectors in Night City; scanning ${limit}`);
 
 // ---- PASS 1 ------------------------------------------------------------------
-const signRows   = ['x,y,z,parts,class,district,coordSource,asset,sector'];
-const sectorRows = ['sector,gx,gy,nodes,glass,glass_off,wall,glass_share,style_use,sign_placements,sign_parts,inert_ad,lights'];
+// SIZE IS NOT OPTIONAL. A billboard is ~30 m2; a neon shopfront sign is ~2 m2.
+// Counting them equally makes Kabuki (many SMALL neon signs) rank 3x above Little
+// China (fewer, HUGE signs) — when the footage shows Little China reading just as
+// loud. Sign density must be weighted by EMISSIVE AREA, so the group's world bounds
+// are carried through: bw/bh/bd, and `face` = the largest of the three cross-sections,
+// a decent stand-in for the emitting face.
+const signRows   = ['x,y,z,bw,bh,bd,face,parts,class,district,coordSource,asset,sector'];
+const sectorRows = ['sector,gx,gy,gz,nodes,glass,glass_off,wall,glass_share,style_use,sign_placements,sign_parts,inert_ad,lights'];
 const lightRows  = ['x,y,z,r,g,b,intensity,radius,temperature,type,name,sector'];
 const skipped    = [];
 const signAssets = {};    // depot path -> placements (PASS 2 input)
+const archAssets = {};    // depot path -> instances  (PASS 3 input — see below)
 const districts  = {};    // RAW game district string -> sign placements (see districtOf)
 
 let done = 0, totalSigns = 0, totalGlass = 0;
@@ -188,7 +217,7 @@ for (let i = 0; i < limit; i++) {
     const byIndex = {};
     for (const o of nd) if (o && typeof o.NodeIndex === 'number') byIndex[o.NodeIndex] = o;
 
-    const tag = s.gx + '_' + s.gy;
+    const tag = s.gx + '_' + s.gy + '_' + s.gz;   // Z is part of the identity — the city stacks
     let glass = 0, glassOff = 0, wall = 0, inertAd = 0, lights = 0, signParts = 0;
     const styles = {};
     const groups = {};   // prefabRef -> one SIGN PLACEMENT (note 2)
@@ -221,6 +250,21 @@ for (let i = 0; i < limit; i++) {
         const app   = ((d.meshAppearance && d.meshAppearance.$value) || '').toLowerCase();
 
         // -- Facade: glass vs wall. GLASS SHARE is the district variable (note 4). --
+        //
+        // THE MESH NAME IS NOT ENOUGH — this is why PASS 3 exists.
+        // Kabuki/Japantown/Heywood are kit-bashed from `*_window_*` / `*_wall_*` pieces,
+        // so a name match works there. Corpo Plaza is NOT: its towers are bespoke
+        // (cct_cpz_building_a_f_6m, ..._shield_c_12m_right, ..._a_6m_slope), almost none
+        // of which say "window" or "wall". Name-matching read a district of GLASS
+        // SKYSCRAPERS as 4% glass, and called its style `ent_ind` (Entropism industrial)
+        // when it is Militarism office. It was measuring the wrong population entirely.
+        //
+        // The truth is in the MATERIAL: a facade piece is glass iff one of its
+        // chunkMaterials resolves to window_parallax_interior. So every architecture mesh
+        // is collected here and resolved in PASS 3 — same trick PASS 2 uses for signs.
+        // The name-based counters below are kept as a CROSS-CHECK, not as the answer.
+        if (ARCH.test(lower)) archAssets[dp] = (archAssets[dp] || 0) + N;
+
         if (WINDOW.test(base)) {
             if (APPEARANCE_OFF.test(app)) glassOff += N; else glass += N;
             const st = lower.match(STYLE);
@@ -246,11 +290,27 @@ for (let i = 0; i < limit; i++) {
         const g = groups[key] || (groups[key] = {
             ref, parts: 0, sumX: 0, sumY: 0, sumZ: 0, pivot: null,
             cls: subclass(lower), asset: dp,
+            // Union of the parts' world bounds = the whole sign's extent → its AREA.
+            bmin: null, bmax: null,
         });
         g.parts += N;
         if (o && o.Position) { g.sumX += o.Position.X; g.sumY += o.Position.Y; g.sumZ += o.Position.Z; }
         // The pivot is the sign's AUTHORED anchor — exact. Prefer it over a centroid.
         if (!g.pivot && o && nz(o.Pivot)) g.pivot = o.Pivot;
+        // Grow the sign's bounds by this part's. Size is what separates a 30 m2
+        // billboard from a 2 m2 shopfront neon — see the note above signRows.
+        if (o && o.Bounds && o.Bounds.Min && o.Bounds.Max) {
+            const lo = o.Bounds.Min, hi = o.Bounds.Max;
+            if (!g.bmin) { g.bmin = { X: lo.X, Y: lo.Y, Z: lo.Z }; g.bmax = { X: hi.X, Y: hi.Y, Z: hi.Z }; }
+            else {
+                if (lo.X < g.bmin.X) g.bmin.X = lo.X;
+                if (lo.Y < g.bmin.Y) g.bmin.Y = lo.Y;
+                if (lo.Z < g.bmin.Z) g.bmin.Z = lo.Z;
+                if (hi.X > g.bmax.X) g.bmax.X = hi.X;
+                if (hi.Y > g.bmax.Y) g.bmax.Y = hi.Y;
+                if (hi.Z > g.bmax.Z) g.bmax.Z = hi.Z;
+            }
+        }
         // Prefer the most specific class seen among the parts.
         if (g.cls === 'advertising') g.cls = subclass(lower);
     }
@@ -262,8 +322,15 @@ for (let i = 0; i < limit; i++) {
         const c = g.pivot || { X: g.sumX / g.parts, Y: g.sumY / g.parts, Z: g.sumZ / g.parts };
         const dist = districtOf(g.ref);
         districts[dist] = (districts[dist] || 0) + 1;
+        let bw = '', bh = '', bd = '', face = '';
+        if (g.bmin) {
+            const w = g.bmax.X - g.bmin.X, h = g.bmax.Y - g.bmin.Y, dz = g.bmax.Z - g.bmin.Z;
+            bw = f2(w); bh = f2(h); bd = f2(dz);
+            // A sign is a flat panel: its emitting face is the biggest cross-section.
+            face = f2(Math.max(w * h, w * dz, h * dz));
+        }
         signRows.push([
-            f2(c.X), f2(c.Y), f2(c.Z), g.parts, g.cls,
+            f2(c.X), f2(c.Y), f2(c.Z), bw, bh, bd, face, g.parts, g.cls,
             '"' + dist + '"', g.pivot ? 'pivot' : 'centroid',
             '"' + g.asset + '"', tag,
         ].join(','));
@@ -273,7 +340,7 @@ for (let i = 0; i < limit; i++) {
     let topStyle = '', topN = 0;
     for (const k in styles) if (styles[k] > topN) { topN = styles[k]; topStyle = k; }
 
-    sectorRows.push([tag, s.gx, s.gy, nodes.length, glass, glassOff, wall, share,
+    sectorRows.push([tag, s.gx, s.gy, s.gz, nodes.length, glass, glassOff, wall, share,
         topStyle, placements, signParts, inertAd, lights].join(','));
 
     totalSigns += placements;
@@ -314,6 +381,69 @@ if (ASSET_COLOURS) {
 const districtRows = ['game_district,sign_placements'];
 for (const k in districts) districtRows.push(`"${k}",${districts[k]}`);
 
+// ---- PASS 3: architecture meshes -> DO THEY CARRY A WINDOW MATERIAL? ---------
+// The whole point. A facade piece is GLASS iff one of its chunk materials resolves to
+// window_parallax_interior (or window_interior_uv) — never mind what the mesh is called.
+// This is what rescues bespoke architecture: Corpo Plaza's towers are
+// cct_cpz_building_a_f_6m / _shield_c_12m_right / _a_6m_slope, which a name test reads
+// as "not a window" and therefore as a 4%-glass district of glass skyscrapers.
+//
+// Emitted per mesh:
+//   instances     how many placed copies exist city-wide (instance-weighted)
+//   glass         1 if any chunk material is a window material
+//   win_mats      the window material names (they encode style + use:
+//                 wat_kab_building_d_..._ent_apt -> Entropism / apartment)
+//   n_chunks      total chunk materials, and how many are window ones -> a per-MESH
+//                 glass fraction, which is far better than counting whole panels
+//                 (one "window panel" mesh holds dozens of actual windows)
+const WINDOW_MAT = /window_parallax_interior|window_interior_uv|windows[\\/]|_window/i;
+const archRows = ['asset,instances,glass,win_chunks,n_chunks,win_mats'];
+{
+    const keys = Object.keys(archAssets);
+    Logger.Info(`[ncz] PASS 3: ${keys.length} unique architecture meshes`);
+    let a = 0, glassMeshes = 0;
+    for (const path of keys) {
+        let isGlass = 0, nChunks = 0, winChunks = 0;
+        const winMats = [];
+        if (path.toLowerCase().endsWith('.mesh')) {
+            try {
+                const j = wkit.GetFileFromArchive(path, OpenAs.Json);
+                if (j) {
+                    const mrc = JSON.parse(j).Data.RootChunk;
+                    // materialEntries names + the external material paths they resolve to.
+                    const ext = [];
+                    for (const e of (mrc.externalMaterials || [])) {
+                        const p = e && e.DepotPath && e.DepotPath.$value;
+                        if (p) ext.push(p);
+                    }
+                    for (const e of (mrc.materialEntries || [])) {
+                        const nm = (e.name && e.name.$value) || '';
+                        nChunks++;
+                        const hit = WINDOW_MAT.test(nm) || ext.some((p) => WINDOW_MAT.test(p));
+                        if (hit) {
+                            winChunks++;
+                            isGlass = 1;
+                            if (winMats.indexOf(nm) === -1) winMats.push(nm);
+                        }
+                    }
+                    // The external .mi paths carry style/use (…_ent_apt.mi), so keep them.
+                    for (const p of ext) {
+                        if (WINDOW_MAT.test(p)) {
+                            const leaf = p.split('\\').pop();
+                            if (winMats.indexOf(leaf) === -1) winMats.push(leaf);
+                        }
+                    }
+                }
+            } catch { /* leave as not-glass; the row still records the instance count */ }
+        }
+        if (isGlass) glassMeshes++;
+        archRows.push(`"${path}",${archAssets[path]},${isGlass},${winChunks},${nChunks},"${winMats.join('|')}"`);
+        if (++a % 250 === 0) Logger.Info(`[ncz] PASS 3: ${a}/${keys.length} (${glassMeshes} carry glass)`);
+    }
+    Logger.Success(`[ncz] PASS 3: ${glassMeshes} of ${keys.length} architecture meshes carry a window material`);
+}
+
+wkit.SaveToRaw('ncz_arch_assets.csv', archRows.join('\n'));
 wkit.SaveToRaw('ncz_signs.csv',       signRows.join('\n'));
 wkit.SaveToRaw('ncz_sectors.csv',     sectorRows.join('\n'));
 wkit.SaveToRaw('ncz_sign_assets.csv', assetRows.join('\n'));
