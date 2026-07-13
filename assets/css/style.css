@@ -233,6 +233,33 @@
     }
 }
 
+/* Three-state control in the Overlays box (city lights). The only <select> on the
+   map, so it gets its own reset — the UA default is a grey system widget that reads
+   as a foreign object against the cyan-on-navy panel. */
+.overlay-select {
+    appearance: none;
+    padding: 1px var(--space-xs);
+    border: var(--ui-border-thin) solid var(--secondary-20);
+    background: transparent;
+    font-family: var(--font-body);
+    font-size: var(--text-xs);
+    color: var(--secondary);
+    cursor: pointer;
+
+    /* The dropdown list is painted by the OS, not by us — it ignores the transparent
+       background above, so the options need a solid one of their own or they render
+       light-on-light under a dark browser theme. */
+    & option {
+        background: var(--primary);
+        color: var(--white);
+    }
+
+    &:hover, &:focus-visible {
+        border-color: var(--secondary);
+        outline: none;
+    }
+}
+
 /* View toggle (SAT | SCHEMA) — floats over the map in the bottom-right */
 #map-view-toggle {
     position: absolute;

@@ -246,6 +246,13 @@
             <label class="overlay-toggle schema-only"><input type="checkbox" data-overlay="metro" checked> Metro</label>
             <label class="overlay-toggle schema-only"><input type="checkbox" data-overlay="buildings" checked> Buildings</label>
             <label class="overlay-toggle schema-only" title="Real-time shadow mapping — always active during Showcase. May reduce performance on lower-end hardware."><input type="checkbox" id="overlay-shadows" data-overlay="shadows"> Shadows <span class="overlay-perf-warn">⚠</span></label>
+            <label class="overlay-toggle schema-only" title="Lit windows and neon. Auto: they fade in at dusk. On: lit at any hour — Night City's windows never actually switch off. Off: dark.">Lights
+                <select id="overlay-lights" class="overlay-select">
+                    <option value="auto">Auto</option>
+                    <option value="on">On</option>
+                    <option value="off">Off</option>
+                </select>
+            </label>
         </div>
         <!-- ?archdebug archetype-classification legend — sits left of the overlays
              box, shown only when the ?archdebug URL flag is present (toggled in

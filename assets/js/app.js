@@ -1084,6 +1084,17 @@ async function initMap() {
     });
   });
 
+  // City lights — three-state, so it's a select, not a checkbox. Not a layer either
+  // (the lights are a shader uniform, not a scene group), so it goes straight to
+  // setLightsMode rather than through setLayerVisibility.
+  const lightsSelect = document.getElementById("overlay-lights");
+  if (lightsSelect) {
+    lightsSelect.value = NCZ.LIGHTS_MODE;      // honour ?lights= on first paint
+    lightsSelect.addEventListener("change", () => {
+      NCZ.ThreeScene.setLightsMode?.(lightsSelect.value);
+    });
+  }
+
   // UI sync — keep overlay checkboxes and sun slider in sync with actual scene state.
   // Runs at 200ms so console commands (setLayerVisibility, setCameraState etc.)
   // are reflected immediately in the UI. Cost: negligible (boolean reads + DOM writes
@@ -1111,6 +1122,10 @@ async function initMap() {
       const vis = NCZ.ThreeScene.getLayerVisibility(cb.dataset.overlay);
       if (vis !== null && cb.checked !== vis) cb.checked = vis;
     });
+
+    // Lights select — mirrors console setLightsMode() calls, same as the checkboxes.
+    const mode = NCZ.ThreeScene.getLightsMode?.();
+    if (lightsSelect && mode && lightsSelect.value !== mode) lightsSelect.value = mode;
 
     // Sun slider — reverse-map scene elevation back to morroMinutes via SunCalc scan
     if (sunSlider && typeof SunCalc !== 'undefined') {
