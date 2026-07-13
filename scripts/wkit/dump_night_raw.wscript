@@ -6,21 +6,30 @@
 //  Dump the facts; work out the patterns offline, where iterating is free.
 //
 //
-//  WORK BACKWARDS FROM THE WINDOW SHADERS
-//  --------------------------------------
-//  Everything in Night City that lights up as a window IS, by definition, something
-//  whose material chain roots at a window material template:
-//
-//      base\materials\window_parallax_interior.mt      (parallax fake interiors)
-//      base\materials\window_interior_uv.mt            (UV box interiors)
-//      ...and the _proxy / _very_long_distance variants
-//
-//  So we RESOLVE THE CHAIN rather than pattern-match names. The chain is real:
+//  WORK BACKWARDS FROM THE SHADERS — WINDOWS *AND* SIGNS
+//  -----------------------------------------------------
+//  Anything that lights up IS, by definition, something whose material chain roots at an
+//  emitting shader, or which sets an emissive parameter. So RESOLVE THE CHAIN instead of
+//  pattern-matching names. The chain is real, and was being guessed at:
 //
 //      cct_cpz_building_a_f_6m.mesh                     (a Corpo Plaza tower panel)
 //        -> cct_cpz_building_a_a_1x1_h400_w300_mlt.mi   (district override)
 //          -> prlx_mlt_office_01_1x1_h400_w300_a.mi     (style x use base)
 //            -> window_parallax_interior.mt             (the shader)  <-- ROOT
+//
+//  WINDOWS root at:  window_parallax_interior.mt, window_interior_uv.mt (+ _proxy variants)
+//  SIGNS  root at:   diode_sign.mt, emissive_control.mt, decal_emissive_*.mt,
+//                    mesh_decal_emissive*.mt ... OR they use an ordinary shader and simply
+//                    SET an emissive parameter (a neon sign's `neon_green_v1` is very likely
+//                    multilayered.mt with an emissive layer).
+//
+//  This dissolves every signage problem the folder-based taxonomy could not solve:
+//    * blank panels — backlit shopfront or painted board? The MATERIAL knows; the mesh
+//      name never will. (The maintainer's Pierogi World sign is a NON-emissive one.)
+//    * posters / streamers / frames are inert because their materials do not emit — not
+//      because I put them in a list.
+//    * signs built on generic meshes are caught regardless of what the mesh is called.
+//    * sign COLOUR is an emissive parameter, not an inference from a material's name.
 //
 //  Every previous attempt guessed instead, and every guess was wrong:
 //    * "a window is a mesh named *_window_*"  -> Corpo Plaza's bespoke glass towers read
@@ -36,7 +45,7 @@
 //
 //  OUTPUT — five files, joined on integer ids
 //  ------------------------------------------
-//   ncz_materials.csv  EVERY .mi in the game (9,472), resolved to its ROOT .mt, with the
+//   ncz_materials.csv  EVERY .mi in the game (9,472), resolved to its ROOT .mt, with EVERY
 //                      night parameters it sets. This is the spine. A material is a window
 //                      iff its root is a window .mt — no name-matching anywhere.
 //                      Also carries: AmountTurnOffAtNight (the game's lit fraction — 0.5
@@ -70,11 +79,16 @@ import * as Logger from 'Logger.wscript';
 const LOD         = 0;
 const MAX_SECTORS = 0;      // 0 = all (~7,159). Set 50 to smoke-test.
 const LOG_EVERY   = 250;
-// The night parameters worth pulling out of a material (everything else stays in the file).
-const KEEP_PARAMS = ['AmountTurnOffAtNight', 'LightsTempVariationAtNight', 'TintColorAtNight',
-                     'EmissiveEV', 'roomWidth', 'roomHeight', 'roomDepth',
-                     'LightIntensity', 'LightColor', 'RoomWidth', 'RoomHeight'];
 // ==================================================
+//
+// NO PARAMETER ALLOW-LIST. Capture EVERY scalar/colour a material sets, and decide what
+// matters offline. An earlier version listed the window params it "knew" it wanted — which
+// is the same mistake as name-matching, one level up. What makes a sign emissive is not one
+// known field: it is EITHER its root shader (diode_sign.mt, *_emissive.mt, emissive_control.mt)
+// OR an emissive parameter set on an ordinary shader (a neon sign's `neon_green_v1` is very
+// likely multilayered.mt with an emissive layer). Capturing everything costs ~5 MB and
+// removes the need to guess which.
+//   Texture references are skipped — they are paths, not values, and would bloat the file.
 
 const f2 = (v) => (typeof v === 'number' ? v.toFixed(2) : '');
 const f3 = (v) => (typeof v === 'number' ? v.toFixed(3) : '');
@@ -97,12 +111,13 @@ function readMaterial(path) {
             for (const v of (rc.values || [])) {
                 for (const k in v) {
                     if (k === '$type') continue;
-                    if (KEEP_PARAMS.indexOf(k) === -1) continue;
                     const val = v[k];
-                    if (val && typeof val === 'object' && val.Red !== undefined) {
-                        out.vals[k] = val.Red + ' ' + val.Green + ' ' + val.Blue;
-                    } else if (typeof val === 'number') {
-                        out.vals[k] = val;
+                    if (val === null || val === undefined) continue;
+                    if (typeof val === 'number') out.vals[k] = val;
+                    else if (typeof val === 'object') {
+                        if (val.Red !== undefined) out.vals[k] = val.Red + ' ' + val.Green + ' ' + val.Blue + ' ' + val.Alpha;   // Color
+                        else if (val.X !== undefined && val.DepotPath === undefined) out.vals[k] = val.X + ' ' + val.Y + ' ' + val.Z + (val.W !== undefined ? ' ' + val.W : '');  // Vector
+                        // DepotPath (texture refs) deliberately skipped — paths, not values.
                     }
                 }
             }
@@ -124,22 +139,35 @@ function readMaterial(path) {
     return out;
 }
 
-const matRows = ['path,root_mt,chain,' + KEEP_PARAMS.join(',')];
+// `params` is every scalar/colour the material sets (its own values merged over its
+// inherited ones), as key=value pairs. Everything downstream reads from here:
+//   root_mt = window_parallax_interior.mt          -> the piece is a WINDOW
+//   root_mt = diode_sign.mt / *_emissive.mt        -> the piece is a SIGN
+//   params contains EmissiveEV / EmissiveColor > 0 -> it GLOWS, whatever its shader
+//   params AmountTurnOffAtNight                    -> the game's lit fraction
+//   params TintColorAtNight / LightColor           -> the colour it glows
+const matRows = ['path,root_mt,chain,params'];
 {
     const mis = [];
+    const seenMi = {};
     for (const f of wkit.GetArchiveFiles()) {
         const name = (typeof f === 'string') ? f : (f.FileName ?? f.Name);
-        if (name && name.toLowerCase().endsWith('.mi') && mis.indexOf(name) === -1) mis.push(name);
+        if (!name || !name.toLowerCase().endsWith('.mi')) continue;
+        const k = name.toLowerCase();
+        if (seenMi[k]) continue;                 // archives carry duplicate copies
+        seenMi[k] = 1;
+        mis.push(name);
     }
     Logger.Info(`[ncz] PASS A: resolving ${mis.length} material instances to their root shader`);
     let a = 0;
     for (const p of mis) {
         const m = readMaterial(p);
-        matRows.push([csv(p), csv(m.root), csv(m.chain.join('|'))]
-            .concat(KEEP_PARAMS.map((k) => (m.vals[k] !== undefined ? m.vals[k] : ''))).join(','));
+        const kv = [];
+        for (const k in m.vals) kv.push(k + '=' + m.vals[k]);
+        matRows.push([csv(p), csv(m.root), csv(m.chain.join('|')), csv(kv.join('|'))].join(','));
         if (++a % 1000 === 0) Logger.Info(`[ncz] PASS A: ${a}/${mis.length}`);
     }
-    Logger.Success(`[ncz] PASS A done — ${mis.length} materials resolved`);
+    Logger.Success(`[ncz] PASS A done — ${mis.length} materials resolved to root shaders`);
 }
 
 // ---- Dictionaries ------------------------------------------------------------
