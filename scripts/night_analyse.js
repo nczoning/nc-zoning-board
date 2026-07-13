@@ -148,6 +148,17 @@ function loadPolys() {
     for (const s of kids) polys.push({ id: s.id, ring: s.polygon, area: area(s.polygon) });
   }
   polys.sort((a, b) => a.area - b.area);   // smallest wins → a subdistrict beats its parent
+  // Bounding box per polygon. Without it, 2.4M nodes x ~29 polygons x hundreds of
+  // vertices is billions of ray-casts and the run never finishes; the box rejects
+  // almost every (node, polygon) pair in four comparisons.
+  for (const p of polys) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const [x, y] of p.ring) {
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    p.bb = [x0, y0, x1, y1];
+  }
   return polys;
 }
 const inPoly = (x, y, r) => {
@@ -201,7 +212,11 @@ async function main() {
     const inst = Math.max(1, +f[COL.inst] || 1);
 
     let hit = null;
-    for (const p of polys) if (inPoly(x, y, p.ring)) { hit = p; break; }
+    for (const p of polys) {
+      const b = p.bb;
+      if (x < b[0] || x > b[2] || y < b[1] || y > b[3]) continue;   // cheap reject first
+      if (inPoly(x, y, p.ring)) { hit = p; break; }
+    }
     if (!hit) { outside++; return; }
     n++;
     const t = tally[hit.id] || (tally[hit.id] = { area: hit.area, glass: 0, glassOff: 0, wall: 0, signArea: 0, signs: 0 });
