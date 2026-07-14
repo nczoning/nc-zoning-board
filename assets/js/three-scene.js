@@ -1170,6 +1170,12 @@ const ThreeScene = (() => {
     // ?colldebug — the GAME's own building decomposition, drawn over the scene.
     // See loadColliderDebug().
     if (new URLSearchParams(location.search).has('colldebug')) loadColliderDebug();
+    // ?windebug — the game's real windows, coloured by whether we can land them on a face.
+    // .catch() is not optional: an un-awaited async loader that throws produces an unhandled
+    // rejection and NO console error, which looks exactly like "the flag did nothing".
+    if (new URLSearchParams(location.search).has('windebug')) {
+      loadWindowDebug().catch((e) => console.error('[NCZ] windebug failed to load', e));
+    }
 
     // ?shapemark — SHAPE-DETECTION verification view (companion to ?facedebug /
     // ?archdebug): labelled beacon pillars at the shape-detector candidates so
@@ -3285,6 +3291,78 @@ const ThreeScene = (() => {
     mesh.renderOrder = 3;        // after the opaque city and the see-through roads
     scene.add(mesh);
     console.log(`[NCZ] colldebug: ${data.colliders.length} game collision boxes (alpha ${alpha}${wire ? ', wireframe' : ''})`);
+    requestRender();
+  }
+
+  // ── ?windebug — every one of the game's 1.7M windows, coloured by WHY it landed ────────────
+  //
+  // 28% of the game's windows do not reach one of our box faces, and the bake writes them off as
+  // "interior glass — courtyards, light wells". THAT IS AN ASSUMPTION AND IT IS UNTESTED. Our
+  // boxes are a coarse `.dds` decode, not a tracing of the buildings, so a window we reject for
+  // being "too deep inside the box" might be sitting on a REAL FACADE our box cloud simply does
+  // not cover. Those two cases are indistinguishable in a percentage and obvious on a map:
+  //
+  //   red cloud buried inside a building        -> interior glass. Correctly not lit.
+  //   red cloud hanging on a flat outer wall    -> A HOLE IN OUR BOX CLOUD, and a measurement of
+  //                                                exactly what a better box cloud has to cover.
+  //
+  // Which is why this draws the REJECTS by default: `?windebug` shows what we are throwing away.
+  // `?windebug=all` adds the 1.2M that landed (cyan), for context.
+  async function loadWindowDebug() {
+    const q = new URLSearchParams(location.search);
+    const set = (typeof localStorage !== 'undefined' && localStorage.getItem(NCZ.ASSET_SET_KEY)) || NCZ.ASSET_SET_DEFAULT;
+    let meta, buf;
+    try {
+      [meta, buf] = await Promise.all([
+        fetch(`data/window-debug-${set}.json`).then((r) => (r.ok ? r.json() : null)),
+        fetch(`data/window-debug-${set}.bin`).then((r) => (r.ok ? r.arrayBuffer() : null)),
+      ]);
+    } catch { /* handled below */ }
+    if (!meta || !buf) {
+      console.warn(`[NCZ] windebug: data/window-debug-${set}.bin missing — run \`node scripts/window_faces.js --bake\``);
+      return;
+    }
+
+    const n = meta.count;
+    const xyz = new Float32Array(buf, 0, n * 3);
+    const why = new Uint8Array(buf, n * 12, n);
+    const showAll = q.get('windebug') === 'all';
+    const size = Number(q.get('winptsize') ?? 3);
+
+    // LANDED cyan · TOO DEEP red · OFF SIDE orange · NO BOX magenta · NO FACE yellow
+    const COL = [[0.15, 0.75, 0.85], [1.0, 0.12, 0.12], [1.0, 0.55, 0.05], [1.0, 0.1, 0.9], [1.0, 0.95, 0.15]];
+    const keep = [];
+    for (let i = 0; i < n; i++) if (showAll || why[i] !== 0) keep.push(i);
+
+    const pos = new Float32Array(keep.length * 3);
+    const col = new Float32Array(keep.length * 3);
+    for (let k = 0; k < keep.length; k++) {
+      const i = keep[k];
+      pos[k * 3] = xyz[i * 3]; pos[k * 3 + 1] = xyz[i * 3 + 1]; pos[k * 3 + 2] = xyz[i * 3 + 2];
+      const c = COL[why[i]] || [1, 1, 1];
+      col[k * 3] = c[0]; col[k * 3 + 1] = c[1]; col[k * 3 + 2] = c[2];
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+
+    // depthTest STAYS ON. A red point that disappears inside a building IS interior glass — the
+    // occlusion is the answer, not an obstacle. Turning it off would hide the very distinction
+    // this view exists to make.
+    const mat = new THREE.PointsNodeMaterial({ size, sizeAttenuation: false, vertexColors: true });
+    const pts = new THREE.Points(geo, mat);
+    pts.name = 'windowDebug';
+    pts.frustumCulled = false;
+    pts.renderOrder = 4;
+    scene.add(pts);
+
+    const c = meta.counts;
+    console.log(`[NCZ] windebug (${set}): ${keep.length.toLocaleString()} of ${n.toLocaleString()} windows drawn`
+      + `\n  cyan   LANDED   ${c.landed.toLocaleString()}${showAll ? '' : '  (hidden — use ?windebug=all)'}`
+      + `\n  RED    TOO DEEP ${c.deep.toLocaleString()}  <- interior glass, or a hole in our box cloud?`
+      + `\n  ORANGE OFF SIDE ${c.offside.toLocaleString()}`
+      + `\n  MAGENTA NO BOX  ${c.nobox.toLocaleString()}`
+      + `\n  YELLOW NO FACE  ${c.nonormal.toLocaleString()}`);
     requestRender();
   }
 

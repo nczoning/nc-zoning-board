@@ -69,3 +69,18 @@ data/window-panels.bin
 #   3. node scripts/window_boxes.js --margin 2 --assign volume --bake --set fixed
 #      node scripts/window_boxes.js --margin 2 --assign volume --bake --set vanilla
 data/window-geom.json
+
+# ?windebug point cloud — 22 MB, every one of the game's 1.7M windows coloured by whether it
+# lands on one of our box faces. A diagnostic, not a runtime asset. Regenerate with:
+#   node scripts/window_faces.js --bake
+data/window-debug-*.bin
+data/window-debug-*.json
+
+# The real window layout, per box face — 21 MB, and the thing that will replace the procedural
+# window grid. IGNORED ONLY WHILE THE FORMAT IS IN FLUX: the margin, the quantisation and the
+# tile size are all still open, and re-committing a 21 MB binary on each iteration would bloat
+# the history for no one's benefit. COMMIT IT once the shader consumes it and the format settles
+# (window-boxes-*.bin is committed, and this belongs beside it).
+#   node scripts/window_faces.js --bake
+data/window-faces-*.bin
+data/window-faces-*.json
