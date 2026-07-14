@@ -125,19 +125,41 @@ function isGlassMesh(rc) {
 }
 
 // ---- which meshes? -----------------------------------------------------------
+//
+// DEDUPE. `wkit.GetArchiveFiles()` enumerates PER ARCHIVE, and Cyberpunk ships base archives plus
+// EP1/patch archives that OVERRIDE THE SAME DEPOT PATHS. A mesh patched by Phantom Liberty is
+// therefore returned TWICE — same depot path, two archives.
+//
+// Not deduping does not lose anything, but it makes every downstream count lie in a way that looks
+// exactly like data loss:
+//
+//     glass set        4,610      <- counts the patched meshes twice
+//     Extract calls    4,610      <- both succeed; the second overwrites the first
+//     .mesh on disk    4,509      <- ONE file per depot path
+//     .glb on disk     4,509
+//     FileExistsInRaw  4,609      <- true for BOTH copies of every duplicate
+//
+// which reads as "101 meshes silently failed to extract" and sent us hunting a WolvenKit bug that
+// was not there. `extracted 5429/5429` was HONEST. The set was 101 short of unique, not the disk
+// 101 short of the set. A count of a multiset is not a count of the thing.
+const seenPath = {};
 const meshes = [];
-let rejectedNotBuilding = 0;
+let rejectedNotBuilding = 0, dupePath = 0;
 for (const f of wkit.GetArchiveFiles()) {
     const name = (typeof f === 'string') ? f : (f.FileName ?? f.Name);
     if (!name || !name.endsWith('.mesh')) continue;
     if (!ARCH.test(name)) continue;
+    const k = name.toLowerCase();
+    if (seenPath[k]) { dupePath++; continue; }
+    seenPath[k] = 1;
     // COUNT what you throw away. A bare `continue` is how 2,356 quest sectors and 803 cars both
     // hid — the filter that drops them silently is indistinguishable from one that finds nothing.
     if (NOT_A_BUILDING.test(name)) { rejectedNotBuilding++; continue; }
     meshes.push(name);
 }
-Logger.Info(`[ncz] ${meshes.length} architecture + building-proxy meshes`
-    + (rejectedNotBuilding ? `  (rejected ${rejectedNotBuilding} vehicle/3dmap meshes)` : '')
+Logger.Info(`[ncz] ${meshes.length} UNIQUE architecture + building-proxy meshes`
+    + (dupePath ? `  (${dupePath} duplicate depot paths collapsed — base vs EP1/patch archives)` : '')
+    + (rejectedNotBuilding ? `  (rejected ${rejectedNotBuilding} vehicle meshes)` : '')
     + '; resolving material chains…');
 
 const glass = [];
