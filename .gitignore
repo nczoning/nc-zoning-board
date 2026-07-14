@@ -58,3 +58,14 @@ worker/.wrangler/
 # Route A panel bake — 22 MB, regenerate with:
 #   node scripts/window_panels.js --bake
 data/window-panels.bin
+
+# The real window geometry pulled out of the meshes' GLBs — 4 MB, and the INPUT to the
+# window-boxes bake (which IS committed, at data/window-boxes-*.bin).
+#
+# To regenerate you need WolvenKit and the game archives:
+#   1. run scripts/wkit/export_glass_meshes.wscript in WolvenKit  (~25 min; ExportFiles is
+#      ASYNC, so wait for the .glb count to STOP CHANGING before believing its verification)
+#   2. node scripts/window_geom.js
+#   3. node scripts/window_boxes.js --margin 2 --assign volume --bake --set fixed
+#      node scripts/window_boxes.js --margin 2 --assign volume --bake --set vanilla
+data/window-geom.json
