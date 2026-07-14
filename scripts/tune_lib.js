@@ -84,7 +84,28 @@ function decodeDistrict(meta) {
   const T = NCZ.DDS_ALPHA_THRESH, U = NCZ.UINT16_MAX, CS = meta.cubeSize;
   const tMin = meta.transMin, tMax = meta.transMax, ofs = meta.offset;
 
+  // TWO descriptions of the same box, and they are NOT interchangeable:
+  //
+  //   bh*  the world AABB      — axis-aligned, and for a yawed box it is a DIFFERENT, BIGGER box.
+  //                              Median 1.96x the true volume; 3.39x on the City Center slab below.
+  //                              Correct for a broad-phase (culling, spatial hash). Nothing else.
+  //   bt*  the TRUE half-extents + bq* the quaternion — the box the RENDERER actually draws.
+  //
+  // The rotation used to be decoded here, used to build the matrix, and then thrown away. Only
+  // 26.6% of the city's boxes are within 5 deg of an axis; the median box is yawed 26.3 deg. So
+  // every script that asked "which way does this wall face" got an answer about a bounding box:
+  //
+  //   a real 12.1 x 60.7 x 68.0 m slab in City Center, yawed 33 deg
+  //     TRUE  side faces 57 deg (NNE)                       elongation 60.7/12.1 = 5.0  (a SLAB)
+  //     AABB  57.5 x 43.3 x 68.0, side faces 0 deg (E)      elongation 57.5/43.3 = 1.3  (a BLOCK)
+  //
+  // That single collapse is why the game's windows would not land (48.7% of them matched no wall
+  // at all), and why a yawed slab classifies as a chunky block. USE bt*/bq* FOR ANYTHING THAT
+  // CARES WHAT SHAPE OR WHICH WAY. Use bh* only when a conservative bound is genuinely what you
+  // want. See wiki/learnings/the-aabb-is-a-different-box.
   const bcx = [], bcy = [], bcz = [], bhx = [], bhy = [], bhz = [];
+  const btx = [], bty = [], btz = [];                       // TRUE half-extents (THREE space)
+  const bqx = [], bqy = [], bqz = [], bqw = [];             // orientation (THREE space)
   for (let y = 0; y < blockH; y++) {
     for (let x = 0; x < blockW; x++) {
       const pi = (y * texW + x) * 4;
@@ -118,13 +139,22 @@ function decodeDistrict(meta) {
       bhx.push(0.5 * (Math.abs(e0) + Math.abs(e4) + Math.abs(e8)));
       bhy.push(0.5 * (Math.abs(e1) + Math.abs(e5) + Math.abs(e9)));
       bhz.push(0.5 * (Math.abs(e2) + Math.abs(e6) + Math.abs(e10)));
+      // The box as DRAWN. sx/sy/sz above are the THREE-space FULL extents, so half them; the
+      // quaternion is the same THREE-space one the renderer feeds to `dummy.quaternion.set`.
+      btx.push(sx * 0.5); bty.push(sy * 0.5); btz.push(sz * 0.5);
+      bqx.push(X); bqy.push(Y); bqz.push(Z); bqw.push(W);
     }
   }
   return {
     name: meta.name,
     count: bcx.length,
     bcx: Float32Array.from(bcx), bcy: Float32Array.from(bcy), bcz: Float32Array.from(bcz),
+    // the AABB — a bigger, different box. Broad-phase only.
     bhx: Float32Array.from(bhx), bhy: Float32Array.from(bhy), bhz: Float32Array.from(bhz),
+    // the box we actually draw.
+    btx: Float32Array.from(btx), bty: Float32Array.from(bty), btz: Float32Array.from(btz),
+    bqx: Float32Array.from(bqx), bqy: Float32Array.from(bqy), bqz: Float32Array.from(bqz),
+    bqw: Float32Array.from(bqw),
   };
 }
 

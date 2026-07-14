@@ -20,7 +20,19 @@ import * as THREE from 'three';
 import { Line2 } from 'three/addons/lines/webgpu/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 
-const OPS = ['merge', 'forceClass', 'exclude', 'forceLit'];
+// `debug` FIRST, and therefore the DEFAULT. It is an annotation: a shape drawn on the map to
+// point at something, with NO effect on the scene. It is inert by construction — the zone engine
+// looks its op up in OP_CODE, finds nothing, and skips it (three-scene.js, `if (!code) continue`)
+// — and it is not a merge zone, so the segmenter never sees it either.
+//
+// WHY IT IS THE DEFAULT, and why it exists at all: to mark Santo Domingo's biggest building for
+// inspection, a zone was drawn round it with the only op to hand — `merge`. Merge zones are FED
+// TO THE SEGMENTER. So the zone fused those boxes into one building, and the screenshot "showing"
+// a megablob was showing the probe, not the bug. THE INSTRUMENT CHANGED WHAT IT MEASURED.
+//
+// A shape you draw to SHOW someone something must not alter the thing you are showing them. So
+// the harmless op is the one you get unless you deliberately ask for a harmful one.
+const OPS = ['debug', 'merge', 'forceClass', 'exclude', 'forceLit'];
 const CLASSES = ['tower', 'block', 'podium', 'short', 'thin', 'elongated'];
 const HANDLE_R = 6;          // vertex handle sphere radius (CET)
 const CLOSE_SNAP_PX = 18;    // click within this of the first handle closes the loop

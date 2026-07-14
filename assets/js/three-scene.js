@@ -2357,9 +2357,44 @@ const ThreeScene = (() => {
   // so buildings separate by city block. Rationale + tuning live in
   // scripts/tune_segment.js / scripts/tune_seg_roads.js / scripts/tune_lib.js (the
   // headless harness lifts the algorithm from THIS function — keep them in sync).
-  function segmentBuildings(cx, cy, cz, hx, hy, hz, count, mergeZones, roadGrid) {
+  // `ori` — the boxes AS DRAWN: { tx,ty,tz } true half-extents + { qx,qy,qz,qw } orientation.
+  // OPTIONAL, and everything degrades to the old AABB behaviour without it (older callers in
+  // scripts/tune_*.js still pass 9 args).
+  //
+  // WHY IT MATTERS. hx/hy/hz are the world AABB, which for a yawed box is a DIFFERENT, BIGGER
+  // box — median 1.96x the volume. Only 26.6% of the city's boxes are within 5 deg of an axis.
+  // A real City Center slab is 12.1 x 60.7 m yawed 33 deg; its AABB is 57.5 x 43.3 m. Feeding
+  // that to the segmenter does two things, both bad:
+  //
+  //   1. It RASTERISES a 57 x 43 footprint where the building is 12 x 61 — stamping cells the
+  //      building does not occupy, bridging the gap to its neighbours. That is the megablob.
+  //   2. It CLASSIFIES a 5.0-elongation SLAB as a 1.3-elongation BLOCK.
+  //
+  // With `ori` both use the real rectangle.
+  function segmentBuildings(cx, cy, cz, hx, hy, hz, count, mergeZones, roadGrid, ori) {
     const CELL = NCZ.BUILDING_SEG_CELL, DH = NCZ.BUILDING_SEG_DH, MIN_CELLS = NCZ.BUILDING_SEG_MIN_CELLS;
     if (count === 0) return { attr: new Float32Array(0), clusterCount: 0 };
+
+    // Ground-plane yaw of box i (its local +X axis, projected to world XZ), and a test for
+    // "is this world point inside box i's true footprint rectangle".
+    const yawOf = (i) => {
+      if (!ori) return 0;
+      const x = ori.qx[i], y = ori.qy[i], z = ori.qz[i], w = ori.qw[i];
+      // rotate (1,0,0) by q, then take atan2(z, x) — THREE is Y-up, so XZ is the ground plane
+      const ax = 1 - 2 * (y * y + z * z);
+      const az = 2 * (x * z - w * y);
+      return Math.atan2(az, ax);
+    };
+    const yaw = new Float32Array(count);
+    if (ori) for (let i = 0; i < count; i++) yaw[i] = yawOf(i);
+    // world (px,pz) inside box i's footprint? (rotate into the box's frame; upright boxes exact)
+    const inFoot = (i, px, pz) => {
+      if (!ori) return true;                       // AABB span already gated it
+      const c = Math.cos(-yaw[i]), s = Math.sin(-yaw[i]);
+      const dx = px - cx[i], dz = pz - cz[i];
+      const lx = dx * c - dz * s, lz = dx * s + dz * c;
+      return Math.abs(lx) <= ori.tx[i] + CELL * 0.5 && Math.abs(lz) <= ori.tz[i] + CELL * 0.5;
+    };
 
     // 1. CET ground grid; per cell, roof = max box-top elevation (cy + hy).
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
@@ -2375,12 +2410,18 @@ const ThreeScene = (() => {
     const floorG = new Float32Array(cols * rows).fill(Infinity); // min box bottom per cell (for road thickness gate)
     const occ = new Uint8Array(cols * rows);
     for (let i = 0; i < count; i++) {
+      // The AABB span is still the SEARCH range (it is a correct bound) — but only the cells
+      // whose centre is inside the box's TRUE rotated footprint get stamped. Without that gate a
+      // yawed slab paints its whole bounding rectangle, occupying ground it does not stand on and
+      // percolating into the building across the street.
       const c0 = Math.floor((cx[i] - hx[i]) / CELL) - col0;
       const c1 = Math.min(Math.floor((cx[i] + hx[i]) / CELL) - col0, c0 + 12); // cap huge boxes
       const r0 = Math.floor((cz[i] - hz[i]) / CELL) - row0;
       const r1 = Math.min(Math.floor((cz[i] + hz[i]) / CELL) - row0, r0 + 12);
       const t = cy[i] + hy[i], b = cy[i] - hy[i];
       for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+        const px = (c + col0 + 0.5) * CELL, pz = (r + row0 + 0.5) * CELL;
+        if (!inFoot(i, px, pz)) continue;
         const k = r * cols + c; occ[k] = 1; if (t > roof[k]) roof[k] = t; if (b < floorG[k]) floorG[k] = b;
       }
     }
@@ -2604,15 +2645,65 @@ const ThreeScene = (() => {
       }
     }
 
-    // 4c. aggregate world AABB per (possibly merged / split) label → building dims.
-    const aggMin = new Map(); // label → {minX..maxZ, minY, maxY}
-    for (let i = 0; i < count; i++) {
-      const lab = boxLabel[i];
-      let a = aggMin.get(lab);
-      if (!a) { a = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity }; aggMin.set(lab, a); }
-      if (cx[i]-hx[i]<a.minX) a.minX=cx[i]-hx[i]; if (cx[i]+hx[i]>a.maxX) a.maxX=cx[i]+hx[i];
-      if (cy[i]-hy[i]<a.minY) a.minY=cy[i]-hy[i]; if (cy[i]+hy[i]>a.maxY) a.maxY=cy[i]+hy[i];
-      if (cz[i]-hz[i]<a.minZ) a.minZ=cz[i]-hz[i]; if (cz[i]+hz[i]>a.maxZ) a.maxZ=cz[i]+hz[i];
+    // 4c. aggregate per (possibly merged / split) label → building dims.
+    //
+    // THE FOOTPRINT MUST BE MEASURED IN THE BUILDING'S OWN FRAME. A world-axis box drawn round a
+    // yawed building squares it up: a 12 x 61 m slab measures 57 x 43, so its elongation reads
+    // 1.3 (a chunky BLOCK) instead of 5.0 (a thin SLAB) — and elongation is exactly what
+    // classifyBuilding keys on. Every archetype call on a yawed building was made on a footprint
+    // the building does not have.
+    //
+    // So: give each building ONE yaw (area-weighted, folded mod 90 deg because a rectangle is
+    // 90-deg symmetric — averaged as 4*theta on the circle so 89 deg and 1 deg agree instead of
+    // cancelling), then measure min/max in that frame. Height is unaffected: yaw is about the
+    // vertical axis, so world Y is already right.
+    const aggMin = new Map(); // label → {minY, maxY, ...OBB accumulators}
+    if (ori) {
+      const dir = new Map();                       // label → [sum w*cos4t, sum w*sin4t]
+      for (let i = 0; i < count; i++) {
+        const lab = boxLabel[i];
+        const w = ori.tx[i] * ori.tz[i] || 1e-3;   // weight by footprint area — big boxes decide
+        let d = dir.get(lab);
+        if (!d) { d = [0, 0]; dir.set(lab, d); }
+        d[0] += w * Math.cos(4 * yaw[i]);
+        d[1] += w * Math.sin(4 * yaw[i]);
+      }
+      const labYaw = new Map();
+      for (const [lab, d] of dir) labYaw.set(lab, Math.atan2(d[1], d[0]) / 4);
+      for (let i = 0; i < count; i++) {
+        const lab = boxLabel[i];
+        let a = aggMin.get(lab);
+        if (!a) {
+          a = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity, wx: 0, wz: 0, n: 0 };
+          aggMin.set(lab, a);
+        }
+        if (cy[i] - hy[i] < a.minY) a.minY = cy[i] - hy[i];
+        if (cy[i] + hy[i] > a.maxY) a.maxY = cy[i] + hy[i];
+        // the box's 4 ground corners, rotated into the BUILDING's frame
+        const t = labYaw.get(lab), ct = Math.cos(-t), st = Math.sin(-t);
+        a.t = t;                                   // keep it: the centre must come back to WORLD
+        const cb = Math.cos(yaw[i]), sb = Math.sin(yaw[i]);
+        for (const [ex, ez] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+          const ox = ex * ori.tx[i], oz = ez * ori.tz[i];
+          const wxp = cx[i] + ox * cb - oz * sb;   // corner, world
+          const wzp = cz[i] + ox * sb + oz * cb;
+          const lx = wxp * ct - wzp * st;          // corner, building frame
+          const lz = wxp * st + wzp * ct;
+          if (lx < a.minX) a.minX = lx; if (lx > a.maxX) a.maxX = lx;
+          if (lz < a.minZ) a.minZ = lz; if (lz > a.maxZ) a.maxZ = lz;
+        }
+        // the world centre still has to be reported in WORLD space (billboards, zone hit-tests)
+        a.wx += cx[i]; a.wz += cz[i]; a.n++;
+      }
+    } else {
+      for (let i = 0; i < count; i++) {
+        const lab = boxLabel[i];
+        let a = aggMin.get(lab);
+        if (!a) { a = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, minZ: Infinity, maxZ: -Infinity }; aggMin.set(lab, a); }
+        if (cx[i]-hx[i]<a.minX) a.minX=cx[i]-hx[i]; if (cx[i]+hx[i]>a.maxX) a.maxX=cx[i]+hx[i];
+        if (cy[i]-hy[i]<a.minY) a.minY=cy[i]-hy[i]; if (cy[i]+hy[i]>a.maxY) a.maxY=cy[i]+hy[i];
+        if (cz[i]-hz[i]<a.minZ) a.minZ=cz[i]-hz[i]; if (cz[i]+hz[i]>a.maxZ) a.maxZ=cz[i]+hz[i];
+      }
     }
     const denseId = new Map(); let nextId = 0;
     const attr = new Float32Array(count * 4);
@@ -2624,12 +2715,21 @@ const ThreeScene = (() => {
       const a = aggMin.get(lab);
       const fx = (a.maxX - a.minX) * 0.5, fz = (a.maxZ - a.minZ) * 0.5;
       attr[i*4+0] = (a.maxY - a.minY) * 0.5;   // building height half-extent
-      attr[i*4+1] = Math.max(fx, fz);          // footprint max half
-      attr[i*4+2] = Math.min(fx, fz);          // footprint min half
+      attr[i*4+1] = Math.max(fx, fz);          // footprint max half — in the BUILDING's frame
+      attr[i*4+2] = Math.min(fx, fz);          // footprint min half — so elongation is REAL
       attr[i*4+3] = id;                        // building id (window/sign hash seed)
-      baseY[i]    = a.minY;                     // building base Y
-      center[i*2+0] = (a.minX + a.maxX) * 0.5;  // building centre world X
-      center[i*2+1] = (a.minZ + a.maxZ) * 0.5;  // building centre world Z
+      baseY[i]    = a.minY;                     // building base Y (yaw is about the vertical axis)
+      // The footprint above is measured in the building's own frame; the CENTRE is consumed in
+      // WORLD space (billboard placement, zone hit-tests), so rotate it back out.
+      const lcx = (a.minX + a.maxX) * 0.5, lcz = (a.minZ + a.maxZ) * 0.5;
+      if (ori && a.t !== undefined) {
+        const ct = Math.cos(a.t), st = Math.sin(a.t);
+        center[i*2+0] = lcx * ct - lcz * st;
+        center[i*2+1] = lcx * st + lcz * ct;
+      } else {
+        center[i*2+0] = lcx;
+        center[i*2+1] = lcz;
+      }
     }
 
     // 4c.5 PART ids — the INTERSECTION of the part region (3.25) and the FINAL
@@ -3191,14 +3291,27 @@ const ThreeScene = (() => {
   async function loadBuildings() {
     registerLoadStep(DISTRICT_META.length); // one step per district
     try {
-      // Zone overrides. `merge` affects segmentation; forceClass/exclude/forceLit
-      // become a per-instance override buffer the shader reads (see below).
+      // Zone ops. `merge` affects SEGMENTATION; forceClass/exclude/forceLit become a per-instance
+      // override buffer the shader reads (below); `debug` does NOTHING and is meant to.
+      //
+      // A `debug` zone is an ANNOTATION — a shape drawn to point at something on the map, for a
+      // human or for Claude, with no effect on the scene. It is inert twice over: it is not a
+      // merge zone, so the segmenter never sees it; and OP_CODE has no entry for it, so the
+      // override loop below skips it (`if (!code) continue`).
+      //
+      // Do not "tidy" this by giving debug an OP_CODE. The whole point is that marking something
+      // on the map must not change it — a merge zone drawn to HIGHLIGHT a suspected megablob went
+      // and fused those boxes into one building, and the resulting screenshot showed the probe
+      // rather than the bug.
       const _zones = await loadBuildingZones();
       const _mergeZones = _zones.filter((z) => z.op === 'merge');
-      const _overrideZones = _zones.filter((z) => z.op !== 'merge');
+      const _overrideZones = _zones.filter((z) => z.op !== 'merge' && z.op !== 'debug');
+      const _debugZones = _zones.filter((z) => z.op === 'debug');
       const CLASS_IDX = { tower: 0, block: 1, podium: 2, short: 3, thin: 4, elongated: 5 };
-      const OP_CODE = { exclude: 1, forceLit: 2, forceClass: 3 };
-      if (_zones.length) console.log(`[NCZ] building zones: ${_zones.length} (${_mergeZones.length} merge, ${_overrideZones.length} override)`);
+      const OP_CODE = { exclude: 1, forceLit: 2, forceClass: 3 };   // no `debug` — inert on purpose
+      if (_zones.length) {
+        console.log(`[NCZ] building zones: ${_zones.length} (${_mergeZones.length} merge, ${_overrideZones.length} override, ${_debugZones.length} debug/inert)`);
+      }
 
       // Per-building metadata table — district polygons loaded once; the table is
       // rebuilt per (re)load, one record per building, tagged by centroid.
@@ -3254,7 +3367,14 @@ const ThreeScene = (() => {
         const matrixData   = new Float32Array(maxInstances * 16);
         // Per-box world centre + AABB half-extents, for the building clustering below.
         const bcx = new Float32Array(maxInstances), bcy = new Float32Array(maxInstances), bcz = new Float32Array(maxInstances);
+        // The world AABB. A conservative BOUND — correct for a broad-phase (spatial hash, culling)
+        // and WRONG for anything that asks what shape a building is or which way a wall faces.
         const bhx = new Float32Array(maxInstances), bhy = new Float32Array(maxInstances), bhz = new Float32Array(maxInstances);
+        // The box AS DRAWN. Only 26.6% of boxes are within 5 deg of an axis; the median is yawed
+        // 26.3 deg, and its AABB is 1.96x its true volume. The segmenter gets THESE.
+        const btx = new Float32Array(maxInstances), bty = new Float32Array(maxInstances), btz = new Float32Array(maxInstances);
+        const bqx = new Float32Array(maxInstances), bqy = new Float32Array(maxInstances);
+        const bqz = new Float32Array(maxInstances), bqw = new Float32Array(maxInstances);
 
         let validCount = 0;
         for (let y = 0; y < blockH; y++) {
@@ -3306,6 +3426,10 @@ const ThreeScene = (() => {
             bhx[validCount] = 0.5 * (Math.abs(e[0]) + Math.abs(e[4]) + Math.abs(e[8]));
             bhy[validCount] = 0.5 * (Math.abs(e[1]) + Math.abs(e[5]) + Math.abs(e[9]));
             bhz[validCount] = 0.5 * (Math.abs(e[2]) + Math.abs(e[6]) + Math.abs(e[10]));
+            // …and the box AS DRAWN, which is what the segmenter and the classifier need.
+            btx[validCount] = hx; bty[validCount] = hz; btz[validCount] = hy;   // CET X→X, Z→Y, Y→Z
+            bqx[validCount] = dummy.quaternion.x; bqy[validCount] = dummy.quaternion.y;
+            bqz[validCount] = dummy.quaternion.z; bqw[validCount] = dummy.quaternion.w;
             validCount++;
           }
         }
@@ -3319,8 +3443,19 @@ const ThreeScene = (() => {
         // (vec4: heightHalf, footMaxHalf, footMinHalf, clusterId). The shader
         // classifies + seeds window/sign hashing from THESE, not the per-box size,
         // so a thin slab inherits its building's class.
+        // The boxes AS DRAWN. Without this the segmenter rasterises each yawed box's BOUNDING
+        // rectangle (a 12 x 61 m slab paints 57 x 43 m), bridging streets and merging buildings;
+        // and it classifies that same slab as a chunky block. Both fall out with the real shape.
+        //
+        // ?aabbboxes restores the old behaviour, so the A/B can be run THROUGH THE REAL PIPELINE
+        // — with the road grid and the zones present. Comparing them in a harness that omits the
+        // road barrier measures a configuration that does not ship, and the road barrier is the
+        // thing that stops buildings merging across streets: santo_domingo segments to 520
+        // buildings with it and 285 without. An A/B is only worth the baseline it uses.
+        const _aabbOnly = new URLSearchParams(location.search).has('aabbboxes');
         const { attr: buildingAttrData, baseY: buildingBaseData, center: buildingCenterData, partId: partIdData, clusterCount, partCount } = segmentBuildings(
-          bcx, bcy, bcz, bhx, bhy, bhz, validCount, _mergeZones, _roadGrid);
+          bcx, bcy, bcz, bhx, bhy, bhz, validCount, _mergeZones, _roadGrid,
+          _aabbOnly ? undefined : { tx: btx, ty: bty, tz: btz, qx: bqx, qy: bqy, qz: bqz, qw: bqw });
         const buildingAttrBuffer = instancedArray(validCount, 'vec4');
         buildingAttrBuffer.value.set(buildingAttrData.subarray(0, validCount * 4));
         console.log(`[NCZ] ${meta.name}: ${validCount} boxes → ${clusterCount} buildings → ${partCount} parts`);
