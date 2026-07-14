@@ -123,7 +123,9 @@ const ALL_GLASS = process.argv.includes('--allglass');
 const glazed = (g, id) => {
   const n = APP[id];
   const rec = (n && g.apps[n]) || g.apps[Object.keys(g.apps)[0]] || { g: [], e: [] };
-  return ALL_GLASS ? (rec.g || []) : (rec.e || []);
+  // `l` = ON AFTER DARK (2^EV x (1 - turnOffAtNight) > 0), not merely emissive: the game bakes
+  // switched-OFF windows as their own chunks, and lighting them lights windows it darkened.
+  return ALL_GLASS ? (rec.g || []) : (rec.l || rec.e || []);
 };
 
 // ── land every real window on a box FACE ────────────────────────────────────

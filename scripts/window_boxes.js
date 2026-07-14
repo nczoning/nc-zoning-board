@@ -58,7 +58,8 @@ const MARGIN = process.argv.includes('--margin')
 const ASSIGN = process.argv.includes('--assign')
   ? process.argv[process.argv.indexOf('--assign') + 1] : 'near';
 
-const { ARCH, makeGlassTest } = require('./glass_lib');
+const { ARCH, BUILDING, PROXY, makeGlassTest } = require('./glass_lib');
+const { makeDetailGrid, makeProxyFilter } = require('./proxy_dedup');
 const pct = (a, p) => a[Math.min(a.length - 1, Math.max(0, Math.floor(a.length * p)))];
 
 function readCsv(file) {
@@ -204,8 +205,15 @@ const asset = {};
 // send the next person to fix an export that is not broken.
 const noGlass = {};                           // exported, genuinely renders no glass  — CORRECT
 const notExported = {};                       // no GLB on disk                        — A HOLE
+const assetPath = {}, assetFoot = {};
 for (const a of readCsv('ncz_assets.csv')) {
-  if (!ARCH.test(a.path)) continue;
+  // BUILDING, not ARCH: a PROXY is a building too. Arasaka Waterfront's twelve towers are nine
+  // kit-built ones and three proxies, and `architecture` is not in a proxy's path. But a proxy is
+  // only COUNTED where no detailed geometry covers it — see the dedup below, or every glazed
+  // building in the city gets its windows twice.
+  if (!BUILDING.test(a.path)) continue;
+  assetPath[a.id] = a.path;
+  assetFoot[a.id] = Math.max(+a.bbx1 - +a.bbx0, +a.bby1 - +a.bby0) || 0;
   const g = GEOM[(a.path || '').toLowerCase()];
   if (g) { asset[a.id] = g; continue; }
   if (!isGlassMat((a.mat_names || '').split('|'), (a.mat_paths || '').split('|'))) continue;
@@ -235,7 +243,10 @@ function glazed(g, appId) {
   const a = (name && g.apps[name]) || null;
   if (!a && name && name !== 'default' && name !== '' && name !== 'None') appFallback++;
   const rec = a || g.apps[Object.keys(g.apps)[0]] || { g: [], e: [] };
-  return ALL_GLASS ? (rec.g || []) : (rec.e || []);
+  // `l` = ON AFTER DARK: 2^EV x (1 - turnOffAtNight) > 0. A proxy tower's Windows_0 chunk is an
+  // emissive window that the game switches OFF at night — 48 panes of geometry we must NOT light.
+  // This is the NIGHT bake, so it uses `l`. --allglass falls back to every glazed chunk.
+  return ALL_GLASS ? (rec.g || []) : (rec.l || rec.e || []);
 }
 
 /**
@@ -421,8 +432,32 @@ async function stream(file, onRow) {
 }
 
 (async () => {
-  // Instanced copies (one row per copy) ...
+  // ── PASS 1: WHERE IS THERE A REAL BUILDING? ──────────────────────────────
+  // Rasterise the ground covered by DETAILED (non-proxy) glazed architecture. A proxy standing on
+  // that ground is a duplicate of a building we already have, and counting both doubles it.
+  //
+  // This must be a SPATIAL test, not a prefab one. A per-building proxy shares its prefab with the
+  // detail — but an AGGREGATE proxy (`*_mproxy`, one mesh for a whole block) does not, so a prefab
+  // test keeps it and it lands on top of a dozen real buildings. Geometry is right; names are not.
+  const detailGrid = makeDetailGrid();
+  const seen = (f, C) => {
+    const id = f[C.asset];
+    if (!asset[id]) return;                       // not glazed — it says nothing about coverage
+    if (PROXY.test(assetPath[id] || '')) return;  // a proxy cannot vouch for itself
+    detailGrid.add(+f[C.x], +f[C.y]);
+  };
+  await stream('ncz_instances.csv', seen);
+  await stream('ncz_nodes.csv', (f, C) => {
+    if (Math.max(1, +f[C.inst] || 1) > 1) return;
+    seen(f, C);
+  });
+  const proxyFilter = makeProxyFilter(detailGrid, assetPath, assetFoot);
+  console.log(`  detail grid: ${detailGrid.size().toLocaleString()} cells of glazed architecture
+`);
+
+  // ── PASS 2: the windows ───────────────────────────────────────────────────
   await stream('ncz_instances.csv', (f, C) => {
+    if (!proxyFilter.keep(f[C.asset], +f[C.x], +f[C.y])) return;
     pane(f[C.asset], +f[C.x], +f[C.y], +f[C.z],
       [+f[C.qi], +f[C.qj], +f[C.qk], +f[C.qr]], +f[C.sx], +f[C.sy], +f[C.sz], f[C.app]);
   });
@@ -431,9 +466,12 @@ async function stream(file, onRow) {
     if (Math.max(1, +f[C.inst] || 1) > 1) return;
     const x = +f[C.x], y = +f[C.y];
     if (!Number.isFinite(x) || !Number.isFinite(y) || (x === 0 && y === 0)) return;
+    if (!proxyFilter.keep(f[C.asset], x, y)) return;
     pane(f[C.asset], x, y, +f[C.z],
       [+f[C.qi], +f[C.qj], +f[C.qk], +f[C.qr]], +f[C.sx], +f[C.sy], +f[C.sz], f[C.app]);
   });
+
+  proxyFilter.report();
 
   // ── 0. COVERAGE — before any aggregate, what did we FAIL to measure? ──────
   // Every hole in this pipeline was a silent filter that produced a complete-looking number.

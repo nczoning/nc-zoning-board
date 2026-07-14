@@ -102,7 +102,23 @@ const VERBOSE = process.argv.includes('--verbose');
 // The ROOT .mt templates that are glass. Applied ONLY to a resolved `MaterialTemplate` from
 // the Material.json — never to a material's name. (scripts/glass_lib.js is the shared
 // definition; this is the same set, matched against a .mt path rather than a CSV column.)
-const GLASS_MT = /(^|[\\/])(window_parallax_interior|window_interior_uv|glass|glass_onesided)\.mt$/i;
+// `_proxy` VARIANTS. A PROXY building's windows resolve to
+// `base\materials\window_parallax_interior_proxy.mt` — a DIFFERENT TEMPLATE FILE. Anchoring to
+// `\.mt$` right after the name misses it, and misses every proxy building's glass with it. The
+// optional suffix is not cosmetic: 7,016 tall glazed proxy-only buildings hang on it.
+//
+// And the proxy templates carry MORE than the detailed ones. The game bakes the LIT PATTERN into
+// them — `wat_nid_building_a_v38`'s proxy has four window chunks:
+//
+//     Windows_0  EV 0  turnOffAtNight 1   OFF
+//     Windows_4  EV 0  turnOffAtNight 1   OFF
+//     Windows_1  EV 3  turnOffAtNight 0   LIT
+//     Windows_5  EV 5  turnOffAtNight 0   LIT, brighter
+//
+// each its own submesh with its own geometry. Which windows are on, which are off, and how
+// bright — as placed geometry. The emissive test below then does the right thing for free:
+// EV 0 is not emissive, so the dark windows stay dark.
+const GLASS_MT = /(^|[\\/])(window_parallax_interior|window_interior_uv|glass|glass_onesided)(_proxy)?\.mt$/i;
 
 // A submesh is FLAT if its thinnest extent is under this. The glass in the reference mesh is
 // 0.000 m; the concrete it is set into is 0.240 m. There is no ambiguous middle in practice —
@@ -119,25 +135,53 @@ const FLAT_M = 0.02;
  *
  * Returns null when nothing emissive is set: that is a pane of glass, not a window.
  */
+// An emissive parameter that is a FLAG or a TWEAK, not an intensity. `EnableRaytracedEmissive: 1`
+// is set on windows that are switched OFF (EV 0, turnOffAtNight 1) — so a bare "any emissive-named
+// param is non-zero" test calls a dark window a light. A generous regex over-matching is the mirror
+// image of the strict one that under-matched, and both are the same mistake.
+const EMISSIVE_FLAG = /^Enable|Bias$|Directionality$/i;
+
 function emissiveOf(mat) {
   if (!mat || !mat.Data) return null;
   const out = {};
   let glows = false;
   for (const [k, v] of Object.entries(mat.Data)) {
     if (!/emissive/i.test(k)) continue;
-    if (typeof v === 'number') { out[k] = v; if (v !== 0) glows = true; }
-    else if (v && typeof v === 'object' && 'Red' in v) {
+    const isFlag = EMISSIVE_FLAG.test(k);
+    if (typeof v === 'number') {
+      out[k] = v;
+      if (!isFlag) glows = true;                 // an emissive INTENSITY is declared at all
+    } else if (v && typeof v === 'object' && 'Red' in v) {
       out[k] = [v.Red, v.Green, v.Blue];
-      if (v.Red || v.Green || v.Blue) glows = true;
-    } else if (typeof v === 'string' && v) { out[k] = v; glows = true; }   // an emissive TEXTURE
+      if (!isFlag && (v.Red || v.Green || v.Blue)) glows = true;
+    } else if (typeof v === 'string' && v && !isFlag) { out[k] = v; glows = true; }  // a texture
   }
   if (!glows) return null;
-  // The night MODIFIERS. Not what makes it emissive — what happens to it after dark. Carried
-  // because the model needs them, and because the game states them and we should not invent them.
+
+  // ── THE GAME'S OWN NIGHT MODEL, and it is not a guess ──────────────────────
+  // brightness      = 2^EmissiveEV          EV 0 -> 1x   EV 3 -> 8x   EV 5 -> 32x
+  // lit at night    = 1 - AmountTurnOffAtNight
+  //
+  // A proxy building's window chunks read, verbatim:
+  //     Windows_0  EV 0  turnOff 1   dim by day, 100% OFF at night
+  //     Windows_4  EV 0  turnOff 1   dim by day, 100% OFF at night
+  //     Windows_1  EV 3  turnOff 0   LIT
+  //     Windows_5  EV 5  turnOff 0   LIT, 4x brighter
+  //
+  // So `emissive` is not a boolean — it is an INTENSITY with a night term, and the geometry is
+  // already sorted into lit and unlit chunks. Carry both, and let the consumer compute
+  // `2^EV * (1 - turnOff)`. That is the number the shader currently invents with a hash.
   const d = mat.Data;
   if (typeof d.AmountTurnOffAtNight === 'number') out.turnOffAtNight = d.AmountTurnOffAtNight;
   if (d.TintColorAtNight) out.tintAtNight = [d.TintColorAtNight.Red, d.TintColorAtNight.Green, d.TintColorAtNight.Blue];
   if (typeof d.LightsTempVariationAtNight === 'number') out.tempVarAtNight = d.LightsTempVariationAtNight;
+
+  // Convenience, derived — but stated, not assumed. `nightLit` is 0 for a window the game turns
+  // off after dark, whatever its EV says.
+  const ev = typeof d.EmissiveEV === 'number' ? d.EmissiveEV : null;
+  out.ev = ev;
+  out.nightLit = (ev === null) ? null
+    : +(Math.pow(2, ev) * (1 - (out.turnOffAtNight ?? 0))).toFixed(4);
   return out;
 }
 
@@ -332,10 +376,10 @@ console.log(`\n${glbs.length} exported .glb found under ${roots.map((r) => path.
 const geom = {};
 const stat = {
   meshes: 0, withGlass: 0, withEmissive: 0, noGlass: 0, noMaterialJson: 0, unreadable: 0,
-  glassChunks: 0, panes: 0, aabbThick: 0, doubleSided: 0, appVaries: 0,
+  glassChunks: 0, panes: 0, aabbThick: 0, doubleSided: 0, appVaries: 0, withLit: 0,
 };
 const conflicts = [];
-let totalGlass = 0, totalRaw = 0, totalPanel = 0, totalEmis = 0, totalNonEmis = 0;
+let totalGlass = 0, totalRaw = 0, totalPanel = 0, totalEmis = 0, totalNonEmis = 0, totalLit = 0;
 
 for (const file of glbs) {
   const matFile = file.replace(/\.glb$/i, '.Material.json');
@@ -433,20 +477,39 @@ for (const file of glbs) {
   // And it is per (appearance, chunk): the SAME chunk can be `window_parallax_interior` in one
   // appearance and plain `glass` in another, so "does this mesh glow" is not a question that has
   // one answer.
+  //
+  // THREE lists, because there are three different questions and the answers differ:
+  //
+  //   g  GLAZED    it is glass.                       (a door, a balustrade, a window)
+  //   e  EMISSIVE  its material declares an emissive.  (a window — lit OR unlit)
+  //   l  NIGHT-LIT it is ON after dark:  2^EV * (1 - turnOffAtNight) > 0
+  //
+  // The third is not a refinement of the second, it is a different fact. A proxy tower's
+  // `Windows_0` chunk declares EmissiveEV 0 and AmountTurnOffAtNight 1: it is an emissive window
+  // that the game switches OFF at night, with its own 48 panes of geometry. Light it and you have
+  // lit a window the game deliberately darkened.
+  //
+  // The NIGHT bake uses `l`. Anything that wants "all the windows, lit or not" uses `e`.
   const apps = {};
   const matParams = {};                        // material name -> its emissive params (or null)
   for (let i = 0; i < appKeys.length; i++) {
     const list = mat.Appearances[appKeys[i]];
-    const g = [], e = [], mOf = {};
+    const g = [], e = [], l = [], mOf = {};
     for (const c of Object.keys(chunks).map(Number).sort((a, b) => a - b)) {
       const mn = list[c];
       if (!isGlassMat(mn)) continue;
       g.push(c);
       mOf[c] = mn;
       if (!(mn in matParams)) matParams[mn] = emissiveOf(byName[mn]);
-      if (matParams[mn]) e.push(c);            // it GLOWS. This one is a window.
+      const p = matParams[mn];
+      if (!p) continue;                        // it does not glow. A door, not a window.
+      e.push(c);
+      // ON after dark? `nightLit` is 2^EV x (1 - turnOffAtNight), straight from the material.
+      // null means the material declares an emissive with no EV (a texture, a colour) — treat it
+      // as lit rather than silently dropping it, and let the count say so.
+      if (p.nightLit === null || p.nightLit > 0) l.push(c);
     }
-    apps[appName(appKeys[i], i)] = { g, e, m: mOf };
+    apps[appName(appKeys[i], i)] = { g, e, l, m: mOf };
   }
   // Does the choice of appearance actually change the glazed area? (It does on 222 meshes.)
   const areaOf = (list) => list.reduce((s, c) => s + chunks[c].area, 0);
@@ -454,9 +517,12 @@ for (const file of glbs) {
   const defA = apps[defName] || { g: [], e: [] };
   const defArea = areaOf(defA.g);
   const defEmis = areaOf(defA.e);
+  const defLit  = areaOf(defA.l || []);      // ON after dark. What the NIGHT bake consumes.
   if (Object.values(apps).some((a) => Math.abs(areaOf(a.g) - defArea) > 0.01)) stat.appVaries++;
   if (defEmis > 0) stat.withEmissive++;
+  if (defLit > 0) stat.withLit++;
   totalEmis += defEmis;
+  totalLit += defLit;
   totalNonEmis += defArea - defEmis;
 
   stat.withGlass++;
@@ -466,7 +532,8 @@ for (const file of glbs) {
 
   geom[depot.toLowerCase()] = {
     glassArea: +defArea.toFixed(4),      // ALL glass, default appearance. One-sided, m2.
-    emisArea: +defEmis.toFixed(4),       // …of which GLOWS. THIS is the window area.
+    emisArea: +defEmis.toFixed(4),       // …of which is an emissive WINDOW (lit or unlit).
+    litArea: +defLit.toFixed(4),         // …of which is ON AFTER DARK. The night bake uses this.
     panelArea: +panelArea.toFixed(4),    // what the old model lit — for the report only
     chunks,                              // chunk -> { area, raw, n, rects }
     apps,                                // appearance -> { g: glazed chunks, e: EMISSIVE chunks, m: chunk->material }
@@ -496,6 +563,8 @@ console.log(`  double-sided glass      ${stat.doubleSided}  (${pct(stat.doubleSi
 console.log('\n=== GLASS IS NOT A WINDOW — EMISSIVE IS');
 console.log(`  meshes with EMISSIVE glass ${stat.withEmissive}  (${pct(stat.withEmissive, stat.withGlass)} of glass-bearing)`);
 console.log(`  EMISSIVE area              ${(totalEmis / 1000).toFixed(1)}k m2   <- the windows. Light these.`);
+console.log(`  ...ON AFTER DARK           ${(totalLit / 1000).toFixed(1)}k m2   <- what the NIGHT bake lights (2^EV x (1 - turnOffAtNight) > 0)`);
+console.log(`  ...emissive but SWITCHED OFF ${((totalEmis - totalLit) / 1000).toFixed(1)}k m2   — the game darkens these. Lighting them is lighting a window it turned off.`);
 console.log(`  glass that does NOT glow   ${(totalNonEmis / 1000).toFixed(1)}k m2   (${pct(totalNonEmis, totalGlass)}) — doors, balustrades, shopfronts, canopies`);
 console.log('     ^ counting these as windows lights the wrong city. The material says which is which.');
 

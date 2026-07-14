@@ -38,7 +38,27 @@
 // the evidence; the return value is not.
 import * as Logger from 'Logger.wscript';
 
-const ARCH = /\\architecture\\|\\megabuilding\\/i;
+// ARCHITECTURE **AND PROXIES**.
+//
+// A proxy is the low-detail, whole-building stand-in the game streams from a distance. It lives at
+// `worlds\03_night_city\sectors\_external\proxy\<hash>\<name>.mesh` — no `architecture` in the
+// path — so the old regex threw every one of them away.
+//
+// That is not a corner case. Arasaka Waterfront has TWELVE identical towers: nine are built from
+// ~2,400 kit pieces, and THREE ship as a single GenericProxyMesh, because you cannot get close
+// enough to them for the difference to show. They are real buildings and they render DARK on our
+// map. City-wide, 22,984 placed proxy copies carry window materials and 7,016 are over 20 m tall
+// — Corpo Plaza towers, Japantown, Arasaka Waterfront.
+//
+// The proxy for `wat_nid_building_a_v38` declares materials `Windows_0/1/4/5` and a
+// 20 x 53 x 164 m bounding box. It IS the tower, windows and all.
+//
+// NOTE for the consumer, not for this script: most buildings ship with BOTH a detailed version
+// and a proxy, and the sector data contains both. Exporting a proxy's GLB is free; COUNTING it on
+// top of the detailed geometry would double every glazed building in Night City. The
+// proxy-vs-detail choice is a PLACEMENT-level, spatial decision and it is made downstream.
+// Exporting over-includes on purpose — same as the glass filter below.
+const ARCH = /\\architecture\\|\\megabuilding\\|\\proxy\\/i;
 // Root .mt templates that ARE glass. Applied to the RESOLVED template, never to a name.
 const GLASS_MT = /window_parallax_interior|window_interior_uv|glass_onesided|(^|\\)glass\.mt/i;
 // Material NAMES. Deliberately broad — a false positive is one wasted GLB; a false negative is
