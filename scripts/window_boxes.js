@@ -215,16 +215,27 @@ for (const a of readCsv('ncz_assets.csv')) {
 }
 
 /**
- * Which chunks does this instance's appearance actually glaze?
+ * Which chunks of this instance's appearance are WINDOWS?
+ *
+ * EMISSIVE ONES. Not "glass" — 43% of this city's glass area (40,300 m2) never lights up:
+ * `glass.mt` on doors, balustrades, shopfronts and the Corpo Plaza roundabout canopy. It is
+ * glass. It is not a window, and counting it as one lights the wrong city.
+ *
+ * The material says which is which — `EmissiveEV`, and window_geom.js records it per (appearance,
+ * chunk) because the SAME chunk can be an emissive window in one appearance and plain glass in
+ * another. `--allglass` restores the old behaviour for comparison.
+ *
  * An appearance the mesh does not define (or a blank `app`) falls back to the mesh's default —
  * which is what the engine does — and is counted.
  */
+const ALL_GLASS = process.argv.includes('--allglass');
 let appFallback = 0;
 function glazed(g, appId) {
   const name = APP_NAME[appId];
-  if (name && g.apps[name]) return g.apps[name];
-  if (name && name !== 'default' && name !== '' && name !== 'None') appFallback++;
-  return g.apps[Object.keys(g.apps)[0]] || [];
+  const a = (name && g.apps[name]) || null;
+  if (!a && name && name !== 'default' && name !== '' && name !== 'None') appFallback++;
+  const rec = a || g.apps[Object.keys(g.apps)[0]] || { g: [], e: [] };
+  return ALL_GLASS ? (rec.g || []) : (rec.e || []);
 }
 
 /**

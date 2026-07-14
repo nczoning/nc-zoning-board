@@ -59,6 +59,30 @@
  * wall, and the corrected number lands on its own face area. That is not a fitted constant —
  * it is the geometry agreeing with itself.
  *
+ * ─── GLASS IS NOT A WINDOW. EMISSIVE IS. ────────────────────────────────────
+ * 43% of the glass area we were counting DOES NOT GLOW — 40,300 m2 of it. `glass.mt` and
+ * `glass_onesided.mt` are doors, balustrades, shopfronts, railings, the Corpo Plaza roundabout
+ * canopy. They are glass. They are not windows, and lighting them lights the wrong city.
+ *
+ *   EMISSIVE   window_parallax_interior (EV 4) · window_corpo_plaza (EV 5) · parallax_windows
+ *              xx_fake_interior (EV 5) · window_blue · window_orange        53.4k m2   57%
+ *   NOT        Glass · glass · glass_1 · z_glass · xx_glass · glass_a       40.3k m2   43%
+ *
+ * So the classifier is EMISSIVE, and it is asked of the material, which states it outright.
+ * NOT "does it glow at night" — `AmountTurnOffAtNight` is a night MODIFIER (the fraction that
+ * go dark; lit = 1 - it), not the definition. A thing that glows, glows.
+ *
+ * AND NO PARAMETER ALLOW-LIST. Emissive is spelled differently on different templates
+ * (`EmissiveEV`, `EmissiveColor`, `EmissiveIntensity`, …), so match on the NAME —
+ * /emissive/i with a non-zero value — rather than on the handful this file happens to know.
+ * Listing the params you "know" you want is the same mistake as name-matching a material, one
+ * level up, and this pipeline has now made it three times.
+ *
+ * PER CHUNK, NOT PER MESH. One facade panel can carry an emissive window chunk AND a plain
+ * glass door chunk. Reading the emissive params off the mesh's FIRST glass material gives the
+ * door the window's glow, or the window the door's darkness. The geometry is per chunk; so is
+ * this.
+ *
  * ─── NO FALLBACK ─────────────────────────────────────────────────────────────
  * A mesh with no glass submesh emits NO windows and is COUNTED. It does not get a guessed
  * area. The export deliberately over-includes (a false positive costs one GLB on disk), so
@@ -84,6 +108,38 @@ const GLASS_MT = /(^|[\\/])(window_parallax_interior|window_interior_uv|glass|gl
 // 0.000 m; the concrete it is set into is 0.240 m. There is no ambiguous middle in practice —
 // this threshold sits in a gap, it does not cut through a distribution.
 const FLAT_M = 0.02;
+
+/**
+ * DOES THIS MATERIAL GLOW?
+ *
+ * Asked of the material's own parameters, by NAME — /emissive/i with a non-zero value — not
+ * against a list of the fields this file happens to know about. `EmissiveEV` is what the window
+ * templates use; other templates spell it differently, and an allow-list would silently miss
+ * them exactly the way a material-name regex silently missed `glass_windows`.
+ *
+ * Returns null when nothing emissive is set: that is a pane of glass, not a window.
+ */
+function emissiveOf(mat) {
+  if (!mat || !mat.Data) return null;
+  const out = {};
+  let glows = false;
+  for (const [k, v] of Object.entries(mat.Data)) {
+    if (!/emissive/i.test(k)) continue;
+    if (typeof v === 'number') { out[k] = v; if (v !== 0) glows = true; }
+    else if (v && typeof v === 'object' && 'Red' in v) {
+      out[k] = [v.Red, v.Green, v.Blue];
+      if (v.Red || v.Green || v.Blue) glows = true;
+    } else if (typeof v === 'string' && v) { out[k] = v; glows = true; }   // an emissive TEXTURE
+  }
+  if (!glows) return null;
+  // The night MODIFIERS. Not what makes it emissive — what happens to it after dark. Carried
+  // because the model needs them, and because the game states them and we should not invent them.
+  const d = mat.Data;
+  if (typeof d.AmountTurnOffAtNight === 'number') out.turnOffAtNight = d.AmountTurnOffAtNight;
+  if (d.TintColorAtNight) out.tintAtNight = [d.TintColorAtNight.Red, d.TintColorAtNight.Green, d.TintColorAtNight.Blue];
+  if (typeof d.LightsTempVariationAtNight === 'number') out.tempVarAtNight = d.LightsTempVariationAtNight;
+  return out;
+}
 
 // ── GLB: minimal reader ─────────────────────────────────────────────────────
 // WolvenKit's export is uncompressed float32 with indices (no Draco, no meshopt), verified on
@@ -275,11 +331,11 @@ console.log(`\n${glbs.length} exported .glb found under ${roots.map((r) => path.
 // carries its appearance id (`ncz_instances.csv` -> `app`), so the join downstream is exact.
 const geom = {};
 const stat = {
-  meshes: 0, withGlass: 0, noGlass: 0, noMaterialJson: 0, unreadable: 0,
+  meshes: 0, withGlass: 0, withEmissive: 0, noGlass: 0, noMaterialJson: 0, unreadable: 0,
   glassChunks: 0, panes: 0, aabbThick: 0, doubleSided: 0, appVaries: 0,
 };
 const conflicts = [];
-let totalGlass = 0, totalRaw = 0, totalPanel = 0;
+let totalGlass = 0, totalRaw = 0, totalPanel = 0, totalEmis = 0, totalNonEmis = 0;
 
 for (const file of glbs) {
   const matFile = file.replace(/\.glb$/i, '.Material.json');
@@ -368,27 +424,40 @@ for (const file of glbs) {
   const e = [0, 1, 2].map((d) => hi[d] - lo[d]).sort((a, b) => a - b);
   panelArea = e[1] * e[2];                   // what the OLD model lit. Reported, never consumed.
 
-  // ── which chunks does each appearance glaze? ──
+  // ── which chunks does each appearance glaze, and which of those GLOW? ──
+  //
+  // Both, because they are different questions and the answer differs. 43% of the glass area in
+  // this city never lights up: `glass.mt` on doors, balustrades, shopfronts and the Corpo Plaza
+  // roundabout canopy. Counting it as a window lights the wrong city.
+  //
+  // And it is per (appearance, chunk): the SAME chunk can be `window_parallax_interior` in one
+  // appearance and plain `glass` in another, so "does this mesh glow" is not a question that has
+  // one answer.
   const apps = {};
+  const matParams = {};                        // material name -> its emissive params (or null)
   for (let i = 0; i < appKeys.length; i++) {
     const list = mat.Appearances[appKeys[i]];
-    const glazed = Object.keys(chunks)
-      .map(Number)
-      .filter((c) => isGlassMat(list[c]))
-      .sort((a, b) => a - b);
-    apps[appName(appKeys[i], i)] = glazed;
+    const g = [], e = [], mOf = {};
+    for (const c of Object.keys(chunks).map(Number).sort((a, b) => a - b)) {
+      const mn = list[c];
+      if (!isGlassMat(mn)) continue;
+      g.push(c);
+      mOf[c] = mn;
+      if (!(mn in matParams)) matParams[mn] = emissiveOf(byName[mn]);
+      if (matParams[mn]) e.push(c);            // it GLOWS. This one is a window.
+    }
+    apps[appName(appKeys[i], i)] = { g, e, m: mOf };
   }
-  // Does the choice of appearance actually change the glazed area? (It does on 190 meshes.)
+  // Does the choice of appearance actually change the glazed area? (It does on 222 meshes.)
   const areaOf = (list) => list.reduce((s, c) => s + chunks[c].area, 0);
   const defName = appName(appKeys[0], 0);
-  const defArea = areaOf(apps[defName] || []);
-  if (Object.values(apps).some((l) => Math.abs(areaOf(l) - defArea) > 0.01)) stat.appVaries++;
-
-  // The night parameters the game itself uses. Per-material, and they differ:
-  // `window_parallax_interior` is EV 4 / 50% dark; `window_hil_corporate` is EV 5 / 20% dark.
-  // Emitted because they are right here and they are needed eventually. Not consumed yet.
-  const firstGlassMat = (mat.Appearances[appKeys[0]] || []).find(isGlassMat);
-  const d = (byName[firstGlassMat] || {}).Data || {};
+  const defA = apps[defName] || { g: [], e: [] };
+  const defArea = areaOf(defA.g);
+  const defEmis = areaOf(defA.e);
+  if (Object.values(apps).some((a) => Math.abs(areaOf(a.g) - defArea) > 0.01)) stat.appVaries++;
+  if (defEmis > 0) stat.withEmissive++;
+  totalEmis += defEmis;
+  totalNonEmis += defArea - defEmis;
 
   stat.withGlass++;
   totalGlass += defArea;
@@ -396,14 +465,12 @@ for (const file of glbs) {
   totalPanel += panelArea;
 
   geom[depot.toLowerCase()] = {
-    glassArea: +defArea.toFixed(4),      // default appearance. THE number, one-sided, m2.
+    glassArea: +defArea.toFixed(4),      // ALL glass, default appearance. One-sided, m2.
+    emisArea: +defEmis.toFixed(4),       // …of which GLOWS. THIS is the window area.
     panelArea: +panelArea.toFixed(4),    // what the old model lit — for the report only
     chunks,                              // chunk -> { area, raw, n, rects }
-    apps,                                // appearance name -> [glazed chunk indices]
-    mats: [...new Set(appKeys.flatMap((k) => mat.Appearances[k].filter(isGlassMat)))],
-    ev: d.EmissiveEV ?? null,
-    off: d.AmountTurnOffAtNight ?? null,
-    tint: d.TintColorAtNight ? [d.TintColorAtNight.Red, d.TintColorAtNight.Green, d.TintColorAtNight.Blue] : null,
+    apps,                                // appearance -> { g: glazed chunks, e: EMISSIVE chunks, m: chunk->material }
+    matParams,                           // material -> its emissive params, or null if it does not glow
   };
 }
 
@@ -426,6 +493,12 @@ console.log(`  appearance CHANGES area ${stat.appVaries}  (${pct(stat.appVaries,
 console.log('\n=== SHAPE — reported, NOT enforced (the heuristic does not generalise; see header)');
 console.log(`  AABB-thick glass        ${stat.aabbThick}  (${pct(stat.aabbThick, stat.glassChunks)}) — sloped/corner glazing; area still exact`);
 console.log(`  double-sided glass      ${stat.doubleSided}  (${pct(stat.doubleSided, stat.glassChunks)}) — back face dropped`);
+console.log('\n=== GLASS IS NOT A WINDOW — EMISSIVE IS');
+console.log(`  meshes with EMISSIVE glass ${stat.withEmissive}  (${pct(stat.withEmissive, stat.withGlass)} of glass-bearing)`);
+console.log(`  EMISSIVE area              ${(totalEmis / 1000).toFixed(1)}k m2   <- the windows. Light these.`);
+console.log(`  glass that does NOT glow   ${(totalNonEmis / 1000).toFixed(1)}k m2   (${pct(totalNonEmis, totalGlass)}) — doors, balustrades, shopfronts, canopies`);
+console.log('     ^ counting these as windows lights the wrong city. The material says which is which.');
+
 console.log('\n=== THE OVERCOUNT BEING KILLED');
 console.log(`  raw triangle area       ${(totalRaw / 1000).toFixed(1)}k m2   (both faces of every double-sided pane)`);
 console.log(`  ONE-SIDED glass area    ${(totalGlass / 1000).toFixed(1)}k m2   -> back faces were ${(totalRaw / totalGlass).toFixed(2)}x`);

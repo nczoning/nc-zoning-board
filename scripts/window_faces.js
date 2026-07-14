@@ -116,9 +116,14 @@ for (const a of readCsv('ncz_assets.csv')) {
   const g = GEOM[a.path.toLowerCase()];
   if (g) asset[a.id] = g;
 }
+// EMISSIVE chunks, not glass chunks. 43% of this city's glass area never lights up — doors,
+// balustrades, shopfronts, the Corpo Plaza roundabout canopy. The material states which is which
+// (`EmissiveEV`); window_geom.js records it per (appearance, chunk). --allglass to compare.
+const ALL_GLASS = process.argv.includes('--allglass');
 const glazed = (g, id) => {
   const n = APP[id];
-  return (n && g.apps[n]) ? g.apps[n] : (g.apps[Object.keys(g.apps)[0]] || []);
+  const rec = (n && g.apps[n]) || g.apps[Object.keys(g.apps)[0]] || { g: [], e: [] };
+  return ALL_GLASS ? (rec.g || []) : (rec.e || []);
 };
 
 // ── land every real window on a box FACE ────────────────────────────────────
