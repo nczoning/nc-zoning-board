@@ -4230,7 +4230,13 @@ const ThreeScene = (() => {
     // Everything downstream consumes only these two scalars.
     let pane, lit;
 
-    if (NCZ.WINDOW_MODEL === 'legacy') {
+    if (NCZ.WINDOW_MODEL === 'none') {
+      // AUDIT MODE (?winmodel=none). No procedural windows at all — the building stays dark and
+      // the ?windebug cloud is the only emitter. A dark tower now means NO DATA, full stop, with
+      // no fake grid painting over the answer.
+      pane = float(0);
+      lit = float(0);
+    } else if (NCZ.WINDOW_MODEL === 'legacy') {
       // Pre-rebuild look, kept ONLY for side-by-side A/B (?winmodel=legacy). Fixed square
       // panes, one flat lit fraction for the whole city, post-hoc floor/column coherence.
       // Delete once the measured model is signed off.

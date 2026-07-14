@@ -747,7 +747,16 @@ NCZ.WINDOW_PANE_ASPECT = 0.75;   // 3 ÷ 4
 NCZ.WINDOW_MODEL = "glass";
 // `panels` = Route A: windows drawn on the game's REAL facade panels at their exact world
 // transforms, with the box cloud's own window pass switched off. No facade-area denominator.
-NCZ.WINDOW_MODELS = ["glass", "legacy", "panels"];
+// `none` — NO PROCEDURAL WINDOWS AT ALL. Buildings render dark and the ?windebug cloud is the
+// ONLY thing emitting. This is an AUDIT mode, and it exists because the procedural windows were
+// actively lying to us: they paint white light across every building that clears the height gate,
+// so "does this tower have real window data?" and "did the old shader decide to light it?" become
+// the same picture. They are not the same question, and only one of them matters now that the
+// grid model is condemned (see wiki/decisions/windows-are-rects-not-a-lattice).
+//
+// With `none`, a dark tower means NO DATA. That is a clean read, and it is the only way to
+// confirm coverage before the rect model is wired up.
+NCZ.WINDOW_MODELS = ["glass", "legacy", "panels", "none"];
 
 // Resolve a building's glass share: hand-tuned override → the measured profile →
 // default. Mirrors signDensityFor's subId-then-districtId fallback exactly.
