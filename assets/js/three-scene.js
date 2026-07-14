@@ -3326,7 +3326,19 @@ const ThreeScene = (() => {
     const n = meta.count;
     const xyz = new Float32Array(buf, 0, n * 3);
     const why = new Uint8Array(buf, n * 12, n);
-    const showAll = q.get('windebug') === 'all';
+    const mode = q.get('windebug') || '';
+    const showAll = mode === 'all' || mode === 'xray';
+    // ?windebug=xray — draw THROUGH the buildings.
+    //
+    // With depth on, turning the buildings on makes the cloud disappear — because the real
+    // windows are INSIDE our boxes (2.12 m at the median). That is the honest picture and the
+    // default. But it means you cannot compare the real windows against the PROCEDURAL ones the
+    // shader paints on the box surface, because you can only ever see one of them at a time.
+    //
+    // xray drops the depth test so both are visible at once: the invented 24 x 18 m hash grid on
+    // the box, and the game's actual windows floating behind it. The offset between them IS the
+    // error, and it is the only view that shows it directly.
+    const xray = mode === 'xray';
     const size = Number(q.get('winptsize') ?? 3);
 
     // LANDED cyan · TOO DEEP red · OFF SIDE orange · NO BOX magenta · NO FACE yellow
@@ -3346,18 +3358,26 @@ const ThreeScene = (() => {
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
 
-    // depthTest STAYS ON. A red point that disappears inside a building IS interior glass — the
-    // occlusion is the answer, not an obstacle. Turning it off would hide the very distinction
-    // this view exists to make.
-    const mat = new THREE.PointsNodeMaterial({ size, sizeAttenuation: false, vertexColors: true });
+    // depthTest ON by default: a red point that disappears inside a building IS interior glass,
+    // and the occlusion is the answer rather than an obstacle. ?windebug=xray turns it off to
+    // compare the real windows against the procedural ones on the same wall (see above).
+    const mat = new THREE.PointsNodeMaterial({
+      size, sizeAttenuation: false, vertexColors: true,
+      depthTest: !xray,
+      depthWrite: !xray,
+      transparent: xray,
+    });
     const pts = new THREE.Points(geo, mat);
     pts.name = 'windowDebug';
     pts.frustumCulled = false;
-    pts.renderOrder = 4;
+    pts.renderOrder = xray ? 6 : 4;      // xray must draw after the buildings, not before
     scene.add(pts);
 
     const c = meta.counts;
-    console.log(`[NCZ] windebug (${set}): ${keep.length.toLocaleString()} of ${n.toLocaleString()} windows drawn`
+    console.log(`[NCZ] windebug (${set})${xray ? ' [XRAY — depth test off, draws through buildings]' : ''}: `
+      + `${keep.length.toLocaleString()} of ${n.toLocaleString()} windows drawn`
+      + `\n  modes: ?windebug (rejects only) · =all (+ the 1.2M that landed) · =xray (all, through walls)`
+      + `\n  see the boxes: ?boxdebug  (+&boxwire, &boxalpha=)`
       + `\n  cyan   LANDED   ${c.landed.toLocaleString()}${showAll ? '' : '  (hidden — use ?windebug=all)'}`
       + `\n  RED    TOO DEEP ${c.deep.toLocaleString()}  <- interior glass, or a hole in our box cloud?`
       + `\n  ORANGE OFF SIDE ${c.offside.toLocaleString()}`
@@ -3777,6 +3797,44 @@ const ThreeScene = (() => {
 
         group.add(mesh);
         buildingMeshes.push(mesh);
+
+        // ── ?boxdebug — SHOW THE BOXES ──────────────────────────────────────
+        // The `.dds` cloud is the game's MAP artwork, not its world: a coarse box wrapped around
+        // each building, authored to be looked at top-down on a menu screen. The real facades sit
+        // INSIDE those boxes — 2.12 m at the median, 9.71 m at p90 — which is why the real windows
+        // (?windebug) vanish the moment the buildings are drawn: the box occludes the very
+        // geometry it stands for.
+        //
+        // Drawn from the SAME matrixData the renderer uses, so this is the actual box, not a
+        // reconstruction of one. Pair it with ?windebug=xray and the whole problem is one image:
+        // the shells we shade, and the windows they are hiding.
+        //
+        //   ?boxdebug            translucent shells
+        //   ?boxdebug&boxwire    wireframe (clearer for seeing what is inside)
+        //   ?boxalpha=0.15       opacity
+        if (new URLSearchParams(location.search).has('boxdebug')) {
+          const dq = new URLSearchParams(location.search);
+          const dbgMat = new THREE.MeshBasicNodeMaterial({
+            transparent: true,
+            depthWrite: false,             // a cage over the city — never occlude what it contains
+            side: THREE.DoubleSide,        // seen from inside, because we WILL be inside one
+            wireframe: dq.has('boxwire'),
+          });
+          dbgMat.colorNode = vec3(0.25, 0.95, 1.0);
+          dbgMat.opacityNode = float(Number(dq.get('boxalpha') ?? 0.12));
+          const dbg = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), dbgMat, validCount);
+          const m4 = new THREE.Matrix4();
+          for (let i = 0; i < validCount; i++) {
+            m4.fromArray(matrixData, i * 16);
+            dbg.setMatrixAt(i, m4);
+          }
+          dbg.instanceMatrix.needsUpdate = true;
+          dbg.name = `boxDebug-${meta.name}`;
+          dbg.frustumCulled = false;
+          dbg.renderOrder = 3;
+          scene.add(dbg);
+        }
+
         // Over-stamp stencil=STENCIL_OCCLUDER so SeeThrough roads are blocked where buildings are visible
         mat.stencilWrite = true;
         mat.stencilRef   = NCZ.STENCIL_OCCLUDER;
