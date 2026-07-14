@@ -108,8 +108,20 @@ import * as Logger from 'Logger.wscript';
 // -1 = EVERY streaming level (the correct setting — a tower lives in level 4 or 6, a prop in
 // level 0; filtering to one level reads only objects of one SIZE). Set 0..6 to isolate one.
 const LOD         = -1;
-const MAX_SECTORS = 0;      // 0 = all (~15,119 across all levels). Set 50 to smoke-test.
+const MAX_SECTORS = 0;      // 0 = all (~19,880 now that quest + interior are in). 50 to smoke-test.
 const LOG_EVERY   = 250;
+// WHICH KINDS OF SECTOR TO READ. Night City has 23,691 and they are not all called `exterior_`:
+//
+//     exterior       15,119   the open city
+//     quest           2,356   world geometry that quests PLACE — and it was never read
+//     interior        2,402   building interiors
+//     always              3   persistent content
+//     navigation      3,811   navmesh. No meshes. Never in this list.
+//
+// The old filter was a regex that matched `exterior_X_Y_Z_L` and dropped everything else through
+// an unlogged `continue` — which is how three Arasaka Waterfront towers, and 84 buildings
+// city-wide, were absent from a dump whose own integrity ledger reported BALANCED.
+const SECTOR_KINDS = ['exterior', 'quest', 'always', 'interior'];
 // ==================================================
 //
 // NO PARAMETER ALLOW-LIST. Capture EVERY scalar/colour a material sets, and decide what
@@ -241,27 +253,93 @@ function prefabRef(o) {
 //
 // The Z index stays part of the sector tag (the city stacks), but the tag is now only a
 // label — positions come from the node transforms, which are exact at every level.
+// ── NOT EVERY SECTOR IS CALLED `exterior_` ──────────────────────────────────
+//
+// THE HOLE, and it was a regex on a FILENAME. Night City has 23,691 streaming sectors. This
+// filter matched `exterior_X_Y_Z_L` and dropped the rest through an unlogged `continue`:
+//
+//     exterior_        15,119   read
+//     navigation_       3,811   navmesh. No meshes. Correctly ignored.
+//     interior_         2,402   NEVER OPENED
+//     quest_            2,356   NEVER OPENED   <-- world geometry that quests place
+//     always_loaded_        3   NEVER OPENED   <-- persistent content, loaded everywhere
+//
+// It was found because the maintainer knew Arasaka Waterfront has TWELVE identical towers and
+// counted NINE on the map. Three buildings — `wat_nid_building_a_v38_004/_008/_010` — exist in
+// the prefab table with TWO placed pieces each against ~2,400 for each of their twins. Their
+// geometry is in none of the 15,119 sectors we read. City-wide the same signature appears on 84
+// buildings, 67 of them in Watson.
+//
+// NOTHING COULD HAVE CAUGHT THIS. The ledger balances; it balances over the sectors we chose to
+// open. An integrity check cannot see the population it was never given. The only witness was a
+// human who knew how many buildings should be there.
+//
+// So: read every sector that can hold geometry, and SAY OUT LOUD what is being skipped and why.
 const seenPath = {};
 const sectors = [];
-const byLevel = {};
+const byKind = {};
+const skippedKind = {};
 for (const f of wkit.GetArchiveFiles()) {
     const name = (typeof f === 'string') ? f : (f.FileName ?? f.Name);
     if (!name || !name.endsWith('.streamingsector')) continue;
     if (name.indexOf('03_night_city') === -1) continue;
-    const m = name.match(/exterior_(-?\d+)_(-?\d+)_(-?\d+)_(\d+)\.streamingsector$/);
-    if (!m) continue;
-    const lvl = parseInt(m[4], 10);
-    if (LOD >= 0 && lvl !== LOD) continue;   // LOD = -1 (the default now) means ALL LEVELS
     const key = name.toLowerCase();
     if (seenPath[key]) continue;
+
+    const leaf = name.split('\\').pop();
+    let kind = null, tag = null, lvl = -1;
+
+    let m = leaf.match(/^exterior_(-?\d+)_(-?\d+)_(-?\d+)_(\d+)\.streamingsector$/);
+    if (m) {
+        lvl = parseInt(m[4], 10);
+        kind = 'exterior';
+        tag = m[1] + '_' + m[2] + '_' + m[3] + '_L' + lvl;
+    } else if ((m = leaf.match(/^interior_(-?\d+)_(-?\d+)_(-?\d+)_(\d+)\.streamingsector$/))) {
+        lvl = parseInt(m[4], 10);
+        kind = 'interior';
+        tag = 'int_' + m[1] + '_' + m[2] + '_' + m[3] + '_L' + lvl;
+    } else if ((m = leaf.match(/^quest_([0-9a-f]+)\.streamingsector$/i))) {
+        // Quest sectors carry no grid coords — they are keyed by a quest hash, and their nodes
+        // carry world positions like any other. The tag is a LABEL; position never came from it.
+        kind = 'quest';
+        tag = 'q_' + m[1];
+    } else if ((m = leaf.match(/^always_loaded_(\d+)\.streamingsector$/))) {
+        kind = 'always';
+        tag = 'always_' + m[1];
+    } else if (/^navigation_/.test(leaf)) {
+        // Navmesh. Genuinely no meshes. Skipped ON PURPOSE, and counted so that "skipped" is a
+        // decision on the record rather than a filename that failed to match.
+        skippedKind.navigation = (skippedKind.navigation || 0) + 1;
+        seenPath[key] = 1;
+        continue;
+    } else {
+        skippedKind[leaf.split('_')[0] || '?'] = (skippedKind[leaf.split('_')[0] || '?'] || 0) + 1;
+        seenPath[key] = 1;
+        continue;
+    }
+
+    // LOD = -1 (the default) means ALL LEVELS. It only applies to grid sectors; quest and
+    // always-loaded sectors have no level and are always read.
+    if (LOD >= 0 && lvl >= 0 && lvl !== LOD) { seenPath[key] = 1; continue; }
+    if (SECTOR_KINDS.indexOf(kind) === -1) {
+        skippedKind[kind] = (skippedKind[kind] || 0) + 1;
+        seenPath[key] = 1;
+        continue;
+    }
+
     seenPath[key] = 1;
-    byLevel[lvl] = (byLevel[lvl] || 0) + 1;
-    sectors.push({ path: name, tag: m[1] + '_' + m[2] + '_' + m[3] + '_L' + lvl });
+    byKind[kind] = (byKind[kind] || 0) + 1;
+    sectors.push({ path: name, tag: tag, kind: kind });
 }
 const limit = MAX_SECTORS > 0 ? Math.min(MAX_SECTORS, sectors.length) : sectors.length;
-Logger.Info(`[ncz] ${sectors.length} exterior sectors (deduped); dumping ${limit}`);
-Logger.Info('[ncz] by streaming level: ' + Object.keys(byLevel).sort((a, b) => a - b)
-    .map((l) => `L${l}=${byLevel[l]}`).join('  '));
+Logger.Info(`[ncz] ${sectors.length} sectors to read (deduped); dumping ${limit}`);
+Logger.Info('[ncz] READING:  ' + Object.keys(byKind).sort()
+    .map((k) => `${k}=${byKind[k]}`).join('  '));
+// SAY WHAT YOU ARE NOT READING. A filename that quietly fails to match a regex is how three
+// buildings — and 2,356 quest sectors — went missing without a single warning.
+Logger.Warning('[ncz] SKIPPING: ' + (Object.keys(skippedKind).length
+    ? Object.keys(skippedKind).sort().map((k) => `${k}=${skippedKind[k]}`).join('  ')
+    : 'nothing'));
 
 // ---- PASS B: every placed node, raw -------------------------------------------
 const nodeRows = ['sector,type,asset,prefab,x,y,z,qi,qj,qk,qr,sx,sy,sz,bw,bh,bd,inst,app'];
@@ -316,6 +394,10 @@ const instRows = ['sector,src,type,asset,prefab,x,y,z,qi,qj,qk,qr,sx,sy,sz,app']
 
 const skipped = [];
 let done = 0, emitted = 0, instEmitted = 0, instMissing = 0, singleEmitted = 0, noPlace = 0, poolNodes = 0;
+// What the `!dp && !isLight` filter throws away — by node type, so the blind spot has a name and
+// a number instead of being invisible.
+let skippedNodes = 0;
+const skipType = {};
 
 // ---- CHUNKED FLUSH — or the process dies before it writes anything ------------
 //
@@ -392,7 +474,16 @@ for (let i = 0; i < limit; i++) {
         const dp = (d.mesh && d.mesh.DepotPath && d.mesh.DepotPath.$value)
                 || (d.material && d.material.DepotPath && d.material.DepotPath.$value) || '';
         const isLight = d.$type === 'worldStaticLightNode';
-        if (!dp && !isLight) continue;   // collision / AI / audio nodes carry nothing we need
+        // THE SECOND BLIND SPOT, and the ledger below CANNOT SEE IT.
+        //
+        // This `continue` drops every node with no direct mesh path — collision, acoustics, GI,
+        // navmesh, particles, and `worldEntityNode` (a thing placed as an ENTITY, whose geometry
+        // lives inside its .ent). It was uncounted and unlogged, so the ledger balanced
+        // `poolNodes + singleEmitted + noPlace` against `emitted` — a population defined AFTER
+        // this line. An integrity check that balances over the survivors is a check that cannot
+        // fail. Count what falls through, and print it, so "we skipped it" is a DECISION on the
+        // record instead of a filename that failed to match.
+        if (!dp && !isLight) { skipType[d.$type] = (skipType[d.$type] || 0) + 1; skippedNodes++; continue; }
 
         const o = byIndex[n];
         const p = o && o.Position, q = o && o.Orientation, sc = o && o.Scale, bb = o && o.Bounds;
@@ -495,6 +586,23 @@ const ledger = poolNodes + singleEmitted + noPlace;
 Logger.Info(`[ncz] PASS B: ${instEmitted} POOL COPIES from ${poolNodes} nodes, + ${singleEmitted} single placements = ${instEmitted + singleEmitted} PLACED COPIES`);
 Logger.Info(`[ncz] PASS B: ${noPlace} nodes with no transform at all` + (instMissing ? `, ${instMissing} COPIES MISSING their slice` : ', no copies missing'));
 Logger.Info(`[ncz] PASS B: LEDGER ${poolNodes} + ${singleEmitted} + ${noPlace} = ${ledger} vs ${emitted} nodes — ` + (ledger === emitted ? 'BALANCED' : `OFF BY ${emitted - ledger}, INVESTIGATE`));
+
+// AND THE POPULATION THE LEDGER CANNOT SEE.
+//
+// `emitted` counts the nodes that got past the `!dp && !isLight` filter, so the ledger balances
+// over the SURVIVORS — it can never fail, and it reported BALANCED while three Arasaka towers and
+// 2,356 whole quest sectors were missing. A check that cannot fail is not a check.
+//
+// So print the other side of the line. `worldEntityNode` is the one to watch: it is a thing
+// placed as an ENTITY, with its geometry inside the .ent rather than on the node. We still do not
+// resolve those — but now the number is on the record instead of in a blind spot.
+Logger.Warning(`[ncz] PASS B: ${skippedNodes} nodes SKIPPED before the ledger (no mesh path, not a light)`);
+const skipRows = Object.keys(skipType).sort((a, b) => skipType[b] - skipType[a]);
+for (let i = 0; i < Math.min(10, skipRows.length); i++) {
+    const t = skipRows[i];
+    const flag = (t === 'worldEntityNode') ? '   <-- GEOMETRY LIVES IN ITS .ent — NOT RESOLVED' : '';
+    Logger.Warning(`[ncz]     ${skipType[t]}  ${t}${flag}`);
+}
 
 // ---- PASS C: unique meshes -> the materials they reference ---------------------
 // Chunk-material NAMES, external .mi PATHS, and local-buffer BASE materials. Join these
