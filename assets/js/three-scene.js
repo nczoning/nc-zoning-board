@@ -3812,6 +3812,13 @@ const ThreeScene = (() => {
         //   ?boxdebug            translucent shells
         //   ?boxdebug&boxwire    wireframe (clearer for seeing what is inside)
         //   ?boxalpha=0.15       opacity
+        //   ?boxcolor=ff00ff     hex
+        //
+        // NEUTRAL GREY ON PURPOSE. The boxes are SCAFFOLDING; the window cloud is the DATA, and
+        // its colours (cyan landed, red too-deep, orange off-side, magenta no-box, yellow
+        // no-face) are the whole point of looking. A cyan box behind a cyan window hides exactly
+        // the thing the view exists to show. Give the structure no colour of its own and every
+        // colour on screen means something.
         if (new URLSearchParams(location.search).has('boxdebug')) {
           const dq = new URLSearchParams(location.search);
           const dbgMat = new THREE.MeshBasicNodeMaterial({
@@ -3820,8 +3827,10 @@ const ThreeScene = (() => {
             side: THREE.DoubleSide,        // seen from inside, because we WILL be inside one
             wireframe: dq.has('boxwire'),
           });
-          dbgMat.colorNode = vec3(0.25, 0.95, 1.0);
-          dbgMat.opacityNode = float(Number(dq.get('boxalpha') ?? 0.12));
+          const hex = dq.get('boxcolor');
+          const c = hex ? new THREE.Color(`#${hex.replace(/^#/, '')}`) : new THREE.Color(0.62, 0.66, 0.72);
+          dbgMat.colorNode = vec3(c.r, c.g, c.b);
+          dbgMat.opacityNode = float(Number(dq.get('boxalpha') ?? (dq.has('boxwire') ? 0.35 : 0.12)));
           const dbg = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), dbgMat, validCount);
           const m4 = new THREE.Matrix4();
           for (let i = 0; i < validCount; i++) {
