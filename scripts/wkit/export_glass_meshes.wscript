@@ -58,7 +58,24 @@ import * as Logger from 'Logger.wscript';
 // top of the detailed geometry would double every glazed building in Night City. The
 // proxy-vs-detail choice is a PLACEMENT-level, spatial decision and it is made downstream.
 // Exporting over-includes on purpose — same as the glass filter below.
-const ARCH = /\\architecture\\|\\megabuilding\\|\\proxy\\/i;
+//
+// AND `\proxy\` ON ITS OWN IS TOO BROAD — IT MATCHES CARS. Measured 2026-07-14: a bare
+// `\\proxy\\` alternation also matches `vehicles\appearances\standard\proxy\<car>\<car>.mesh`.
+// A windscreen is glass, so every vehicle proxy in the game sails through the glass test below
+// and gets exported — and its glass is then waiting to be counted as building windows.
+//
+// The building proxies live at exactly ONE place. Anchor to it, and say so:
+//     worlds\<world>\sectors\_external\proxy\<hash>\<name>.mesh
+// Same failure as every other one on this project: a regex on a PATH that quietly over-matches
+// and returns a plausible number. (world-asset-reference §12)
+const ARCH = /\\architecture\\|\\megabuilding\\|\\sectors\\_external\\proxy\\/i;
+// Belt and braces: whatever ARCH lets through, a vehicle is never a building.
+const NOT_A_BUILDING = /\\vehicles\\/i;
+// Don't re-export a mesh whose .glb is already on disk. The previous run left 2,257 valid GLBs
+// and re-exporting them is ~42% of this run's work for zero new data — and it is NOT free: a
+// mesh export uncooks its whole material stack (~5.5 mask-layer PNGs each) into the Depot.
+// Set false to force a full re-export (e.g. after a game patch).
+const SKIP_EXISTING = true;
 // Root .mt templates that ARE glass. Applied to the RESOLVED template, never to a name.
 const GLASS_MT = /window_parallax_interior|window_interior_uv|glass_onesided|(^|\\)glass\.mt/i;
 // Material NAMES. Deliberately broad — a false positive is one wasted GLB; a false negative is
@@ -109,11 +126,19 @@ function isGlassMesh(rc) {
 
 // ---- which meshes? -----------------------------------------------------------
 const meshes = [];
+let rejectedNotBuilding = 0;
 for (const f of wkit.GetArchiveFiles()) {
     const name = (typeof f === 'string') ? f : (f.FileName ?? f.Name);
-    if (name && name.endsWith('.mesh') && ARCH.test(name)) meshes.push(name);
+    if (!name || !name.endsWith('.mesh')) continue;
+    if (!ARCH.test(name)) continue;
+    // COUNT what you throw away. A bare `continue` is how 2,356 quest sectors and 803 cars both
+    // hid — the filter that drops them silently is indistinguishable from one that finds nothing.
+    if (NOT_A_BUILDING.test(name)) { rejectedNotBuilding++; continue; }
+    meshes.push(name);
 }
-Logger.Info(`[ncz] ${meshes.length} architecture meshes; resolving material chains…`);
+Logger.Info(`[ncz] ${meshes.length} architecture + building-proxy meshes`
+    + (rejectedNotBuilding ? `  (rejected ${rejectedNotBuilding} vehicle/3dmap meshes)` : '')
+    + '; resolving material chains…');
 
 const glass = [];
 let checked = 0;
@@ -128,33 +153,56 @@ if (glass.length < 1200) {
     Logger.Warning(`[ncz] ${glass.length} is LOW — ncz_assets.csv's resolved chain finds 1,232. Something is still missing. Do NOT assume the export is complete.`);
 }
 
+// ---- what actually needs exporting? -------------------------------------------
+// An export is NOT cheap: each mesh uncooks its whole material stack into the Depot (~5.5
+// mask-layer PNGs), and that — not the mesh — is where the time goes. Measured 2026-07-14:
+// 114 GLBs came with 624 PNGs, and the run was moving at 9 meshes/min against the ~100/min
+// this API manages when the materials are already in the Depot.
+//
+// So skip the ones already on disk. The GLB library is CUMULATIVE across runs.
+const todo = [];
+let already = 0;
+for (const p of glass) {
+    if (SKIP_EXISTING) {
+        let have = false;
+        try { have = wkit.FileExistsInRaw(p.replace(/\.mesh$/i, '.glb')); } catch { have = false; }
+        if (have) { already++; continue; }
+    }
+    todo.push(p);
+}
+Logger.Info(`[ncz] ${already} already exported (skipping); ${todo.length} to export`);
+if (!todo.length) {
+    Logger.Success('[ncz] nothing to do — the GLB library is already complete.');
+} else {
+
 // ---- extract into the project, then export ------------------------------------
 let added = 0, addFail = 0;
-for (let i = 0; i < glass.length; i++) {
-    if (i % 200 === 0) Logger.Info(`[ncz] extracting to project ${i}/${glass.length}…`);
-    try { wkit.Extract(glass[i]); added++; }
-    catch (e) { addFail++; if (addFail <= 3) Logger.Error(`[ncz] Extract failed: ${glass[i]} — ${e}`); }
+for (let i = 0; i < todo.length; i++) {
+    if (i % 200 === 0) Logger.Info(`[ncz] extracting to project ${i}/${todo.length}…`);
+    try { wkit.Extract(todo[i]); added++; }
+    catch (e) { addFail++; if (addFail <= 3) Logger.Error(`[ncz] Extract failed: ${todo[i]} — ${e}`); }
 }
-Logger.Info(`[ncz] extracted ${added}/${glass.length} into the project` + (addFail ? `, ${addFail} FAILED` : ''));
+Logger.Info(`[ncz] extracted ${added}/${todo.length} into the project` + (addFail ? `, ${addFail} FAILED` : ''));
 
-Logger.Info('[ncz] exporting to GLB…');
-try { wkit.ExportFiles(glass); }
+Logger.Info(`[ncz] exporting ${todo.length} meshes to GLB…`);
+try { wkit.ExportFiles(todo); }
 catch (e) { Logger.Error(`[ncz] ExportFiles threw: ${e}`); }
+}
 
-// ---- THE ONLY HONEST CHECK: DID THE FILE APPEAR? ------------------------------
-// Not the return value. Not "none failed". The log has lied about this twice.
-let wrote = 0;
-const missing = [];
-for (const p of glass) {
-    const glb = p.replace(/\.mesh$/i, '.glb');
-    let ok = false;
-    try { ok = wkit.FileExistsInRaw(glb); } catch { ok = false; }
-    if (ok) wrote++; else if (missing.length < 5) missing.push(glb);
-}
-if (wrote === glass.length) {
-    Logger.Success(`[ncz] VERIFIED ON DISK: ${wrote}/${glass.length} .glb files exist.`);
-} else {
-    Logger.Error(`[ncz] ONLY ${wrote}/${glass.length} .glb FILES EXIST — ${glass.length - wrote} MISSING.`);
-    for (const m of missing) Logger.Error(`[ncz]   missing: ${m}`);
-}
-Logger.Info('[ncz] then: node scripts/window_geom.js --bake');
+// ---- THIS SCRIPT CANNOT VERIFY ITS OWN EXPORT. SAY SO. -------------------------
+// `ExportFiles` is ASYNC. It returns before it has written anything, and a wscript cannot sleep.
+// The previous version ran `FileExistsInRaw` here and reported
+//     ONLY 798/2257 .glb FILES EXIST — 1459 MISSING
+// 0.9 seconds in. Nothing was wrong; the count settled at 2,268 twenty-five minutes later. Then
+// it did it AGAIN tonight (2257/5429). A check that fires before the thing it checks has happened
+// is not a check — it is a second bug wearing the first one's clothes.
+//
+// "Look at the artefact, not the return value" is necessary and NOT sufficient. An artefact
+// written asynchronously is a moving target, and a partial read of one is indistinguishable from
+// a failure. So: print the TARGET, and verify from OUTSIDE once the count has stopped moving.
+Logger.Success(`[ncz] EXPORT DISPATCHED: ${todo.length} meshes  (${already} already on disk; ${glass.length} in the glass set)`);
+Logger.Warning('[ncz] ExportFiles is ASYNCHRONOUS — it has almost certainly written NOTHING yet.');
+Logger.Warning('[ncz] Do NOT trust any file count until it has STOPPED CHANGING. Verify from outside:');
+Logger.Info('[ncz]   node scripts/wkit/check_export.js        <- polls until settled, then reports');
+Logger.Info(`[ncz]   expect ${glass.length} .glb under source\\raw when it is done`);
+Logger.Info('[ncz] then: node scripts/rebuild_night_data.js');
