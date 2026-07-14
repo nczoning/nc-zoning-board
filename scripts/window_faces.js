@@ -37,7 +37,8 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
-const { ARCH } = require('./glass_lib');
+const { BUILDING, PROXY } = require('./glass_lib');
+const { makeDetailGrid, makeProxyFilter } = require('./proxy_dedup');
 const { DISTRICT_META, decodeDistrict } = require('./tune_lib');
 
 const arg = (f, d) => (process.argv.includes(f) ? process.argv[process.argv.indexOf(f) + 1] : d);
@@ -110,9 +111,23 @@ for (let b = 0; b < B.length; b++) {
 
 const APP = {};
 for (const r of readCsv('ncz_appearances.csv')) APP[r.id] = r.appearance;
-const asset = {};
+// BUILDING, not ARCH. `architecture` is not in a proxy's path, and glass_lib exports BOTH regexes
+// — ARCH (architecture|megabuilding) and BUILDING (…|proxy) — with a comment on BUILDING saying to
+// use it. This file used ARCH.
+//
+// It cost the entire proxy export. 2,274 proxy meshes carrying 519,226 real window rects went into
+// window-geom.json, and EVERY ONE of them was dropped here: no entry in `asset`, so `place()`
+// returns on its first line and the placement contributes nothing. The bake came out at 885,291
+// windows — barely different from the 902,155 it had BEFORE the proxies existed — and that
+// "nothing much moved" is what a total loss looks like when the filter is silent.
+//
+// Arasaka Waterfront would still have had NINE towers.
+const asset = {}, assetPath = {}, assetFoot = {}, assetTop = {};
 for (const a of readCsv('ncz_assets.csv')) {
-  if (!a.path || !ARCH.test(a.path)) continue;
+  if (!a.path || !BUILDING.test(a.path)) continue;
+  assetPath[a.id] = a.path;
+  assetFoot[a.id] = Math.max(+a.bbx1 - +a.bbx0, +a.bby1 - +a.bby0) || 0;
+  assetTop[a.id] = (+a.bbz1) || 0;      // local top of the mesh bbox — the dedup's missing axis
   const g = GEOM[a.path.toLowerCase()];
   if (g) asset[a.id] = g;
 }
@@ -151,9 +166,18 @@ const REASON = { LANDED: 0, DEEP: 1, OFFSIDE: 2, NOBOX: 3, NONORMAL: 4 };
 const dbgXYZ = [];      // world position (THREE space, so the renderer can use it directly)
 const dbgWhy = [];
 
+// WHERE DID THE WINDOWS COME FROM? Split every count by proxy vs detail.
+// A total is not evidence: "windows went up 3%" is equally consistent with the proxies working
+// and with the proxies contributing almost nothing while something else drifted. The pipeline has
+// been fooled by an aggregate six times this week. Print the breakdown next to the total.
+const SRC = { kitPlace: 0, kitWin: 0, pxPlace: 0, pxWin: 0 };
+
 function place(assetId, px, py, pz, q, sx, sy, sz, appId) {
   const g = asset[assetId];
   if (!g) return;
+  const isPx = PROXY.test(assetPath[assetId] || '');
+  if (isPx) SRC.pxPlace++; else SRC.kitPlace++;
+  const w0 = W;
   sx = sx || 1; sy = sy || 1; sz = sz || 1;
 
   for (const c of glazed(g, appId)) {
@@ -224,6 +248,7 @@ function place(assetId, px, py, pz, q, sx, sy, sz, appId) {
       });
     }
   }
+  if (isPx) SRC.pxWin += W - w0; else SRC.kitWin += W - w0;
 }
 
 async function stream(file, onRow) {
@@ -260,7 +285,36 @@ function lattice(vals, tol) {
 }
 
 (async () => {
+  // ── PASS 1: WHERE IS THERE A REAL BUILDING? ────────────────────────────────
+  // Admitting proxies (above) is only half the job, and the other half is the half that BITES.
+  // MOST BUILDINGS SHIP WITH BOTH a detailed version and a proxy, and the sector data contains
+  // BOTH — `v38_005` is placed as 2,136 instanced meshes AND 72 proxy meshes. Counting them both
+  // gives every glazed building in Night City its windows TWICE: a 2x overcount wearing the
+  // costume of a fix.
+  //
+  // So use a proxy ONLY where no detailed geometry covers it, and decide that SPATIALLY — a
+  // per-building proxy shares its prefab with the detail, but an AGGREGATE proxy (`*_mproxy`, one
+  // mesh per block) does not, so a prefab test keeps it and drops it on top of a dozen real
+  // buildings. window_boxes.js has done this since the proxies landed; this file never did.
+  const detailGrid = makeDetailGrid();
+  const seen = (f, C) => {
+    const id = f[C.asset];
+    if (!asset[id]) return;                       // not glazed — says nothing about coverage
+    if (PROXY.test(assetPath[id] || '')) return;  // a proxy cannot vouch for itself
+    // ...and HOW HIGH it reaches. A podium vetoing a tower is the bug this axis exists to stop.
+    detailGrid.add(+f[C.x], +f[C.y], +f[C.z] + (assetTop[id] || 0) * (+f[C.sz] || 1));
+  };
+  await stream('ncz_instances.csv', seen);
+  await stream('ncz_nodes.csv', (f, C) => {
+    if (Math.max(1, +f[C.inst] || 1) > 1) return;
+    seen(f, C);
+  });
+  const proxyFilter = makeProxyFilter(detailGrid, assetPath, assetFoot, assetTop);
+  console.log(`\n  detail grid: ${detailGrid.size().toLocaleString()} cells of glazed architecture`);
+
+  // ── PASS 2: the windows ────────────────────────────────────────────────────
   await stream('ncz_instances.csv', (f, C) => {
+    if (!proxyFilter.keep(f[C.asset], +f[C.x], +f[C.y], +f[C.z], +f[C.sz])) return;
     place(f[C.asset], +f[C.x], +f[C.y], +f[C.z],
       [+f[C.qi], +f[C.qj], +f[C.qk], +f[C.qr]], +f[C.sx], +f[C.sy], +f[C.sz], f[C.app]);
   });
@@ -268,12 +322,21 @@ function lattice(vals, tol) {
     if (Math.max(1, +f[C.inst] || 1) > 1) return;
     const x = +f[C.x], y = +f[C.y];
     if (!Number.isFinite(x) || !Number.isFinite(y) || (x === 0 && y === 0)) return;
+    if (!proxyFilter.keep(f[C.asset], x, y, +f[C.z], +f[C.sz])) return;
     place(f[C.asset], x, y, +f[C.z],
       [+f[C.qi], +f[C.qj], +f[C.qk], +f[C.qr]], +f[C.sx], +f[C.sy], +f[C.sz], f[C.app]);
   });
+  proxyFilter.report();
 
   const pc = (a, q) => { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(s.length * q))]; };
   const pct = (n) => `${((n / W) * 100).toFixed(1)}%`;
+
+  console.log('\n=== 0. WHERE DID THE WINDOWS COME FROM?  (proxy vs detail)\n');
+  const glazedProxyAssets = Object.keys(asset).filter((id) => PROXY.test(assetPath[id] || '')).length;
+  console.log(`  GLAZED assets            ${Object.keys(asset).length.toLocaleString()}  (${glazedProxyAssets.toLocaleString()} of them proxies)`);
+  console.log(`  detail placements USED   ${SRC.kitPlace.toLocaleString().padStart(11)}  ->  ${SRC.kitWin.toLocaleString().padStart(9)} windows`);
+  console.log(`  PROXY placements USED    ${SRC.pxPlace.toLocaleString().padStart(11)}  ->  ${SRC.pxWin.toLocaleString().padStart(9)} windows`);
+  console.log('     ^ if this is ~0, the proxies are not reaching the bake and the whole export was wasted.');
 
   console.log('\n=== 1. DO THE GAME\'S WINDOWS LAND ON OUR FACES?  (margin ' + MARGIN + ' m)\n');
   console.log(`  real windows              ${W.toLocaleString()}`);

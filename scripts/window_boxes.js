@@ -205,7 +205,7 @@ const asset = {};
 // send the next person to fix an export that is not broken.
 const noGlass = {};                           // exported, genuinely renders no glass  — CORRECT
 const notExported = {};                       // no GLB on disk                        — A HOLE
-const assetPath = {}, assetFoot = {};
+const assetPath = {}, assetFoot = {}, assetTop = {};
 for (const a of readCsv('ncz_assets.csv')) {
   // BUILDING, not ARCH: a PROXY is a building too. Arasaka Waterfront's twelve towers are nine
   // kit-built ones and three proxies, and `architecture` is not in a proxy's path. But a proxy is
@@ -214,6 +214,7 @@ for (const a of readCsv('ncz_assets.csv')) {
   if (!BUILDING.test(a.path)) continue;
   assetPath[a.id] = a.path;
   assetFoot[a.id] = Math.max(+a.bbx1 - +a.bbx0, +a.bby1 - +a.bby0) || 0;
+  assetTop[a.id] = (+a.bbz1) || 0;      // local top of the mesh bbox — the dedup's missing axis
   const g = GEOM[(a.path || '').toLowerCase()];
   if (g) { asset[a.id] = g; continue; }
   if (!isGlassMat((a.mat_names || '').split('|'), (a.mat_paths || '').split('|'))) continue;
@@ -444,20 +445,21 @@ async function stream(file, onRow) {
     const id = f[C.asset];
     if (!asset[id]) return;                       // not glazed — it says nothing about coverage
     if (PROXY.test(assetPath[id] || '')) return;  // a proxy cannot vouch for itself
-    detailGrid.add(+f[C.x], +f[C.y]);
+    // ...and HOW HIGH it reaches. A 20 m podium must not veto the 150 m tower standing on it.
+    detailGrid.add(+f[C.x], +f[C.y], +f[C.z] + (assetTop[id] || 0) * (+f[C.sz] || 1));
   };
   await stream('ncz_instances.csv', seen);
   await stream('ncz_nodes.csv', (f, C) => {
     if (Math.max(1, +f[C.inst] || 1) > 1) return;
     seen(f, C);
   });
-  const proxyFilter = makeProxyFilter(detailGrid, assetPath, assetFoot);
+  const proxyFilter = makeProxyFilter(detailGrid, assetPath, assetFoot, assetTop);
   console.log(`  detail grid: ${detailGrid.size().toLocaleString()} cells of glazed architecture
 `);
 
   // ── PASS 2: the windows ───────────────────────────────────────────────────
   await stream('ncz_instances.csv', (f, C) => {
-    if (!proxyFilter.keep(f[C.asset], +f[C.x], +f[C.y])) return;
+    if (!proxyFilter.keep(f[C.asset], +f[C.x], +f[C.y], +f[C.z], +f[C.sz])) return;
     pane(f[C.asset], +f[C.x], +f[C.y], +f[C.z],
       [+f[C.qi], +f[C.qj], +f[C.qk], +f[C.qr]], +f[C.sx], +f[C.sy], +f[C.sz], f[C.app]);
   });
@@ -466,7 +468,7 @@ async function stream(file, onRow) {
     if (Math.max(1, +f[C.inst] || 1) > 1) return;
     const x = +f[C.x], y = +f[C.y];
     if (!Number.isFinite(x) || !Number.isFinite(y) || (x === 0 && y === 0)) return;
-    if (!proxyFilter.keep(f[C.asset], x, y)) return;
+    if (!proxyFilter.keep(f[C.asset], x, y, +f[C.z], +f[C.sz])) return;
     pane(f[C.asset], x, y, +f[C.z],
       [+f[C.qi], +f[C.qj], +f[C.qk], +f[C.qr]], +f[C.sx], +f[C.sy], +f[C.sz], f[C.app]);
   });
