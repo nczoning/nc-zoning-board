@@ -303,15 +303,21 @@ NCZ.fetchLocationsFromApi = async function () {
 
   let rawLocations;
   let freshEtag = null; // set only on a fresh 200 we should cache
+  // The recency window, read straight off the response envelope. Cached with the
+  // data so the 304 path keeps it; null when an older API omits it (the caller
+  // falls back to NCZ.RECENTLY_UPDATED_DAYS).
+  let recentlyUpdatedDays = null;
   if (res.status === 304 && Array.isArray(cached?.data)) {
     console.log(`Data API: 304 Not Modified — reusing ${cached.data.length} cached locations`);
     rawLocations = cached.data;
+    recentlyUpdatedDays = cached.recentlyUpdatedDays ?? null;
   } else if (res.ok) {
     const envelope = await res.json();
     rawLocations = envelope?.data;
     if (!Array.isArray(rawLocations)) {
       throw new Error("Data API: malformed payload (envelope.data is not an array)");
     }
+    recentlyUpdatedDays = envelope?.recently_updated_days ?? null;
     freshEtag = res.headers.get("ETag");
     console.log(`Data API: loaded ${rawLocations.length} locations (dataset ${String(envelope.dataset_version).slice(0, 8)})`);
   } else {
@@ -330,7 +336,7 @@ NCZ.fetchLocationsFromApi = async function () {
 
   if (freshEtag !== null) {
     try {
-      localStorage.setItem(NCZ.API_LOCATIONS_CACHE_KEY, JSON.stringify({ etag: freshEtag, data: rawLocations }));
+      localStorage.setItem(NCZ.API_LOCATIONS_CACHE_KEY, JSON.stringify({ etag: freshEtag, data: rawLocations, recentlyUpdatedDays }));
     } catch {
       /* localStorage quota — fine, we just won't get a 304 next load */
     }
@@ -358,7 +364,7 @@ NCZ.fetchLocationsFromApi = async function () {
     };
   });
 
-  return { mods, nexusThumbs };
+  return { mods, nexusThumbs, recentlyUpdatedDays };
 };
 
 // Legacy client-side data path (pre-B7): load mods.json + tags.json +

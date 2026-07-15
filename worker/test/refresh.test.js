@@ -91,12 +91,14 @@ test('first run writes the full dataset (changed=true)', async () => {
   const r = await runRefresh(env, fakeFetch());
   assert.equal(r.changed, true);
   assert.ok(r.version);
-  const slim = await env.DATASET.get(KEYS.slim, 'json');
-  assert.equal(slim.length, 2); // 1 manual + 1 auto (777 excluded)
-  assert.ok(slim.every((l) => l.district));
+  const full = await env.DATASET.get(KEYS.full, 'json');
+  const locs = Object.values(full);
+  assert.equal(locs.length, 2); // 1 manual + 1 auto (777 excluded)
+  assert.ok(locs.every((l) => l.district));
+  assert.ok(locs.every((l) => typeof l.recently_updated === 'boolean'));
   const meta = await env.DATASET.get(KEYS.meta, 'json');
   assert.equal(meta.discovery_stale, false);
-  assert.equal(meta.counts.total, 2);
+  assert.ok(!('counts' in meta)); // aggregates removed — consumers derive their own
   assert.equal(meta.dataset_version, r.version);
 });
 
@@ -125,14 +127,14 @@ test('Nexus failure keeps last-known-good and flags stale + alerts Discord', asy
     NCZ_ALERTS_DISCORD_WEBHOOK_URL: 'https://discord/webhook',
   };
   await runRefresh(env, fakeFetch()); // seed good data
-  const goodSlim = await env.DATASET.get(KEYS.slim, 'json');
+  const goodFull = await env.DATASET.get(KEYS.full, 'json');
 
   const discordSink = [];
   const r = await runRefresh(env, fakeFetch({ failNexus: true, discordSink }));
   assert.equal(r.stale, true);
   assert.match(r.error, /503/);
   // Dataset preserved (not wiped).
-  assert.deepEqual(await env.DATASET.get(KEYS.slim, 'json'), goodSlim);
+  assert.deepEqual(await env.DATASET.get(KEYS.full, 'json'), goodFull);
   const meta = await env.DATASET.get(KEYS.meta, 'json');
   assert.equal(meta.discovery_stale, true);
   assert.match(meta.last_error, /503/);
@@ -145,7 +147,7 @@ test('failure with no prior dataset returns stale with null version, no crash', 
   const r = await runRefresh(env, fakeFetch({ failMods: true }));
   assert.equal(r.stale, true);
   assert.equal(r.version, null);
-  assert.equal(await env.DATASET.get(KEYS.slim, 'json'), null);
+  assert.equal(await env.DATASET.get(KEYS.full, 'json'), null);
 });
 
 test('recovery after a stale cycle rewrites and clears the stale flag', async () => {
