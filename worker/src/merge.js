@@ -17,6 +17,7 @@
 
 import { parseNcZoningBlock } from './parse.js';
 import { assignDistrict } from './districts.js';
+import { RECENTLY_UPDATED_DAYS } from './config.js';
 
 export const DESCRIPTION_MAX_LENGTH = 500;
 
@@ -31,9 +32,12 @@ export const DESCRIPTION_MAX_LENGTH = 500;
  *   mods, keyed by numeric nexus_id ({pictureUrl, thumbnailUrl, updatedAt}).
  *   Covers manual entries not tagged NCZoning (the tagged query only backfills
  *   the tagged ones). Optional so existing callers/tests don't break.
- * @returns {{locations: Array, full: Object<string, object>, meta: object}}
+ * @param {number} [input.nowMs] wall-clock (ms) the recently_updated bool is
+ *   computed against. refresh.js passes the cron tick's clock; defaults to
+ *   Date.now() so other callers still work. Tests pass a fixed value.
+ * @returns {{full: Object<string, object>, meta: object}}
  */
-export function buildDataset({ manualMods, tagsDict, excluded, nexusNodes, districts, manualThumbs = {} }) {
+export function buildDataset({ manualMods, tagsDict, excluded, nexusNodes, districts, manualThumbs = {}, nowMs = Date.now() }) {
   const validTagNames = new Set(Object.keys(tagsDict));
   const excludedIds = new Set(Object.keys(excluded || {}));
 
@@ -116,16 +120,25 @@ export function buildDataset({ manualMods, tagsDict, excluded, nexusNodes, distr
     };
   }
 
-  const perDistrict = {};
-  const locations = [];
+  // One representation: the full record, keyed by id (the by-id endpoint reads
+  // full[id]; the list endpoint serves Object.values(full), which keeps the
+  // alphabetical order of `all`). No separate slim array — consumers derive any
+  // aggregate (counts, category breakdown) by grouping these records locally.
+  const cutoffMs = nowMs - RECENTLY_UPDATED_DAYS * 86400000;
   const full = {};
 
   for (const entry of all) {
     const { district, subdistrict } = assignDistrict(entry.coordinates, districts);
-    const key = district || 'Outside mapped districts';
-    perDistrict[key] = (perDistrict[key] || 0) + 1;
+    const thumbs = resolveThumbs(entry);
+    // Server-computed polyfill for the clockless in-game consumer. Content ×
+    // wall-clock, so it must ride the periodically-rehashed content (refresh.js
+    // recomputes it every cron tick) — never materialize-once. NaN (bad/absent
+    // date) → false.
+    const recently_updated = thumbs.updated_at
+      ? Date.parse(thumbs.updated_at) > cutoffMs
+      : false;
 
-    locations.push({
+    full[entry.id] = {
       id: entry.id,
       name: entry.name,
       nexus_id: String(entry.nexus_id),
@@ -137,28 +150,17 @@ export function buildDataset({ manualMods, tagsDict, excluded, nexusNodes, distr
       source: entry.source,
       district,
       subdistrict,
-    });
-
-    full[entry.id] = {
-      ...locations[locations.length - 1],
+      recently_updated,
       description: entry.description ?? '',
       ...(entry.credits ? { credits: entry.credits } : {}),
-      ...resolveThumbs(entry),
+      ...thumbs,
     };
   }
 
   return {
-    locations,
     full,
-    meta: {
-      counts: {
-        manual: manualMods.length,
-        auto: autoEntries.length,
-        total: all.length,
-        per_district: perDistrict,
-      },
-      skipped,
-      nexus_thumbs: nexusThumbs,
-    },
+    // skipped = tagged mods with no valid block, surfaced on /v1/meta for the
+    // auto-discovery monitor. No aggregate counts: consumers derive their own.
+    meta: { skipped, nexus_thumbs: nexusThumbs },
   };
 }

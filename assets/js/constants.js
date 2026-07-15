@@ -145,6 +145,11 @@ NCZ.CET_UNITS_PER_METER = 1;
 // LocalStorage cache keys & TTLs
 NCZ.THEME_PREFERENCE_KEY = "nc_theme_id";
 NCZ.SHOWCASE_OPTIONS_KEY = "nc_showcase_options";
+// Fallback recency window (days). The API owns this rule — it computes each
+// mod's `recently_updated` bool and publishes the window as
+// `recently_updated_days` on the response envelope, which the app adopts into
+// NCZ.recentlyUpdatedDays. This constant is only used when the API is
+// unavailable (client-side fallback path) or omits the field.
 NCZ.RECENTLY_UPDATED_DAYS = 7;
 NCZ.UPDATED_LABEL = "RECENTLY UPDATED";
 NCZ.THUMB_CACHE_KEY = "nc_nexus_thumbs";
