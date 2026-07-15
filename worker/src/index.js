@@ -17,6 +17,7 @@
 import { runRefresh } from './refresh.js';
 import { KEYS } from './store.js';
 import { docsPage, spec } from './docs.js';
+import { RECENTLY_UPDATED_DAYS } from './config.js';
 
 const SCHEMA_VERSION = 1;
 
@@ -30,12 +31,18 @@ const CORS_HEADERS = {
 // stale-while-revalidate window so a client never blocks on a refresh.
 const DATA_CACHE = 'public, max-age=300, stale-while-revalidate=3600';
 
-/** Wrap payload data in the versioned envelope (version/time from meta). */
+/**
+ * Wrap payload data in the versioned envelope (version/time from meta).
+ * recently_updated_days publishes the recency window so clock-having consumers
+ * (and the website's tooltip text) read the rule rather than hardcoding it; the
+ * clockless in-game consumer instead reads each record's recently_updated bool.
+ */
 function envelope(data, meta) {
   return {
     schema: SCHEMA_VERSION,
     generated_at: meta?.generated_at ?? null,
     dataset_version: meta?.dataset_version ?? null,
+    recently_updated_days: RECENTLY_UPDATED_DAYS,
     data,
   };
 }
@@ -69,14 +76,13 @@ function notReady() {
  * receives the parsed meta and returns the response `data`, or `undefined`
  * to signal a 404 (e.g. an unknown location id).
  */
-async function serveDataset(request, env, build, etagSuffix = '') {
+async function serveDataset(request, env, build) {
   const meta = await env.DATASET.get(KEYS.meta, 'json');
   if (!meta) return notReady();
 
-  // The ETag is the dataset content hash. Representations that share a hash
-  // but differ in body (slim vs ?full=1) must NOT share an ETag, or a client
-  // caching one and requesting the other would get a wrong 304. Vary it.
-  const etag = `"${meta.dataset_version}${etagSuffix}"`;
+  // The ETag is the dataset content hash. There is a single location
+  // representation now, so every route derives its ETag from the same hash.
+  const etag = `"${meta.dataset_version}"`;
   if (request.headers.get('If-None-Match') === etag) {
     return new Response(null, {
       status: 304,
@@ -101,26 +107,15 @@ const routes = {
   'GET /v1/health': (request, env) =>
     json(envelope({ status: 'ok', version: env.API_VERSION }, null)),
 
-  // Slim by default: the lean list, kept RedData-mappable for the in-game
-  // parser. `?full=1` returns the full entries as an array — description/credits
-  // + image URLs — in one request. Both current consumers (the website and the
-  // in-game NCZoningCore mod) fetch ?full=1; slim stays for any consumer that
-  // only needs the minimal shape.
-  'GET /v1/locations': (request, env) => {
-    const url = new URL(request.url);
-    if (url.searchParams.get('full') === '1') {
-      return serveDataset(
-        request,
-        env,
-        async (e) => {
-          const full = await e.DATASET.get(KEYS.full, 'json');
-          return full ? Object.values(full) : undefined;
-        },
-        '-full',
-      );
-    }
-    return serveDataset(request, env, (e) => e.DATASET.get(KEYS.slim, 'json'));
-  },
+  // One representation: the full records as an array — every field the DTO
+  // consumer needs, RedData-mappable. `?full=1` is accepted as a no-op alias so
+  // existing consumers (the website and the in-game NCZoningCore mod, which both
+  // request it) keep working; there is no leaner shape to opt out to.
+  'GET /v1/locations': (request, env) =>
+    serveDataset(request, env, async (e) => {
+      const full = await e.DATASET.get(KEYS.full, 'json');
+      return full ? Object.values(full) : undefined;
+    }),
 
   'GET /v1/districts': (request, env) =>
     serveDataset(request, env, (e) => e.DATASET.get(KEYS.districts, 'json')),
@@ -128,9 +123,10 @@ const routes = {
   'GET /v1/tags': (request, env) =>
     serveDataset(request, env, (e) => e.DATASET.get(KEYS.tags, 'json')),
 
+  // Operational metadata only — health flags the monitors read. No aggregate
+  // counts: consumers derive those from the per-location records.
   'GET /v1/meta': (request, env) =>
     serveDataset(request, env, (e, meta) => ({
-      counts: meta.counts,
       discovery_stale: meta.discovery_stale ?? false,
       skipped: meta.skipped ?? [],
     })),

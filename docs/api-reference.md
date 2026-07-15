@@ -20,12 +20,19 @@ Every response is wrapped:
   "schema": 1,
   "generated_at": "2026-07-05T00:00:00.000Z",
   "dataset_version": "87cc60cf7332…",
+  "recently_updated_days": 7,
   "data": <route-specific>
 }
 ```
 
 `dataset_version` is a content hash of the whole dataset. It's also the
 `ETag`, so it's how you detect changes (see [Caching](#caching)).
+
+`recently_updated_days` is the recency window in days: a location's
+`recently_updated` bool is `true` when its Nexus update falls within this many
+days. It's published so consumers (and UI text) read the rule instead of
+hardcoding it — though a clockless in-game consumer doesn't need it: it just
+reads each record's `recently_updated` bool directly.
 
 ## Contract rules (why the JSON looks the way it does)
 
@@ -52,14 +59,19 @@ parser:
 | Route | Returns |
 | --- | --- |
 | `GET /v1/health` | `{ status, version }` (uncached) |
-| `GET /v1/locations` | all locations, slim |
-| `GET /v1/locations?full=1` | all locations, full (adds `description`, `credits`, image URLs) — one request for everything |
-| `GET /v1/locations/{id}` | one full entry (adds `description`, `credits`, image URLs), or 404 |
+| `GET /v1/locations` | all locations (full records) as an array |
+| `GET /v1/locations?full=1` | identical to `/v1/locations` — `full=1` is a no-op alias kept for older consumers |
+| `GET /v1/locations/{id}` | one location record, or 404 |
 | `GET /v1/districts` | district/subdistrict hierarchy (flat boundaries + centroids) |
 | `GET /v1/tags` | tag id → description |
-| `GET /v1/meta` | `{ counts, discovery_stale, skipped }` |
+| `GET /v1/meta` | `{ discovery_stale, skipped }` (operational health flags) |
 
-A location (slim):
+There is a **single location representation** — every record carries all fields.
+Consumers derive any aggregate (per-district counts, category breakdown, recency
+counts) by grouping these records locally; the API does not ship precomputed
+aggregates.
+
+A location record:
 
 ```json
 {
@@ -73,17 +85,22 @@ A location (slim):
   "authors": ["SomeModder"],
   "source": "auto",
   "district": "City Center",
-  "subdistrict": "Corpo Plaza"
+  "subdistrict": "Corpo Plaza",
+  "recently_updated": true,
+  "description": "…",
+  "credits": "Optional team name",
+  "thumbnail_url": "https://…",
+  "picture_url": "https://…",
+  "updated_at": "2026-07-02T12:00:00.000Z"
 }
 ```
 
-Full entries (`/v1/locations/{id}` or the whole list via `/v1/locations?full=1`)
-add `description`, `credits` (if present), and the Nexus image fields
-`thumbnail_url` / `picture_url` / `updated_at` (each `null` when unknown — e.g.
-WIP/Dummy entries). Images live on the full entry only; the slim list stays
-lean for the in-game RedData consumer. The `?full=1` list carries its own ETag
-(the dataset version suffixed `-full`), so caching it never collides with the
-slim list.
+- `recently_updated` is server-computed: `true` when `updated_at` is within
+  `recently_updated_days` (on the envelope). It's the answer a clockless in-game
+  consumer can't compute for itself, so the server provides it.
+- `credits` appears only when set; `thumbnail_url` / `picture_url` / `updated_at`
+  are `null` when unknown (e.g. WIP/Dummy entries with no Nexus page, which are
+  also never `recently_updated`).
 
 ## Caching
 
@@ -119,6 +136,7 @@ public class NCZLocation {
   let category: String;
   let district: String;
   let subdistrict: String;
+  let recently_updated: Bool;      // server-computed; no client clock needed
 }
 
 public class NCZExample extends ScriptableSystem {
@@ -153,8 +171,12 @@ re-downloading unchanged data.
 ## Notes
 
 - The API never talks to Nexus on your behalf at request time — a cron
-  rebuilds the dataset every 15 minutes and serves it from cache, so you're
+  rebuilds the dataset every 5 minutes and serves it from cache, so you're
   shielded from Nexus API hiccups. If a refresh fails, `meta.discovery_stale`
   is `true` and the last-known-good data is served.
 - `meta.skipped` lists mods tagged `NCZoning` whose metadata block didn't
   parse — useful if you're a mod author debugging why yours isn't appearing.
+- `recently_updated` rides the content hash: because it depends on the clock,
+  a location crossing the `recently_updated_days` boundary changes
+  `dataset_version` (and the `ETag`) even when nothing on Nexus changed, so a
+  conditional GET correctly sees the flip rather than a stale `304`.
