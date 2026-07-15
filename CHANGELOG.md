@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-07-16
+
 ### Changed
 
 - **Data API now carries per-location records only.** `/v1/locations` is a single representation — the slim/full split is gone (`?full=1` is a no-op alias) — and `/v1/meta` no longer ships aggregate `counts`. Consumers derive counts by grouping records.
