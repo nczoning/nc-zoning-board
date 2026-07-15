@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- District info panel no longer undercounts: locations outside every district/subdistrict polygon now fall back to Badlands (matching the API), instead of being dropped from all stats. Fixes Badlands count (41 → 44) and the `% of all locations` denominator (292 → 295). ([#823](https://github.com/spuddeh/nc-zoning-board/issues/823))
+
 ## [1.3.0] - 2026-07-09
 
 ### Design

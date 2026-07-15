@@ -30,6 +30,13 @@ NCZ.DistrictInfo = (() => {
   let _stats = { districts: {}, subs: {}, total: 0 };
   let _ready = false;
   let _pendingMods = null;        // setMods() called before init() finished
+  let _defaultDistrict = null;    // the game's catch-all district (Badlands)
+
+  // The game's default district: anywhere outside every district polygon is
+  // Badlands (it has no polygon of its own — the parent is the catch-all).
+  // Mirrors DEFAULT_DISTRICT_ID in worker/src/districts.js assignDistrict()
+  // so the panel's stats and the API's `district` field can never disagree.
+  const DEFAULT_DISTRICT_ID = "badlands";
 
   // Shoelace area (absolute) — smallest matching polygon wins, so a mod inside
   // both a subdistrict and its parent district is attributed to the subdistrict.
@@ -93,6 +100,7 @@ NCZ.DistrictInfo = (() => {
           _subMeta[s.id] = { name: s.name, districtId: d.id, color };
         }
       }
+      _defaultDistrict = _districts.find(d => d.id === DEFAULT_DISTRICT_ID) || null;
       _ready = true;
       if (_pendingMods) { setMods(_pendingMods); _pendingMods = null; }
     } catch (err) {
@@ -111,8 +119,12 @@ NCZ.DistrictInfo = (() => {
     for (const m of mods || []) {
       const c = m.coordinates;
       if (!c || c.length < 2) continue;
-      const area = resolveArea([c[0], c[1]]);
-      if (!area) continue; // outside every district (e.g. open ocean) — skip
+      // Outside every polygon → the game's default district (Badlands), matching
+      // the API's assignDistrict(). Skipping these dropped them from every
+      // district's stats AND from _stats.total, so shares were computed against
+      // a denominator that was too small. See issue #823.
+      const area = resolveArea([c[0], c[1]]) || (_defaultDistrict && { dist: _defaultDistrict, sub: null });
+      if (!area) continue; // no default district at all (shouldn't happen with real data)
       const { dist, sub } = area;
 
       const catKey = (m.category in emptyBucket().cat) ? m.category : "other";
