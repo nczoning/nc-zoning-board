@@ -14,9 +14,9 @@ Tags are used to describe the aesthetic, function, or intended audience of a loc
 | `entropism` | The look of poverty that derives from humans grappling with and struggling against technology and its unforgiving advance. |
 | `house` | A standalone player dwelling or safehouse structure. |
 | `infrastructure` | Roads, bridges, parking structures, and public works. |
-| `kitsch` | Flashy, bold and usually cheap — the look of a long lost golden age. |
+| `kitsch` | Flashy, bold and usually cheap: the look of a long lost golden age. |
 | `neokitsch` | Synonymous with luxury and infinite wealth. |
-| `neomilitarism` | Cold, sharp, and modern — making everyone look ready for combat. |
+| `neomilitarism` | Cold, sharp, and modern: making everyone look ready for combat. |
 | `nomad` | Off-the-grid, scrapyard, desert, or vehicular-based habitats. |
 | `photos` | Scenic or atmospheric locations well-suited for virtual photography. |
 | `quest` | A location closely tied to custom gigs, missions, or storylines. |
@@ -34,22 +34,22 @@ Synthetic tags are applied automatically by the map system. They are **not** in 
 | Tag | Applied by | Description |
 | --- | --- | --- |
 | `nczoning` | Auto-discovery (`fetchNexusTaggedMods`) | Applied to every mod sourced automatically from Nexus Mods. Appears as a filter tag and as a badge on the popup and sidebar entry. |
-| `updated` | `app.js` filter setup | A virtual filter that surfaces any mod whose Nexus `updatedAt` timestamp falls within `NCZ.RECENTLY_UPDATED_DAYS` days. Not stored on the mod object — evaluated live by `isRecentlyUpdated()`. |
+| `updated` | `app.js` filter setup | A virtual filter that surfaces any mod whose Nexus `updatedAt` timestamp falls within `NCZ.RECENTLY_UPDATED_DAYS` days. Not stored on the mod object, evaluated live by `isRecentlyUpdated()`. |
 
 ---
 
 ## Adding a Tag
 
-1. **`data/tags.json`** — Add the new key and a concise definition sentence.
+1. **`data/tags.json`**: Add the new key and a concise definition sentence.
 
-2. **`.github/ISSUE_TEMPLATE/mod_submission.yml`** — Add a checkbox entry under the `tags` checkboxes field, in alphabetical order:
+2. **`.github/ISSUE_TEMPLATE/mod_submission.yml`**: Add a checkbox entry under the `tags` checkboxes field, in alphabetical order:
    ```yaml
    - label: "your-tag — Short description matching the one in tags.json"
    ```
 
-3. **`.github/ISSUE_TEMPLATE/modify_location.yml`** — Add the same checkbox entry in the same alphabetical position.
+3. **`.github/ISSUE_TEMPLATE/modify_location.yml`**: Add the same checkbox entry in the same alphabetical position.
 
-The sidebar filter UI in `app.js` is fully data-driven — the new tag will appear automatically once any mod uses it. No frontend changes are needed.
+The sidebar filter UI in `app.js` is fully data-driven: the new tag will appear automatically once any mod uses it. No frontend changes are needed.
 
 ---
 
@@ -57,9 +57,9 @@ The sidebar filter UI in `app.js` is fully data-driven — the new tag will appe
 
 If you only need to update the wording of an existing tag's description (not rename the key):
 
-1. **`data/tags.json`** — Update the definition string for the key.
-2. **`.github/ISSUE_TEMPLATE/mod_submission.yml`** — Update the matching checkbox label text.
-3. **`.github/ISSUE_TEMPLATE/modify_location.yml`** — Update the matching checkbox label text.
+1. **`data/tags.json`**: Update the definition string for the key.
+2. **`.github/ISSUE_TEMPLATE/mod_submission.yml`**: Update the matching checkbox label text.
+3. **`.github/ISSUE_TEMPLATE/modify_location.yml`**: Update the matching checkbox label text.
 
 > The label text shown in the issue form (after ` — `) is cosmetic only. The authoritative definition lives in `tags.json` and is used as tooltip text on the live map.
 
@@ -67,13 +67,13 @@ If you only need to update the wording of an existing tag's description (not ren
 
 ## Renaming a Tag Key
 
-Renaming a tag key (e.g. `photos` → `photography`) is a **breaking change** — it invalidates any existing location data that uses the old key.
+Renaming a tag key (e.g. `photos` → `photography`) is a **breaking change**: it invalidates any existing location data that uses the old key.
 
-1. **Audit existing data** — find all locations using the old key:
+1. **Audit existing data**: find all locations using the old key:
    ```bash
    grep -rl '"old-tag"' data/locations/
    ```
-2. **Update each affected location file** — replace the old key with the new key in the `tags` array.
+2. **Update each affected location file**: replace the old key with the new key in the `tags` array.
 3. Follow the [Adding a Tag](#adding-a-tag) steps for the new key.
 4. Follow the [Removing a Tag](#removing-a-tag) steps for the old key.
 
@@ -81,9 +81,9 @@ Renaming a tag key (e.g. `photos` → `photography`) is a **breaking change** �
 
 ## Removing a Tag
 
-1. **Audit existing data** — confirm no location files use the tag (see command above). If any do, update or remove the tag from those files first.
-2. **`data/tags.json`** — Delete the key.
-3. **`.github/ISSUE_TEMPLATE/mod_submission.yml`** — Remove the checkbox entry.
-4. **`.github/ISSUE_TEMPLATE/modify_location.yml`** — Remove the checkbox entry.
+1. **Audit existing data**: confirm no location files use the tag (see command above). If any do, update or remove the tag from those files first.
+2. **`data/tags.json`**: Delete the key.
+3. **`.github/ISSUE_TEMPLATE/mod_submission.yml`**: Remove the checkbox entry.
+4. **`.github/ISSUE_TEMPLATE/modify_location.yml`**: Remove the checkbox entry.
 
 The tag will disappear from the sidebar filter automatically on next deploy.

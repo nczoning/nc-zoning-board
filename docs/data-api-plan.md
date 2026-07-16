@@ -37,7 +37,7 @@ The static `mods.json` is not enough for game clients, for three reasons:
   entries; the Worker only reads deployed CDN artifacts. A separate
   `monitor-api-health.yml` GitHub Action probes `/v1` every 15 min and alerts
   on the same channel if the API stops serving (independent of the Worker's own
-  alert — catches cases where the Worker can't alert for itself).
+  alert: catches cases where the Worker can't alert for itself).
 - **Free tier:** ~1 conditional GET per player session against a 100k req/day
   cap; KV writes at most 96/day. Passes with a huge margin.
 

@@ -1,4 +1,4 @@
-# NC Zoning Data API — reference
+# NC Zoning Data API reference
 
 Read-only API serving the NC Zoning Board registry (Cyberpunk 2077 location
 mods) to in-game mods and the website.
@@ -35,14 +35,14 @@ parser:
 - **No arrays-of-arrays.** `coordinates` is a flat `[X, Y, Z]`; district
   boundaries are flattened to `[x1, y1, x2, y2, …]`. This maps cleanly to
   redscript `array<Float>`.
-- **Property names are case-sensitive** and stable — they match DTO field
+- **Property names are case-sensitive** and stable: they match DTO field
   names exactly.
-- **Coordinates are raw CET world values** — the same numbers
+- **Coordinates are raw CET world values**: the same numbers
   `GetWorldPosition()` returns in-game. No transform needed to teleport to
   them or compare against the player.
 - **Stable ids:** manual entries keep a UUID; auto-discovered mods get
   `nexus-<nexus_id>`. Safe to bookmark.
-- **`district` is never null** — anywhere outside every district polygon is
+- **`district` is never null**: anywhere outside every district polygon is
   Badlands (the game's own default). `subdistrict` may be null.
 - **Additive versioning:** new fields may appear within `/v1/`; breaking
   changes would ship as `/v2/`.
@@ -53,7 +53,7 @@ parser:
 | --- | --- |
 | `GET /v1/health` | `{ status, version }` (uncached) |
 | `GET /v1/locations` | all locations, slim |
-| `GET /v1/locations?full=1` | all locations, full (adds `description`, `credits`, image URLs) — one request for everything |
+| `GET /v1/locations?full=1` | all locations, full (adds `description`, `credits`, image URLs): one request for everything |
 | `GET /v1/locations/{id}` | one full entry (adds `description`, `credits`, image URLs), or 404 |
 | `GET /v1/districts` | district/subdistrict hierarchy (flat boundaries + centroids) |
 | `GET /v1/tags` | tag id → description |
@@ -79,7 +79,7 @@ A location (slim):
 
 Full entries (`/v1/locations/{id}` or the whole list via `/v1/locations?full=1`)
 add `description`, `credits` (if present), and the Nexus image fields
-`thumbnail_url` / `picture_url` / `updated_at` (each `null` when unknown — e.g.
+`thumbnail_url` / `picture_url` / `updated_at` (each `null` when unknown, e.g.
 WIP/Dummy entries). Images live on the full entry only; the slim list stays
 lean for the in-game RedData consumer. The `?full=1` list carries its own ETag
 (the dataset version suffixed `-full`), so caching it never collides with the
@@ -96,10 +96,10 @@ Cache-Control: public, max-age=300, stale-while-revalidate=3600
 
 Store the `dataset_version` from your last fetch and send it back as
 `If-None-Match`. If nothing changed you get a **`304 Not Modified`** with no
-body — the cheap path. The data changes at most a few times a day, so one
+body: the cheap path. The data changes at most a few times a day, so one
 fetch per game session (plus an optional occasional re-check) is plenty.
 
-Before the very first dataset build a route returns **`503 not_ready`** —
+Before the very first dataset build a route returns **`503 not_ready`**:
 retry shortly.
 
 ## Using it from a mod
@@ -111,7 +111,7 @@ NCZoningCore framework). Minimal redscript:
 import RedHttpClient.*
 import RedData.Json.*
 
-// DTO — field names match the JSON exactly (case-sensitive).
+// DTO - field names match the JSON exactly (case-sensitive).
 public class NCZLocation {
   let id: String;
   let name: String;
@@ -128,7 +128,7 @@ public class NCZExample extends ScriptableSystem {
   }
 
   private cb func OnLocations(response: ref<HttpResponse>) {
-    // Runs on a worker thread — parse/store here, apply game changes on the
+    // Runs on a worker thread - parse/store here, apply game changes on the
     // next tick via DelaySystem.
     let root = response.GetJson();          // the envelope
     let data = (root as JsonObject).GetKey("data") as JsonArray;
@@ -152,9 +152,9 @@ re-downloading unchanged data.
 
 ## Notes
 
-- The API never talks to Nexus on your behalf at request time — a cron
+- The API never talks to Nexus on your behalf at request time: a cron
   rebuilds the dataset every 15 minutes and serves it from cache, so you're
   shielded from Nexus API hiccups. If a refresh fails, `meta.discovery_stale`
   is `true` and the last-known-good data is served.
 - `meta.skipped` lists mods tagged `NCZoning` whose metadata block didn't
-  parse — useful if you're a mod author debugging why yours isn't appearing.
+  parse: useful if you're a mod author debugging why yours isn't appearing.
