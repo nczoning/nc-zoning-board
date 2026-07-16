@@ -38,7 +38,7 @@ path to the exported PNG and the metadata values from the .xbm JSON.
 
 
 WARNING: do NOT open/re-save the PNGs in Photoshop or any tool that
-applies colour management — the data channels must be read as raw bytes.
+applies colour management: the data channels must be read as raw bytes.
 This script uses pypng which ignores sRGB/gAMA/iCCP chunks entirely.
 
 
@@ -94,7 +94,7 @@ OUTPUT_DIR = "output"   # relative or absolute path
 #   "CUBE_SIZE" : base half-extent of one instance cube (game units)
 #   "HEIGHT"    : texture height in pixels (== number of instance rows)
 #
-# Values must be copied exactly from the source JSON — no rounding.
+# Values must be copied exactly from the source JSON, no rounding.
 
 
 DISTRICTS = {
@@ -202,7 +202,7 @@ def load_png_raw_f64(path: str) -> tuple[np.ndarray, int]:
 
 
     IMPORTANT: never pre-process the source PNG with colour-managed
-    software — any gamma correction will corrupt the encoded coordinates.
+    software; any gamma correction will corrupt the encoded coordinates.
     """
     import png
 
@@ -244,7 +244,7 @@ def lerp_f64(a: np.float64, b: np.float64, t: np.float64) -> np.float64:
 def quat_to_matrix_f64(w, x, y, z) -> np.ndarray:
     """
     Quaternion (w, x, y, z) -> 3x3 rotation matrix, float64.
-    Not normalised — consistent with the game shader and the original
+    Not normalised, consistent with the game shader and the original
     Blender import scripts.
     """
     return np.array([

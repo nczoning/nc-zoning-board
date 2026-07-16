@@ -29,13 +29,13 @@ const MANUAL = [
 ];
 
 const NODES = [
-  { // duplicate of the manual entry — must only contribute thumbs
+  { // duplicate of the manual entry; must only contribute thumbs
     modId: 12345, name: 'Zeta Manual Loft (Nexus page)', summary: 'dup',
     description: 'NCZoning:\ncoords=1,1\ncategory=other',
     pictureUrl: 'pic-dup', thumbnailUrl: 'thumb-dup', updatedAt: '2026-07-01',
     uploader: { name: 'Spud' },
   },
-  { // excluded — never appears even with a valid block
+  { // excluded: never appears even with a valid block
     modId: 777, name: 'Mistagged Mod', summary: 'oops',
     description: 'NCZoning:\ncoords=2,2\ncategory=other',
     uploader: { name: 'Someone' },
@@ -46,7 +46,7 @@ const NODES = [
     pictureUrl: 'pic-888', thumbnailUrl: 'thumb-888', updatedAt: '2026-07-02',
     uploader: { name: 'Uploader888' },
   },
-  { // tagged but no valid block — skipped, surfaced in meta
+  { // tagged but no valid block: skipped, surfaced in meta
     modId: 999, name: 'Blockless Mod', summary: 'no block',
     description: 'Just prose.', uploader: { name: 'Nobody' },
   },
@@ -91,7 +91,7 @@ test('manual full entry carries images from the tagged-query backfill', () => {
 });
 
 test('WIP manual entry resolves to null images (shape stays stable)', () => {
-  const full = dataset.full['bbbb-2222']; // nexus_id WIP — no Nexus page
+  const full = dataset.full['bbbb-2222']; // nexus_id WIP: no Nexus page
   assert.equal(full.thumbnail_url, null);
   assert.equal(full.picture_url, null);
   assert.equal(full.updated_at, null);

@@ -69,7 +69,7 @@ const sun = new THREE.DirectionalLight(0xffffff, 0.8);
 sun.position.set(20, 50, 30);
 scene.add(sun);
 
-// 200 near-coplanar cubes — depth-precision stress
+// 200 near-coplanar cubes: depth-precision stress
 const cubeGeo = new THREE.BoxGeometry(2, 0.3, 2);
 const cubeMat = new THREE.MeshLambertNodeMaterial({ color: 0x556677 });
 for (let i = 0; i < 200; i++) {
@@ -82,7 +82,7 @@ for (let i = 0; i < 200; i++) {
   scene.add(c);
 }
 
-// Far landmark — far-frustum precision check
+// Far landmark: far-frustum precision check
 const farMat = new THREE.MeshLambertNodeMaterial({ color: 0xffb300 });
 const far = new THREE.Mesh(new THREE.BoxGeometry(200, 200, 200), farMat);
 far.position.set(0, 100, -20000);

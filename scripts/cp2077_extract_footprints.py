@@ -4,20 +4,20 @@ cp2077_extract_footprints.py
 Extracts 2D building footprints from CP2077 3D-minimap data textures and
 produces the following outputs for the NC Zoning Board website:
 
-  data/buildings.json              — building polygons as Leaflet [lat, lng] arrays
-  data/roads.json                  — road face polygons as Leaflet [lat, lng] arrays
-  data/metro.json                  — metro boundary edge segments as Leaflet [lat, lng] pairs
-  scripts/output/buildings.svg     — vector building footprints by district
-  scripts/output/roads.svg         — vector road surface fills
-  scripts/output/metro.svg         — vector metro track edges
-  scripts/output/district_borders.svg — district boundary outlines from trigger polygons
-  scripts/output/combined_8k.png   — 8192×8192 RGBA composite (roads + metro + borders + buildings)
+  data/buildings.json              :  building polygons as Leaflet [lat, lng] arrays
+  data/roads.json                  :  road face polygons as Leaflet [lat, lng] arrays
+  data/metro.json                  :  metro boundary edge segments as Leaflet [lat, lng] pairs
+  scripts/output/buildings.svg     :  vector building footprints by district
+  scripts/output/roads.svg         :  vector road surface fills
+  scripts/output/metro.svg         :  vector metro track edges
+  scripts/output/district_borders.svg :  district boundary outlines from trigger polygons
+  scripts/output/combined_8k.png   :  8192×8192 RGBA composite (roads + metro + borders + buildings)
 
 Usage:
-  # Pass 1 — diagnose world extent (fast, position data only)
+  # Pass 1: diagnose world extent (fast, position data only)
   python scripts/cp2077_extract_footprints.py --analyze
 
-  # Pass 2 — full output (set WORLD_MIN/MAX_X/Y constants first)
+  # Pass 2: full output (set WORLD_MIN/MAX_X/Y constants first)
   python scripts/cp2077_extract_footprints.py
 
 Dependencies:
@@ -65,7 +65,7 @@ from map_constants import (
 
 
 # ── CONFIG ─────────────────────────────────────────────────────────────────────
-# No area filter — extract ALL building instances for 1-to-1 game map replica.
+# No area filter: extract ALL building instances for 1-to-1 game map replica.
 # Previously MIN_AREA_SQ = 50.0 which discarded 37% of instances (small buildings,
 # kiosks, phone booths, etc. that are visible on the in-game map).
 
@@ -450,12 +450,12 @@ def point_in_polygon(x, y, polygon):
 
 def classify_district(cx, cy, trigger_polygons):
     """
-    Determine which district a building center (cx, cy) belongs to.
+    Determine which district a building centre (cx, cy) belongs to.
     Tests against trigger polygons in priority order (Dogtown before Pacifica,
     since Dogtown is inside the broader Pacifica texture area).
     Returns the district key or None if outside all districts.
     """
-    # Test Dogtown first — it overlaps with no main district but needs priority
+    # Test Dogtown first: it overlaps with no main district but needs priority
     # to avoid being swallowed by a broader texture decode
     priority_order = ["ep1_dogtown", "ep1_spaceport", "city_center", "watson",
                       "westbrook", "heywood", "santo_domingo", "pacifica"]
@@ -478,13 +478,13 @@ def classify_district(cx, cy, trigger_polygons):
 # Layers rendered under the building footprints (back to front).
 #
 # Rendering notes:
-#   - Water mesh: a world-scale flat plane — when filled as 2D polygons it covers
+#   - Water mesh: a world-scale flat plane; when filled as 2D polygons it covers
 #     the entire canvas. Excluded; dark background gives ocean context for free.
 #   - Road/terrain fills: 3D surface polygons are huge when projected flat.
 #     Use BOUNDARY edges only (edges belonging to exactly 1 face) to get road
 #     outlines without interior mesh triangulation artefacts.
 #   - Metro: same boundary-edge approach for clean track lines.
-#   - Landmarks: filled top-down silhouettes — faint so they don't overpower
+#   - Landmarks: filled top-down silhouettes, faint so they don't overpower
 #     building footprints, which are composited on top.
 #
 # Set to an empty list [] to produce buildings-only output.
@@ -507,18 +507,18 @@ GLB_LAYERS = [
     #
     # Roads: fill the road surface faces at low opacity → shows grey road areas
     # between buildings. Buildings are composited on top so fills only appear
-    # where there are no buildings (the streets themselves). No edges — the
+    # where there are no buildings (the streets themselves). No edges: the
     # boundary-edge approach shows mesh slab outlines, not readable roads.
     ("3dmap_roads.glb",   (45, 45, 65, 100), None,               0, "roads", None),
     ("3dmap_metro.glb",   None,              (255, 200, 0, 230), 3, "metro", None),
 
-    # Landmark meshes — filled top-down silhouettes rendered over buildings.
+    # Landmark meshes: filled top-down silhouettes rendered over buildings.
     # Both fill_rgba and edge_rgba use ("district", alpha) sentinels: colour is
     # resolved at render time from the landmark's world CET position via
     # classify_district() + DISTRICT_COLORS, so each landmark uses the same
     # colour as surrounding buildings (fill alpha=200, outline alpha=240).
     # offset_key values confirmed via --list-landmarks; update if ent changes.
-    # Note: 3dmap_cliffs.glb is excluded — terrain geometry, not a landmark, and
+    # Note: 3dmap_cliffs.glb is excluded (terrain geometry, not a landmark) and
     # obscures the map in the Dogtown/Badlands border area at 2D projection scale.
     ("3dmap_obelisk.glb",                    ("district", 200), ("district", 240), 1, "obelisk",             "obelisk"),
     ("monument_ave_pyramid.glb",             ("district", 200), ("district", 240), 1, "pyramid",             "monument_ave_pyramid"),
@@ -526,7 +526,7 @@ GLB_LAYERS = [
     ("3dmap_ext_monument_av_building_b.glb", ("district", 200), ("district", 240), 1, "av_building",         "ext_monument_av_building_b"),
     ("northoak_sign_a.glb",                  ("district", 200), ("district", 240), 1, "northoak_sign",       "northoak_sign_a"),
     ("cz_cz_building_h_icosphere.glb",       ("district", 200), ("district", 240), 1, "icosphere",           "cz_cz_building_h_icosphere"),
-    # Ferris wheel is placed twice in the ent — upright in Pacifica and collapsed.
+    # Ferris wheel is placed twice in the ent: upright in Pacifica and collapsed.
     # Both reference the same GLB; offset_key distinguishes the two instances.
     # Run --list-landmarks to find the exact component names if these don't match.
     ("rcr_park_ferris_wheel.glb",            ("district", 200), ("district", 240), 1, "ferris_wheel_upright",   "ferris_wheel_pacifica"),
@@ -538,7 +538,7 @@ def render_glb_base_layer(wbounds, mesh_transforms=None, trigger_polygons=None, 
     """
     Collect GLB mesh elements as Z-annotated draw primitives and write per-category SVG/JSON.
 
-    Returns a list of z_elements dicts — one per face or edge — for use in the
+    Returns a list of z_elements dicts (one per face or edge) for use in the
     unified Z-sorted draw pass in run_full_output().  No PIL drawing is done here.
 
     Each z_element:
@@ -564,7 +564,7 @@ def render_glb_base_layer(wbounds, mesh_transforms=None, trigger_polygons=None, 
     def verts_to_px(verts, off_x=0.0, off_y=0.0):
         """Batch-convert GLB vertices to pixel (x, y) arrays.
 
-        Axis mapping (confirmed empirically — roads 180° from buildings without this):
+        Axis mapping (confirmed empirically; roads 180° from buildings without this):
           GLB_X  -> -CET_X  (X is negated)
           GLB_Y  -> height   (used for Z depth)
           GLB_Z  -> +CET_Y  (Z maps directly to north-south, no negation)
@@ -631,7 +631,7 @@ def render_glb_base_layer(wbounds, mesh_transforms=None, trigger_polygons=None, 
             edge_rgba = (r, g, b, alpha)
 
         # Roads/metro (offset_key=None) are already in world space with orientation
-        # handled by the -GLB_X axis flip in verts_to_px — don't apply ent rotation.
+        # handled by the -GLB_X axis flip in verts_to_px; don't apply ent rotation.
         if offset_key is None:
             off_quat = (1.0, 0.0, 0.0, 0.0)
 
@@ -664,7 +664,7 @@ def render_glb_base_layer(wbounds, mesh_transforms=None, trigger_polygons=None, 
 
         px, py = verts_to_px(verts, off_x, off_y)
 
-        # Collect filled faces — Z = average vertex height (verts[:, 1] = CET_Z after rotation)
+        # Collect filled faces: Z = average vertex height (verts[:, 1] = CET_Z after rotation)
         if fill_rgba is not None:
             svg_polys = []   # list of (z, poly_str) tuples for per-file SVG
             json_polys = []  # list of {"z": float, "pts": [[lat,lng],...]}
@@ -705,11 +705,11 @@ def render_glb_base_layer(wbounds, mesh_transforms=None, trigger_polygons=None, 
                         json_fill_acc[out_key] = []
                     json_fill_acc[out_key].extend(json_polys)
 
-        # Collect BOUNDARY edges only — edges belonging to exactly 1 face.
+        # Collect BOUNDARY edges only: edges belonging to exactly 1 face.
         # Using all edges_unique draws interior mesh tessellation (triangles).
         # Boundary edges give clean road/track outlines with no interior artefacts.
         if edge_rgba is not None:
-            # faces_unique_edges: (N_faces, 3) — edge indices per face
+            # faces_unique_edges: (N_faces, 3), edge indices per face
             edge_counts = np.bincount(
                 mesh.faces_unique_edges.ravel(),
                 minlength=len(mesh.edges_unique)
@@ -768,7 +768,7 @@ def render_glb_base_layer(wbounds, mesh_transforms=None, trigger_polygons=None, 
 
         print(f"  [GLB] {label}: {len(mesh.vertices):,} verts, {len(mesh.faces):,} faces")
 
-    # Write accumulated SVG files — polygons/lines sorted by Z within each group
+    # Write accumulated SVG files: polygons/lines sorted by Z within each group
     if svg_output_dir:
         all_svg_keys = set(svg_fill_acc) | set(svg_edge_acc)
         for out_key in all_svg_keys:
@@ -802,7 +802,7 @@ def render_glb_base_layer(wbounds, mesh_transforms=None, trigger_polygons=None, 
             size_mb = os.path.getsize(svg_file) / (1024 * 1024)
             print(f"  [GLB] SVG  -> {svg_file} ({size_mb:.1f} MB)")
 
-    # Write accumulated JSON files — each element carries a "z" field.
+    # Write accumulated JSON files: each element carries a "z" field.
     # Combined (landmark) format: {label: {"faces": [{"z":,"pts":},...], "edges": [...]}}
     # Non-combined format: flat list (roads = faces, metro = edges)
     if json_output_dir:
@@ -868,18 +868,18 @@ def render_district_borders(trigger_polygons, wbounds, svg_output_dir=None):
 
     Two-tier rendering:
       - District borders: thick solid lines (width=3, alpha=180)
-      - Subdistrict borders: thin dashed lines (width=1, alpha=100), same color
+      - Subdistrict borders: thin dashed lines (width=1, alpha=100), same colour
 
     District data comes from trigger_polygons (flat dict, already loaded).
     Subdistrict data is loaded from data/subdistricts.json if it exists.
 
-    These are the actual game trigger area boundaries — much cleaner than the
+    These are the actual game trigger area boundaries, much cleaner than the
     3dmap_roads_borders.glb mesh (which is just road surface geometry).
     """
     from PIL import Image, ImageDraw
 
     # subdistricts.json uses "dogtown" / "ncx_morro_rock" as IDs, but
-    # DISTRICT_COLORS uses "ep1_dogtown" / "ep1_spaceport" — map them here.
+    # DISTRICT_COLORS uses "ep1_dogtown" / "ep1_spaceport"; map them here.
     SUBDIST_ID_TO_COLOR_KEY = {
         "dogtown":        "ep1_dogtown",
         "ncx_morro_rock": "ep1_spaceport",
@@ -978,7 +978,7 @@ def render_district_borders(trigger_polygons, wbounds, svg_output_dir=None):
 def load_png_raw_f64(path):
     """
     Load a PNG as float64 RGBA in [0,1].
-    Uses pypng which ignores sRGB/gAMA/iCCP chunks — raw bytes only.
+    Uses pypng which ignores sRGB/gAMA/iCCP chunks; raw bytes only.
     Supports 8-bit and 16-bit PNGs (WolvenKit exports TRF_DeepColor as 16-bit).
     """
     import png
@@ -1095,7 +1095,7 @@ def decode_district(name, d, positions_only=False):
             cy = tmin_y + (tmax_y - tmin_y) * pg + off_y
             wz = tmin_z + (tmax_z - tmin_z) * pb
 
-            # Scale (half-extents) — X, Y for footprint, Z for building height
+            # Scale (half-extents): X, Y for footprint, Z for building height
             sr, sg, sb = px[y, x + 2*block_w, 0], px[y, x + 2*block_w, 1], px[y, x + 2*block_w, 2]
             hx = sr * cube_val
             hy = sg * cube_val
@@ -1210,7 +1210,7 @@ def run_analyze():
             ax.scatter(xs, ys, s=0.5, c=color, alpha=0.4, label=name, rasterized=True)
 
         ax.set_aspect("equal")
-        # No invert_yaxis() — matplotlib default (positive Y at top) already = north-up
+        # No invert_yaxis(): matplotlib default (positive Y at top) already = north-up
         ax.legend(loc="upper right", fontsize=8, facecolor="#0a192f", labelcolor="white",
                   markerscale=6)
         ax.set_title("Building position scatter — all districts", color="white", fontsize=14)
@@ -1288,7 +1288,7 @@ def run_full_output():
     print("Collecting GLB landmark layer...")
     landmark_z_elems = render_glb_base_layer(wbounds, mesh_transforms=mesh_transforms, trigger_polygons=trigger_polygons, svg_output_dir=OUTPUT_DIR, json_output_dir=DATA_DIR, layers=GLB_LAYERS[2:], combined_label="landmarks")
 
-    # Render district borders from trigger polygons (always drawn topmost — not Z-sorted)
+    # Render district borders from trigger polygons (always drawn topmost, not Z-sorted)
     print("Rendering district borders from trigger polygons...")
     if trigger_polygons:
         border_layer = render_district_borders(trigger_polygons, wbounds, svg_output_dir=OUTPUT_DIR)
@@ -1337,7 +1337,7 @@ def run_full_output():
 
     print(f"  Classified: {classified}, Badlands/outside: {badlands_count}\n")
 
-    # Collect per-district building z_elements (deferred drawing — unified pass below)
+    # Collect per-district building z_elements (deferred drawing; unified pass below)
     svg_groups      = []   # per-district SVG groups for buildings.svg
     json_districts  = []   # per-district data for buildings.json
     building_z_elems = []  # z_elements for unified PNG/combined-SVG draw pass
@@ -1400,7 +1400,7 @@ def run_full_output():
     # Unified Z-sorted PNG + combined SVG
     # Merge all z_elements from roads/metro, buildings, and landmarks.
     # Sort by Z ascending so higher elements paint over lower ones (painter's algorithm).
-    # District borders are drawn on top afterwards — not Z-sorted, always topmost.
+    # District borders are drawn on top afterwards: not Z-sorted, always topmost.
     all_z_elems = sorted(
         (base_z_elems or []) + building_z_elems + (landmark_z_elems or []),
         key=lambda e: e["z"]
@@ -1440,7 +1440,7 @@ def run_full_output():
         f.write(svg_content)
     print(f"SVG  -> {svg_path}")
 
-    # Write combined.svg — all elements from all categories sorted by Z (full cross-category accuracy)
+    # Write combined.svg: all elements from all categories sorted by Z (full cross-category accuracy)
     sorted_svg_strs = [s for _, s in sorted(combined_svg_elems, key=lambda t: t[0])]
     combined_svg_path = os.path.join(OUTPUT_DIR, "combined.svg")
     with open(combined_svg_path, "w", encoding="utf-8") as f:

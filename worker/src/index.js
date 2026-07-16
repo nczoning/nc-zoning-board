@@ -1,5 +1,5 @@
 /**
- * NC Zoning Data API — read-only Worker serving the mod registry to
+ * NC Zoning Data API: read-only Worker serving the mod registry to
  * Cyberpunk 2077 mods (and, later, the website itself).
  *
  * Contract rules (frozen, see docs/data-api-plan.md):
@@ -63,7 +63,7 @@ function notFound() {
   return json(envelope({ error: 'not_found' }, null), { status: 404 });
 }
 
-/** Before the first successful cron, KV is empty — say so, don't 404. */
+/** Before the first successful cron, KV is empty; say so, don't 404. */
 function notReady() {
   return json(envelope({ error: 'not_ready' }, null), {
     status: 503,
@@ -107,7 +107,7 @@ const routes = {
   'GET /v1/health': (request, env) =>
     json(envelope({ status: 'ok', version: env.API_VERSION }, null)),
 
-  // One representation: the full records as an array — every field the DTO
+  // One representation: the full records as an array, every field the DTO
   // consumer needs, RedData-mappable. `?full=1` is accepted as a no-op alias so
   // existing consumers (the website and the in-game NCZoningCore mod, which both
   // request it) keep working; there is no leaner shape to opt out to.
@@ -123,7 +123,7 @@ const routes = {
   'GET /v1/tags': (request, env) =>
     serveDataset(request, env, (e) => e.DATASET.get(KEYS.tags, 'json')),
 
-  // Operational metadata only — health flags the monitors read. No aggregate
+  // Operational metadata only: health flags the monitors read. No aggregate
   // counts: consumers derive those from the per-location records.
   'GET /v1/meta': (request, env) =>
     serveDataset(request, env, (e, meta) => ({
@@ -132,7 +132,7 @@ const routes = {
     })),
 };
 
-/** GET /v1/locations/{id} — full entry, or 404. */
+/** GET /v1/locations/{id}: full entry, or 404. */
 function locationById(request, env, id) {
   return serveDataset(request, env, async (e) => {
     const full = await e.DATASET.get(KEYS.full, 'json');
