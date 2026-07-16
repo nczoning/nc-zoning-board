@@ -8,7 +8,7 @@ Thanks for wanting to help! There are a few different ways to contribute dependi
 
 ### Preferred: NCZoning Auto-Discovery
 
-Add your mod directly from Nexus — no GitHub required. Tag your mod with **NCZoning**, then use the **[+] Submit** button on the map to generate and paste a metadata block into your mod description.
+Add your mod directly from Nexus (no GitHub required). Tag your mod with **NCZoning**, then use the **[+] Submit** button on the map to generate and paste a metadata block into your mod description.
 
 See **[docs/nczoning-auto-discovery.md](docs/nczoning-auto-discovery.md)** for full instructions.
 
@@ -20,7 +20,7 @@ For a permanent, manually curated entry. See **[docs/adding-mods.md](docs/adding
 
 1. Get your in-game coordinates from the CET console: `print(GetPlayer():GetWorldPosition())`
 2. Go to [Issues → New Issue → 📍 Submit a New Mod Location](https://github.com/spuddeh/nc-zoning-board/issues/new/choose)
-3. Fill in the form — the bot creates a PR automatically
+3. Fill in the form, and the bot creates a PR automatically
 4. A maintainer reviews and merges it → your pin appears on the live map
 
 > **No Git knowledge required** for either method.
@@ -59,7 +59,7 @@ scripts/
   generate_tiles.js     # Map tile generator (Node.js + sharp)
 docs/                   # Architecture, guides, coordinate system
 .github/
-  workflows/            # CI/CD — validation, submission, deployment
+  workflows/            # CI/CD - validation, submission, deployment
   ISSUE_TEMPLATE/       # Mod submission form
 ```
 
@@ -70,7 +70,7 @@ Just do a quick sanity check:
 - Run `node scripts/build_mods.js` to compile data
 - Run `node scripts/validate_tags.js` to check tag validity
 - If you changed map/coordinate stuff, verify pins still render correctly
-- Keep it focused — one feature or fix per PR
+- Keep it focused: one feature or fix per PR
 
 If something breaks, let us know! We can debug together.
 
@@ -78,7 +78,7 @@ If something breaks, let us know! We can debug together.
 
 ## 🤝 Ways to Help
 
-This is a community passion project built by modders helping each other. If you've got some spare time and want to contribute — great! No pressure if you can't. Here are the areas where help would be awesome:
+This is a community passion project built by modders helping each other. If you've got some spare time and want to contribute, great! No pressure if you can't. Here are the areas where help would be awesome:
 
 ### 🖥️ Frontend & Web
 
@@ -96,14 +96,14 @@ Into icon design or dark-theme UI? We'd love Cyberpunk-style custom pins, visual
 
 Help keep docs/ current, write guides for new contributors, or clarify existing docs. Markdown + basic Git knowledge.
 
-**Want to help?** Join the **[Locations Hub Discord](https://discord.gg/sc4yEx2fNf)** and say hi in the general channel — we'd love to chat about what you're interested in!
+**Want to help?** Join the **[Locations Hub Discord](https://discord.gg/sc4yEx2fNf)** and say hi in the general channel. We'd love to chat about what you're interested in!
 
 ---
 
 ## 📌 Code Standards
 
 - **JavaScript:** Vanilla ES6+, no build step, no frameworks
-- **CSS:** Plain CSS — keep the Cyberpunk aesthetic (Orbitron/Rajdhani fonts, dark theme)
+- **CSS:** Plain CSS. Keep the Cyberpunk aesthetic (Orbitron/Rajdhani fonts, dark theme)
 - **JSON:** All `mods.json` entries must pass schema validation
 - **Commit messages:** Use [Conventional Commits](https://www.conventionalcommits.org/) style (`feat:`, `fix:`, `docs:`, `chore:`)
 
@@ -111,15 +111,15 @@ Help keep docs/ current, write guides for new contributors, or clarify existing 
 
 ## 🔍 Useful Docs
 
-- [NCZoning Auto-Discovery](docs/nczoning-auto-discovery.md) — adding mods directly from Nexus
-- [Architecture](docs/architecture.md) — file structure, data flow, secrets
-- [Submission Pipeline](docs/submission-pipeline.md) — how GitHub Actions handles new mod entries
-- [Coordinate System](docs/coordinate-system.md) — CET ↔ Leaflet transform, calibration data
-- [Adding Mods](docs/adding-mods.md) — schema reference, getting coordinates, GitHub submission methods
-- [Tag Registry](docs/tags.md) — current tags, and how to add, modify, or remove tags
-- [Tile Generation](docs/tile-generation.md) — how the map tiles are generated and upgraded
-- [Skills & Roles](docs/skills-and-roles.md) — full role descriptions and recruiting priorities
-- [Roadmap](docs/roadmap.md) — what's planned
+- [NCZoning Auto-Discovery](docs/nczoning-auto-discovery.md): adding mods directly from Nexus
+- [Architecture](docs/architecture.md): file structure, data flow, secrets
+- [Submission Pipeline](docs/submission-pipeline.md): how GitHub Actions handles new mod entries
+- [Coordinate System](docs/coordinate-system.md): CET ↔ Leaflet transform, calibration data
+- [Adding Mods](docs/adding-mods.md): schema reference, getting coordinates, GitHub submission methods
+- [Tag Registry](docs/tags.md): current tags, and how to add, modify, or remove tags
+- [Tile Generation](docs/tile-generation.md): how the map tiles are generated and upgraded
+- [Skills & Roles](docs/skills-and-roles.md): full role descriptions and recruiting priorities
+- [Roadmap](docs/roadmap.md): what's planned
 
 ---
 
