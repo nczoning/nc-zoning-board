@@ -1,5 +1,5 @@
 /**
- * Refresh orchestrator — the body of the 5-minute cron. Fetches the CDN
+ * Refresh orchestrator: the body of the 5-minute cron. Fetches the CDN
  * source files + Nexus auto-discovery, rebuilds the dataset, and writes to
  * KV only when the content hash changes.
  *
@@ -103,7 +103,7 @@ export async function runRefresh(env, fetchImpl = fetch) {
 
     // Manual-mod thumbnails: the tagged query only backfills manual mods that
     // are themselves NCZoning-tagged, so pull the rest via modsByUid. Cosmetic
-    // and non-throwing — a failure here just leaves some images null this
+    // and non-throwing: a failure here just leaves some images null this
     // cycle, it never marks the dataset stale.
     const manualNumericIds = manualMods
       .map((m) => String(m.nexus_id))
@@ -118,7 +118,7 @@ export async function runRefresh(env, fetchImpl = fetch) {
 
     // Hash the content that actually varies (not generated_at). Tags are
     // included so a tags.json edit propagates through the ETag. `full` carries
-    // the recently_updated bool, so its clock-driven flips move the ETag —
+    // the recently_updated bool, so its clock-driven flips move the ETag;
     // that is deliberate (a location aging past the window must invalidate
     // caches even though nothing on Nexus changed). This is why the cron
     // rebuilds every tick against a fresh clock, with no Nexus short-circuit.

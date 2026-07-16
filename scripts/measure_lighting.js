@@ -1,5 +1,5 @@
 /**
- * Lighting metering harness — measures scene brightness across the envelope
+ * Lighting metering harness: measures scene brightness across the envelope
  * defined in scripts/lighting-envelope.json (poses × sun times × themes).
  *
  * Drives a real installed Chrome via puppeteer-core (WebGPU needs it; no
@@ -20,11 +20,11 @@
  * Gotchas handled:
  *   - Compute culling lags camera teleports (buildings missing at the new
  *     pose). setPose() does the confirmed zoom-out/in nudge + settle waits.
- *   - Theme must be PINNED, not inherited — localStorage is seeded before the
+ *   - Theme must be PINNED, not inherited: localStorage is seeded before the
  *     app boots (a stray stored preference silently flips every measurement).
  *   - Pins/districts overlays are disabled before measuring (calibration
- *     rule: overlays off); shadows stay ON — usability mode measures the real
- *     default viewing condition.
+ *     rule: overlays off); shadows stay ON (usability mode measures the real
+ *     default viewing condition).
  */
 
 'use strict';
@@ -51,7 +51,7 @@ const VIEW = { width: 1600, height: 940 };
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// ── Static file server (no deps — the page just needs same-origin fetch) ──
+// ── Static file server (no deps; the page just needs same-origin fetch) ──
 const MIME = {
   '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
   '.json': 'application/json', '.png': 'image/png', '.webp': 'image/webp',
@@ -84,7 +84,7 @@ async function waitForScene(page) {
 }
 
 // Teleport with the cull-nudge workaround: compute culling can lag a camera
-// jump and leave buildings missing — zoom out ~3% and back in, with settles.
+// jump and leave buildings missing: zoom out ~3% and back in, with settles.
 async function setPose(page, pose) {
   const apply = (position) => page.evaluate((t, p) => {
     window.NCZ.ThreeScene.setCameraState({ target: t, position: p });
@@ -134,7 +134,7 @@ async function setupPage(browser, theme, port) {
 }
 
 // Solve mode: hold ONE representative view (P1 default city) at the brightness
-// the user's anchor exposure produces, and read off the exposure each sun time
+// the anchor exposure produces, and read off the exposure each sun time
 // needs. Exposure→brightness is monotonic below clip, so bisection is robust.
 // Output: a {minutes, elevationDeg, exposure} table to bake into applySunTime.
 async function runSolve(browser, port) {

@@ -30,7 +30,7 @@
 /* Force the WebGLRenderer canvas to fill its container.
    Three.js is initialised with `setSize(w, h, false)` (updateStyle:false), so
    it never writes inline width/height onto <canvas>. Without this rule, the
-   canvas — a replaced element — falls back to its intrinsic dimensions (the
+   canvas (a replaced element) falls back to its intrinsic dimensions (the
    drawingBuffer pixel size, = clientSize × devicePixelRatio), which overflows
    the container on any DPR > 1.0 and shifts the WebGL scene off the CSS2D pin
    overlay. See three-scene.js:225 for the renderer setup. */
@@ -39,8 +39,8 @@
     height: 100%;
 }
 
-/* Overlay toggles — floats over the map, above the view toggle */
-/* District hover info panel — top-right under the header, right-aligned with the
+/* Overlay toggles: floats over the map, above the view toggle */
+/* District hover info panel: top-right under the header, right-aligned with the
    icon on the right (parity with the in-game bottom-right readout; bottom-right
    here is taken by the overlay controls). --di-color is set per-district by
    NCZ.DistrictInfo. pointer-events:none so it never blocks the map. */
@@ -56,7 +56,7 @@
     pointer-events: none;
     /* Text-only (no plate). A solid four-direction dark casing (like the map
        labels) keeps it legible over bright satellite imagery as well as the dark
-       schematic — a soft blur alone washed out over the rooftops. */
+       schematic; a soft blur alone washed out over the rooftops. */
     text-shadow:
         -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000,
         0 0 4px rgba(0, 0, 0, 0.9),
@@ -191,7 +191,7 @@
     }
 }
 
-/* View toggle (SAT | SCHEMA) — floats over the map in the bottom-right */
+/* View toggle (SAT | SCHEMA): floats over the map in the bottom-right */
 #map-view-toggle {
     position: absolute;
     bottom: 80px; /* above Leaflet zoom controls */
@@ -225,7 +225,7 @@
     }
 }
 
-/* Controls reference + reset — bottom-left of #map-3d */
+/* Controls reference + reset: bottom-right of #map-3d */
 #scene-controls {
     position: absolute;
     bottom: var(--space-sm);
@@ -389,7 +389,7 @@
 }
 
 
-/* Showcase fullscreen — applied directly to #map-3d, no ancestor cascade needed */
+/* Showcase fullscreen: applied directly to #map-3d, no ancestor cascade needed */
 #map-3d.showcase-fullscreen {
     position: fixed;
     inset: 0;
@@ -399,7 +399,7 @@
 }
 
 
-/* Flyover start-screen — opening title card */
+/* Flyover start-screen: opening title card */
 #flyover-start-screen {
     position: absolute;
     inset: 0;
@@ -1073,7 +1073,7 @@ body.cluster-panel-resizing * {
         line-height: var(--lh-zoom-control) !important;
     }
 
-    /* Leaflet Scale Control — placement only. Visual styling lives below
+    /* Leaflet Scale Control: placement only. Visual styling lives below
        so the 3D view's #scene-scale can wear the same skin. */
     .leaflet-control-scale {
         margin-bottom: var(--space-md);
@@ -1081,7 +1081,7 @@ body.cluster-panel-resizing * {
     }
 }
 
-/* Distance scale bar — shared by Leaflet (.leaflet-control-scale at
+/* Distance scale bar: shared by Leaflet (.leaflet-control-scale at
    bottom-right of the SAT view) and ThreeMarkers (#scene-scale at bottom-
    right of the SCHEMA view). Both wear the same .leaflet-control-scale-line
    skin so 2D and 3D distance bars render identically. */
@@ -1102,7 +1102,7 @@ body.cluster-panel-resizing * {
     }
 }
 
-/* 3D-specific placement — floats above the bottom controls strip, below the
+/* 3D-specific placement: floats above the bottom controls strip, below the
    #map-view-toggle. Kept out of #scene-controls so the strip's flex row
    doesn't shift width every time the bar relabels at a new zoom level.
    Bottom value sits in the gap between scene-controls top (~44px) and
@@ -1161,7 +1161,7 @@ body.cluster-panel-resizing * {
     background-color: var(--secondary) !important;
 }
 
-/* ── Popup chrome — shared by Leaflet (2D) and ThreeMarkers (3D) ──────────
+/* ── Popup chrome: shared by Leaflet (2D) and ThreeMarkers (3D) ──────────
    Leaflet renders the popup inside `.leaflet-popup.ncz-dynamic-popup >
    .leaflet-popup-content-wrapper`. ThreeMarkers renders it as
    `.three-popup.ncz-dynamic-popup` directly (no auto-generated wrapper).
@@ -1177,7 +1177,7 @@ body.cluster-panel-resizing * {
     &.popup-cat-other             { --popup-border-color: var(--category-other); }
 }
 
-/* Leaflet-only structural reset — strip Leaflet's default close button, tip,
+/* Leaflet-only structural reset: strip Leaflet's default close button, tip,
    and outer wrapper margins so our chrome can render cleanly. */
 .leaflet-popup.ncz-dynamic-popup {
     margin: 0 !important;
@@ -1187,7 +1187,7 @@ body.cluster-panel-resizing * {
     .leaflet-popup-tip-container { display: none !important; }
 }
 
-/* The styled card — Leaflet's content-wrapper or 3D's .three-popup. */
+/* The styled card: Leaflet's content-wrapper or 3D's .three-popup. */
 .leaflet-popup.ncz-dynamic-popup .leaflet-popup-content-wrapper,
 .three-popup.ncz-dynamic-popup {
     position: relative;
@@ -1211,7 +1211,7 @@ body.cluster-panel-resizing * {
     }
 }
 
-/* Direction classes — ncz-popup-top = popup is above pin (arrow at popup
+/* Direction classes: ncz-popup-top = popup is above pin (arrow at popup
    bottom pointing down). ncz-popup-bottom = popup below pin (arrow at top
    pointing up). top/bottom work for both views; left/right are Leaflet-only. */
 .leaflet-popup.ncz-dynamic-popup.ncz-popup-top .leaflet-popup-content-wrapper::after,
@@ -1793,7 +1793,7 @@ header {
 }
 
 h1 {
-    /* Tier 0 wordmark — the one place the Night Corp Display face earns its keep.
+    /* Tier 0 wordmark: the one place the Night Corp Display face earns its keep.
        The display face is wider than Orbitron, so pin it to one line. */
     font-family: var(--font-nightcorp);
     font-size: 1.75rem;
@@ -1964,7 +1964,7 @@ body::before {
     }
 }
 
-/* Tier 0 boot splash — display face, biggest branded moment in the welcome flow */
+/* Tier 0 boot splash: display face, biggest branded moment in the welcome flow */
 .welcome-hero {
     font-family: var(--font-nightcorp);
     font-size: var(--text-2xl);
@@ -2012,7 +2012,7 @@ body::before {
     gap: var(--space-sm);
 }
 
-/* Attribution block — "Asset & data credits" heading, CDPR Fan Content
+/* Attribution block: "Asset & data credits" heading, CDPR Fan Content
    disclaimer, then the per-asset credit list. Body reads at the modal text
    size; heading reuses the .parameters-section-title idiom (Orbitron, accent,
    uppercase) so it matches the Settings section headings. */
@@ -2148,7 +2148,7 @@ body::before {
 }
 
 /* Always-visible hint under a Settings checkbox (the toggles' hover-title made
-   visible, per request) — a bit smaller than the setting label. */
+   visible); a bit smaller than the setting label. */
 .parameters-hint {
     margin: 0 0 var(--space-xs) calc(var(--space-md) + var(--space-2xs));
     font-family: var(--font-body);
@@ -2514,7 +2514,7 @@ body::before {
         color: var(--color-white);
     }
 
-    /* Active cluster — the one whose contents are currently in the cluster
+    /* Active cluster: the one whose contents are currently in the cluster
        panel. Shared between Leaflet (SAT) and ThreeMarkers (SCHEMA) views. */
     &.marker-cluster-active {
         box-shadow:
@@ -2578,7 +2578,7 @@ body::before {
 }
 
 /* Outline-hover emphasis: the hovered district/subdistrict's label pops to full
-   opacity, scales up slightly, and gains a colour glow — paired with the
+   opacity, scales up slightly, and gains a colour glow, paired with the
    outline brighten in setHoveredDistrict (3D) / onMapMouseMove (2D). */
 .district-label.district-label-hover {
     opacity: 1;
@@ -2607,14 +2607,14 @@ body::before {
 }
 
 /* The satellite imagery is bright and busy, so the 3D schematic's soft halo
-   isn't enough — give the SAT labels a solid dark text-casing (1px outline in
+   isn't enough: give the SAT labels a solid dark text-casing (1px outline in
    all four diagonals + glow) and a heavier weight / more present baseline so the
    names stay legible over any tile. Scoped to the Leaflet tooltip so the 3D
    labels keep their faint look. Higher specificity than the shared hover rule,
    so the hover override below must match it (4 classes) to still win. */
 .leaflet-tooltip.district-label-tooltip .district-label {
     /* Faded baseline (so the fade + hover-emphasis still read) but kept legible
-       by the solid dark casing below — the outline carries contrast even at low
+       by the solid dark casing below; the outline carries contrast even at low
        fill opacity, where the old soft halo couldn't. */
     opacity: 0.6;
     font-weight: 700;
@@ -2631,7 +2631,7 @@ body::before {
         0 0 6px var(--label-color, #fff), 0 0 12px #000;
 }
 
-/* 3D tooltip anchor — wraps the shared `.pin-tooltip` skin (defined above).
+/* 3D tooltip anchor: wraps the shared `.pin-tooltip` skin (defined above).
    CSS2DRenderer projects the anchor to the pin's world position; the inner
    .pin-tooltip is then offset upward in screen space so the arrow points
    down at the pin. Single instance reused on every hover. */
@@ -2656,7 +2656,7 @@ body::before {
 }
 
 .three-popup-anchor {
-    /* CSS2DRenderer applies translate(-50%, -50%) — a zero-size box centres
+    /* CSS2DRenderer applies translate(-50%, -50%): a zero-size box centres
        its inner content's reference point exactly on the world position. */
     position: relative;
     width: 0;
@@ -2664,8 +2664,8 @@ body::before {
     pointer-events: none;
     /* CSS2DRenderer sets style.zIndex inline per frame based on camera
        distance, which can place a closer pin in front of a popup attached
-       to a further pin. !important is the only way to beat inline styles
-       — combined with renderOrder=1000 on the CSS2DObject (see three-markers.js)
+       to a further pin. !important is the only way to beat inline styles;
+       combined with renderOrder=1000 on the CSS2DObject (see three-markers.js)
        this guarantees the popup always paints above every pin.
        Value 500 is deliberately chosen between:
          - CSS2DRenderer's auto-assigned zIndex range (0–~300 for our pin count)
@@ -2674,7 +2674,7 @@ body::before {
     z-index: 500 !important;
 }
 
-/* 3D-specific positioning — sizes the popup and floats it above (default)
+/* 3D-specific positioning: sizes the popup and floats it above (default)
    or below (when `.ncz-popup-bottom` is added) the anchor's world point.
    Visual chrome (background, arrow, category colour) comes from the shared
    `.ncz-dynamic-popup` rules above; this rule only deals with layout. */

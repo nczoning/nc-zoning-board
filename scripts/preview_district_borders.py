@@ -3,9 +3,9 @@ Quick preview: render district_borders.svg from data/subdistricts.json.
 
 Rendering approach:
   - Districts: solid thick outline, no fill
-  - Subdistricts: subtle filled polygon (same district color, low opacity)
+  - Subdistricts: subtle filled polygon (same district colour, low opacity)
     with a thin dashed outline. The edge of each filled zone IS the visible
-    dividing line — no explicit midline computation required.
+    dividing line; no explicit midline computation required.
   - Labels: subdistrict names at geometric centroid, district names larger
 
 Output: scripts/output/district_borders.svg
@@ -24,7 +24,7 @@ from map_constants import (
     IMG_SIZE, cet_to_pixel,
 )
 
-# Colors from game Ink styles (see docs/district-hierarchy.md)
+# Colours from game Ink styles (see docs/district-hierarchy.md)
 DISTRICT_COLORS = {
     "city_center":    "#ffd741",   # MainColors.Yellow
     "watson":         "#ff3e34",   # MainColors.CombatRed
@@ -52,7 +52,7 @@ def pts_str(coords):
 def polygon_centroid(coords):
     """Compute the geometric centroid of a polygon in pixel space using Shapely.
 
-    Shapely's centroid is the center of mass, which handles non-convex and
+    Shapely's centroid is the centre of mass, which handles non-convex and
     irregular polygons correctly (unlike a simple vertex average).
     """
     shape = ShapelyPolygon(coords)
@@ -124,14 +124,14 @@ def main():
                     f'opacity="0.9">{sub["name"]}</text>'
                 )
         else:
-            # No subdistricts (Dogtown, NCX) — fill the district itself
+            # No subdistricts (Dogtown, NCX): fill the district itself
             if district.get("polygon"):
                 lines.append(
                     f'    <polygon points="{pts_str(district["polygon"])}" '
                     f'fill="{color}" fill-opacity="0.15" stroke="none"/>'
                 )
 
-        # District outline on top — solid, no fill, always visible
+        # District outline on top: solid, no fill, always visible
         if district.get("polygon"):
             lines.append(
                 f'    <polygon points="{pts_str(district["polygon"])}" '
@@ -146,7 +146,7 @@ def main():
                 f'opacity="0.7">{district["name"]}</text>'
             )
         elif is_badlands and subs:
-            # Badlands has no single polygon — place label halfway between
+            # Badlands has no single polygon; place label halfway between
             # Red Peaks and Vasquez Pass on X axis, use union centroid for Y
             from shapely.ops import unary_union
             union = unary_union([ShapelyPolygon(s["polygon"]).buffer(0) for s in subs])

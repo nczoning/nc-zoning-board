@@ -1,5 +1,5 @@
 /**
- * Dataset builder — the server-side version of the merge the browser does
+ * Dataset builder: the server-side version of the merge the browser does
  * in assets/js/services.js (fetchNexusTaggedMods) + app.js concat.
  *
  * Pure function: all inputs are plain data, no fetching, no KV. The cron
@@ -50,7 +50,7 @@ export function buildDataset({ manualMods, tagsDict, excluded, nexusNodes, distr
 
   const nexusThumbs = {}; // manual-entry image/updatedAt backfill, keyed by nexus_id
   const autoEntries = [];
-  const skipped = []; // tagged mods with no valid block — surfaced for monitoring
+  const skipped = []; // tagged mods with no valid block, surfaced for monitoring
 
   for (const node of nexusNodes || []) {
     const nexusId = String(node.modId);
@@ -122,7 +122,7 @@ export function buildDataset({ manualMods, tagsDict, excluded, nexusNodes, distr
 
   // One representation: the full record, keyed by id (the by-id endpoint reads
   // full[id]; the list endpoint serves Object.values(full), which keeps the
-  // alphabetical order of `all`). No separate slim array — consumers derive any
+  // alphabetical order of `all`). No separate slim array; consumers derive any
   // aggregate (counts, category breakdown) by grouping these records locally.
   const cutoffMs = nowMs - RECENTLY_UPDATED_DAYS * 86400000;
   const full = {};
@@ -132,7 +132,7 @@ export function buildDataset({ manualMods, tagsDict, excluded, nexusNodes, distr
     const thumbs = resolveThumbs(entry);
     // Server-computed polyfill for the clockless in-game consumer. Content ×
     // wall-clock, so it must ride the periodically-rehashed content (refresh.js
-    // recomputes it every cron tick) — never materialize-once. NaN (bad/absent
+    // recomputes it every cron tick), never materialise-once. NaN (bad/absent
     // date) → false.
     const recently_updated = thumbs.updated_at
       ? Date.parse(thumbs.updated_at) > cutoffMs

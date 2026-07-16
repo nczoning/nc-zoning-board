@@ -1,11 +1,11 @@
 /**
- * NC Zoning Board — Main Application Logic
- * DOM manipulation, map initialization, event handlers, sidebar, modals, image gallery.
+ * NC Zoning Board: Main Application Logic
+ * DOM manipulation, map initialisation, event handlers, sidebar, modals, image gallery.
  * Depends on: constants.js, utils.js, services.js (via NCZ namespace).
  */
 
 document.addEventListener("DOMContentLoaded", () => {
-  // Terminal header close buttons — delegates to each modal's existing close button
+  // Terminal header close buttons: delegates to each modal's existing close button
   document.querySelectorAll(".terminal-close-btn[data-close-modal]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const modal = document.getElementById(btn.dataset.closeModal);
@@ -17,7 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // Welcome Modal Logic — runs immediately, independent of map loading
+  // Welcome Modal Logic: runs immediately, independent of map loading
   const welcomeModal = document.getElementById("welcome-modal");
   const closeModalBtn = document.getElementById("close-modal");
 
@@ -47,7 +47,7 @@ document.addEventListener("DOMContentLoaded", () => {
     aboutModal.classList.add("hidden");
   });
 
-  // WebGPU-unsupported notice — footer button. The header X is handled by the
+  // WebGPU-unsupported notice: footer button. The header X is handled by the
   // delegated .terminal-close-btn[data-close-modal] listener above.
   const closeWebgpuModalBtn = document.getElementById("close-webgpu-unsupported-modal");
   if (closeWebgpuModalBtn) {
@@ -132,7 +132,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Reflect a theme's render-toggle defaults (--scene-grade / --scene-edge-glow)
   // into the Settings checkboxes. Reads the CSS var directly so it's independent
-  // of the scene's async build timing (buildings — and thus glow — finish after
+  // of the scene's async build timing (buildings, and thus glow, finish after
   // init resolves). Called at initial load and on every theme switch, both of
   // which reset the toggles to the active theme's default.
   function syncRenderToggles() {
@@ -169,12 +169,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // so both renderers pick up the new CSS custom properties immediately.
     NCZ.ThreeScene?.updateMaterials();
     // A theme switch resets the LUT grade + edge glow to the new theme's
-    // defaults — reflect that in the Settings toggles.
+    // defaults; reflect that in the Settings toggles.
     syncRenderToggles();
     NCZ._clearOverlayCache?.();
   }
 
-  // Expose for flyover.js — persist:false so showcase changes don't overwrite
+  // Expose for flyover.js; persist:false so showcase changes don't overwrite
   // the user's saved preference in localStorage.
   NCZ.applyTheme = (id) => applyThemeById(id, { persist: false });
 
@@ -548,7 +548,7 @@ async function initMap() {
   const southWest = map.unproject([0, 16384], maxNativeZoom);
   const northEast = map.unproject([16384, 0], maxNativeZoom);
   const mapBounds = new L.LatLngBounds(southWest, northEast);
-  const panEdgeFraction = 0.5; // Let each map edge travel about halfway toward screen center.
+  const panEdgeFraction = 0.5; // Let each map edge travel about halfway toward screen centre.
 
   function updatePannableBounds() {
     const size = map.getSize();
@@ -597,15 +597,15 @@ async function initMap() {
   // switchView calls it after toggling so the open popup persists across views.
   let onViewSwitched = null;
   // Set false once WebGPU is known unavailable (forceSatFallback). Blocks any
-  // re-entry into the broken 3D view — deep link, keyboard, stray call.
+  // re-entry into the broken 3D view: deep link, keyboard, stray call.
   let threeDAvailable = true;
   let webgpuFallbackDone = false;
-  // ?gamelight — calibration reference mode. Pins the 3D scene to the decoded
+  // ?gamelight: calibration reference mode. Pins the 3D scene to the decoded
   // in-game 3D-map lighting state: sun fixed at the 3dmap.envparam
   // GlobalLightOverride (azimuth 107.12°, elevation 7°), time-of-day slider
   // frozen, and the Districts/Pins overlays stripped so the terrain/buildings
   // can be colour-matched against the in-game SDR capture without obstruction.
-  // A reproducible reference frame — same URL always yields the identical
+  // A reproducible reference frame: same URL always yields the identical
   // lighting state. Debug/calibration only; not linked from the UI.
   const GAMELIGHT = new URLSearchParams(window.location.search).has('gamelight');
   function switchView(viewName) {
@@ -620,7 +620,7 @@ async function initMap() {
     });
 
     if (viewName === "schema") {
-      // Capture the Leaflet viewport BEFORE hiding #map — getCenter()/getSize()
+      // Capture the Leaflet viewport BEFORE hiding #map: getCenter()/getSize()
       // only read true while the container is laid out. On the *first* SCHEMA
       // entry the scene isn't built yet, so the E5 intro owns the framing; on
       // later toggles we carry the 2D viewport across.
@@ -636,12 +636,12 @@ async function initMap() {
       Promise.resolve(NCZ.ThreeScene.init("map-3d"))
         .then(() => {
           // init() aborts early (no render loop wired) when the renderer fell
-          // back to WebGL2 — buildings can't run there. Don't show a broken
+          // back to WebGL2 (buildings can't run there). Don't show a broken
           // 3D scene: drop the user onto the 2D Leaflet map instead.
           if (NCZ.ThreeScene.isWebGPUActive()) {
             NCZ.ThreeScene.startRenderLoop();
             if (GAMELIGHT) applyGameLightRef();
-            // Sync the 2D viewport into the 3D camera — but only once the scene
+            // Sync the 2D viewport into the 3D camera, but only once the scene
             // already exists, so the first-entry intro fly-in isn't stomped.
             if (wasInit) NCZ.ThreeScene.frameLeafletView({ ...leafletView, leafletPxW });
           } else {
@@ -652,7 +652,7 @@ async function initMap() {
       // Carry the 3D camera's viewport back to the Leaflet map. Capture from the
       // canvas (Leaflet-independent) before showing #map; round zoom to an
       // integer for tile crispness, clamp to the map's range. Use the *visible*
-      // 3D container's width for the px basis — map.getSize() reads 0 while #map
+      // 3D container's width for the px basis: map.getSize() reads 0 while #map
       // is still display:none, which would collapse the derived zoom.
       const view = NCZ.ThreeScene.getLeafletView?.({ leafletPxW: map3dEl.clientWidth });
       map3dEl.style.display = "none";
@@ -669,7 +669,7 @@ async function initMap() {
 
   // Frame the 2D map at the view equivalent to the *default* 3D framing (the E5
   // intro rest pose). Used by the WebGPU fallback, where the 3D camera never
-  // gets built — without this the map sits at its init fitBounds(mapBounds)
+  // gets built; without this the map sits at its init fitBounds(mapBounds)
   // (the whole 16k image, framing nothing). Runs the intro rest constants
   // through the same horizontal-extent transform a real SCHEMA→SAT switch uses,
   // so the fallback lands exactly where switching to 2D from the default 3D view
@@ -698,7 +698,7 @@ async function initMap() {
     threeDAvailable = false;
     switchView("sat");
     // switchView's SAT branch can't carry a view across (no 3D camera exists on
-    // the fallback), so it leaves the init fitBounds in place — override it with
+    // the fallback), so it leaves the init fitBounds in place; override it with
     // the default 3D-equivalent framing now that #map is laid out.
     applyDefaultSatView();
     const schemaBtn = document.querySelector('.map-view-btn[data-view="schema"]');
@@ -719,26 +719,26 @@ async function initMap() {
     NCZ.ThreeScene.resetCamera();
   });
 
-  // ── Sun slider — time of day at Morro Bay, CA (Night City's real-world location)
+  // ── Sun slider: time of day at Morro Bay, CA (Night City's real-world location)
   // Slider values are always in Morro Bay PDT (UTC-7, the summer offset).
   // All conversions use UTC internally so the browser's local timezone never
   // affects the sun position calculation.
   const SUN_LAT  = 35.370781, SUN_LNG = -120.851173;
   const PDT_OFFSET = -7; // Morro Bay summer (PDT) = UTC-7
-  // June 21 at UTC midnight — year doesn't matter for sun geometry
+  // June 21 at UTC midnight; year doesn't matter for sun geometry
   const SOLSTICE = new Date(Date.UTC(new Date().getFullYear(), 5, 21));
 
   const sunSlider      = document.getElementById("scene-sun-slider");
   const sunTimeDisplay = document.getElementById("scene-sun-time");
 
-  // The decoded 3dmap.envparam GlobalLightOverride sun — fixed, no time of day.
+  // The decoded 3dmap.envparam GlobalLightOverride sun: fixed, no time of day.
   const GAMELIGHT_SUN_AZIMUTH   = 107.121956 * Math.PI / 180;
   const GAMELIGHT_SUN_ELEVATION = 7 * Math.PI / 180;
 
   function applySunTime(morroMinutes) {
-    // ?gamelight — pin to the decoded reference sun, ignore the slider value.
+    // ?gamelight: pin to the decoded reference sun, ignore the slider value.
     // Gating here (not just at the call sites) means every path that drives the
-    // sun — slider setup, terrain-loaded apply, the UI-sync poll — keeps it
+    // sun (slider setup, terrain-loaded apply, the UI-sync poll) keeps it
     // pinned, so the reference frame can't drift.
     if (GAMELIGHT) {
       NCZ.ThreeScene?.setSunPosition?.(GAMELIGHT_SUN_AZIMUTH, GAMELIGHT_SUN_ELEVATION);
@@ -752,7 +752,7 @@ async function initMap() {
     date.setUTCHours((Math.floor(morroMinutes / 60) - PDT_OFFSET) % 24, morroMinutes % 60, 0, 0);
     const pos = SunCalc.getPosition(date, SUN_LAT, SUN_LNG);
     NCZ.ThreeScene.setSunPosition(pos.azimuth, pos.altitude);
-    // Time-of-day exposure — floor the dark ends without flattening the natural
+    // Time-of-day exposure: floor the dark ends without flattening the natural
     // day/night variation. Keyed on elevation so the flyover shares it. See
     // NCZ.SCENE_EXPOSURE_CURVE + NCZ.exposureForSunElevation.
     NCZ.ThreeScene?.setSceneExposure?.(NCZ.exposureForSunElevation(pos.altitude));
@@ -775,7 +775,7 @@ async function initMap() {
       sunSlider.max = 1216;
     }
 
-    // Default: 8:00 AM PDT — sun ~24° elevation from the east. The high-noon
+    // Default: 8:00 AM PDT (sun ~24° elevation from the east). The high-noon
     // default (10am, el 48°) over-lights building tops under the new photometric
     // lighting; a moderate morning sun reads as 3D-massed city without blasting.
     const DEFAULT_SUN_MINUTES = 480;
@@ -798,7 +798,7 @@ async function initMap() {
     });
   }
 
-  // Settings → "Edge glow" toggle — binary self-lit building edges. Same
+  // Settings → "Edge glow" toggle: binary self-lit building edges. Same
   // override-the-theme-default pattern as the LUT toggle above.
   const glowToggle = document.getElementById("edge-glow-toggle");
   if (glowToggle) {
@@ -807,7 +807,7 @@ async function initMap() {
     });
   }
 
-  // Settings → "Fixed building assets" toggle — selects the 3D-map building
+  // Settings → "Fixed building assets" toggle: selects the 3D-map building
   // asset set: checked = malgalad's alignment-fixed textures, unchecked =
   // base-game. Unlike the render toggles above, this is a PERSISTED user
   // preference (localStorage, not theme-scoped). The building data is CPU-
@@ -823,7 +823,7 @@ async function initMap() {
     });
   }
 
-  // ?gamelight — apply the calibration reference state once the 3D scene is
+  // ?gamelight: apply the calibration reference state once the 3D scene is
   // live (called from switchView's schema branch). The sun is already pinned
   // by applySunTime()'s GAMELIGHT gate; here we freeze the slider and strip the
   // Districts/Pins overlays so they don't obscure the surfaces being matched
@@ -846,7 +846,7 @@ async function initMap() {
 
   const flyoverBtn = document.getElementById("scene-flyover-btn");
   // Elements to hide during showcase. We save each one's inline display value
-  // so we can restore it exactly — this handles elements that JS may have
+  // so we can restore it exactly; this handles elements that JS may have
   // already toggled (e.g. sidebar-open uses a .visible class, not display).
   const _showcaseEls = [];
 
@@ -940,9 +940,9 @@ async function initMap() {
     NCZ.Flyover.startFlyover(opts); // creates and manages the fade overlay internally
     flyoverBtn.classList.add("active");
     flyoverBtn.textContent = "Exit showcase";
-    // Request native browser fullscreen — must be called from a user gesture (button click)
+    // Request native browser fullscreen; must be called from a user gesture (button click)
     document.documentElement.requestFullscreen().catch(() => {});
-    // Reconcile the renderer + CSS2DRenderer to the new container size — the
+    // Reconcile the renderer + CSS2DRenderer to the new container size: the
     // fullscreen class grows #map-3d without firing a window resize, and the
     // CSS2DRenderer must adopt the new client size or every pin/cluster/
     // district label drifts off its world anchor (#769). (Mid-showcase
@@ -1016,7 +1016,7 @@ async function initMap() {
     if (!document.fullscreenElement && flyoverBtn.classList.contains("active")) exitShowcase();
   });
 
-  // Overlay toggles — delegate to the right renderer based on active view
+  // Overlay toggles: delegate to the right renderer based on active view
   document.querySelectorAll("[data-overlay]").forEach(checkbox => {
     checkbox.addEventListener("change", () => {
       const overlay = checkbox.dataset.overlay;
@@ -1030,7 +1030,7 @@ async function initMap() {
     });
   });
 
-  // UI sync — keep overlay checkboxes and sun slider in sync with actual scene state.
+  // UI sync: keep overlay checkboxes and sun slider in sync with actual scene state.
   // Runs at 200ms so console commands (setLayerVisibility, setCameraState etc.)
   // are reflected immediately in the UI. Cost: negligible (boolean reads + DOM writes
   // that short-circuit when unchanged).
@@ -1038,7 +1038,7 @@ async function initMap() {
   setInterval(() => {
     if (!NCZ.ThreeScene?.getLayerVisibility) return;
 
-    // ?gamelight — hold the calibration reference state. Districts and the
+    // ?gamelight: hold the calibration reference state. Districts and the
     // shadow pass initialise asynchronously (after terrain load), so the
     // one-shot applyGameLightRef() can't catch them; re-assert here. The
     // checkbox sync below then unticks them to match. Guarded so it's a no-op
@@ -1058,7 +1058,7 @@ async function initMap() {
       if (vis !== null && cb.checked !== vis) cb.checked = vis;
     });
 
-    // Sun slider — reverse-map scene elevation back to morroMinutes via SunCalc scan
+    // Sun slider: reverse-map scene elevation back to morroMinutes via SunCalc scan
     if (sunSlider && typeof SunCalc !== 'undefined') {
       const el = NCZ.ThreeScene.getSunElevation?.();
       if (el !== undefined && el !== _lastPolledSunEl) {
@@ -1092,7 +1092,7 @@ async function initMap() {
     maxClusterRadius: 40,
     iconCreateFunction: function (cluster) {
       const count = cluster.getChildCount();
-      // Color ramp uses 10 steps across a bounded 0..100 count range.
+      // Colour ramp uses 10 steps across a bounded 0..100 count range.
       const boundedCount = Math.max(0, Math.min(count, 100));
       const colorStep = Math.round(boundedCount / 11);
 
@@ -1119,17 +1119,17 @@ async function initMap() {
   let focusedRestoreFrame = null;
   // The single non-panel marker currently pulled out of the cluster group
   // for focus (Discover / sidebar / deep-link). The 2D analogue of 3D's
-  // "popupModId is excluded from the clusterer" rule — replaces spiderfy as
+  // "popupModId is excluded from the clusterer" rule; replaces spiderfy as
   // the way a clustered-but-focused pin stays visible. Panel-set markers are
   // owned by applyPanelPinFocus instead; this is only for the lone-pin paths.
   let soloFocusMarker = null;
 
   // ?mod= deep-link sync. Mirrors NCZ.ThreeMarkers.syncUrlForMod so the two
   // views stay coherent. Called EAGERLY when focus is initiated (not only
-  // from popupopen) — the popup now opens deferred (on flyTo's moveend), so
+  // from popupopen): the popup now opens deferred (on flyTo's moveend), so
   // waiting for popupopen left a window where switching views lost the
-  // pin (the "shared camera/popup broken on clustered pins" bug: clustered
-  // pins go through the deferred path, unclustered ones opened synchronously).
+  // pin (clustered pins go through the deferred path; unclustered ones
+  // opened synchronously and were unaffected).
   function setModUrlParam(mod) {
     if (!mod) return;
     const isNum = /^\d+$/.test(String(mod.nexus_id));
@@ -1160,7 +1160,7 @@ async function initMap() {
 
   // Safety net only: re-open the focused popup if it closed while the marker
   // is an un-clustered singleton. Spiderfy was removed entirely (per product
-  // decision) — focused/selected markers are now kept visible by pulling
+  // decision); focused/selected markers are now kept visible by pulling
   // them OUT of the cluster group (soloFocusMarker / applyPanelPinFocus), so
   // a focused marker is never hidden inside a bubble and never needs
   // spiderfying. For force-individual markers this whole function early-
@@ -1424,7 +1424,7 @@ async function initMap() {
 
   // True only while pin emphasis is actually applied (a panel item was
   // clicked). Lets clearPanelPinFocus() short-circuit when there's nothing
-  // to undo — important because populateClusterPanel() calls it on EVERY
+  // to undo; important because populateClusterPanel() calls it on EVERY
   // (re)populate, including the high-frequency successor-tracking path
   // during camera moves. Without this, each successor recompute would do a
   // full marker sweep + a synchronous 3D recomputeClusters for no reason.
@@ -1463,7 +1463,7 @@ async function initMap() {
   // True iff `set` contains exactly the IDs in `list`. Used by both cluster
   // bubble click handlers (2D + 3D) to detect "user clicked the cluster
   // whose contents are already in the panel" → toggle-close instead of
-  // re-populate. Cheap O(n) — cluster sizes are bounded by markercluster's
+  // re-populate. Cheap O(n): cluster sizes are bounded by markercluster's
   // disable-clustering-at-zoom threshold.
   function isSameModSet(set, list) {
     if (!set || set.size !== list.length) return false;
@@ -1479,7 +1479,7 @@ async function initMap() {
   // above its now-faded neighbours; 3D delegates to ThreeMarkers, which sets
   // the inner .marker-pin opacity (the only mechanism that survives
   // CSS2DRenderer's per-frame inline restyling). Two mechanisms, one
-  // behaviour — the divergence is forced by the two views' DOM lifecycles,
+  // behaviour: the divergence is forced by the two views' DOM lifecycles,
   // not parallel styling.
   function applyPanelPinFocus() {
     if (!panelClusterModIds) return;
@@ -1487,7 +1487,7 @@ async function initMap() {
       const marker = allMarkers.find((m) => m.modData.id === id);
       if (!marker) continue;
       // 2D force-individual: Leaflet.markercluster has no per-marker
-      // "don't cluster" flag — the idiomatic way to keep specific markers
+      // "don't cluster" flag; the idiomatic way to keep specific markers
       // always visible is to pull them out of the cluster group and add
       // them straight to the map. Idempotent: only move if still grouped.
       if (markerClusterGroup.hasLayer(marker)) {
@@ -1508,7 +1508,7 @@ async function initMap() {
 
   // Restore every panel pin to full opacity / default stacking. Must run
   // before panelClusterModIds is cleared (it drives the 2D iteration).
-  // No-ops unless emphasis was actually applied — keeps the per-populate
+  // No-ops unless emphasis was actually applied; keeps the per-populate
   // call cheap and breaks the populateClusterPanel→clear→setForced→recompute
   // re-entry in the common (no pin picked) case.
   function clearPanelPinFocus() {
@@ -1521,7 +1521,7 @@ async function initMap() {
         marker.setZIndexOffset(0);
         // Return the marker to the cluster group so it re-clusters normally.
         // Only if we actually pulled it out (standalone on the map and not
-        // in the group) — guards the cluster-mode-then-close path where no
+        // in the group); guards the cluster-mode-then-close path where no
         // marker was ever moved.
         if (map.hasLayer(marker) && !markerClusterGroup.hasLayer(marker)) {
           map.removeLayer(marker);
@@ -1556,13 +1556,12 @@ async function initMap() {
   //    visible during the fly = no vibration.
   // 2. Sync ?mod= EAGERLY (not from popupopen). The popup is opened deferred
   //    on moveend, so a view switch during the fly would otherwise see no
-  //    ?mod= and fail to restore — that's the "shared camera/popup broken
-  //    on clustered pins" report (clustered pins route through this deferred
+  //    ?mod= and fail to restore (clustered pins route through this deferred
   //    path; unclustered ones open synchronously and were unaffected).
   // 3. Open the popup only once the flyTo settles. `opened` + the
   //    `focusedMarker === marker` guard handle rapid re-clicks (flyTo B
   //    interrupts flyTo A → A's moveend still fires, but focus moved on).
-  // targetZoom never zooms OUT — keep the user's zoom if already close.
+  // targetZoom never zooms OUT; keep the user's zoom if already close.
   // (6/8 is a building-detail zoom; tune here if it feels too near/far.)
   function flyToMarkerAndOpen(marker) {
     map.closePopup();
@@ -1581,7 +1580,7 @@ async function initMap() {
 
   // Pull `marker` out of the cluster group so a clustered-but-focused pin is
   // visible without spiderfy. Returns the previously soloed marker to the
-  // group first — unless it belongs to an active panel set, which
+  // group first, unless it belongs to an active panel set, which
   // applyPanelPinFocus / clearPanelPinFocus own. This is the lone-pin path
   // (Discover / sidebar / deep-link); the panel path force-individuals the
   // whole set separately.
@@ -1590,9 +1589,9 @@ async function initMap() {
   // prev's popup → the popupclose handler's solo-release branch fires
   // re-entrantly; if `soloFocusMarker` still pointed at `prev` there, that
   // branch would call setSoloFocusMarker(null) mid-call and the line below
-  // would `markerClusterGroup.addLayer(null)` — prev removed from the map
-  // and never re-added = the "Discover removes the pin when clicked again"
-  // bug. Reassigning first makes `popupSource === soloFocusMarker` false in
+  // would `markerClusterGroup.addLayer(null)`: prev removed from the map
+  // and never re-added, so a second click on a Discover pin deleted it.
+  // Reassigning first makes `popupSource === soloFocusMarker` false in
   // the re-entrant check, so it no-ops; using the `prev` local makes the
   // re-add robust regardless.
   function setSoloFocusMarker(marker) {
@@ -1624,7 +1623,7 @@ async function initMap() {
 
   // Panel-item focus. The marker is already individual (applyPanelPinFocus
   // pulled the whole panel set out of the cluster group before this runs),
-  // so just fly + open — no solo bookkeeping needed.
+  // so just fly + open; no solo bookkeeping needed.
   function flyToPanelMarker(marker) {
     flyToMarkerAndOpen(marker);
   }
@@ -1666,10 +1665,10 @@ async function initMap() {
     discoverLocationBtn.addEventListener("click", focusRandomVisibleMarker);
   }
 
-  // Populates the cluster panel with a sorted list of mods. View-agnostic —
+  // Populates the cluster panel with a sorted list of mods. View-agnostic:
   // both the Leaflet clusterclick handler and ThreeMarkers cluster clicks
   // call this. onItemClick receives the mod object; the active view flies to
-  // it (focusMarker for SAT, NCZ.ThreeMarkers.focusMod for SCHEMA) — the fly
+  // it (focusMarker for SAT, NCZ.ThreeMarkers.focusMod for SCHEMA); the fly
   // dissolves the cluster but the panel stays open as a comparison list, so
   // the user can click each member in turn. The clicked pin is kept at full
   // opacity and the rest dim (applyPanelPinFocus).
@@ -1745,7 +1744,7 @@ async function initMap() {
           // applyPanelPinFocus must run BEFORE the fly so the whole panel
           // set is already pulled out of the cluster group (2D) / excluded
           // from the clusterer (3D); otherwise the bubble persists through
-          // the fly (the original recording bug). The panel stays open on
+          // the fly. The panel stays open on
           // desktop; mobile still closes it (full-screen panel + fly +
           // popup at once is too much there).
           panelSelectedModId = mod.id;
@@ -1799,9 +1798,11 @@ async function initMap() {
   map.on("click", hideClusterPanel);
   map.on("zoomstart", () => {
     isZoomTransitioning = true;
-    // Note: cluster panel intentionally stays open on zoom (matches SCHEMA).
-    // Closing only happens via outside-click (map.on("click") above), the
-    // close button, view switch, or 3D successor-cluster going stale.
+    // Note: the cluster panel intentionally stays open during the zoom
+    // animation (matches SCHEMA). recomputeSatClusterPanel runs on zoomend
+    // and closes it only if its cluster dissolved or went singleton; the
+    // other close paths (outside-click, close button, toggle re-click,
+    // view switch) are unaffected by zoom.
   });
   map.on("zoomend", () => {
     isZoomTransitioning = false;
@@ -1814,7 +1815,7 @@ async function initMap() {
     // B7: primary data path is the server-built Data API (/v1). It already does
     // the manual + Nexus auto-discovery merge, district enrichment and thumbnail
     // resolution server-side, so the browser makes no Nexus calls here. tags.json
-    // stays a local static fetch (same-origin — not the Nexus fragility this
+    // stays a local static fetch (same-origin, not the Nexus fragility this
     // replaces). If the API is unavailable we fall back to the legacy
     // client-side merge, so the map never regresses during the transition.
     let mods, nexusThumbs, tagsDict;
@@ -1837,7 +1838,7 @@ async function initMap() {
       mods = fb.mods;
       nexusThumbs = fb.nexusThumbs;
       tagsDict = fb.tagsDict;
-      // No API envelope on the fallback path — compute recency with the constant.
+      // No API envelope on the fallback path; compute recency with the constant.
       NCZ.recentlyUpdatedDays = NCZ.RECENTLY_UPDATED_DAYS;
       console.log(`Data source: client-side fallback — ${mods.length} mods`);
     }
@@ -1845,14 +1846,14 @@ async function initMap() {
     modCountEl.textContent = `(${mods.length})`;
 
     const sortedMods = mods.sort(NCZ.sortModsByUpdated);
-    // Hand the same data set to the 3D pin layer — pins won't appear until ThreeScene
+    // Hand the same data set to the 3D pin layer; pins won't appear until ThreeScene
     // is initialised (first switch to SCHEMA), but the call is safe before that and the
     // data is held internally so the layer can build pins on attach.
     NCZ.ThreeMarkers?.setMods?.(sortedMods, nexusThumbs, tagsDict);
-    // District info panel stats — attribute each mod to its district/subdistrict.
+    // District info panel stats: attribute each mod to its district/subdistrict.
     NCZ.DistrictInfo?.setMods?.(sortedMods);
 
-    // Cluster panel wiring — both views call the same populateClusterPanel
+    // Cluster panel wiring: both views call the same populateClusterPanel
     // helper. Registered here (inside the try block) so each handler's
     // closure can pass `nexusThumbs` and reference the loaded `mods` array.
 
@@ -1865,7 +1866,7 @@ async function initMap() {
         .sort((left, right) => NCZ.sortModsByUpdated(left.modData, right.modData));
       const childMods = childMarkers.map((m) => m.modData);
       // Toggle-close: re-clicking the cluster whose contents the panel shows
-      // closes it — but only before a pin was picked. Once a pin is selected
+      // closes it, but only before a pin was picked. Once a pin is selected
       // the cluster has dissolved (flown into), so this path can't be hit
       // for that cluster anyway; the guard makes the intent explicit.
       if (
@@ -1887,7 +1888,7 @@ async function initMap() {
     // 3D (ThreeMarkers) cluster click → cluster panel
     NCZ.ThreeMarkers?.setClusterClickHandler?.((modIds) => {
       // Toggle-close on the active cluster, before a pin is picked (parity
-      // with 2D — see that handler for the rationale).
+      // with 2D; see that handler for the rationale).
       if (panelSelectedModId === null && isSameModSet(panelClusterModIds, modIds)) {
         hideClusterPanel();
         return;
@@ -1909,17 +1910,17 @@ async function initMap() {
 
     // 3D map-aware panel: when 3D clusters recompute (camera moved/zoomed/
     // tilted), follow the cluster the panel was opened for. Find the
-    // "successor" — the current cluster with the most overlap with the
-    // panel's mod set — and update the panel's contents to match. Close
+    // "successor" (the current cluster with the most overlap with the
+    // panel's mod set) and update the panel's contents to match. Close
     // only when no current cluster has any of the original mods, OR the
     // best successor has fewer than 2 mods (no longer a real cluster).
     NCZ.ThreeMarkers?.setClustersChangedHandler?.((clusterSets) => {
       if (!panelClusterModIds || panelClusterModIds.size === 0) return;
-      // Once a pin is picked the panel is a static comparison list — the
+      // Once a pin is picked the panel is a static comparison list; the
       // flyTo already dissolved the cluster it tracked, so don't let the
       // recompute close or rewrite the panel out from under the user.
       if (panelSelectedModId !== null) return;
-      // Skip while SAT is active — SAT panel state is independent.
+      // Skip while SAT is active; SAT panel state is independent.
       if (mapEl.style.display !== "none") return;
 
       let bestSet = null;
@@ -1970,7 +1971,7 @@ async function initMap() {
       // Pin picked → static comparison list; the panel set is force-
       // individual now, so don't auto-close or rewrite the panel.
       if (panelSelectedModId !== null) return;
-      // Skip while SCHEMA is active — SCHEMA panel state is independent.
+      // Skip while SCHEMA is active; SCHEMA panel state is independent.
       if (mapEl.style.display === "none") return;
 
       // Group panel mods by their current visible parent (cluster or singleton).
@@ -2011,7 +2012,7 @@ async function initMap() {
       }
 
       // Skip rebuild if membership identical (avoid flicker during continuous interaction).
-      // Still re-apply the active mark — Leaflet recreates cluster DOM elements
+      // Still re-apply the active mark: Leaflet recreates cluster DOM elements
       // on zoom, so the previously-marked element may no longer exist.
       if (childMarkers.length === panelClusterModIds.size) {
         let identical = true;
@@ -2037,7 +2038,7 @@ async function initMap() {
     // Re-evaluate SAT panel after Leaflet finishes its zoom transition (clusters
     // recomputed at the new zoom level).
     map.on("zoomend", recomputeSatClusterPanel);
-    // markercluster fires animationend after cluster animations settle —
+    // markercluster fires animationend after cluster animations settle;
     // covers zoom-driven cluster regrouping (spiderfy is no longer used).
     markerClusterGroup.on("animationend", recomputeSatClusterPanel);
 
@@ -2117,7 +2118,7 @@ async function initMap() {
         });
 
         // Pulse marker (or parent cluster) on sidebar hover. Both views share
-        // the `.pulsing` class + @keyframes markerPulse — calling both layers
+        // the `.pulsing` class + @keyframes markerPulse; calling both layers
         // is idempotent and keeps SAT/SCHEMA in sync without checking which
         // is active.
         li.addEventListener("mouseenter", () => {
@@ -2156,7 +2157,7 @@ async function initMap() {
     // its visible framing comes from view-sync on a SCHEMA→SAT switch, or from
     // applyDefaultSatView() on the WebGPU fallback. A fit-to-all-pins default
     // squashed the city into a corner (badlands outliers stretch the bounds) and
-    // only ever showed on the fallback — superseded by the 3D-equivalent default.
+    // only ever showed on the fallback; superseded by the 3D-equivalent default.
 
     // Deep-link: open pin if ?mod= is in the URL
     const deepLinkParam = new URLSearchParams(window.location.search).get(NCZ.URL_PARAM_MOD);
@@ -2169,7 +2170,7 @@ async function initMap() {
 
     // Re-open the popup in the freshly-activated view. Both ThreeMarkers and
     // the Leaflet popupopen handler keep ?mod= in sync, so this restore picks
-    // up whatever was open before the switch — popups stay coherent across modes.
+    // up whatever was open before the switch; popups stay coherent across modes.
     onViewSwitched = (viewName) => {
       // Cluster panel state is view-specific: SAT and SCHEMA cluster differently
       // (Leaflet's stable IDs vs Three's screen-space recompute), so the panel's
@@ -2340,7 +2341,7 @@ async function initMap() {
     }
     updateSearchClearButtonVisibility();
 
-    // Centralized Filter Logic
+    // Centralised Filter Logic
     function applyFilters() {
       const query = searchInput.value.toLowerCase();
       const activeCats = Array.from(
@@ -2381,7 +2382,7 @@ async function initMap() {
       // Apply same filter set to 3D pin layer
       NCZ.ThreeMarkers?.applyFilters?.(visibleIds);
 
-      // SAT cluster panel may need to update or close after filter change —
+      // SAT cluster panel may need to update or close after filter change:
       // some of its mods might no longer be in the visible cluster set.
       recomputeSatClusterPanel();
 

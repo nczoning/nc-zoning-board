@@ -84,7 +84,7 @@ jobs:
 
               const existingData = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
-              // Prepare new data — keep existing coordinates if all are blank
+              // Prepare new data: keep existing coordinates if all are blank
               let coordX, coordY, coordZ;
               const hasNewCoords = coordXRaw || coordYRaw || coordZRaw;
               if (!hasNewCoords) {

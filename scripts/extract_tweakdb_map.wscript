@@ -4,10 +4,10 @@
  * WolvenKit script to extract map-related TweakDB records for the NC Zoning Board.
  *
  * Extracts:
- *   1. WorldMapSettings — CursorBoundaryMin/Max (map viewport bounds), zoom level refs
- *   2. WorldMapZoomLevel entries — Zoom, Fov, ShowDistricts, ShowSubDistricts, etc.
- *   3. WorldMapFreeCameraSettings — ZoomMin/Max/Default, FovMin/Max
- *   4. District records — LocalizedName, UiState, UiIcon, ParentDistrict hierarchy
+ *   1. WorldMapSettings: CursorBoundaryMin/Max (map viewport bounds), zoom level refs
+ *   2. WorldMapZoomLevel entries: Zoom, Fov, ShowDistricts, ShowSubDistricts, etc.
+ *   3. WorldMapFreeCameraSettings: ZoomMin/Max/Default, FovMin/Max
+ *   4. District records: LocalizedName, UiState, UiIcon, ParentDistrict hierarchy
  *
  * Output:
  *   Saves JSON files to the project raw folder via wkit.SaveToRaw().
@@ -16,7 +16,7 @@
  * Usage:
  *   1. Open your map_data_export project in WolvenKit
  *   2. Open Script Manager, load this script
- *   3. Run — output files appear in your project's raw/ folder
+ *   3. Run; output files appear in your project's raw/ folder
  *
  * Note: TweakDB must be loaded. If GetRecords() returns empty, the script will
  *       attempt a warmup by saving/opening a temporary YAML file.
@@ -306,7 +306,7 @@ function extractDistricts(allRecords) {
 
     Logger.Info("Found " + uniquePaths.length + " potential district records");
 
-    // Extract a manageable subset — focus on known district names
+    // Extract a manageable subset: focus on known district names
     var knownDistricts = [
         "CityCenter", "Watson", "Westbrook", "Heywood",
         "SantoDomingo", "Pacifica", "Badlands", "Dogtown",

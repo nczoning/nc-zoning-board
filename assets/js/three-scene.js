@@ -1,5 +1,5 @@
 /**
- * NC Zoning Board — Three.js Scene
+ * NC Zoning Board: Three.js Scene
  * Namespace: NCZ.ThreeScene
  *
  * Manages the WebGPU renderer, perspective schema camera (FOV 25°, TweakDB-
@@ -31,7 +31,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 // WebGL-only registry) which the three.webgpu build does not expose, so
 // loading them at module-init time throws a SyntaxError before our code ever
 // runs. The webgpu wrapper extends LineSegments2 and pairs with the bundled
-// Line2NodeMaterial — same Line2 API, TSL-based shader, viewport size pulled
+// Line2NodeMaterial: same Line2 API, TSL-based shader, viewport size pulled
 // from the renderer automatically (no `resolution` field to keep in sync).
 import { Line2 } from 'three/addons/lines/webgpu/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
@@ -39,9 +39,9 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import Stats from 'three/addons/libs/stats.module.js';
 // The exact in-game 3D-map colour pipeline (decoded from 3dmap.envparam):
-// ACES tonemap + colour grade + braindance LUT — see assets/js/aces-tonemap.js.
+// ACES tonemap + colour grade + braindance LUT; see assets/js/aces-tonemap.js.
 import { registerCP2077ToneMapping, loadBraindanceLUT, setSceneGradeEnabled } from './aces-tonemap.js';
-// Custom TSL wide-line material for district outlines (#775) — replaces
+// Custom TSL wide-line material for district outlines (#775); replaces
 // THREE.Line2NodeMaterial; see the header of district-line-material.js.
 import { DistrictLineMaterial } from './district-line-material.js';
 
@@ -56,7 +56,7 @@ const ThreeScene = (() => {
   let initialized = false;
   // True only when the renderer ended up on a real WebGPU backend. The webgpu
   // build reports renderer.isWebGPURenderer === true even on its WebGL2
-  // fallback, so that flag can't be trusted — renderer.backend.isWebGPUBackend
+  // fallback, so that flag can't be trusted; renderer.backend.isWebGPUBackend
   // (set by r184's WebGPUBackend, absent on WebGLBackend) is the real signal.
   let _webgpuActive = false;
   let loadingEl      = null;
@@ -74,9 +74,9 @@ const ThreeScene = (() => {
   const _snapX = new THREE.Vector3();
   const _snapY = new THREE.Vector3();
   const _snapZ = new THREE.Vector3();
-  // Last computed shadow fit (half + center) captured by updateShadowCamera —
+  // Last computed shadow fit (half + center) captured by updateShadowCamera,
   // exposed via getShadowSnapshot() for the `__shadowTrace` debug logger.
-  // `fallback` true means rect was degenerate and we used the world-centered
+  // `fallback` true means rect was degenerate and we used the world-centred
   // safety net; `lastUpdateMs` lets us detect frames where updateShadowCamera
   // didn't run.
   let _lastShadowFit = { half: 0, cx: 0, cz: 0, fallback: false, lastUpdateMs: 0 };
@@ -88,7 +88,7 @@ const ThreeScene = (() => {
 
   // Cast rays from the camera through the four NDC corners and intersect with
   // the ground plane (Y=0). The XZ AABB of those four hits is the bounding rect
-  // of what the camera sees on the ground — used by pan bounds, scale bar, and
+  // of what the camera sees on the ground; used by pan bounds, scale bar, and
   // the shadow camera footprint. Works for any camera type (orthographic via
   // unproject's projection-matrix inversion, perspective likewise).
   // Mutates and returns _groundRectMin / _groundRectMax.
@@ -113,8 +113,8 @@ const ThreeScene = (() => {
   }
 
   // Bounding sphere (centroid + enclosing radius) of the visible-ground footprint.
-  // Same four corner ray-casts as _computeVisibleGroundRect, but the sphere — unlike
-  // the AABB — is invariant under camera azimuth: rotating the view yields a congruent
+  // Same four corner ray-casts as _computeVisibleGroundRect, but the sphere (unlike
+  // the AABB) is invariant under camera azimuth: rotating the view yields a congruent
   // ground footprint, so its corners' pairwise distances (hence the radius) don't
   // change and the centroid only translates. updateShadowCamera fits the sun's ortho
   // box to this so the shadow texel size stays constant as you pan/rotate, which is the
@@ -153,18 +153,18 @@ const ThreeScene = (() => {
     _groundSphereRadius = Math.sqrt(r2);
   }
   let _shadowsOn     = true;  // shadows on by default; checkbox reflects this via poll
-  // Stored shadow strength — independent of the on/off toggle. Initialised from
+  // Stored shadow strength, independent of the on/off toggle. Initialised from
   // the constant; the Shadows overlay multiplies by this when enabled, by 0 when
   // off (so the tuned strength survives a Shadows toggle).
   let _shadowIntensity = NCZ.SHADOW_INTENSITY;
-  let _sunSphere     = null; // visible sun disc — shown during showcase only
-  let _sunAz = Math.PI * 0.25, _sunEl = Math.PI * 0.35; // last *requested* setSunPosition args — placeholders only until the first call (the slider init in app.js), which may land before the lights exist
+  let _sunSphere     = null; // visible sun disc; shown during showcase only
+  let _sunAz = Math.PI * 0.25, _sunEl = Math.PI * 0.35; // last *requested* setSunPosition args; placeholders only until the first call (the slider init in app.js), which may land before the lights exist
   let _terrainBox = null;     // THREE.Box3 of the terrain GLB; gates pan-bound clamp
                               // because the bound shouldn't activate before terrain loads
   let _introTween   = null;   // E5 intro fly-in tween, or null when idle
   let _introLastTime = 0;     // performance.now() of the previous intro frame
 
-  // Material refs — stored so updateMaterials() can re-apply theme colors live
+  // Material refs, stored so updateMaterials() can re-apply theme colours live
   let terrainMat = null;
   let waterMat   = null;
   let cliffsMat  = null;
@@ -173,18 +173,18 @@ const ThreeScene = (() => {
   let normalRoadsMat  = null;  // Normal depth-tested pass
   let normalBordersMat= null;  // Normal depth-tested pass
   let metroMat        = null;
-  let metroDistanceUniform = null; // TSL uniform() — schema camera-to-target distance; drives metro LOD tier discard (mutex)
+  let metroDistanceUniform = null; // TSL uniform(): schema camera-to-target distance; drives metro LOD tier discard (mutex)
   // Captured at WebGPURenderer construction so dumpDebugInfo can introspect
-  // the antialias flag — WebGPURenderer has no getContextAttributes() to read it
+  // the antialias flag; WebGPURenderer has no getContextAttributes() to read it
   // back from, unlike WebGLRenderer.
   let _rendererInitParams = null;
 
   // ── Phase 2B compute culling state ─────────────────────────────────────
   // TWO 6-plane frustum sets shared by every district's cull compute:
-  //   • _frustumPlaneUniforms       — the camera frustum (what the user sees)
-  //   • _shadowFrustumPlaneUniforms — the sun's shadow camera frustum (what
+  //   • _frustumPlaneUniforms:       the camera frustum (what the user sees)
+  //   • _shadowFrustumPlaneUniforms: the sun's shadow camera frustum (what
   //                                   the shadow map covers)
-  // An instance is visible to the cull if it passes EITHER frustum — so an
+  // An instance is visible to the cull if it passes EITHER frustum, so an
   // off-screen building still in the shadow ortho box gets into the indirect
   // buffer and casts its shadow into the visible area. (Phase 2B originally
   // tested only the camera frustum, which made shadows pop in at screen
@@ -197,7 +197,7 @@ const ThreeScene = (() => {
   //   `dot(plane.xyz, center) + plane.w >= -radius`.
   // We recompute both sets on every `controls.change` (CPU-side, via Three's
   // existing `THREE.Frustum.setFromProjectionMatrix`) and push to the same
-  // uniform nodes — much cheaper than passing matrices and re-deriving
+  // uniform nodes; much cheaper than passing matrices and re-deriving
   // planes per-thread on the GPU.
   const _frustumPlaneUniforms = [
     uniform(new THREE.Vector4()), uniform(new THREE.Vector4()),
@@ -222,7 +222,7 @@ const ThreeScene = (() => {
     // `renderCam` defaults to the schema ortho camera; pass the perspective
     // `flyCamera` during showcase so the cull tests against what's actually
     // being rendered. `Frustum.setFromProjectionMatrix` handles both
-    // ortho + perspective projections — the algebra is the same.
+    // ortho + perspective projections; the algebra is the same.
     _frustumScratchMat.multiplyMatrices(renderCam.projectionMatrix, renderCam.matrixWorldInverse);
     // Critical: pass WebGPUCoordinateSystem so the near/far plane extraction
     // uses the WebGPU clip-space convention (depth range [0, 1]). The default
@@ -239,8 +239,8 @@ const ThreeScene = (() => {
 
   // Refresh the 6 sun-shadow-camera frustum planes from the current light
   // pose. Mirrors what `DirectionalLightShadow.updateMatrices()` does
-  // internally before the shadow pass — position the shadow camera at the
-  // light, aim it at the light target, refresh its world+inverse matrices —
+  // internally before the shadow pass (position the shadow camera at the
+  // light, aim it at the light target, refresh its world+inverse matrices)
   // so the planes we extract match the box the shadow renderer will use.
   // Called from `updateShadowCamera()` after the ortho box + light pose
   // have been re-fitted, so all existing `updateShadowCamera()` call sites
@@ -260,7 +260,7 @@ const ThreeScene = (() => {
     const shadowCam = _dirLight.shadow.camera;
     shadowCam.position.copy(_dirLight.position);
     shadowCam.lookAt(_dirLight.target.position);
-    // Camera.updateMatrixWorld() also refreshes matrixWorldInverse — needed
+    // Camera.updateMatrixWorld() also refreshes matrixWorldInverse, needed
     // for the projection × view multiply below.
     shadowCam.updateMatrixWorld(true);
     _shadowFrustumScratchMat.multiplyMatrices(shadowCam.projectionMatrix, shadowCam.matrixWorldInverse);
@@ -271,25 +271,25 @@ const ThreeScene = (() => {
     }
   }
   let buildingMeshes     = [];    // one InstancedMesh per district
-  let buildingMaterials  = [];    // parallel ShaderMaterial array for theme updates
+  let buildingMaterials  = [];    // parallel material array (Lambert node materials) for theme updates
   let landmarkMat        = null;  // shared MeshLambertMaterial for all landmark GLBs
 
-  // District metadata — sourced directly from 3dmap_triangle_soup.Material.json.
+  // District metadata, sourced directly from 3dmap_triangle_soup.Material.json.
   // Cache note: the *.dds paths below are served `no-cache` (see _headers), so
-  // updating a texture needs no cache-busting — just redeploy. Only tile regen
+  // updating a texture needs no cache-busting; just redeploy. Only tile regen
   // needs manual action. See docs/caching-strategy.md.
-  // dataDds: _data.dds (DXGI_FORMAT_R16G16B16A16_UNORM — raw 16-bit RGBA instance data)
+  // dataDds: _data.dds (DXGI_FORMAT_R16G16B16A16_UNORM: raw 16-bit RGBA instance data)
   // dataDdsFixed: optional alignment-fixed _data from malgalad's "3D World Map
   //   Fixed" mod (Nexus #26500). Same dimensions/transforms as the vanilla
   //   dataDds (texel placement corrected), so it's a straight texture swap when
   //   the Fixed asset set is selected. ep1_spaceport has no fixed version → it
   //   stays on dataDds in both sets. See docs/3dmap-fixed-assets.md.
-  // mDds:    _m.dds   (DXGI_FORMAT_R8_UNORM — 8-bit greyscale surface detail, 10 mips)
+  // mDds:    _m.dds   (DXGI_FORMAT_R8_UNORM: 8-bit greyscale surface detail, 10 mips)
   // transMin/transMax: district-local CET XYZ bounds (before district offset)
   // offset: world XY offset applied to decoded positions (no Z offset)
   // cubeSize: half-extent multiplier (from CubeSize shader parameter)
   // edgeThickness / edgeSharpness: EdgeThickness / EdgeSharpnessPower from
-  //   3d_map_cubes.mt — drive the building edge highlight. edgeSharpness sets
+  //   3d_map_cubes.mt; these drive the building edge highlight. edgeSharpness sets
   //   the visible band width; edgeThickness only feeds the sub-pixel
   //   camera-distance term.
   const DISTRICT_META = [
@@ -301,12 +301,12 @@ const ThreeScene = (() => {
     { name: 'watson',        dataDds: 'assets/dds/watson_data.dds',       dataDdsFixed: 'assets/dds/fixed/watson_data.dds',       mDds: 'assets/dds/watson_m.dds',       cubeSize: 237.175003,   transMin: [-1254.46997, -1258.68469, -24.7028503],  transMax: [1988.5448,    2032.52405,  475.268005],  offset: [-1979.372,   1873.951], edgeThickness: 0.0005, edgeSharpness: 50 },
     { name: 'ep1_dogtown',   dataDds: 'assets/dds/dogtown_data.dds',      dataDdsFixed: 'assets/dds/fixed/dogtown_data.dds',      mDds: 'assets/dds/dogtown_m.dds',      cubeSize: 198.020691,   transMin: [-2650.0,     -3126.6084,   -0.750015974], transMax: [-1025.51855, -1803.58118,  493.576111],  offset: [    0.0,        0.0  ], edgeThickness: 0.0005, edgeSharpness: 50 },
     { name: 'ep1_spaceport', dataDds: 'assets/dds/spaceport_data.dds',    mDds: 'assets/dds/spaceport_m.dds',    cubeSize: 115.298218,   transMin: [-1168.5874,   -765.104614, -41.4592323],  transMax: [1219.45483,   1018.70129,  296.498138],  offset: [-4200.000,    200.000], edgeThickness: 0.0005, edgeSharpness: 50 },
-    // Fixed-only "corrections overlay" — malgalad's combined my_district cloud
+    // Fixed-only "corrections overlay": malgalad's combined my_district cloud
     // (world-space, offset 0). The per-district fixed textures remove the game's
     // broken blocks but don't replace them; my_district fills those gaps (e.g.
     // the Corpo Plaza building cluster). Only loaded with the Fixed asset set;
     // reuses the game's Pacifica surface (pacifica_m) that malgalad's material
-    // points at — c_pacifica_m is byte-identical. See
+    // points at (c_pacifica_m is byte-identical). See
     // docs/3dmap-fixed-assets.md.
     { name: 'my_district',   dataDds: 'assets/dds/fixed/my_district_data.dds', mDds: 'assets/dds/pacifica_m.dds', cubeSize: 200, transMin: [-2766, -5399, -50], transMax: [2960, 4254, 650], offset: [-828, -531], edgeThickness: 0.0005, edgeSharpness: 50, fixedOnly: true },
     // Fixed-only "ugly building" add-on (malgalad's optional download that returns
@@ -320,7 +320,7 @@ const ThreeScene = (() => {
   function readThemeColor(varName, fallback) {
     const raw = getComputedStyle(document.documentElement)
       .getPropertyValue(varName).trim();
-    // CSS custom properties return their literal stored value — CSS functions like
+    // CSS custom properties return their literal stored value; CSS functions like
     // color-mix() are NOT resolved by getPropertyValue. Fall back if unparseable.
     try { return new THREE.Color(raw || fallback); }
     catch { return new THREE.Color(fallback); }
@@ -381,15 +381,15 @@ const ThreeScene = (() => {
 
   // Continuous anti-aliased grid-line coverage. The game's original formula
   // (round() + min(frac()·N,1), integrated over the pixel footprint) has hard
-  // step discontinuities — coverage JUMPS as the camera moves, and the game
+  // step discontinuities: coverage JUMPS as the camera moves, and the game
   // hides the resulting shimmer with TAA, which our scene does not have. This
   // replacement is continuous so it antialiases itself, no TAA needed:
-  //   • triangle-wave distance to the nearest line centre — no jumps,
+  //   • triangle-wave distance to the nearest line centre: no jumps,
   //   • smoothstep ramp across the pixel footprint,
-  //   • minification compensation — once a line is thinner than a pixel it is
+  //   • minification compensation: once a line is thinner than a pixel it is
   //     drawn at footprint width and dimmed proportionally, so it fades out
   //     smoothly instead of aliasing.
-  // N is the line-width factor — a line spans ≈ cell/N. The +0.5 places the
+  // N is the line-width factor; a line spans ≈ cell/N. The +0.5 places the
   // lines where the game's formula put them (same grid, no flicker).
   const gridCoverage = Fn(([c, N]) => {
     const w         = dFdx(c).abs().max(dFdy(c).abs());                  // pixel footprint per axis
@@ -420,18 +420,18 @@ const ThreeScene = (() => {
   // The game computes
   //   X    = max(|1-2u|, |1-2v|) + camDist·0.002·EdgeThickness / faceSize
   //   edge = saturate(pow(X, EdgeSharpnessPower))
-  // `pow(X, power)` is NOT a step — it is a GRADIENT: ~0 across the inner face,
+  // `pow(X, power)` is NOT a step; it is a GRADIENT: ~0 across the inner face,
   // curving up to the bright rim. `edge` then lerps albedo → EdgeColor, so each
   // face shades dark-centre → light-edge (the in-game look). An earlier port
   // mistook the steep curve for a near-step and rendered a flat smoothstep
-  // band, which dropped the gradient — this restores it.
+  // band, which dropped the gradient; this restores it.
   // No TAA here, so the steep rim is box-filtered over X's pixel footprint:
   // the analytic mean of X^p over [lo,hi] is
   //   (hi^(p+1) − lo^(p+1)) / ((hi − lo)(p+1))
   // → X^p as the footprint → 0, and self-flattens (toward 1/(p+1)) when the
   // whole gradient goes sub-pixel under minification, instead of shimmering.
   const buildingEdgeCoverage = Fn(([faceUv, sharpness, camTerm]) => {
-    // X = max(|1−2u|, |1−2v|) + camTerm — 0 at the face centre, 1 at the edge.
+    // X = max(|1−2u|, |1−2v|) + camTerm: 0 at the face centre, 1 at the edge.
     const X = faceUv.x.mul(2).sub(1).abs()
           .max( faceUv.y.mul(2).sub(1).abs() )
           .add(camTerm);
@@ -448,10 +448,10 @@ const ThreeScene = (() => {
   // theme base colour → theme grid colour by the procedural grid factor, so
   // each surface keeps its existing per-theme colour and the grid rides on
   // top. Where there's no grid line the factor is 0 and the colorNode is
-  // exactly `materialColor` — the fill is identical to the plain material.
+  // exactly `materialColor`; the fill is identical to the plain material.
   //
   // Use the `mix()` FUNCTION, never the `.mix()` node method here: the
-  // method does not evaluate as `mix(receiver, b, t)` — `materialColor.mix(
+  // method does not evaluate as `mix(receiver, b, t)`: `materialColor.mix(
   // uGrid, 0)` rendered the grid colour, not the base colour, washing the
   // whole surface even at factor 0. The `mix(a, b, t)` function is correct
   // (verified: `mix(materialColor, uGrid, 0) === materialColor`).
@@ -461,7 +461,7 @@ const ThreeScene = (() => {
   function makeHillshadeMaterial(colorVar, fallback, extra = {}, brightness = 1) {
     const mat = new THREE.MeshLambertNodeMaterial({
       color: readThemeColor(colorVar, fallback),
-      // INTENTIONAL faceted look — do NOT "fix" this. `flatShading` discards
+      // INTENTIONAL faceted look; do NOT "fix" this. `flatShading` discards
       // the GLBs' (present) smooth vertex normals for per-face ones, so the
       // directional sun (#694) renders the terrain/cliffs as crisp triangle
       // facets. PR #741 removed this for "correct" smooth hillshading; a 12–3
@@ -475,7 +475,7 @@ const ThreeScene = (() => {
     const uGrid = uniform(readThemeColor('--scene-grid', '#6d8ab0'));
     mat.userData.tslUniforms = { uGrid };
     // Base colour + procedural grid. `brightness` is the material's decoded
-    // Brightness param — water is 0.7 (3dmap_water.mi overrides it on the
+    // Brightness param: water is 0.7 (3dmap_water.mi overrides it on the
     // shared terrain material); terrain and cliffs are 1.
     const shaded = mix(materialColor, uGrid, terrainGridFactor());
     mat.colorNode = brightness === 1 ? shaded : shaded.mul(brightness);
@@ -491,7 +491,7 @@ const ThreeScene = (() => {
 
   // Give every descendant of `root` a prefixed, type-tagged name so the Needle
   // Inspector hierarchy reads as English instead of "mesh_0". WolvenKit/Blender
-  // bakes generic names like "mesh_0", "Object_3", "Cube.001" — those are
+  // bakes generic names like "mesh_0", "Object_3", "Cube.001"; those are
   // overwritten. Any descriptive name (e.g. "Crystal_Palace_Tower") is kept.
   const NAME_GENERIC = /^(mesh|object|node|cube|sphere|group|geometry|line|primitive)[\s._\d]*$/i;
   function nameSubtree(root, prefix) {
@@ -514,7 +514,7 @@ const ThreeScene = (() => {
   // Hoisted singleton: MeshoptDecoder is attached so GLBs encoded with
   // EXT_meshopt_compression decode transparently. The decoder is a no-op for
   // uncompressed GLBs (the extension is only triggered when present). The
-  // decoder ships with three.js examples — no extra dependency.
+  // decoder ships with three.js examples; no extra dependency.
   const gltfLoader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
 
   function loadGLB(file) {
@@ -527,8 +527,8 @@ const ThreeScene = (() => {
   // ── DDS loaders ─────────────────────────────────────────────────────────
   // DDS files exported by WolvenKit use DX10 extended headers (FourCC='DX10').
   // Standard header = 128 bytes, DX10 extension = 20 bytes → pixel data at offset 148.
-  // _data.dds: DXGI_FORMAT_R16G16B16A16_UNORM — raw 16-bit RGBA, 1 mip, no compression.
-  // _m.dds:    DXGI_FORMAT_R8_UNORM            — 8-bit greyscale, 10 mips, no compression.
+  // _data.dds: DXGI_FORMAT_R16G16B16A16_UNORM: raw 16-bit RGBA, 1 mip, no compression.
+  // _m.dds:    DXGI_FORMAT_R8_UNORM:            8-bit greyscale, 10 mips, no compression.
 
   // Load _data.dds → Uint16Array of raw 16-bit RGBA pixel values.
   // Width and height are read from the DDS header (offsets 16 and 12).
@@ -554,14 +554,14 @@ const ThreeScene = (() => {
     tex.generateMipmaps = true;
     tex.minFilter = THREE.LinearMipmapLinearFilter;
     tex.magFilter = THREE.LinearFilter;
-    // Anisotropic filtering — fixes shimmer on surfaces viewed at oblique angles
+    // Anisotropic filtering: fixes shimmer on surfaces viewed at oblique angles
     // (terrain/buildings tilted toward the camera). Mips alone aren't enough because
-    // mip selection picks based on the smaller of the screen-space derivatives —
+    // mip selection picks based on the smaller of the screen-space derivatives;
     // an elongated texture footprint still aliases along the long axis. AF samples
     // multiple texels along that axis. Free-ish on modern GPUs (fixed-function path).
     // WebGPU exposes the limit via `renderer.backend.device.limits.maxSamplerAnisotropy`
     // (post-init); WebGL2 fallback uses the legacy `renderer.capabilities.getMaxAnisotropy()`.
-    // Cap at 16 — the hardware ceiling on every consumer GPU since ~2009.
+    // Cap at 16, the hardware ceiling on every consumer GPU since ~2009.
     const maxAniso = renderer.backend?.device?.limits?.maxSamplerAnisotropy
                   ?? renderer.capabilities?.getMaxAnisotropy?.()
                   ?? 16;
@@ -607,7 +607,7 @@ const ThreeScene = (() => {
     loadingEl     = container.querySelector('.scene-loading');
     loadingFillEl = container.querySelector('.scene-loading__fill');
 
-    // Renderer — WebGPU build with WebGL2 auto-fallback. The canvas is kept at
+    // Renderer: WebGPU build with WebGL2 auto-fallback. The canvas is kept at
     // width/height:100% via the `#map-3d > canvas` rule in style.css so it
     // always fills #map-3d without pushing surrounding layout elements (and
     // without falling back to its intrinsic drawingBuffer size, which would
@@ -617,13 +617,13 @@ const ThreeScene = (() => {
     // and uses depthCompare:'greater' instead of 'less'. Combined with WebGPU's
     // native float depth, this redistributes precision so far-frustum surfaces
     // keep enough resolution to avoid Z-fighting at our 3-15km zoom range.
-    // Strictly better than the old `logarithmicDepthBuffer` workaround — log-depth
+    // Strictly better than the old `logarithmicDepthBuffer` workaround: log-depth
     // writes frag_depth from the fragment shader, killing the GPU's early-Z
-    // optimization. Reverse-Z achieves precision purely through projection-matrix
+    // optimisation. Reverse-Z achieves precision purely through projection-matrix
     // tricks; early-Z stays on. Available on `WebGPURenderer` since Three.js r183
     // (PR #32967, Feb 2026). Camera.reversedDepth is auto-corrected per PR #31410.
     //
-    // (No `powerPreference` here — Chrome confirmed it's currently ignored on
+    // (No `powerPreference` here; Chrome confirmed it's currently ignored on
     // Windows for navigator.gpu.requestAdapter() per https://crbug.com/369219127.
     // Hybrid-graphics laptops fall back to OS adapter selection. Watch list
     // item: revisit if dGPU isn't getting selected.)
@@ -638,7 +638,7 @@ const ThreeScene = (() => {
     // name at all, and WebGPU rejects the ENTIRE device request if
     // `requiredLimits` names a limit the adapter doesn't expose
     // ("OperationError: Limit 'maxStorageBuffersInVertexStage' not
-    // recognized") — which is exactly why the 3D scene silently fell back to
+    // recognized"), which is exactly why the 3D scene silently fell back to
     // WebGL2 on Firefox. So probe the adapter first and only ask for the limit
     // on adapters that actually have it; Firefox's core mode allows the
     // vertex-stage read under its `maxStorageBuffersPerShaderStage` budget
@@ -650,7 +650,7 @@ const ThreeScene = (() => {
         requiredLimits.maxStorageBuffersInVertexStage = 1;
       }
     } catch (_) {
-      // No navigator.gpu / adapter — WebGPURenderer falls back to WebGL2 on
+      // No navigator.gpu / adapter; WebGPURenderer falls back to WebGL2 on
       // its own; nothing to require here.
     }
     _rendererInitParams = {
@@ -659,7 +659,7 @@ const ThreeScene = (() => {
       reversedDepthBuffer: true,
       requiredLimits,
     };
-    // TEMP — verification only, remove before dev→main. ?forcewebgl forces
+    // TEMP: verification only, remove before dev→main. ?forcewebgl forces
     // the WebGL2 backend so the WebGPU-unavailable → 2D-Leaflet fallback can
     // be exercised on any browser (no about:config / exotic browser needed).
     if (new URLSearchParams(window.location.search).has('forcewebgl')) {
@@ -670,14 +670,14 @@ const ThreeScene = (() => {
     try {
       await renderer.init();   // WebGPURenderer requires async init before any use
     } catch (err) {
-      // Neither WebGPU nor the WebGL2 fallback could initialise — bail to 2D.
+      // Neither WebGPU nor the WebGL2 fallback could initialise; bail to 2D.
       console.warn('[NCZ] Renderer init failed — falling back to the 2D map.', err);
       _webgpuActive = false;
       hideLoading();
       return;
     }
     // The 3D scene's buildings hard-depend on WebGPU compute (storage buffers,
-    // indirect draw, atomics — no WebGL2 equivalent). On the WebGL2 fallback
+    // indirect draw, atomics: no WebGL2 equivalent). On the WebGL2 fallback
     // they throw and the scene is broken-looking, so we don't render a
     // degraded 3D view at all: abort init here and let app.js fall the user
     // back to the fully-functional 2D Leaflet map (see forceSatFallback).
@@ -691,15 +691,15 @@ const ThreeScene = (() => {
     // r185's #33700 "fixed" render-list sorting under reversedDepthBuffer with
     // a wholesale list.reverse() AFTER the painter sort. The sort key is
     // groupOrder → renderOrder → z → id, so the reverse fixes the z direction
-    // but also INVERTS renderOrder semantics — our transparent chain
+    // but also INVERTS renderOrder semantics: our transparent chain
     // (water 0 → SeeThrough roads 1 → metro 2) drew backwards: metro first
     // (then hidden under water's depthWrite) and SeeThrough roads before water
     // had written stencil=STENCIL_WATER (tunnel roads gone). Compensate by
     // handing the sorter comparators that are the exact NEGATION of the order
-    // we want — the engine's trailing .reverse() then lands the desired order:
+    // we want; the engine's trailing .reverse() then lands the desired order:
     // renderOrder ascending (the documented contract), z direction correct for
     // reversed-depth projected z (larger z = nearer). The id tiebreaker makes
-    // the order total, so reverse(sort(-D)) == sort(D) exactly — no stability
+    // the order total, so reverse(sort(-D)) == sort(D) exactly; no stability
     // caveats. Remove when upstream replaces the wholesale reverse with a
     // z-only fix: https://github.com/mrdoob/three.js/pull/33700
     if (renderer.reversedDepthBuffer === true) {
@@ -718,17 +718,17 @@ const ThreeScene = (() => {
     }
     // Make the sRGB-correct colour pipeline explicit. These match Three.js r170
     // defaults (since r152 / r155 respectively) but stating them here protects
-    // the scene's appearance against future Three.js default changes — both flags
+    // the scene's appearance against future Three.js default changes; both flags
     // have shifted in past major versions.
     THREE.ColorManagement.enabled = true;
     renderer.outputColorSpace     = THREE.SRGBColorSpace;
-    // Tonemap — the exact in-game 3D-map ACES Output Transform. The map renders
+    // Tonemap: the exact in-game 3D-map ACES Output Transform. The map renders
     // through `TonemappingModeACES` (decoded from 3dmap.envparam); aces-tonemap.js
     // ports the ACES SSTS tone scale parametrised by the decoded
     // STonemappingACESParams and registers it as a custom WebGPU tone-mapping
     // function. This supersedes the interim NeutralToneMapping; Three's built-in
-    // ACESFilmicToneMapping (the Narkowicz approximation — desaturates) is not used.
-    // Exposure (NCZ.SCENE_EXPOSURE) — a normalised gauge. The in-game map's
+    // ACESFilmicToneMapping (the Narkowicz approximation, which desaturates) is not used.
+    // Exposure (NCZ.SCENE_EXPOSURE): a normalised gauge. The in-game map's
     // physical camera decodes to exposure 0.000108, but that value can't be
     // used literally: it's a global multiplier and would crush the unlit
     // [0,1]-colour overlays (roads/metro/district lines) to black. So exposure
@@ -736,7 +736,7 @@ const ThreeScene = (() => {
     // See the lighting block in constants.js.
     renderer.toneMapping         = registerCP2077ToneMapping(renderer);
     renderer.toneMappingExposure = NCZ.SCENE_EXPOSURE;
-    // Load the braindance grading LUT — fire-and-forget; the texture binding is
+    // Load the braindance grading LUT (fire-and-forget); the texture binding is
     // stable so the data fill uploads transparently once the fetch lands. The
     // grade + LUT are gated per theme via the --scene-grade CSS var (Game/Preem
     // set it to 1; the five stylised themes leave it 0). Seed it from the
@@ -744,7 +744,7 @@ const ThreeScene = (() => {
     loadBraindanceLUT('assets/data/braindance-lut.bin')
       .catch(err => console.warn('[NCZ] braindance LUT load failed:', err));
     applyGrade(themeGradeEnabled());
-    // Cap effective DPR — see NCZ.MAX_DEVICE_PIXEL_RATIO. The debug-dump
+    // Cap effective DPR; see NCZ.MAX_DEVICE_PIXEL_RATIO. The debug-dump
     // "Renderer DPR" line shows the capped value; "Display ... DPR" still shows
     // the raw window.devicePixelRatio, so the two diverge for capped users.
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, NCZ.MAX_DEVICE_PIXEL_RATIO));
@@ -758,11 +758,11 @@ const ThreeScene = (() => {
     // renderer.shadowMap object only carries { enabled, transmitted, type }).
     // We hold _dirLight.shadow.autoUpdate = false (set just after the light is
     // created) and flag re-renders via flagShadowUpdate(), so the 4096² depth
-    // pass only re-renders when a caster or the sun/shadow-camera actually moves —
+    // pass only re-renders when a caster or the sun/shadow-camera actually moves;
     // theme tweens, pin hovers and other non-geometric frames skip it.
     // Take the canvas out of document flow so its pixel-buffer dimensions
     // can never push or displace surrounding layout elements.
-    // inset:0 stretches it to fill #map-3d on all four sides — no explicit
+    // inset:0 stretches it to fill #map-3d on all four sides; no explicit
     // width/height needed (and adding them alongside inset:0 can cause squishing).
     renderer.domElement.style.position = 'absolute';
     renderer.domElement.style.inset    = '0';
@@ -770,12 +770,12 @@ const ThreeScene = (() => {
 
     initStats(container);
 
-    // Scene background matches theme primary color
+    // Scene background matches theme primary colour
     scene = new THREE.Scene();
     scene.name = 'main-scene';
     scene.background = readThemeColor('--primary', '#0a192f');
 
-    // Perspective camera matching the game's TopDown view — FOV 25°, distance in
+    // Perspective camera matching the game's TopDown view: FOV 25°, distance in
     // CET / world units (see SCHEMA_CAMERA_* in constants.js; values mirror
     // WorldMap.TopDownCameraSettingsDefault in TweakDB). Z = -WORLD_CY because
     // GLB_Z = -CET_Y.
@@ -797,7 +797,7 @@ const ThreeScene = (() => {
     // cube, through an ACES tonemap (decoded from base/weather/24h_basic/
     // 3dmap.envparam). We reproduce that: a DirectionalLight with the decoded
     // warm sun colour + a HemisphereLight with the decoded sky/ground colours,
-    // both at fixed (calibrated) intensity — the game's map has no time-of-day
+    // both at fixed (calibrated) intensity; the game's map has no time-of-day
     // variation. The sun slider still moves the sun's *direction* (shadows sweep,
     // faces relight); colour + intensity stay put. Cast shadows are layered on
     // top as an intentional artistic choice (the in-game map has them disabled).
@@ -814,7 +814,7 @@ const ThreeScene = (() => {
     _dirLight.shadow.camera.near = NCZ.SHADOW_CAM_NEAR;
     _dirLight.shadow.camera.far  = NCZ.SHADOW_CAM_FAR; // orthographic ⇒ a wide range costs no precision
     _dirLight.shadow.camera.name = 'sun-shadow-cam';
-    _dirLight.shadow.bias        = NCZ.SHADOW_BIAS;        // 0 — native depth32float + reverse-Z need no depth cushion
+    _dirLight.shadow.bias        = NCZ.SHADOW_BIAS;        // 0: native depth32float + reverse-Z need no depth cushion
     // The real WebGPU shadow-pass gate: hold autoUpdate off and re-render only when
     // flagShadowUpdate() raises needsUpdate (caster/sun/shadow-cam moved). While the
     // Shadows overlay is off, flagShadowUpdate() no-ops → the depth pass never runs.
@@ -830,7 +830,7 @@ const ThreeScene = (() => {
     scene.add(_dirLight);
     scene.add(_dirLight.target);
 
-    // Hemisphere ambient — the decoded envparam ambient cube collapses to a
+    // Hemisphere ambient: the decoded envparam ambient cube collapses to a
     // hemisphere: 5 bright cool-white faces (sky + sides) over 1 dim blue face
     // (ground). Fixed colour + intensity, matching the game's fixed environment.
     _hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, NCZ.AMBIENT_INTENSITY);
@@ -840,7 +840,7 @@ const ThreeScene = (() => {
     scene.add(_hemiLight);
     // Sun position is applied by app.js via the slider once terrain has loaded.
 
-    // Visible sun sphere — hidden by default, shown during showcase only.
+    // Visible sun sphere: hidden by default, shown during showcase only.
     // Radius NCZ.SUN_SPHERE_RADIUS units at NCZ.SUN_SPHERE_DIST distance ≈ 1.7° apparent diameter (≈3× real sun).
     _sunSphere = new THREE.Mesh(
       new THREE.SphereGeometry(NCZ.SUN_SPHERE_RADIUS, 16, 16),
@@ -850,11 +850,11 @@ const ThreeScene = (() => {
     _sunSphere.visible = false;
     scene.add(_sunSphere);
 
-    // OrbitControls — left=pan, right=tilt, middle=zoom.
+    // OrbitControls: left=pan, right=tilt, middle=zoom.
     //
     // Attached to `container` (#map-3d), not `renderer.domElement` (the
     // canvas), so pointer events bubbling up from the CSS2D pin/cluster
-    // overlay reach the controls — mirroring Leaflet's pattern where the
+    // overlay reach the controls, mirroring Leaflet's pattern where the
     // map's drag handler lives on the container element above the marker
     // layer. Combined with the pointer-capture defeat below, this lets
     // OrbitControls see drag/zoom gestures that start on a pin while the
@@ -863,25 +863,25 @@ const ThreeScene = (() => {
     // pointerup off the pin.)
     const _orbitDom = renderer.domElement.parentElement;
     controls = new OrbitControls(camera, _orbitDom);
-    // Defeat OrbitControls' setPointerCapture — Leaflet doesn't use pointer
+    // Defeat OrbitControls' setPointerCapture: Leaflet doesn't use pointer
     // capture for its map drag, and that's exactly the property that
     // preserves click event dispatch on child markers. Without this
     // override, `pointerup` would retarget to the container and the
     // browser would fire `click` on the lowest common ancestor (the
     // container) instead of on the pin. No-op'ing both methods is a
     // single-line patch; the only behavioural trade-off is that a drag
-    // pointer leaving the container during a gesture goes silent — the
+    // pointer leaving the container during a gesture goes silent; the
     // container fills the viewport so this is a near-impossible case.
     _orbitDom.setPointerCapture     = () => {};
     _orbitDom.releasePointerCapture = () => {};
-    // Scene-control UI (#scene-controls — Reset/Showcase buttons, sun slider,
+    // Scene-control UI (#scene-controls: Reset/Showcase buttons, sun slider,
     // tilt readout) lives *inside* #map-3d, so its gestures bubble up to the
     // OrbitControls listeners on _orbitDom and pan/zoom/tilt the camera while
     // you're operating a control (dragging the sun slider moved the map).
     // This is the inverse of the pin/cluster case above: pins *want* the
     // gesture to reach the camera (drag-to-pan, click still fires); controls
     // do NOT. Mirror Leaflet's L.DomEvent.disableClickPropagation /
-    // disableScrollPropagation — stop the gesture-initiating events at the
+    // disableScrollPropagation: stop the gesture-initiating events at the
     // control container so OrbitControls (the ancestor listener) never sees
     // them. stopPropagation only (no preventDefault / stopImmediatePropagation)
     // leaves the controls' own behaviour and click handlers fully intact.
@@ -893,7 +893,7 @@ const ThreeScene = (() => {
     }
     // District hover-brighten: cursor over a district's area fades its outline
     // up. Listener on the container so moves over the CSS2D pin overlay still
-    // reach it (events bubble; pointer capture is no-op'd above). passive — we
+    // reach it (events bubble; pointer capture is no-op'd above). passive: we
     // never preventDefault, so the camera drag path is untouched.
     _orbitDom.addEventListener('mousemove', onSceneMouseMove, { passive: true });
     _orbitDom.addEventListener('mouseleave', () => { setHoveredDistrict(null); NCZ.DistrictInfo?.hide?.(); }, { passive: true });
@@ -913,7 +913,7 @@ const ThreeScene = (() => {
     controls.enableDamping  = true;
     // Ground-plane panning, not screen-space. Under perspective, screen-space
     // panning (the OrbitControls default) has a world-Y component whenever
-    // the camera is tilted — left-drag at high tilt lifts controls.target off
+    // the camera is tilted: left-drag at high tilt lifts controls.target off
     // the ground, the orbit pivot moves up, and subsequent rotates/zooms
     // behave around a lifted point so the camera itself appears to climb as
     // you pan. With screenSpacePanning=false, panning is constrained to the
@@ -921,9 +921,9 @@ const ThreeScene = (() => {
     // at Y=0 implicitly and vertical drag at high tilt moves the target
     // forward/back along the camera look direction at the same rate as
     // horizontal drag moves it left/right. Ortho hid the drift; perspective
-    // surfaces it. See controls 'change' handler — no y-clamp needed.
+    // surfaces it. See controls 'change' handler; no y-clamp needed.
     controls.screenSpacePanning = false;
-    // Target the same point the camera is posed over (the E5 intro start —
+    // Target the same point the camera is posed over (the E5 intro start;
     // see camera.position above). A mismatch here would make controls.update()
     // derive a bogus azimuth from the off-axis offset, rotating the pre-intro
     // loading view ~180° (it looked upside-down before this).
@@ -946,7 +946,7 @@ const ThreeScene = (() => {
       if (_introTween) { _introTween = null; setContinuousRender(false); }
     });
 
-    // Pan bounds — clamp controls.target so the camera can't drift
+    // Pan bounds: clamp controls.target so the camera can't drift
     // arbitrarily far from the visible terrain. OrbitControls has no built-in
     // min/maxPan, so we listen for 'change' and snap target back if it leaves
     // bounds, also moving camera.position by the same delta so the spherical
@@ -954,17 +954,17 @@ const ThreeScene = (() => {
     //
     // Bounds use the *terrain GLB extent* (the visible square ~[-8000, 8000]
     // in both Three X and Three Z) rather than the playable CET world extent
-    // (which is asymmetric — playable area sits in the northern half of the
+    // (which is asymmetric: playable area sits in the northern half of the
     // Y range). This gives the same "perfect square" feel Leaflet has on the
     // SAT view, where the user can pan equally far past every edge.
     //
     // panEdgeFraction = 0.5 collapses to zero offset → target clamps at the
-    // terrain edge → at max pan, terrain edge sits at viewport center, half
+    // terrain edge → at max pan, terrain edge sits at viewport centre, half
     // terrain visible / half empty (matches Leaflet exactly at zero tilt).
     //
     // Tilt note: at high tilts the visible ground extent grows by 1/cos(polar)
     // in the tilt direction, so the "half-screen-past-terrain" feel stretches
-    // out — you can technically pan more terrain off-screen at high tilt
+    // out; you can technically pan more terrain off-screen at high tilt
     // before hitting the bound. An earlier tilt-correction attempt produced
     // catastrophic camera jumps when bounds inverted at extreme zoom-out +
     // tilt; that was reverted in favour of this stable simpler bound. A
@@ -973,7 +973,7 @@ const ThreeScene = (() => {
       const t = controls.target;
       const f = NCZ.PIN_3D_PAN_EDGE_FRACTION;
       // Pan envelope = TweakDB WorldMap.DefaultSettings.cursorBoundary (the
-      // game's own pan limits — tighter than the terrain GLB extent because
+      // game's own pan limits, tighter than the terrain GLB extent because
       // the playable area sits in the northern half of the world). Allow the
       // target to drift toward an edge by (f - 0.5) × visible-rect-size so
       // edge content can still be centred.
@@ -1007,7 +1007,7 @@ const ThreeScene = (() => {
     // layer can drive camera fly-to-pin tweens on focusMod().
     NCZ.ThreeMarkers?.attach?.(scene, camera, container, controls);
 
-    // Initial scale bar — controls 'change' won't fire until the user
+    // Initial scale bar: controls 'change' won't fire until the user
     // interacts, so paint the bar once at startup using the initial camera state.
     updateScaleBar();
 
@@ -1016,13 +1016,14 @@ const ThreeScene = (() => {
 
   // NOTE (issue #771 history): a `setResizeSuppressed` guard used to hold the
   // drawing buffer at its pre-showcase size because any r185 setSize wedged
-  // the canvas (stale Line2 binding to the destroyed viewport-mip texture —
-  // see the dispose() below). With that mitigation in place the guard was
-  // retested (showcase + mid-flight window resizes, zero errors) and removed;
-  // the showcase now renders at native fullscreen resolution instead of a
-  // CSS-stretched windowed buffer.
+  // the canvas (stale Line2 binding to the destroyed viewport-mip texture).
+  // A dispose-on-resize mitigation made resizes safe; the guard was retested
+  // with it (showcase + mid-flight window resizes, zero errors) and removed,
+  // and the mitigation itself went away with the move to DistrictLineMaterial
+  // (see onResize below). The showcase now renders at native fullscreen
+  // resolution instead of a CSS-stretched windowed buffer.
   //
-  // ThreeMarkers.onResize must ALWAYS run here — the CSS2DRenderer maps NDC
+  // ThreeMarkers.onResize must ALWAYS run here: the CSS2DRenderer maps NDC
   // to its own stored size; leaving it stale while the client size changes
   // offsets every pin, cluster and district label from its world anchor
   // (issue #769, the "floating pins" bug).
@@ -1036,7 +1037,7 @@ const ThreeScene = (() => {
     const h = container.clientHeight;
     const bufferResized = w !== _lastBufferW || h !== _lastBufferH;
     if (bufferResized) {
-      renderer.setSize(w, h, false); // updateStyle:false — CSS width/height stay at 100%
+      renderer.setSize(w, h, false); // updateStyle:false; CSS width/height stay at 100%
       _lastBufferW = w; _lastBufferH = h;
     }
     camera.aspect = w / h;
@@ -1045,7 +1046,7 @@ const ThreeScene = (() => {
     // flyCamera resize is handled in flyover.js
     // District lines need no resize handling: DistrictLineMaterial (#775)
     // reads the viewport from a TSL screen node at shader-execution time and
-    // binds no framebuffer-copy textures — the dispose-on-resize mitigation
+    // binds no framebuffer-copy textures; the dispose-on-resize mitigation
     // that Line2NodeMaterial's viewportOpaqueMipTexture binding required
     // (#771) was removed with it.
     NCZ.ThreeMarkers?.onResize?.(w, h);
@@ -1054,7 +1055,7 @@ const ThreeScene = (() => {
   }
 
   // ── Layer registry ─────────────────────────────────────────────────────
-  // Named scene groups — toggled by setLayerVisibility()
+  // Named scene groups, toggled by setLayerVisibility()
 
   const layers = {
     terrain:   null,
@@ -1062,29 +1063,29 @@ const ThreeScene = (() => {
     cliffs:    null,
     roads:     null,
     metro:     null,
-    districts: null,  // parent group — toggled as a unit
+    districts: null,  // parent group, toggled as a unit
     buildings: null,
   };
 
   // Sub-groups inside layers.districts (parent group controls overall visibility):
-  let _districtOuter  = null; // districts with subs — visible at the districts zoom band (d ≥ 11000)
-  let _districtSub    = null; // canonical subdistricts — visible at the subs band (7000 ≤ d < 11000)
-  let _districtAlways = null; // no-sub districts (Dogtown / Morro Rock) + non-canonical subs (Casino) — visible whenever EITHER outline tier is
+  let _districtOuter  = null; // districts with subs; visible at the districts zoom band (d ≥ 11000)
+  let _districtSub    = null; // canonical subdistricts; visible at the subs band (7000 ≤ d < 11000)
+  let _districtAlways = null; // no-sub districts (Dogtown / Morro Rock) + non-canonical subs (Casino); visible whenever EITHER outline tier is
 
-  // Name labels: { css: CSS2DObject, group } — `group` is the outline tier the
+  // Name labels: { css: CSS2DObject, group }; `group` is the outline tier the
   // label belongs to, so the label is shown exactly when that tier is.
   const _districtLabels = [];
 
   // Gate each label per-leaf (CSS2D `visible` doesn't cascade from a parent
   // group). A label shows when the Districts overlay is on AND its outline
-  // tier's group is currently visible — so district names appear at the
+  // tier's group is currently visible, so district names appear at the
   // district zoom band, subdistrict names at the subdistrict band.
   function updateDistrictLabelVisibility() {
     if (!_districtLabels.length) return;
     const districtsOn = layers.districts ? layers.districts.visible : true;
     // Showcase mode: names are a user option independent of the outline tier
-    // (the tier groups stay visible to carry the pinned outlines — see
-    // forceDistrictBand — so the label gate needs its own switch).
+    // (the tier groups stay visible to carry the pinned outlines (see
+    // forceDistrictBand), so the label gate needs its own switch).
     const namesOn = _showcaseDistricts ? _showcaseDistricts.names : true;
     for (const { css, group } of _districtLabels) css.visible = districtsOn && group.visible && namesOn;
   }
@@ -1098,7 +1099,7 @@ const ThreeScene = (() => {
       return;
     }
     if (name === 'shadows') { setShadowsEnabled(visible); return; }
-    // The marker overlay isn't a scene layer — it's a separate CSS2DRenderer
+    // The marker overlay isn't a scene layer; it's a separate CSS2DRenderer
     // pass owned by ThreeMarkers, gated by the schema camera's Three.js
     // Object3D.layers mask. Routing it through here keeps the overlay-controls
     // panel's [data-overlay] handler uniform across every toggle.
@@ -1110,7 +1111,7 @@ const ThreeScene = (() => {
 
   // Pins the district-outline tier independent of the schema camera's zoom
   // band. The showcase flyover renders through its own camera while the
-  // schema camera (which drives updateDistrictZoom) is frozen — starting a
+  // schema camera (which drives updateDistrictZoom) is frozen; starting a
   // showcase zoomed in below SUBDISTRICT_DISTANCE_3D froze ALL outline tiers
   // hidden for the whole flight, so "Show district outlines" silently did
   // nothing. 'district' pins the main-district tier (the cinematic look the
@@ -1120,7 +1121,7 @@ const ThreeScene = (() => {
   // the CSS2D labels (see updateDistrictLabelVisibility), outlines gate the
   // Line2 rings per-line (the tier groups stay visible either way so labels
   // can show without outlines). Outlines render at the HOVERED opacity for
-  // the whole flight — the 5% base is illegible from cinematic distances.
+  // the whole flight; the 5% base is illegible from cinematic distances.
   let _districtBandForced = null; // 'district' | null
   let _showcaseDistricts  = null; // { names, outlines } | null
   function forceDistrictBand(band, opts = null) {
@@ -1150,13 +1151,13 @@ const ThreeScene = (() => {
   }
 
   function updateDistrictZoom() {
-    if (_districtBandForced) return; // showcase owns the band — see forceDistrictBand
+    if (_districtBandForced) return; // showcase owns the band; see forceDistrictBand
     if (!_districtOuter || !_districtSub || !controls) return;
     // Three-state visibility, matching WorldMap.ZoomLevel* records:
     //   d ≥ 11000: main district outlines (ZoomLevelDistricts.showDistricts = 1)
     //   7000 ≤ d < 11000: subdistrict outlines (ZoomLevelSubDistricts.showSubDistricts = 1)
     //   d < 7000: neither (every closer zoom-level record has both flags false)
-    // The game hides outlines entirely at close zoom — only mappins remain.
+    // The game hides outlines entirely at close zoom; only mappins remain.
     // alwaysGroup (no-sub districts + non-canonical subs) follows the same
     // outline-tier-visible rule: shown whenever EITHER district or subdistrict
     // tier would render, hidden together with them below 7000.
@@ -1171,7 +1172,7 @@ const ThreeScene = (() => {
   // ── District hover-brighten ─────────────────────────────────────────────
   // In-game parity: outlines sit at NCZ.DISTRICT_LINE_OPACITY (5%) and brighten
   // to ~full over 250 ms when the cursor enters the district's area. No pick
-  // geometry — the rings are flat on Y=0, so we intersect the cursor ray with
+  // geometry: the rings are flat on Y=0, so we intersect the cursor ray with
   // the ground plane and run a CPU point-in-polygon over the in-memory rings.
   // One registry entry per outline; `group` is its visibility tier so we only
   // test (and brighten) outlines that are actually drawn at the current zoom.
@@ -1180,10 +1181,10 @@ const ThreeScene = (() => {
   // Draw the hovered outline last so it paints on top of any coincident faint
   // neighbour. Outlines have depthTest:false (depth ignored), so the only thing
   // that decides which of two coplanar coincident lines wins a pixel is paint
-  // order — and the transparent back-to-front sort is unstable for equal-
+  // order, and the transparent back-to-front sort is unstable for equal-
   // distance lines. District outlines sit at tier 7 of the explicit transparent
   // chain (water 0 → roads depth/colour 1/2 → borders depth/colour 3/4 →
-  // SeeThrough 5 → metro 6 → districts 7) so they always draw after water — a
+  // SeeThrough 5 → metro 6 → districts 7) so they always draw after water; a
   // shared tier would fall back to camera-angle-dependent centroid-z ties.
   // A higher renderOrder forces the hovered line last so it reads above its
   // siblings. Reset to the base tier on exit.
@@ -1196,7 +1197,7 @@ const ThreeScene = (() => {
   const _hoverNdc    = new THREE.Vector2();
   const _hoverWorld  = new THREE.Vector3();
 
-  // Shoelace area (absolute) — used to prefer the smallest matching ring when a
+  // Shoelace area (absolute), used to prefer the smallest matching ring when a
   // point sits inside nested outlines (e.g. the casino sub inside Westbrook).
   function polygonArea(ring) {
     let a = 0;
@@ -1232,15 +1233,15 @@ const ThreeScene = (() => {
       -(((clientY - rect.top) / rect.height) * 2 - 1)
     );
     _hoverRay.setFromCamera(_hoverNdc, camera);
-    // Near-horizontal rays barely graze Y=0 — bail rather than pick a point
-    // kilometres off (cf. ray-to-ground-thit-explodes-near-horizontal). Outlines
-    // only show when zoomed out/steep, so this never costs a real hover.
+    // Near-horizontal rays barely graze Y=0, so the plane hit lands kilometres
+    // off; bail instead. Outlines only show when zoomed out/steep, so this
+    // never costs a real hover.
     if (Math.abs(_hoverRay.ray.direction.y) < 1e-3) return null;
     if (!_hoverRay.ray.intersectPlane(_hoverPlane, _hoverWorld)) return null;
     return [_hoverWorld.x, -_hoverWorld.z]; // world (x,z) → ring (cetX, cetY)
   }
 
-  // The visible outline under a CET ground point (or null) — only outlines whose
+  // The visible outline under a CET ground point (or null); only outlines whose
   // tier group is currently drawn, smallest-area first. Drives the brighten;
   // the info panel resolves the subdistrict separately (all tiers).
   function pickDistrictAt(gp) {
@@ -1272,7 +1273,7 @@ const ThreeScene = (() => {
   }
 
   function onSceneMouseMove(e) {
-    // Showcase mode pins every outline at the hovered opacity — the pointer
+    // Showcase mode pins every outline at the hovered opacity; the pointer
     // must not re-target materials mid-flight (and the pick raycast uses the
     // schema camera, which is wrong under the fly camera anyway).
     if (_showcaseDistricts) return;
@@ -1298,7 +1299,7 @@ const ThreeScene = (() => {
     const maxStep = range * (dt / NCZ.DISTRICT_HOVER_FADE_MS);
     let active = false;
     for (const e of _districtHover) {
-      if (!e.material) continue; // label-only entry (Badlands) — no outline to tween
+      if (!e.material) continue; // label-only entry (Badlands); no outline to tween
       const diff = e.target - e.material.opacity;
       if (Math.abs(diff) <= maxStep || maxStep === 0) {
         if (e.material.opacity !== e.target) e.material.opacity = e.target;
@@ -1360,20 +1361,20 @@ const ThreeScene = (() => {
         loadGLB('3dmap_cliffs.glb'),
       ]);
 
-      // SeeThrough-roads stencil chain (Pacifica tunnel — a road visible *through* the open bay).
+      // SeeThrough-roads stencil chain (Pacifica tunnel: a road visible *through* the open bay).
       //   • Water writes stencil=STENCIL_WATER where it's the visible surface. The water GLB is a
       //     flat sea-level sheet (world Y ≈ -1) the whole terrain (Y -99..+879) pokes through, so
       //     for stencilZPass to land only on "pixels where you see water" (the open bay = where the
       //     terrain dips below sea level), water must be depth-tested against the FULLY-rendered
-      //     opaque scene. `transparent: true` (opacity = WATER_OPACITY, 1.0 by default — still
+      //     opaque scene. `transparent: true` (opacity = WATER_OPACITY, 1.0 by default, still
       //     visually opaque) moves water out of the opaque list into the transparent pass, which is
-      //     unconditionally drawn after every opaque object — so its depth test sees terrain/cliffs/
+      //     unconditionally drawn after every opaque object, so its depth test sees terrain/cliffs/
       //     buildings already in the depth buffer and fails over all of them, confining
       //     stencil=STENCIL_WATER to the bay. (Plain renderOrder doesn't push water past the terrain
-      //     in the opaque sort under WebGPURenderer — cause unclear; the transparent pass sidesteps
+      //     in the opaque sort under WebGPURenderer, cause unclear; the transparent pass sidesteps
       //     the sort entirely.) renderOrder stays 0, so water still draws before the SeeThrough roads.
       //   • Terrain, cliffs and buildings over-stamp stencil=STENCIL_OCCLUDER where THEY are the
-      //     visible surface (depth-tested, ZPass:Replace) — so SeeThrough roads don't draw through
+      //     visible surface (depth-tested, ZPass:Replace), so SeeThrough roads don't draw through
       //     them. Safe vs the tunnel because water (transparent pass) re-writes stencil=STENCIL_WATER
       //     over the bay AFTER the terrain seabed wrote stencil=STENCIL_OCCLUDER there in the opaque pass.
       const stencilOverstamp = { stencilWrite: true, stencilRef: NCZ.STENCIL_OCCLUDER, stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp };
@@ -1388,14 +1389,14 @@ const ThreeScene = (() => {
       applyMaterial(waterScene,   waterMat);
       applyMaterial(cliffsScene,  cliffsMat);
 
-      // Shadow flags — terrain RECEIVES only (no longer casts). Road/metro
+      // Shadow flags: terrain RECEIVES only (no longer casts). Road/metro
       // decals sit near-coplanar with terrain and use shadow() to receive
       // building shadows; if terrain also casts, the decal's shadow sample
       // reads as occluded by the terrain right under it → black-stripe acne
       // along the road. Cliffs still cast (they're elevated and the user
       // wants long cliff-base shadows). Water receives only (flat ocean).
       // Side-benefit: terrain self-shadow "the wave" (grazing-sun acne) goes
-      // away as a consequence — Phase 3's footprint-scaled normalBias was
+      // away as a consequence; Phase 3's footprint-scaled normalBias was
       // there to mask exactly that.
       terrainScene.traverse(c => { if (c.isMesh) { c.receiveShadow = true; c.frustumCulled = false; } });
       waterScene.traverse(c =>   { if (c.isMesh) { c.receiveShadow = true; c.frustumCulled = false; } });
@@ -1437,14 +1438,14 @@ const ThreeScene = (() => {
 
       // Trigger the sun slider so app.js applies the correct initial sun position.
       // Done here (post-terrain) because ThreeScene.setSunPosition now exists and
-      // the directional light is in the scene — the slider fires too early otherwise.
+      // the directional light is in the scene; the slider fires too early otherwise.
       document.getElementById('scene-sun-slider')?.dispatchEvent(new Event('input'));
 
       // Tier 2+3: start all concurrent tasks, hide loading only when all complete.
       // Add future loaders (loadLandmarks etc.) to this array.
       Promise.all([loadRoadsMetro(), loadDistricts(), loadBuildings(), loadLandmarks()])
         .then(() => {
-          // Buildings now exist — apply the active theme's edge-glow default to
+          // Buildings now exist; apply the active theme's edge-glow default to
           // their uniforms (updateMaterials' early applyEdgeGlow ran before the
           // materials were built; the grade has no such dependency).
           applyEdgeGlow(themeEdgeGlowDefault());
@@ -1467,7 +1468,7 @@ const ThreeScene = (() => {
         loadGLB('3dmap_roads_borders.glb'),
       ]);
 
-      // All road GLBs have inverted X axis — rotate 180° around Y to correct
+      // All road GLBs have inverted X axis; rotate 180° around Y to correct
       roadsScene.rotation.y   = Math.PI;
       metroScene.rotation.y   = Math.PI;
       bordersScene.rotation.y = Math.PI;
@@ -1483,23 +1484,22 @@ const ThreeScene = (() => {
       const borderColor = readThemeColor('--overlay-road-border-color', '#1ec3c8');
       const metroColor  = readThemeColor('--overlay-metro-color',       '#dcaa28');
 
-      // Normal depth-tested pass — surface roads/borders sit correctly in scene.
+      // Normal depth-tested pass: surface roads/borders sit correctly in scene.
       // Flat unlit Basic so the infographic colour stays uniform across the
-      // whole road network. (Tried receiving sun shadows in this PR — both via
-      // a manual `materialColor × shadow()` multiply on Basic and via Lambert +
-      // receiveShadow — and both looked wrong: the multiply gave black-stripe
-      // acne on the coplanar road geometry, and Lambert sun-direction-tinted
-      // the network into something that read as 3D rather than infographic.
-      // Scrapped — buildings/terrain still receive shadows, decals don't.)
+      // whole road network. (Do not add sun-shadow receiving here: a manual
+      // `materialColor × shadow()` multiply on Basic gives black-stripe acne
+      // on the coplanar road geometry, and Lambert + receiveShadow
+      // sun-direction-tints the network into something that reads as 3D
+      // rather than infographic. Buildings/terrain receive shadows, decals don't.)
       // Blend + opacity here are decoded constants, not tuning. 3d_map_solid.mt
       // has a fixed One/One additive PSO; the per-material AdditiveAlphaBlend flag
       // decides whether the additive contribution is pre-scaled by Color.Alpha.
       // Roads = AdditiveAlphaBlend 0 / alpha 255, borders = AdditiveAlphaBlend 1 /
       // alpha 255 → both full-strength additive. (Roads were Normal-blend opacity
-      // 0.8 — an eyeballed guess that also let the road colour drift with whatever
+      // 0.8, an eyeballed guess that also let the road colour drift with whatever
       // sat under it; additive is the game-faithful blend.)
       // Surface roads/borders over-stamp stencil=STENCIL_OCCLUDER where they
-      // are the visible surface — the same pattern terrain/cliffs/buildings
+      // are the visible surface, the same pattern terrain/cliffs/buildings
       // use in the opaque pass. This makes the surface and SeeThrough copies
       // mutually exclusive per pixel: where the surface copy draws (passes
       // depth), the stencil is no longer STENCIL_WATER, so the SeeThrough
@@ -1510,23 +1510,23 @@ const ThreeScene = (() => {
         stencilWrite: true, stencilRef: NCZ.STENCIL_OCCLUDER,
         stencilFunc: THREE.AlwaysStencilFunc, stencilZPass: THREE.ReplaceStencilOp,
       };
-      // Depth pre-pass + Equal colour pass — additive layers can't occlude
+      // Depth pre-pass + Equal colour pass: additive layers can't occlude
       // themselves (every overlapping fragment adds), so overlapping road
       // decks / crossing borders drew twice (bright hot spots at any angle:
       // draw order within a tier is buffer order, not per-fragment depth).
       // Each layer first lays down its nearest-surface depth (colorWrite off,
-      // transparent:true keeps it in the transparent pass AFTER water — an
+      // transparent:true keeps it in the transparent pass AFTER water; an
       // opaque prepass would depth-block water under bridges and shift the
       // additive base colour), then the colour pass draws with
       // depthFunc:Equal so exactly one surface per pixel receives colour.
-      // The vertex path is identical between the two passes, so rasterized
+      // The vertex path is identical between the two passes, so rasterised
       // depth matches exactly.
       const depthPrepassMat = new THREE.MeshBasicNodeMaterial({ transparent: true, colorWrite: false });
       // r185 routes material.depthFunc through ReversedDepthFuncs under
       // reversedDepthBuffer and wrongly inverts EqualDepth → NotEqualDepth
       // (equality is direction-independent; the upstream map blanket-inverts
       // every comparator). Hand it NotEqual so the broken inversion lands on
-      // the Equal we actually want — the same pre-compensation pattern as the
+      // the Equal we actually want, the same pre-compensation pattern as the
       // render-list sort comparators above. Symptom if this regresses: roads
       // invisible over terrain/water but visible through buildings.
       // Remove together with the sort compensation when upstream fixes.
@@ -1537,7 +1537,7 @@ const ThreeScene = (() => {
       applyMaterial(roadsScene,   normalRoadsMat);
       applyMaterial(bordersScene, normalBordersMat);
 
-      // Explicit transparent-pass tiers — the whole water/roads/metro chain is
+      // Explicit transparent-pass tiers: the whole water/roads/metro chain is
       // order-dependent, and any two overlays sharing a renderOrder fall back
       // to per-object centroid-z ties that flip with camera angle (the cause
       // of the old "road borders vanish over water at some angles" bug):
@@ -1551,7 +1551,7 @@ const ThreeScene = (() => {
       roadsScene.traverse(o   => { if (o.isMesh) o.renderOrder = 2; });
       bordersScene.traverse(o => { if (o.isMesh) o.renderOrder = 4; });
 
-      // Metro: normal depth-tested, renderOrder=6 — after water (0) so it
+      // Metro: normal depth-tested, renderOrder=6, after water (0) so it
       // shows over the bay, after the road passes so it layers above both.
       //
       // LOD discard: COLOR_0 vertex attribute carries the LOD tier as one
@@ -1563,7 +1563,7 @@ const ThreeScene = (() => {
       //
       // TSL port (was `onBeforeCompile` GLSL injection on r170):
       //   - vertex color attribute pulled via `attribute('color')`
-      //   - per-frame zoom uniform via `uniform()` node — mutate `.value` from
+      //   - per-frame zoom uniform via `uniform()` node; mutate `.value` from
       //     the controls 'change' handler (lookup at top of init())
       //   - boolean expression composed with TSL methods (.greaterThan/.and/.or)
       //   - `material.maskNode` is a KEEP mask (true=keep, false=discard);
@@ -1571,17 +1571,17 @@ const ThreeScene = (() => {
       metroMat = new THREE.MeshBasicNodeMaterial({
         color: metroColor,
         transparent: true,
-        opacity: 0.235,  // 3dmap_metro Color.Alpha 60/255 — AdditiveAlphaBlend=1
+        opacity: 0.235,  // 3dmap_metro Color.Alpha 60/255; AdditiveAlphaBlend=1
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       });
-      // Metro LOD — decoded from 3d_map_metro.mt's pixel shader (PIX capture).
+      // Metro LOD: decoded from 3d_map_metro.mt's pixel shader (PIX capture).
       // The metro mesh carries three
       // tiers in COLOR_0 (R dotted / G thin / B wide), one channel per vertex.
       // Each tier is fully on below its distance threshold and crossfades out
-      // over METRO_LOD_TRANSITION — the game dissolves tiers, it doesn't snap.
+      // over METRO_LOD_TRANSITION; the game dissolves tiers, it doesn't snap.
       // Driven by one CPU uniform: schema camera-to-target distance, seeded
-      // from the LIVE camera here — a constant seed showed the wrong tier on
+      // from the LIVE camera here; a constant seed showed the wrong tier on
       // the first frame until the first camera move (the load-flicker bug).
       metroDistanceUniform = uniform(camera.position.distanceTo(controls.target));
       const uMetroNear = uniform(NCZ.METRO_LOD_DISTANCE_NEAR);
@@ -1595,13 +1595,13 @@ const ThreeScene = (() => {
       const fNear = tierRamp(uMetroNear);
       const fMed  = tierRamp(uMetroMed);
       const fFar  = tierRamp(uMetroFar);
-      // Mutually-exclusive tier weights — the game's min(ramp, 1 - prevRamp)
+      // Mutually-exclusive tier weights: the game's min(ramp, 1 - prevRamp)
       // chain, so adjacent tiers crossfade and never both reach full.
       const nearW = fNear;
       const midW  = fMed.min(float(1).sub(fNear));
       const farW  = fFar.min(float(1).sub(fMed));
       // Each vertex carries exactly one tier in COLOR_0; `max` selects its
-      // weight. The result drives alpha — tiers fade in/out under additive blend.
+      // weight. The result drives alpha; tiers fade in/out under additive blend.
       const metroLOD = nearW.mul(lodColor.r)
         .max(midW.mul(lodColor.g))
         .max(farW.mul(lodColor.b));
@@ -1623,12 +1623,12 @@ const ThreeScene = (() => {
       }
 
       // SeeThrough pass: depthTest:false + stencil=EQUAL(STENCIL_WATER) → only renders where water
-      // is the visible surface at this pixel — i.e. the open bay (see the stencil-chain comment in
+      // is the visible surface at this pixel, i.e. the open bay (see the stencil-chain comment in
       // loadTerrain). Pacifica tunnel: water writes stencil=STENCIL_WATER → the tunnel road + border
       // (below the water) draw on top of it = visible through the water ✓.  Mountain / city roads:
       // terrain/cliffs/buildings over-stamp stencil=STENCIL_OCCLUDER ≠ STENCIL_WATER → hidden ✓.
       // (Bridge-over-bay double-draw is gone since the surface copies over-stamp
-      // stencil=STENCIL_OCCLUDER where visible — the SeeThrough copy only draws
+      // stencil=STENCIL_OCCLUDER where visible; the SeeThrough copy only draws
       // where water remains the visible surface, so the two copies are mutually
       // exclusive per pixel.)
       const stBase = {
@@ -1637,11 +1637,11 @@ const ThreeScene = (() => {
         stencilFunc: THREE.EqualStencilFunc, stencilRef: NCZ.STENCIL_WATER, stencilFuncMask: 0xff,
         stencilFail: THREE.KeepStencilOp, stencilZFail: THREE.KeepStencilOp, stencilZPass: THREE.KeepStencilOp,
       };
-      // SeeThrough variants match the normal pass — full-strength additive (see
+      // SeeThrough variants match the normal pass: full-strength additive (see
       // the decoded-constant note on normalRoadsMat above).
       roadsMat   = new THREE.MeshBasicNodeMaterial({ ...stBase, color: roadColor,   opacity: 1.0, blending: THREE.AdditiveBlending });
       bordersMat = new THREE.MeshBasicNodeMaterial({ ...stBase, color: borderColor, opacity: 1.0, blending: THREE.AdditiveBlending });
-      // No shadow multiply on the SeeThrough variants — they're an
+      // No shadow multiply on the SeeThrough variants; they're an
       // infographic "see the tunnel through the water" effect (depthTest:false,
       // stencil=WATER), drawing road geometry that sits BELOW the water plane
       // and surrounding terrain. Sampling the shadow map at that underwater
@@ -1659,7 +1659,7 @@ const ThreeScene = (() => {
       stRoads.traverse(o => { if (o.isMesh) o.renderOrder = 5; });
       stBorders.traverse(o => { if (o.isMesh) o.renderOrder = 5; });
 
-      // Depth pre-passes (see depthPrepassMat above) — same geometry cloned
+      // Depth pre-passes (see depthPrepassMat above): same geometry cloned
       // via makeSeeThrough with the colourless depth-writing material, drawn
       // one tier before their colour pass.
       const dpRoads   = makeSeeThrough(roadsScene,   depthPrepassMat);
@@ -1697,9 +1697,9 @@ const ThreeScene = (() => {
     registerLoadStep(); // districts
     try {
       const data = await fetch('data/subdistricts.json').then(r => r.json());
-      const outerGroup  = new THREE.Group(); // districts with subs — zoom-out only
-      const alwaysGroup = new THREE.Group(); // no-sub districts + canonical:false subs — always visible
-      const subGroup    = new THREE.Group(); // canonical subdistricts — zoom-in only
+      const outerGroup  = new THREE.Group(); // districts with subs; zoom-out only
+      const alwaysGroup = new THREE.Group(); // no-sub districts + canonical:false subs; always visible
+      const subGroup    = new THREE.Group(); // canonical subdistricts; zoom-in only
       outerGroup.name  = 'districts-outer';
       alwaysGroup.name = 'districts-always';
       subGroup.name    = 'subdistricts';
@@ -1708,7 +1708,7 @@ const ThreeScene = (() => {
       // ThreeMarkers' CSS2DRenderer pass (it traverses the whole scene). Each
       // label is tagged with the visibility GROUP of its outline, so the label
       // shows exactly when its outline tier does (handled in
-      // updateDistrictLabelVisibility — CSS2D visible doesn't cascade, so we set
+      // updateDistrictLabelVisibility; CSS2D visible doesn't cascade, so we set
       // it per-leaf). Default layer 0 → labels aren't gated by the Pins toggle.
       const labelGroup = new THREE.Group();
       labelGroup.name = 'district-labels';
@@ -1739,7 +1739,7 @@ const ThreeScene = (() => {
         const hasSubs = canonicalSubs.length > 0;
         const distGroup = hasSubs ? outerGroup : alwaysGroup;
 
-        // District outline — always group if no canonical subs, outer group otherwise
+        // District outline: always group if no canonical subs, outer group otherwise
         if (dist.polygon?.length) {
           const line = buildLine(dist.polygon, color, window.NCZ.DISTRICT_LINE_WIDTH);
           line.name = `district-outline-${dist.id}`;
@@ -1755,7 +1755,7 @@ const ThreeScene = (() => {
             const labelEl = addLabel(dist.name, pos, colorHex, distGroup, 'district');
             // No outline to hover, so register each subdistrict polygon as a
             // district-tier, label-only hover region pointing at the Badlands
-            // label — hovering the badlands area emphasises the name.
+            // label; hovering the badlands area emphasises the name.
             for (const sub of dist.subdistricts || []) {
               if (sub.polygon?.length) registerDistrictHover(sub.polygon, null, distGroup, labelEl, dist.id, null);
             }
@@ -1766,7 +1766,7 @@ const ThreeScene = (() => {
           if (!sub.polygon?.length) continue;
           const line = buildLine(sub.polygon, color, window.NCZ.SUBDISTRICT_LINE_WIDTH);
           line.name = `subdistrict-outline-${dist.id}/${sub.id}`;
-          // canonical:false (casino etc) — always visible; otherwise zoom-gated.
+          // canonical:false (casino etc): always visible; otherwise zoom-gated.
           const group = sub.canonical === false ? alwaysGroup : subGroup;
           group.add(line);
           const labelEl = addLabel(sub.name, NCZ.polygonCentroid(sub.polygon), colorHex, group, 'subdistrict');
@@ -1812,7 +1812,7 @@ const ThreeScene = (() => {
   const LANDMARK_META = [
     // { file, cetX, cetY, cetZ, qi, qj, qk, qr }
     // XY from cp2077_extract_footprints.py --list-landmarks (CET world space)
-    // Z from ent localTransform.Position.z (Bits/131072) — CET height = Three.js Y
+    // Z from ent localTransform.Position.z (Bits/131072); CET height = Three.js Y
     // qi/qj/qk/qr from ent Orientation [i,j,k,r]
     { file: '3dmap_obelisk.glb',                   cetX: -1714.5, cetY: -2331.3, cetZ:  35.68, qi: -0.0436, qj: -0.0019, qk:  0.9981, qr:  0.0436 },
     { file: 'monument_ave_pyramid.glb',             cetX: -1595.2, cetY: -2344.3, cetZ:  55.74, qi:  0.0000, qj:  0.0000, qk:  0.0000, qr:  1.0000 },
@@ -1854,10 +1854,10 @@ const ThreeScene = (() => {
         source.traverse(child => {
           if (!child.isMesh) return;
           const mesh = new THREE.Mesh(child.geometry, mat);
-          // Preserve the source mesh's local transform — for meshopt-compressed
+          // Preserve the source mesh's local transform; for meshopt-compressed
           // GLBs this carries the KHR_mesh_quantization dequant translate/scale
           // that maps int16 vertex positions back to mesh-local-space coords.
-          // Without this, vertices render at raw quantized scale (0–65535).
+          // Without this, vertices render at raw quantised scale (0–65535).
           mesh.position.copy(child.position);
           mesh.quaternion.copy(child.quaternion);
           mesh.scale.copy(child.scale);
@@ -1885,9 +1885,10 @@ const ThreeScene = (() => {
   async function loadBuildings() {
     registerLoadStep(DISTRICT_META.length); // one step per district
     try {
-      // Source geometry — single unit cube reused by every district. Wrapped in
-      // an InstancedBufferGeometry per-district so Three.js draws `instanceCount`
-      // copies; the per-instance matrix lookup happens in our positionNode via
+      // Source geometry: single unit cube reused by every district. Cloned
+      // into a regular BufferGeometry per-district and driven by an indirect
+      // draw buffer (NOT an InstancedBufferGeometry; see the clone site
+      // below); the per-instance matrix lookup happens in our positionNode via
       // the storage buffer (`instanceMatricesBuffer.element(instanceIndex)`).
       const baseGeo = new THREE.BoxGeometry(1, 1, 1);
       const group   = new THREE.Group();
@@ -1901,14 +1902,14 @@ const ThreeScene = (() => {
       const assetSet = (typeof localStorage !== 'undefined' && localStorage.getItem(NCZ.ASSET_SET_KEY)) || NCZ.ASSET_SET_DEFAULT;
 
       // Debug aid: ?only=<district> renders only that DISTRICT_META entry by
-      // name (e.g. ?only=my_district, ?only=ugly_building) — isolates a single
+      // name (e.g. ?only=my_district, ?only=ugly_building); isolates a single
       // building cloud for diagnosing placement/content. Sibling of ?debug /
       // ?gamelight / ?webgpuprobe.
       const _only = new URLSearchParams(location.search).get('only');
       for (const meta of DISTRICT_META) {
         if (_only && meta.name !== _only) continue;
         // Fixed-only entries (e.g. the my_district corrections overlay) exist
-        // only in the Fixed asset set — skip them entirely in CDPR mode.
+        // only in the Fixed asset set; skip them entirely in CDPR mode.
         if (meta.fixedOnly && assetSet !== 'fixed') continue;
         setLoadingText(`Loading buildings [${meta.name}]…`);
 
@@ -1930,7 +1931,7 @@ const ThreeScene = (() => {
             const ri = (y * texW + x + blockW)  * 4;   // rotation block
             const si = (y * texW + x + 2*blockW)* 4;   // scale block
 
-            // Empty-cell detection — two encodings exist. Base-game textures
+            // Empty-cell detection: two encodings exist. Base-game textures
             // mark empties with near-zero position-block ALPHA; malgalad's
             // "3D World Map Fixed" textures keep alpha full and mark empties
             // with ZERO SCALE instead (see docs/3dmap-fixed-assets.md).
@@ -1964,7 +1965,7 @@ const ThreeScene = (() => {
             dummy.updateMatrix();
             // Pack the 16 floats of the matrix at offset (validCount * 16).
             // Three.js stores Matrix4.elements in column-major order, which
-            // matches WGSL's mat4x4f memory layout — direct copy, no transpose.
+            // matches WGSL's mat4x4f memory layout: direct copy, no transpose.
             matrixData.set(dummy.matrix.elements, validCount * 16);
             validCount++;
           }
@@ -1981,7 +1982,7 @@ const ThreeScene = (() => {
         // get the original instance ID, then fetches the matrix at that index.
         const visibleIndicesBuffer = instancedArray(validCount, 'uint');
 
-        // Indirect draw struct — written by reset+cull computes, consumed by
+        // Indirect draw struct: written by reset+cull computes, consumed by
         // `drawIndexedIndirect`. Layout follows the WebGPU indexed-draw spec:
         // [indexCount, instanceCount, firstIndex, baseVertex, firstInstance].
         // `instanceCount` is atomic so concurrent threads can append safely.
@@ -1995,7 +1996,7 @@ const ThreeScene = (() => {
         }, `IndirectDraw_${meta.name}`);
         const drawStorage = storage(indirectAttribute, indirectStruct, 1);
 
-        // (init compute) Run once at scene setup — writes the static draw
+        // (init compute) Run once at scene setup; writes the static draw
         // fields (everything except instanceCount, which the cull pass owns).
         const baseGeoIndexCount = baseGeo.index ? baseGeo.index.count : baseGeo.attributes.position.count;
         const initFn = Fn(() => {
@@ -2016,7 +2017,7 @@ const ThreeScene = (() => {
         // (cull compute) Per frame, N threads (one per instance). Each thread
         // tests its instance's bounding sphere against TWO 6-plane frusta:
         // the camera frustum AND the sun's shadow frustum. The instance is
-        // visible if it passes either — that way off-screen buildings still
+        // visible if it passes either; that way off-screen buildings still
         // inside the shadow ortho box get into the indirect buffer and cast
         // shadows into the visible area (the original camera-only test
         // dropped them, making shadows pop at screen edges on pan).
@@ -2068,13 +2069,13 @@ const ThreeScene = (() => {
         mat.userData.visibleIndicesBuffer   = visibleIndicesBuffer;
         mat.userData.indirectAttribute      = indirectAttribute;
 
-        // Per-district geometry — clone the unit cube (sharing would tie all
+        // Per-district geometry: clone the unit cube (sharing would tie all
         // districts to a single indirect buffer) and wire up the indirect-
         // draw buffer. Critically NOT an `InstancedBufferGeometry`: when both
         // `instanceCount` and `setIndirect()` are set, Three.js picks the
         // former and silently ignores the indirect buffer. Regular
         // `BufferGeometry.clone()` + `setIndirect()` matches the canonical
-        // `webgpu_struct_drawindirect` example — instance count comes solely
+        // `webgpu_struct_drawindirect` example; instance count comes solely
         // from the indirect buffer's `instanceCount` field, which the cull
         // compute writes each frame.
         const geo = baseGeo.clone();
@@ -2087,8 +2088,9 @@ const ThreeScene = (() => {
         // Three.js's default frustum cull was already broken for our cube-
         // at-origin setup. The
         // storage-buffer pattern moves all positioning to the GPU, so the host
-        // bounding sphere is even more meaningless — disable cull explicitly
-        // until Phase 2B's compute pass owns visibility.
+        // bounding sphere is even more meaningless; disable cull explicitly.
+        // Visibility is owned by the Phase 2B cull compute pass writing the
+        // indirect buffer's instanceCount each frame.
         mesh.frustumCulled = false;
 
         group.add(mesh);
@@ -2121,15 +2123,15 @@ const ThreeScene = (() => {
   //
   //   0. Per-instance positioning + normals (vertex stage, via `geometryNode`)
   //      The buildings group is rendered as a non-instanced `Mesh` backed by
-  //      an `InstancedBufferGeometry` whose instance matrices live in an
-  //      `instancedArray` storage buffer (see `loadBuildings()`).
+  //      a regular `BufferGeometry` with an indirect draw buffer; the instance
+  //      matrices live in an `instancedArray` storage buffer (see `loadBuildings()`).
   //      `material.geometryNode` runs BEFORE the standard pipeline and
-  //      mutates `positionLocal`/`normalLocal` in place — the same pattern
+  //      mutates `positionLocal`/`normalLocal` in place, the same pattern
   //      `InstanceNode.setup()` uses for `InstancedMesh`. After it runs
   //      every downstream computation (positionWorld, normalView, lighting,
   //      shadow depth) sees the instance-transformed values automatically.
-  //      Phase 2B compute culling will slot a `visibleIndices` lookup
-  //      between `instanceIndex` and the matrix fetch with no other changes.
+  //      Phase 2B compute culling slots a `visibleIndices` lookup between
+  //      `instanceIndex` and the matrix fetch (see the dereference below).
   //
   //   1. `_m.dds` surface modulation (pre-lighting, via `colorNode`)
   //      Original GLSL hook: `#include <color_fragment>`
@@ -2137,7 +2139,7 @@ const ThreeScene = (() => {
   //      and multiplies the diffuse colour. Because `geometryNode` already
   //      put the instance-transformed position into `positionLocal`,
   //      `positionWorld` (= modelWorldMatrix · positionLocal) gives the
-  //      correct world position automatically — same code path as Phase 1.
+  //      correct world position automatically; same code path as Phase 1.
   //
   //   2. Edge highlight (pre-lighting, via `colorNode`)
   //      The game's gbuffer shader lerps EdgeColor into the ALBEDO before
@@ -2159,16 +2161,16 @@ const ThreeScene = (() => {
     const uOffset        = uniform(new THREE.Vector2(meta.offset[0], meta.offset[1]));
     const uEdgeColor     = uniform(readThemeColor('--scene-buildings-edge', '#ffffff'));
     // Edge highlight constants, decoded from 3d_map_cubes.mt (per-district):
-    //   uEdgeSharpness — EdgeSharpnessPower (30 / 50): the exponent of the
+    //   uEdgeSharpness = EdgeSharpnessPower (30 / 50): the exponent of the
     //                  pow(X, power) edge gradient.
-    //   uEdgeCamCoeff — the camera-distance widening, k = camDist·0.002·
+    //   uEdgeCamCoeff: the camera-distance widening, k = camDist·0.002·
     //                  EdgeThickness, pre-divided by cubeSize (the game divides
-    //                  by the per-face world size; cubeSize is its stand-in —
+    //                  by the per-face world size; cubeSize is its stand-in;
     //                  the term is sub-pixel at map zoom regardless).
     const uEdgeSharpness = uniform(meta.edgeSharpness);
     const uEdgeCamCoeff = uniform(NCZ.BUILDING_EDGE_CAMDIST_K * meta.edgeThickness / meta.cubeSize);
     // Edge "glow": when on, the edge highlight is also written to emissiveNode
-    // so it stays lit regardless of sun/shadow — neon, strongest at dawn/dusk
+    // so it stays lit regardless of sun/shadow: neon, strongest at dawn/dusk
     // (a true halo needs the bloom pass; this is the cheap self-lit version).
     // Binary on/off at the fixed NCZ.EDGE_GLOW_INTENSITY; per-theme default from
     // --scene-edge-glow, overridable via the Settings toggle (_edgeGlowOn).
@@ -2176,19 +2178,19 @@ const ThreeScene = (() => {
     // uEdgeColor + uEdgeGlow need runtime mutation (theme rewire / flyover tweens).
     mat.userData.tslUniforms = { uEdgeColor, uEdgeGlow };
 
-    // (0) Per-instance positioning + normals — explicit space transforms.
+    // (0) Per-instance positioning + normals: explicit space transforms.
     //
     // `material.normalNode` is consumed by `NodeMaterial.setupNormal()` as:
-    //   `vec3(this.normalNode).normalize()` — used DIRECTLY for lighting
+    //   `vec3(this.normalNode).normalize()`, used DIRECTLY for lighting
     //   without any further matrix transforms. So whatever we provide must
     //   already be in VIEW space.
     //
     // Composition:
-    //   1. `transformNormal(normalLocal, instMatrix)` — applies the instance
+    //   1. `transformNormal(normalLocal, instMatrix)`: applies the instance
     //      matrix to the local normal using the inverse-transpose form
     //      (handles non-uniform building scale). Output is in WORLD space
     //      because our matrices encode world transforms (group at origin).
-    //   2. `transformNormalToView(...)` — applies modelNormalMatrix
+    //   2. `transformNormalToView(...)`: applies modelNormalMatrix
     //      (identity for our group) and cameraViewMatrix.transformDirection
     //      to take world → view. This is the same helper Three.js uses
     //      internally for the default `normalLocal → normalView` path.
@@ -2196,7 +2198,7 @@ const ThreeScene = (() => {
     // Earlier attempts that set `normalNode` directly to a world-space
     // value (via `transformNormal` alone or `mat3(M).mul(normalLocal)`)
     // produced view-dependent lighting because lighting was computing
-    // dot(world_normal, view_lightDir) — values in different coordinate
+    // dot(world_normal, view_lightDir), values in different coordinate
     // spaces.
     // Phase 2B: `instanceIndex` is the COMPACTED draw index (0..visibleCount).
     // We dereference through `visibleIndicesBuffer` to get the original
@@ -2208,11 +2210,11 @@ const ThreeScene = (() => {
     const worldNormal = transformNormal(normalLocal, instMatrix); // also drives the _m slope guard below
     mat.normalNode   = transformNormalToView(worldNormal);
 
-    // World-space planar UV — XZ plane, normalised against the district's CET
+    // World-space planar UV: XZ plane, normalised against the district's CET
     // bounds. Original GLSL: vMUv = ((wx - off.x - min.x)/(max.x - min.x),
     //                                (-wz - off.y - min.y)/(max.y - min.y))
     // We read the instance-transformed world position directly from the
-    // matrix multiplication chain rather than `positionWorld` — under WebGPU
+    // matrix multiplication chain rather than `positionWorld`; under WebGPU
     // with a custom `positionNode`, `positionWorld` evaluates to
     // `modelWorldMatrix · positionLocal` (without the instance transform).
     const instWorldPos4 = instMatrix.mul(vec4(positionLocal, 1));
@@ -2224,14 +2226,14 @@ const ThreeScene = (() => {
     );
 
     // Sloped-face guard: ~12.5% of instances have oblique quaternions
-    // (_data.dds census — 32k of 255k tilted >2° off any 90° multiple), and on
+    // (_data.dds census: 32k of 255k tilted >2° off any 90° multiple), and on
     // their slanted faces the fragment-position planar UV paints a recognisable
-    // 2-D patch of the district map — a top-down projection landing on a
+    // 2-D patch of the district map: a top-down projection landing on a
     // non-horizontal surface. The game has the same latent artifact (its
     // vertical-AO gbuffer term ships disabled, and its near-top-down map camera
     // never shows walls), but our tilting camera does. Steep faces therefore
-    // sample _m at the instance's own centre instead — each building's walls
-    // and slopes carry their own roof texel, which cannot image — blended by
+    // sample _m at the instance's own centre instead (each building's walls
+    // and slopes carry their own roof texel, which cannot image), blended by
     // the world normal's up-ness so flat roofs keep the exact decoded planar
     // sample.
     const instCenter4 = instMatrix.mul(vec4(0, 0, 0, 1)); // unit-cube origin = box centre
@@ -2246,20 +2248,20 @@ const ThreeScene = (() => {
     );
     const mUv = mix(centerUv, planarUv, upness);
 
-    // (1) Diffuse modulation — sample _m, scale base colour. The game's
+    // (1) Diffuse modulation: sample _m, scale base colour. The game's
     // gbuffer shader applies `surface = 0.4 + 0.5·m` to the albedo (decoded from
     // a PIX capture; the shader's vertical-AO term is disabled by the default
     // DebugScaleOffset, so it collapses to floor+range).
     const mVal = texture(mTex, mUv.clamp(0, 1)).r;
     const modulation = float(NCZ.BUILDING_TEX_FLOOR).add(mVal.mul(NCZ.BUILDING_TEX_RANGE));
 
-    // (2) Edge highlight — the decoded game algorithm with fwidth AA standing
+    // (2) Edge highlight: the decoded game algorithm with fwidth AA standing
     // in for the game's TAA (see `buildingEdgeCoverage`). The game lerps the
     // edge into the gbuffer ALBEDO before lighting, so we mix on `colorNode`,
     // before the _m modulation, to match. `camTerm` = the game's
     // camDist·0.002·EdgeThickness/cubeSize widening.
     //
-    // The game's edge tint is `EdgeColor · 2 · luma(BaseColorScale)` — a
+    // The game's edge tint is `EdgeColor · 2 · luma(BaseColorScale)`, a
     // brightness boost that drives the rim toward (clamped) white. The HUE
     // stays theme-driven (uEdgeColor); only the 2·luma scale is the game's.
     // Dropping it (an earlier port did) leaves the rim far too dim vs the
@@ -2282,11 +2284,11 @@ const ThreeScene = (() => {
     return mat;
   }
 
-  // District line materials — stored so resolution can be updated on resize
+  // District line materials, stored so resolution can be updated on resize
   const districtLineMaterials = [];
 
   // Per-ring stencil refs for the joint self-overlap dedup (see
-  // district-line-material.js header). Values 3..255 — 1 (OCCLUDER) and 2
+  // district-line-material.js header). Values 3..255; 1 (OCCLUDER) and 2
   // (water) belong to the scene's SeeThrough stencil chain. Cycling is safe:
   // a collision would need two rings ~253 build-order apart sharing a border.
   let _nextLineStencilRef = 3;
@@ -2298,13 +2300,13 @@ const ThreeScene = (() => {
 
   // Drop consecutive ring vertices within ε CET units of each other. The
   // cleanup script (scripts/regenerate_subdistricts.py) runs Shapely boolean
-  // ops on subdistrict polygons and rounds the output to 2 decimal places —
+  // ops on subdistrict polygons and rounds the output to 2 decimal places;
   // when two operation-produced vertices land within 0.01 wu of each other,
   // rounding collapses them to identical coordinates, leaving a zero-length
   // edge in the ring. Line2NodeMaterial's screen-space line shader divides by
   // `length(ndcEnd - ndcStart)` to get the segment direction; degenerate
   // (or sub-pixel after projection) edges produce NaN/Inf direction vectors,
-  // which render as long colored rays across the viewport at close zoom.
+  // which render as long coloured rays across the viewport at close zoom.
   //
   // ε = 0.1 wu catches only the literally-degenerate cases observed in
   // data/subdistricts.json (0.000, 0.010, 0.020 wu edges in badlands subs);
@@ -2340,11 +2342,11 @@ const ThreeScene = (() => {
   // unstable for equal-distance coplanar lines, so the hovered (bright) line is
   // not guaranteed to paint last and a faint 0.05 neighbour can overdraw its
   // edges. The hover code promotes the hovered line's renderOrder to force it
-  // last — see setHoveredDistrict / DISTRICT_HOVER_RENDER_ORDER.
+  // last; see setHoveredDistrict / DISTRICT_HOVER_RENDER_ORDER.
   function buildLine(ring, color, lineWidth) {
     const cleaned = dedupRing(ring);
     if (cleaned.length < 3) {
-      // Degenerate polygon after dedup — can't draw a meaningful ring. Build
+      // Degenerate polygon after dedup; can't draw a meaningful ring. Build
       // an empty Line2 so the caller's group structure is preserved.
       const empty = new LineGeometry();
       empty.setPositions([]);
@@ -2361,7 +2363,7 @@ const ThreeScene = (() => {
     const geometry = new LineGeometry();
     geometry.setPositions(positions);
 
-    // Our own TSL wide-line material (#775) — real alpha blending instead of
+    // Our own TSL wide-line material (#775): real alpha blending instead of
     // Line2NodeMaterial's NoBlending + opaque-backdrop fake, which was the
     // shared root of the #771 resize wedge, the unhovered colour regression
     // and the alphaToCoverage quantisation. Reads the viewport from a TSL
@@ -2387,11 +2389,11 @@ const ThreeScene = (() => {
   // whole-city framing. Replaces the old fitCameraToBox opening: that fit
   // distance always exceeded controls.maxDistance (the terrain box is far
   // taller than the ~6650 wu the FOV can frame at maxDistance), so the map
-  // silently opened fully zoomed out — the "opens too far" bug E5 closes.
+  // silently opened fully zoomed out: the "opens too far" bug E5 closes.
 
   // Camera pose for the intro: position offset from the framing target by
   // `distance` at `tiltDeg` off vertical, along the fixed intro azimuth.
-  // The target is SCHEMA_INTRO_REST_CENTER ([cetX, cetY]) or world centre —
+  // The target is SCHEMA_INTRO_REST_CENTER ([cetX, cetY]) or world centre:
   // the same point for the start and rest poses, so the fly-in is a straight
   // top-down descent with no sideways pan. (Three spherical: phi = polar
   // angle from +Y, theta = azimuth.)
@@ -2414,7 +2416,7 @@ const ThreeScene = (() => {
     u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
 
   // Start the intro fly-in. When a ?mod= deep-link is present the intro is
-  // skipped — the camera snaps straight to the rest pose so app.js's
+  // skipped; the camera snaps straight to the rest pose so app.js's
   // deep-link handler flies to the pin from a sensible whole-city framing.
   function playIntro() {
     if (!controls || !camera) return;
@@ -2441,7 +2443,7 @@ const ThreeScene = (() => {
   }
 
   // Advance the intro fly-in one frame. Called at the top of frame() so
-  // the camera mutation lands before controls.update() reconciles it — that
+  // the camera mutation lands before controls.update() reconciles it; that
   // reconcile fires the 'change' listener, refreshing district zoom, metro
   // LOD, the shadow camera, scale bar and cull frustum as the camera moves.
   function updateIntroTween() {
@@ -2462,12 +2464,12 @@ const ThreeScene = (() => {
 
   const tiltDisplay = document.getElementById('scene-tilt-display');
 
-  // Debug instrumentation — only active when URL has ?debug=1.
+  // Debug instrumentation: only active when URL has ?debug=1.
   // stats.js panels (vertical stack, all visible): FPS / MS / MB / draw calls / triangles.
   const DEBUG_MODE = new URLSearchParams(window.location.search).has('debug');
   let stats = null, statsCallsPanel = null, statsTrisPanel = null;
 
-  // Rolling time-based buffer of frame intervals — feeds dumpDebugInfo() with
+  // Rolling time-based buffer of frame intervals; feeds dumpDebugInfo() with
   // avg/p50/p95. The window is *time*, not frame count: a count-based cap was
   // 0.4s on a 280fps machine and 4s on a 15fps machine, defeating the point of
   // a "wait a few seconds and click" workflow. 5s is enough to smooth jitter
@@ -2483,7 +2485,7 @@ const ThreeScene = (() => {
     // Anchor inside #map-3d so the panel sits below the page header automatically,
     // regardless of header height. top-right keeps it clear of the scene-tilt display.
     // Flex-column stacks the visible panels vertically so the rightmost ones don't
-    // overflow into the viewport edge — Stats.addPanel()'d entries (Calls, Tris/k)
+    // overflow into the viewport edge; Stats.addPanel()'d entries (Calls, Tris/k)
     // bypass the built-in showPanel(0) cycling and stay permanently visible.
     stats.dom.style.position      = 'absolute';
     stats.dom.style.top           = '16px';
@@ -2495,17 +2497,17 @@ const ThreeScene = (() => {
     stats.dom.style.gap           = '4px';
     // pointer-events:none disables stats.js's built-in click-to-cycle handler
     // (so all panels stay visible always) AND lets mouse drags pass through
-    // to the canvas underneath — useful since the panel sits over the 3D map.
+    // to the canvas underneath, useful since the panel sits over the 3D map.
     stats.dom.style.pointerEvents = 'none';
     statsCallsPanel = stats.addPanel(new Stats.Panel('Calls',  '#ff8', '#221'));
     statsTrisPanel  = stats.addPanel(new Stats.Panel('Tris/k', '#f8f', '#212'));
-    // Force every panel visible — the constructor calls showPanel(0) which
+    // Force every panel visible; the constructor calls showPanel(0) which
     // hides MS and MB. We want all five (FPS / MS / MB / Calls / Tris/k) on
     // screen at once so the user can read every metric without interaction.
     for (const child of stats.dom.children) child.style.display = 'block';
     container.appendChild(stats.dom);
 
-    // "Copy debug info" button — sits below the 5 stats panels.
+    // "Copy debug info" button: sits below the 5 stats panels.
     // Stats height: 5 × 48px panels + 4 × 4px gaps = 256px → button starts at 16+256+8 = 280px.
     const dumpBtn = document.createElement('button');
     dumpBtn.textContent  = 'Copy debug info';
@@ -2531,19 +2533,19 @@ const ThreeScene = (() => {
     console.log('  NCZ.ThreeScene.dumpDebugInfo()       → full diagnostic snapshot (also bound to the "Copy debug info" button)');
   }
 
-  // Render-on-demand over renderer.setAnimationLoop — the WebGPU-native frame
+  // Render-on-demand over renderer.setAnimationLoop: the WebGPU-native frame
   // driver (issue #768; the WebGL-era manual rAF chain is retired). The loop
   // fn stays armed while work exists and early-returns on non-dirty ticks;
   // after IDLE_DISARM_MS of consecutive idle ticks it disarms itself via
   // setAnimationLoop(null), so a truly idle map costs zero renders AND zero
-  // rAF wakeups. requestRender() marks the frame dirty and re-arms — hook it
+  // rAF wakeups. requestRender() marks the frame dirty and re-arms; hook it
   // into any state mutation that affects pixels. The grace window (rather
   // than disarm-on-first-idle-tick) keeps bursty input (wheel ticks, hover
   // in/out) on a warm loop instead of churning setAnimationLoop.
   // Damping continuation is detected from controls.update()'s return value
   // (true = state still interpolating).
   //
-  // _suppressed — flyover stops the schema loop and drives frames through
+  // _suppressed: flyover stops the schema loop and drives frames through
   // _flyoverFrame (setFlyoverFrame below) on this same animation loop. Beat-
   // driven transitionToColors still fires requestRender during the flyover,
   // which would otherwise mark the schema path dirty and race the flyover
@@ -2556,7 +2558,7 @@ const ThreeScene = (() => {
   let _loopArmed = false;
   let _idleSince = 0;
   let _flyoverFrame = null;   // showcase per-frame callback; loop persists while set
-  let _framesRendered = 0;    // lifetime renderer.render count — idle verification
+  let _framesRendered = 0;    // lifetime renderer.render count; idle verification
 
   function armLoop() {
     if (_loopArmed || !renderer) return;
@@ -2573,14 +2575,14 @@ const ThreeScene = (() => {
   function frame(time) {
     if (_flyoverFrame) { _flyoverFrame(time); return; }
     if (_suppressed || (!_frameDirty && _continuousRenderRefs === 0)) {
-      // Idle tick — nothing changed since the last render. Disarm once the
+      // Idle tick: nothing changed since the last render. Disarm once the
       // grace window has passed with no new work.
       if ((time ?? performance.now()) - _idleSince > IDLE_DISARM_MS) disarmLoop();
       return;
     }
     _frameDirty = false;
     if (stats) stats.begin();
-    updateIntroTween();   // E5 intro fly-in — mutate the camera before controls.update() reconciles
+    updateIntroTween();   // E5 intro fly-in: mutate the camera before controls.update() reconciles
     stepDistrictHoverFade(performance.now()); // district outline opacity tween
     const dampingActive = controls.update();
     // Phase 2B: dispatch per-district reset+cull computes BEFORE render.
@@ -2605,7 +2607,7 @@ const ThreeScene = (() => {
       stats.end();
     }
     // Frame-time sampling for dumpDebugInfo(). Cap dt so a long idle gap
-    // between render-on-demand frames doesn't poison the rolling average —
+    // between render-on-demand frames doesn't poison the rolling average;
     // anything over 1s is treated as "loop was paused, ignore this delta".
     const _now = performance.now();
     if (_lastFrameTime) {
@@ -2631,7 +2633,7 @@ const ThreeScene = (() => {
     else _idleSince = performance.now();
   }
 
-  // Schedule one frame. Idempotent — multiple calls within the same tick
+  // Schedule one frame. Idempotent: multiple calls within the same tick
   // collapse to a single dirty flag. Hook into any state change that affects
   // pixels. Re-arms the animation loop if it has idle-disarmed.
   function requestRender() {
@@ -2642,8 +2644,8 @@ const ThreeScene = (() => {
   }
 
   // Hold the loop open across an arbitrary number of frames. Counter-based so
-  // multiple animations (theme dissolve + sun arc + beat pulse) compose cleanly
-  // — each pairs a true/false call. Flyover doesn't use this; it bypasses the
+  // multiple animations (theme dissolve + sun arc + beat pulse) compose cleanly;
+  // each pairs a true/false call. Flyover doesn't use this; it bypasses the
   // schema frame body entirely via its setFlyoverFrame callback.
   function setContinuousRender(active) {
     _continuousRenderRefs = Math.max(0, _continuousRenderRefs + (active ? 1 : -1));
@@ -2651,7 +2653,7 @@ const ThreeScene = (() => {
   }
 
   // Showcase frame driver (issue #768). While a callback is set, the shared
-  // animation loop invokes it every tick instead of the schema frame body —
+  // animation loop invokes it every tick instead of the schema frame body;
   // a cinematic is continuous by nature, so no dirty flag and no idle disarm.
   // Clearing it falls back to the schema path, which (still _suppressed until
   // startRenderLoop) idles out through the normal grace window.
@@ -2660,18 +2662,18 @@ const ThreeScene = (() => {
     if (_flyoverFrame) armLoop();
   }
 
-  // Backward-compat shims — external callers (app.js view switch, flyover
+  // Backward-compat shims: external callers (app.js view switch, flyover
   // restart) still talk to start/stop. start = "ensure at least one frame
   // renders soon" which on-demand satisfies via a single requestRender.
   // start also clears the flyover suppression flag in case stopRenderLoop
   // was the call that engaged it; stop sets it so any in-flight requestRender
-  // (e.g. from a still-running color tween) doesn't mark the schema path dirty.
+  // (e.g. from a still-running colour tween) doesn't mark the schema path dirty.
   function startRenderLoop() {
     _suppressed = false;
     // The showcase flyover fits the shadow camera, the cull-frustum uniforms,
     // and the metro LOD pseudo-zoom to its own PerspectiveCamera (renderFrame
     // below). When it hands control back, snap all three back to the schema
-    // camera's view before the next schema frame — otherwise the cull's first
+    // camera's view before the next schema frame; otherwise the cull's first
     // post-showcase dispatch would test against the flyCamera's last frustum
     // and the metro LOD would be stuck on the synthetic perspective zoom
     // until the user moved the camera (firing the controls 'change' reset).
@@ -2686,7 +2688,7 @@ const ThreeScene = (() => {
   function stopRenderLoop() {
     _suppressed = true;
     _frameDirty = false;
-    // Disarm now unless the flyover is (about to be) driving frames — in the
+    // Disarm now unless the flyover is (about to be) driving frames; in the
     // flyover start sequence setFlyoverFrame() follows immediately and re-arms.
     if (!_flyoverFrame) disarmLoop();
     _lastFrameTime = 0; // Reset so the next frame after restart doesn't sample the gap
@@ -2694,11 +2696,11 @@ const ThreeScene = (() => {
 
   // ── Debug helpers (always exposed; useful from DevTools console) ───────
 
-  // Snapshot of renderer.info — counts that explain CPU vs GPU bottlenecks.
+  // Snapshot of renderer.info: counts that explain CPU vs GPU bottlenecks.
   function getRenderInfo() {
     if (!renderer) return null;
     return {
-      // Lifetime count of frames actually rendered (schema + flyover) — poll
+      // Lifetime count of frames actually rendered (schema + flyover); poll
       // twice to verify render-on-demand idles at zero (issue #768 acceptance).
       framesRendered: _framesRendered,
       drawCalls:  renderer.info.render.calls,
@@ -2715,7 +2717,7 @@ const ThreeScene = (() => {
 
   // Phase 2B cull-effectiveness probe. `renderer.info.render.triangles` is
   // CPU-computed and never round-trips the indirect buffer's atomic
-  // instanceCount, so it reads 0 under indirect draws — the only way to know
+  // instanceCount, so it reads 0 under indirect draws; the only way to know
   // how many building instances actually survive the compute frustum cull is
   // to read the GPU copy back. `getArrayBufferAsync` maps the storage buffer
   // to the CPU; index [1] of the 5-uint IndirectDraw struct is instanceCount.
@@ -2725,7 +2727,7 @@ const ThreeScene = (() => {
     const byDistrict = [];
     let total = 0, visible = 0;
     // buildingMeshes and buildingMaterials are pushed in lockstep in loadBuildings,
-    // so the index aligns — use it for the district name (`buildings-<district>`).
+    // so the index aligns; use it for the district name (`buildings-<district>`).
     for (let i = 0; i < buildingMaterials.length; i++) {
       const mat  = buildingMaterials[i];
       const attr = mat.userData.indirectAttribute;
@@ -2755,7 +2757,7 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  // Comprehensive diagnostic snapshot — bound to the "Copy debug info" button
+  // Comprehensive diagnostic snapshot, bound to the "Copy debug info" button
   // and exposed for console use. Logs human-readable text, copies it to the
   // clipboard, and returns the structured object for programmatic use.
   function dumpDebugInfo() {
@@ -2775,7 +2777,7 @@ const ThreeScene = (() => {
       };
     }
 
-    // GPU details — two paths:
+    // GPU details (two paths):
     //   WebGPU: pull from the cached GPUAdapterInfo on the backend adapter.
     //           WGSL spec exposes `vendor` and `architecture`/`description`;
     //           Three.js caches whatever the browser surfaces at adapter request.
@@ -2785,12 +2787,12 @@ const ThreeScene = (() => {
     if (renderer) {
       try {
         if (renderer.isWebGPURenderer) {
-          // r184's WebGPUBackend keeps the GPUAdapter local to init() — it's not
+          // r184's WebGPUBackend keeps the GPUAdapter local to init(); it's not
           // on `renderer.backend`. The device, however, exposes `adapterInfo`
           // (spec-stable GPUDevice.adapterInfo). Chrome's anti-fingerprinting
           // policy blanks `device`/`description` for non-allowlisted origins, but
           // `vendor` ("nvidia", "amd"…) and `architecture` ("blackwell", "rdna3"…)
-          // still come through — same caveat the WebGL2 path's UNMASKED_* had.
+          // still come through; same caveat the WebGL2 path's UNMASKED_* had.
           const adapterInfo = renderer.backend?.device?.adapterInfo;
           if (adapterInfo) {
             gpu    = adapterInfo.description || adapterInfo.architecture || 'unknown';
@@ -2799,7 +2801,7 @@ const ThreeScene = (() => {
           const limits = renderer.backend?.device?.limits;
           if (limits) {
             maxTexture = limits.maxTextureDimension2D ?? '?';
-            // No direct renderbuffer limit in WebGPU — use storage-buffer binding size
+            // No direct renderbuffer limit in WebGPU; use storage-buffer binding size
             // as the closest analogue; surfaces under the same "how big can a single
             // GPU resource be" question as the WebGL value.
             maxRb      = limits.maxStorageBufferBindingSize ?? '?';
@@ -2814,7 +2816,7 @@ const ThreeScene = (() => {
           maxTexture = gl.getParameter(gl.MAX_TEXTURE_SIZE);
           maxRb      = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
         }
-      } catch (_) { /* introspection unavailable — leave defaults */ }
+      } catch (_) { /* introspection unavailable; leave defaults */ }
     }
 
     const shadowTypeNames = ['BasicShadowMap', 'PCFShadowMap', 'PCFSoftShadowMap', 'VSMShadowMap'];
@@ -2825,20 +2827,20 @@ const ThreeScene = (() => {
         // Per Three.js Info.js: `info.render.calls` = lifetime render() calls,
         // `info.render.frameCalls` = current-frame render() calls (usually 1),
         // `info.render.drawCalls` = current-frame DRAW count. Earlier Phase 1
-        // code mislabelled `calls` as "drawCalls" — it's the lifetime render
+        // code mislabelled `calls` as "drawCalls"; it's the lifetime render
         // counter, not the per-frame draw counter.
         drawCallsThisFrame: renderer.info.render.drawCalls ?? 0,
         rendersTotal:       renderer.info.render.calls,
         triangles:    renderer.info.render.triangles,
         lines:        renderer.info.render.lines,
         // Compute stats live at `info.compute.{calls, frameCalls}` on
-        // WebGPURenderer — NOT under `info.render`. WebGL2 fallback has
+        // WebGPURenderer, NOT under `info.render`. WebGL2 fallback has
         // neither, so we coalesce to 0.
         computeTotal:      renderer.info.compute?.calls ?? 0,
         computeFrameCalls: renderer.info.compute?.frameCalls ?? 0,
         geometries:   renderer.info.memory.geometries,
         textures:     renderer.info.memory.textures,
-        // Indirect-storage-buffer bytes — confirms Phase 2B's draw buffers
+        // Indirect-storage-buffer bytes: confirms Phase 2B's draw buffers
         // (5 u32s × 8 districts = 160 bytes minimum) are allocated.
         indirectBufferBytes: renderer.info.memory.indirectStorageAttributesSize ?? 0,
         // WebGPU exposes the compiled-pipeline count at info.memory.programs
@@ -2847,7 +2849,7 @@ const ThreeScene = (() => {
       } : null,
       rendererSettings: renderer ? {
         pixelRatio:     renderer.getPixelRatio(),
-        // No `getContextAttributes()` on WebGPURenderer — track from constructor
+        // No `getContextAttributes()` on WebGPURenderer; track from constructor
         // params via a sentinel set at init time. Falls back to the legacy path
         // for WebGL2 where the WebGL context exposes these directly.
         antialias:      _webgpuActive
@@ -2901,7 +2903,8 @@ const ThreeScene = (() => {
         lines.push(`Compute:       (none — running on WebGL2 fallback?)`);
       }
       lines.push(`Triangles:     ${dump.render.triangles.toLocaleString()}`);
-      // Programs is WebGL2-only — show "n/a" rather than "null" under WebGPU.
+      // info.memory.programs counts compiled pipelines on both backends;
+      // "n/a" covers dumps captured before any pipeline compiled.
       const programsField = dump.render.programs == null ? 'n/a (WebGPU)' : dump.render.programs;
       lines.push(`Geometries:    ${dump.render.geometries}    Textures: ${dump.render.textures}    Programs: ${programsField}`);
       if (dump.render.indirectBufferBytes > 0) {
@@ -2925,7 +2928,7 @@ const ThreeScene = (() => {
     // Brave, etc.); Firefox and Safari return undefined, which falls through to "unknown".
     // Where it IS supported, the value is quantised to the largest power of 2 strictly less
     // than the actual RAM (spec caps at 8 GB; Chromium ignores the cap but still applies the
-    // rounding — verified by user reports of 64 GB → 32 and 16 GB → 8). The actual RAM
+    // rounding, verified by user reports of 64 GB → 32 and 16 GB → 8). The actual RAM
     // therefore lies in (reported, 2 × reported]; we display that half-open range so readers
     // don't misread the floor as a precise figure. Phrased as "browser reports …" rather
     // than naming Chrome, since the rounding is observable in every Chromium variant.
@@ -2954,14 +2957,13 @@ const ThreeScene = (() => {
   // ── WebGPU diagnostic probe (?webgpuprobe) ─────────────────────────────
   // Three.js collapses every WebGPU negotiation failure into one opaque log
   // line ("WebGPU is not available, running under WebGL2 backend"), and r184's
-  // WebGPUBackend keeps the GPUAdapter local to its init() — so post-init we
+  // WebGPUBackend keeps the GPUAdapter local to its init(), so post-init we
   // can't see *why* it bailed. This pre-init probe replicates the exact
   // adapter/device requests Three.js makes and surfaces the real rejection.
   //
-  // Output convention follows the project's devtools `copy()` debug pattern
-  // (see learnings/shadowtrace-spacebar-marker-pattern): the full text is
+  // Output convention follows the project's devtools `copy()` debug pattern: the full text is
   // stashed on window.__webgpuProbe so the tester runs `copy(__webgpuProbe)`
-  // and pastes it back — no clipboard user-gesture needed at page load.
+  // and pastes it back; no clipboard user-gesture needed at page load.
   async function runWebGPUProbe() {
     const lines = [];
     const log = (s) => lines.push(s);
@@ -3042,7 +3044,7 @@ const ThreeScene = (() => {
           log('  → REJECTED. name=' + err.name + '  message=' + err.message);
         }
 
-        // (5) Contrast control — does the device come up at all without limits?
+        // (5) Contrast control: does the device come up at all without limits?
         log('');
         log('requestDevice() (no requiredLimits — contrast control):');
         try {
@@ -3086,26 +3088,26 @@ const ThreeScene = (() => {
       '[NCZ] WebGPU probe complete. Run  copy(__webgpuProbe)  in this console ' +
       'to copy it, then paste it back.\n\n' + text
     );
-    // Opportunistic — works if the page happens to be focused; the
+    // Opportunistic: works if the page happens to be focused; the
     // copy(__webgpuProbe) path above is the reliable one at page load.
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(
         () => console.log('[NCZ] WebGPU probe — also copied to clipboard ✓'),
-        ()  => { /* expected without a user gesture — use copy(__webgpuProbe) */ }
+        ()  => { /* expected without a user gesture; use copy(__webgpuProbe) */ }
       );
     }
   }
 
   // ── Flyover API ────────────────────────────────────────────────────────
-  // Called by flyover.js — kept minimal to avoid exposing internals.
+  // Called by flyover.js; kept minimal to avoid exposing internals.
 
   function renderFrame(cam) {
     if (!renderer || !scene) return;
-    // The showcase flyover renders through its own PerspectiveCamera —
+    // The showcase flyover renders through its own PerspectiveCamera;
     // re-fit the shadow camera AND the cull-frustum uniforms to *its* view
     // each frame (the schema frame body is suppressed during showcase, so
     // nothing else is keeping these in sync). Then dispatch the per-frame
-    // Phase 2B cull computes the same way frame() does — without this,
+    // Phase 2B cull computes the same way frame() does; without this,
     // the indirect buffer's instanceCount is frozen at whatever the schema
     // cam last culled, so both the shadow pass and the main pass draw a
     // stale building set (the original symptom: shadows missing under
@@ -3143,7 +3145,7 @@ const ThreeScene = (() => {
   function resetCamera() {
     if (!controls) return;
 
-    // Snap back to the E5 intro's rest pose — the whole-city framing the
+    // Snap back to the E5 intro's rest pose: the whole-city framing the
     // camera comes to rest at on first load. Cancel an in-flight intro
     // (and release its render-loop hold) if Reset is hit during the fly-in.
     if (_introTween) { _introTween = null; setContinuousRender(false); }
@@ -3189,13 +3191,13 @@ const ThreeScene = (() => {
     if (normalBordersMat) normalBordersMat.color.copy(readThemeColor('--overlay-road-border-color', '#1ec3c8'));
     if (metroMat)   metroMat.color.copy(readThemeColor('--overlay-metro-color',        '#dcaa28'));
 
-    // Update landmark material — its own --scene-landmarks colour. The game's
+    // Update landmark material: its own --scene-landmarks colour. The game's
     // monument meshes are a separate material from the building cubes; the
     // Preem Map mod recolours buildings but leaves the monuments vanilla, so
     // landmarks must be themed independently.
     if (landmarkMat) landmarkMat.color.copy(readThemeColor('--scene-landmarks', '#7a8fa0'));
 
-    // Update building materials — MeshLambertNodeMaterial.color + TSL edge-colour uniform
+    // Update building materials: MeshLambertNodeMaterial.color + TSL edge-colour uniform
     if (buildingMaterials.length) {
       const base = readThemeColor('--scene-buildings', '#7a8fa0');
       const edge = readThemeColor('--scene-buildings-edge', '#ffffff');
@@ -3205,7 +3207,7 @@ const ThreeScene = (() => {
         if (u?.uEdgeColor) u.uEdgeColor.value.copy(edge);
       }
       // Edge-glow uniforms handled by applyEdgeGlow() above (theme default /
-      // Settings override) — uses the fixed intensity, not the raw CSS number.
+      // Settings override); uses the fixed intensity, not the raw CSS number.
     }
     requestRender();
   }
@@ -3269,7 +3271,7 @@ const ThreeScene = (() => {
     return getColorBindings().map(({ key, cssVar, fallback }) => ({ key, cssVar, fallback }));
   }
 
-  // Snapshot current material colors — call before applyTheme so the old
+  // Snapshot current material colours; call before applyTheme so the old
   // values are captured for use as the "from" end of a transition lerp.
   function captureColors() {
     const snap = {};
@@ -3277,8 +3279,8 @@ const ThreeScene = (() => {
     return snap;
   }
 
-  // Lerp scene/material colors from a snapshot to explicit THREE.Color targets.
-  // Used by the flyover beat cycle — no CSS read, no building update, no overhead.
+  // Lerp scene/material colours from a snapshot to explicit THREE.Color targets.
+  // Used by the flyover beat cycle: no CSS read, no building update, no overhead.
   function transitionToColors(from, to, durationMs = 800) {
     if (!scene) return;
     const bindings = getColorBindings();
@@ -3294,10 +3296,11 @@ const ThreeScene = (() => {
     requestAnimationFrame(step);
   }
 
-  // Smoothly lerp scene/material colors from a captured snapshot to the
-  // current CSS custom property values (new theme already applied).
-  // Buildings snap immediately via updateMaterials(); only the main scene
-  // colors are lerped to keep the per-frame cost low.
+  // Smoothly lerp scene/material colours from a captured snapshot to the
+  // current CSS custom property values (the new theme is already applied,
+  // typically via updateMaterials()): each binding is reset to the snapshot
+  // and lerped to its new value. Every getColorBindings entry participates,
+  // buildings included.
   function transitionMaterials(from, durationMs = 1000) {
     if (!scene) return;
     const bindings = getColorBindings();
@@ -3328,7 +3331,7 @@ const ThreeScene = (() => {
   // So az=0 (south) → Z+; az=π/2 (west) → X-; az=-π/2 (east) → X+
   function setSunPosition(azimuthRad, altitudeRad) {
     // Store the requested state BEFORE the lights-exist guard. getSunElevation()
-    // — and the app.js UI-sync poll that reverse-maps it onto the sun slider —
+    // (and the app.js UI-sync poll that reverse-maps it onto the sun slider)
     // must see what was requested even when this call lands before init() has
     // built the lights (the slider's initial applySunTime fires that early).
     // When the request was dropped here instead, the poll read the placeholder
@@ -3351,7 +3354,7 @@ const ThreeScene = (() => {
     flagShadowUpdate();   // sun moved ⇒ re-render the shadow depth map next frame (no-op while shadows off)
 
     // Sun + ambient colour and intensity are fixed (calibrated to 3dmap.envparam,
-    // set once at light construction) — the in-game map has no time-of-day
+    // set once at light construction); the in-game map has no time-of-day
     // variation. The slider only moves the sun's direction, above.
 
     // Move the visible sun sphere (shown during showcase only).
@@ -3359,7 +3362,7 @@ const ThreeScene = (() => {
     if (_sunSphere) {
       const SUN_SPHERE_DIST = NCZ.SUN_SPHERE_DIST;
       const nx = -Math.cos(el) * Math.sin(az);
-      const ny =  Math.sin(el); // unclamped — terrain naturally occludes it at sunrise/sunset
+      const ny =  Math.sin(el); // unclamped; terrain naturally occludes it at sunrise/sunset
       const nz =  Math.cos(el) * Math.cos(az);
       _sunSphere.position.set(
         NCZ.WORLD_CX + nx * SUN_SPHERE_DIST,
@@ -3386,11 +3389,11 @@ const ThreeScene = (() => {
     if (!_dirLight || !renderCam) return;
     const shadowCam = _dirLight.shadow.camera;
 
-    // Two fit paths — the camera shapes are too different to share one.
+    // Two fit paths; the camera shapes are too different to share one.
     //
     // Schema cam (interactive top-down perspective with controls): sphere-fit.
     // Ray-cast NDC corners → Y=0 → bounding sphere (centroid + enclosing
-    // radius). Tight, sharp, matches the user's view, and — unlike the AABB —
+    // radius). Tight, sharp, matches the user's view, and (unlike the AABB)
     // rotation-invariant, so the texel size below stays constant as you orbit
     // and the texel snap holds. Always succeeds for the schema cam because
     // controls constrain tilt below horizontal, so corners always hit ground at
@@ -3400,14 +3403,14 @@ const ThreeScene = (() => {
     // schema cam when zoomed out past the cap: a WORLD-LOCKED cap-sized box (half =
     // `SHADOW_MAX_DISTANCE + GROUND_MARGIN`) centred on the world. Since that box
     // already spans the whole ~12 km world, there's no texel-density gain from
-    // following the camera — and a camera-following centre clamps toward a world
+    // following the camera, and a camera-following centre clamps toward a world
     // edge (leaving the far side unshadowed) and crawls. World-locking gives full
     // coverage and a static centre every frame; only the moving-sun crawl remains,
     // masked by the wider showcase PCF blur (`SHADOW_RADIUS_SHOWCASE`). Coarser
     // texels than the tight schema fit, but cinematic motion masks that.
     // (History: the fly cam previously used a forward-ray-to-ground + tHit-cap
     // fit to avoid the "shadow box pop" rect-fit caused at horizon-crossing
-    // waypoints — see shadow_trace_2/3.json; world-locking subsumes that.)
+    // waypoints, see shadow_trace_2/3.json; world-locking subsumes that.)
     let half, center;
     let rectValid = false;
     if (renderCam === camera && controls) {
@@ -3416,7 +3419,7 @@ const ThreeScene = (() => {
       if (rectValid && _groundSphereRadius > NCZ.SHADOW_MAX_DISTANCE) {
         // View is larger than the shadow map can cover (zoomed out). Capping a box
         // centred on the visible footprint turns it into a camera-tracking slice
-        // that leaves the rest of the world unshadowed — the "moving shadow box":
+        // that leaves the rest of the world unshadowed, the "moving shadow box":
         // the footprint centroid even clamps to a world corner at extreme tilt.
         // Instead, cover the WHOLE WORLD from its centre. The world half-diagonal
         // (~8564 wu) is ≤ cap+margin, so a cap-sized box centred here reaches every
@@ -3430,15 +3433,15 @@ const ThreeScene = (() => {
         center = _shadowScratchV.copy(_groundSphereCenter);
       } else {
         // Degenerate (shouldn't happen for the schema cam given controls.maxPolarAngle,
-        // but the safety net stays). World-centered fallback at the cap.
+        // but the safety net stays). World-centred fallback at the cap.
         half = NCZ.SHADOW_MAX_DISTANCE + NCZ.SHADOW_GROUND_MARGIN;
         center = _shadowScratchV.set(NCZ.WORLD_CX, 0, -NCZ.WORLD_CY);
       }
     } else {
-      // External cam (showcase fly cam) — world-locked box, same as the schema
+      // External cam (showcase fly cam): world-locked box, same as the schema
       // zoomed-out case above. The box is already cap-sized (half ≈ 9200 wu),
       // which spans the whole ~12 km world, so centring it on the camera buys no
-      // texel-density gain — it only risks clamping toward a world edge (leaving
+      // texel-density gain; it only risks clamping toward a world edge (leaving
       // the far side unshadowed) and crawling as the cam moves. World-locking
       // gives full coverage every frame and a static centre (only the moving-sun
       // crawl remains, masked by SHADOW_RADIUS_SHOWCASE). This replaces the old
@@ -3453,10 +3456,10 @@ const ThreeScene = (() => {
     center.x = Math.max(NCZ.WORLD_MIN_X, Math.min(NCZ.WORLD_MAX_X, center.x));
     center.z = Math.max(-NCZ.WORLD_MAX_Y, Math.min(-NCZ.WORLD_MIN_Y, center.z));
 
-    // Stabilisation (quantise size + texel-snap centre) — SCHEMA CAM ONLY.
+    // Stabilisation (quantise size + texel-snap centre): SCHEMA CAM ONLY.
     // Both steps assume a STATIC texel grid frame-to-frame: constant texelSize AND
     // a constant light-space basis. The interactive schema cam satisfies that (the
-    // sun only moves on a slider drag). The showcase fly cam does NOT — flyover.js
+    // sun only moves on a slider drag). The showcase fly cam does NOT: flyover.js
     // arcs the sun every frame (setSunPosition), so the snap basis (built from
     // _sunDir) rotates continuously; combined with the fly cam's far forward-
     // projected centre near the horizon, a tiny basis rotation swings center·snapX
@@ -3468,8 +3471,8 @@ const ThreeScene = (() => {
       // Quantise the box size to a multiplicative ladder so texelSize is
       // piecewise-constant. The snap only cancels swim while texelSize holds; the
       // sphere fit already keeps `half` constant under pan/azimuth (congruent
-      // footprint), but TILTING toward the horizon grows the footprint continuously
-      // — without this the grid rescales every frame and edges shimmer despite the
+      // footprint), but TILTING toward the horizon grows the footprint continuously;
+      // without this the grid rescales every frame and edges shimmer despite the
       // snap. Rounding UP to the next rung holds the box across a slow tilt/zoom,
       // trading continuous swim for the odd resolution step. Capped at the diagonal.
       const rung = Math.log(half) / Math.log(NCZ.SHADOW_SIZE_QUANTUM);
@@ -3510,7 +3513,7 @@ const ThreeScene = (() => {
     shadowCam.far  = NCZ.SHADOW_CAM_FAR;
     shadowCam.updateProjectionMatrix();
     // Normal-bias the receiver samples by a few shadow texels' worth of world
-    // units — scaled with the footprint so it's the same texel offset at every
+    // units, scaled with the footprint so it's the same texel offset at every
     // zoom (a constant world bias is too small zoomed out → grazing-sun acne
     // ["the wave" on flat terrain/water], too large zoomed in → shadows detach).
     _dirLight.shadow.normalBias = NCZ.SHADOW_NORMAL_BIAS_TEXELS * (2 * half / NCZ.SHADOW_MAP_SIZE);
@@ -3527,7 +3530,7 @@ const ThreeScene = (() => {
     _dirLight.target.position.copy(center);
     _dirLight.position.copy(center).addScaledVector(_sunDir, NCZ.SUN_DIST);
 
-    // Refresh the shadow-camera frustum planes that the union cull reads —
+    // Refresh the shadow-camera frustum planes that the union cull reads;
     // off-screen casters still inside this box need to make it into the
     // building indirect-draw buffer so their shadows land in view.
     updateShadowFrustumUniforms();
@@ -3535,13 +3538,13 @@ const ThreeScene = (() => {
     flagShadowUpdate();  // shadow camera/footprint moved ⇒ re-render the depth map next frame (no-op while shadows off)
   }
 
-  // Single chokepoint for "the shadow silhouette changed — re-render the depth map
+  // Single chokepoint for "the shadow silhouette changed: re-render the depth map
   // next frame." Under WebGPURenderer the shadow pass is gated by
   // light.shadow.needsUpdate (autoUpdate is held false at init), so this is the only
   // thing that schedules a shadow render. Gated on _shadowsOn: while the Shadows
   // overlay is off we never flag, so ShadowNode.updateBefore() early-returns and the
   // 4096² depth pass is skipped entirely. Call it wherever a shadow CASTER or the
-  // sun/shadow-camera moves — updateShadowCamera (camera/resize/terrain/flyover/
+  // sun/shadow-camera moves: updateShadowCamera (camera/resize/terrain/flyover/
   // re-enable), setSunPosition, async caster loads (buildings, landmarks). NOT on
   // theme/colour changes: shadow depth is geometry-only, so those frames skip it.
   function flagShadowUpdate() {
@@ -3550,7 +3553,7 @@ const ThreeScene = (() => {
 
   function setShadowsEnabled(enabled) {
     _shadowsOn = enabled;
-    // Genuinely SKIP the shadow depth pass when off — not just dim it — without
+    // Genuinely SKIP the shadow depth pass when off (not just dim it) without
     // tearing down the depth texture (toggling castShadow / renderer.shadowMap.
     // enabled does that and crashes WebGPURenderer: "Cannot read properties of
     // null (reading 'depthTexture')").
@@ -3580,7 +3583,7 @@ const ThreeScene = (() => {
   function getShadowsEnabled() { return _shadowsOn; }
   function getSunElevation() { return _sunEl; }
 
-  // Exposure setter — driven by the time-of-day curve (applySunTime /
+  // Exposure setter, driven by the time-of-day curve (applySunTime /
   // updateFlyoverSun) and the metering harness.
   function setSceneExposure(v)    { if (renderer)   renderer.toneMappingExposure = v; requestRender(); }
   function getLightingState() {
@@ -3588,7 +3591,7 @@ const ThreeScene = (() => {
       sun:      _dirLight  ? _dirLight.intensity         : null,
       ambient:  _hemiLight ? _hemiLight.intensity        : null,
       exposure: renderer   ? renderer.toneMappingExposure : null,
-      // Stored, not live — the live value goes to 0 when the Shadows overlay
+      // Stored, not live; the live value goes to 0 when the Shadows overlay
       // is off; this returns the tuned strength regardless of on/off state.
       shadow:   _shadowIntensity,
     };
@@ -3598,7 +3601,7 @@ const ThreeScene = (() => {
   // debug logger (set NCZ.__shadowTrace = true to enable per-frame logging
   // in flyover.js). Captures everything that could explain "shadows turn
   // off at some waypoints": light pose, shadow camera bounds, fit state,
-  // renderer flags, hemisphere fill — so a post-mortem of the trace can
+  // renderer flags, hemisphere fill, so a post-mortem of the trace can
   // disambiguate any failure mode without re-instrumenting.
   function getShadowSnapshot() {
     if (!_dirLight || !renderer) return null;
@@ -3674,7 +3677,7 @@ const ThreeScene = (() => {
   }
 
   // Frame a Leaflet centre + zoom in the 3D camera (for the SAT→SCHEMA switch).
-  // Preserves the user's current azimuth/tilt — only the ground target and the
+  // Preserves the user's current azimuth/tilt; only the ground target and the
   // along-view distance move, so heading/tilt carry across the switch. Kept
   // separate from setCameraState (which restores an absolute stored pose +
   // sun state); this *derives* the pose from preserved θ/φ + computed distance.

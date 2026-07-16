@@ -1,7 +1,7 @@
 name: Monitor Data API Health
 
-# The site consumes /v1 with a client-side fallback (B7), and in-game mods —
-# the API's primary consumer — have NO fallback. So a silent website fallback
+# The site consumes /v1 with a client-side fallback (B7), and in-game mods
+# (the API's primary consumer) have NO fallback. So a silent website fallback
 # would mask an API outage. This is the independent alarm: it hits the live API
 # on a schedule and pings Discord (+ fails the run) when it isn't serving.
 

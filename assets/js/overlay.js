@@ -1,5 +1,5 @@
 /**
- * NC Zoning Board — Overlay Module
+ * NC Zoning Board: Overlay Module
  * Namespace: NCZ.Overlay
  *
  * Manages overlay layers for the Leaflet satellite view:
@@ -16,20 +16,20 @@
  *                   + canonical:false subs (casino)
  *
  * Public API (called by app.js):
- *   NCZ.Overlay.init(map)             — load subdistricts.json, add layers
- *   NCZ.Overlay.setDistricts(visible) — show/hide district borders
+ *   NCZ.Overlay.init(map):             load subdistricts.json, add layers
+ *   NCZ.Overlay.setDistricts(visible): show/hide district borders
  *
  * Depends on: constants.js (NCZ.DISTRICT_COLORS, NCZ.DISTRICT_ZOOM_THRESHOLD), utils.js
  */
 
 NCZ.Overlay = (() => {
   let _map = null;
-  let alwaysLayer    = null; // no-sub districts + canonical:false — always visible
-  let outerLayer     = null; // districts with subs — zoom-out only
-  let subLayer       = null; // canonical subdistricts — zoom-in only
+  let alwaysLayer    = null; // no-sub districts + canonical:false, always visible
+  let outerLayer     = null; // districts with subs, zoom-out only
+  let subLayer       = null; // canonical subdistricts, zoom-in only
   let districtsVisible = true;
 
-  // Hover-brighten registry — mirrors the SCHEMA (Three.js) behaviour: outlines
+  // Hover-brighten registry. Mirrors the SCHEMA (Three.js) behaviour: outlines
   // sit at the faint baseline and brighten when the cursor is inside the
   // district's area (point-in-polygon, not a thin-line hit). Each entry knows
   // its tier so we only test outlines currently on the map. The 250 ms fade is
@@ -54,7 +54,7 @@ NCZ.Overlay = (() => {
     pane:    "districtPane",
   });
 
-  // Shoelace area (lat/lng space) — smallest matching ring wins so a small
+  // Shoelace area (lat/lng space): smallest matching ring wins so a small
   // nested outline (casino inside Westbrook) takes the hover over its parent.
   function ringArea(ring) {
     let a = 0;
@@ -101,7 +101,7 @@ NCZ.Overlay = (() => {
     map.getPane("districtPane").classList.add("district-outline-pane");
 
     // Name labels live just above the outlines but BELOW the markerPane (600),
-    // so pins always render on top of labels — matching the 3D view. Leaflet's
+    // so pins always render on top of labels, matching the 3D view. Leaflet's
     // default tooltipPane (650) would put them above the pins. pointer-events:
     // none so the pane never intercepts map/pin interaction.
     map.createPane("districtLabelPane");
@@ -141,7 +141,7 @@ NCZ.Overlay = (() => {
               properties: { color, name: sub.name, level: "subdistrict", ring: coords, districtId: dist.id, subId: sub.id },
               geometry: { type: "Polygon", coordinates: [coords.map(c => [c[1], c[0]])] },
             };
-            // canonical:false (casino etc) — always visible
+            // canonical:false (casino etc): always visible
             (sub.canonical === false ? alwaysFeatures : subFeatures).push(feature);
           }
         }
@@ -206,7 +206,7 @@ NCZ.Overlay = (() => {
       .catch(err => console.error("[NCZ] Failed to load subdistricts.json:", err));
   }
 
-  // Drop the brightened state — a feature hidden mid-hover (zoom tier swap or
+  // Drop the brightened state: a feature hidden mid-hover (zoom tier swap or
   // districts toggled off) would otherwise stay bright when it re-appears.
   function clearHover() {
     if (_hoveredFeature) {

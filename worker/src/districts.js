@@ -1,9 +1,9 @@
 /**
- * District/subdistrict assignment — server-side port of the client logic
+ * District/subdistrict assignment: server-side port of the client logic
  * (assets/js/utils.js pointInPolygon/polygonCentroid + the resolveArea
  * rule in assets/js/district-info.js). Polygons come from
  * data/subdistricts.json and are in CET world coordinates, the same space
- * as location `coordinates` — no transforms anywhere.
+ * as location `coordinates`; no transforms anywhere.
  */
 
 /** Ray-casting point-in-polygon. `point` and `ring` vertices share a space. */
@@ -40,7 +40,7 @@ export function polygonCentroid(ring) {
   return [cx / (6 * a), cy / (6 * a)];
 }
 
-/** Absolute shoelace area — smallest containing polygon wins. */
+/** Absolute shoelace area; smallest containing polygon wins. */
 function polyArea(ring) {
   let a = 0;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -83,7 +83,7 @@ export function resolveArea(pt, districts) {
 
 /**
  * The game's default district: anywhere outside every district polygon is
- * Badlands (which is why it has no polygon of its own — its subdistricts
+ * Badlands (which is why it has no polygon of its own: its subdistricts
  * are trigger areas transformed into polygons for the map, but the parent
  * is the catch-all). The API mirrors that rule so in-game consumers and
  * the game itself can never disagree.
@@ -109,7 +109,7 @@ export function assignDistrict(coordinates, districts) {
 
 /**
  * /v1/districts payload: hierarchy with names, centroids and FLATTENED
- * boundaries ([x1,y1,x2,y2,...]) — the DTO contract forbids
+ * boundaries ([x1,y1,x2,y2,...]): the DTO contract forbids
  * arrays-of-arrays (RedData FromJson limit).
  */
 export function districtsPayload(districts) {

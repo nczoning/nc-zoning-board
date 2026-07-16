@@ -98,7 +98,7 @@ test('first run writes the full dataset (changed=true)', async () => {
   assert.ok(locs.every((l) => typeof l.recently_updated === 'boolean'));
   const meta = await env.DATASET.get(KEYS.meta, 'json');
   assert.equal(meta.discovery_stale, false);
-  assert.ok(!('counts' in meta)); // aggregates removed — consumers derive their own
+  assert.ok(!('counts' in meta)); // aggregates removed; consumers derive their own
   assert.equal(meta.dataset_version, r.version);
 });
 

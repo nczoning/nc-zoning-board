@@ -1,5 +1,5 @@
 /**
- * NCZoning metadata-block parser — server-side port of
+ * NCZoning metadata-block parser: server-side port of
  * assets/js/utils.js NCZ.parseNcZoningBlock (keep the two in sync; the
  * client version's comment block documents the real-world breakage this
  * strategy survives).
@@ -7,8 +7,8 @@
  * Strategy: strip all BBCode, then treat `NCZoning:` as a token that can
  * appear anywhere (not a whole line). Every occurrence is tried as a
  * candidate; the first one whose following lines yield valid coords +
- * category wins, so the coords/category validation — not the sentinel's
- * position — is what disambiguates the real block from prose.
+ * category wins, so the coords/category validation (not the sentinel's
+ * position) is what disambiguates the real block from prose.
  */
 
 const RECOGNIZED = new Set(['coords', 'category', 'tags', 'yaw', 'credits', 'authors']);

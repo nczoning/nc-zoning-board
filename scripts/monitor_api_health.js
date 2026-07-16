@@ -3,7 +3,7 @@
  * Data API health monitor.
  *
  * Why this exists: the website consumes /v1 with a graceful fallback to the
- * client-side merge (B7), and the API's PRIMARY consumer — in-game mods — has
+ * client-side merge (B7), and the API's PRIMARY consumer (in-game mods) has
  * NO fallback at all. So a silent website fallback would MASK an API outage:
  * the map looks fine while the mods are broken. This is the independent alarm
  * that closes that gap. It hits the live API on a schedule and pings Discord
@@ -19,17 +19,17 @@
  *      still serving last-known-good, so it's a warning, not an outage.
  *
  * NOTE: envelope.generated_at is deliberately NOT used as a freshness/liveness
- * signal — the cron only rewrites it when the dataset CONTENT changes (a few
+ * signal: the cron only rewrites it when the dataset CONTENT changes (a few
  * times a day), so a healthy-but-idle API legitimately has an hours-old
  * generated_at. There is no served "last cron ran" timestamp to check.
  *
  * Run: node scripts/monitor_api_health.js
  * Targets: API_HEALTH_TARGETS (comma-separated), default https://api.nczoning.net
- * Alerts:  NCZ_ALERTS_DISCORD_WEBHOOK_URL — the dedicated map-alerts channel,
+ * Alerts:  NCZ_ALERTS_DISCORD_WEBHOOK_URL, the dedicated map-alerts channel,
  *          kept separate from the submissions webhook (prints a preview instead
  *          of sending if unset).
  * Exit:    0 when every target is serving; 1 on any outage or infra error
- *          (so the Actions run goes red — a second signal beside Discord).
+ *          (so the Actions run goes red, a second signal beside Discord).
  */
 
 const DEFAULT_TARGETS = ["https://api.nczoning.net"];
@@ -41,14 +41,14 @@ const FETCH_TIMEOUT_MS = 15000;
 //
 // This monitor was once 403'd on every run: the zone ran Cloudflare's free Bot
 // Fight Mode, which managed-challenges automated clients from datacentre IPs
-// (the GitHub Actions runner, ASN 8075) — a false "outage" for a fully-healthy
+// (the GitHub Actions runner, ASN 8075), a false "outage" for a fully-healthy
 // API. It keyed on the request being non-interactive automation, NOT the UA
 // string, so a browser-UA disguise did nothing (verified: BFM still challenged
 // the Chrome UA). BFM is fundamentally incompatible with an Actions-based probe
 // and its protective value on a public read-only API is nil, so it was disabled
 // zone-wide (a /v1 rate-limit rule is the compensating control; DDoS + WAF stay
 // on). With BFM off the UA is unchallenged, so keep the honest, self-describing
-// one — and keep X-Health-Probe as a stable, spoof-resistant identifier for CF
+// one, and keep X-Health-Probe as a stable, spoof-resistant identifier for CF
 // logs / a future rate-limit exception.
 const PROBE_HEADERS = {
   "User-Agent": "nczoning-health-monitor",
@@ -63,7 +63,7 @@ async function fetchJson(url) {
   try {
     const res = await fetch(url, { signal: ctrl.signal, headers: PROBE_HEADERS });
     let json = null;
-    try { json = await res.json(); } catch { /* non-JSON body — leave null */ }
+    try { json = await res.json(); } catch { /* non-JSON body; leave null */ }
     return { ok: res.ok, status: res.status, json };
   } finally {
     clearTimeout(timer);
@@ -111,7 +111,7 @@ async function checkTarget(base) {
   });
   if (locationsProblem) issues.push(`/v1/locations not serving data (${locationsProblem})`);
 
-  // discovery_stale is context, not an outage — the cron self-alerts on it.
+  // discovery_stale is context, not an outage; the cron self-alerts on it.
   try {
     const { ok, json } = await fetchJson(`${base}/v1/meta`);
     if (ok && json?.data?.discovery_stale) {
@@ -140,7 +140,7 @@ async function postDiscord(results, { recovered = false } = {}) {
     }));
 
   // Three headlines: outage (page), recovery (all-clear edge), warning (soft).
-  // Outage wins if anything is currently down — recovery only applies when
+  // Outage wins if anything is currently down; recovery only applies when
   // this run is fully clean.
   let title, description, color;
   if (down.length) {
@@ -212,7 +212,7 @@ async function postDiscord(results, { recovered = false } = {}) {
     // The previous run's conclusion IS the last health state: this script
     // exits 1 on an outage (Actions run → failure) and 0 when serving
     // (→ success). The workflow reads that conclusion and passes it in, so a
-    // clean run that follows a failed one is the recovery edge — announce the
+    // clean run that follows a failed one is the recovery edge: announce the
     // all-clear ONCE (next run sees success and stays quiet). A prior infra
     // error also lands here as "was down"; a reassuring green after it is
     // harmless. Absent the flag (local run, first ever run) → no false edge.

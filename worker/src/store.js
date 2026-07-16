@@ -1,12 +1,13 @@
 /**
  * KV storage layer for the dataset. Keys under `dataset:v1*`:
- * - dataset:v1:full      { id: fullEntry } map — the one location
+ * - dataset:v1:full      { id: fullEntry } map: the one location
  *                        representation. /v1/locations serves its values;
  *                        /v1/locations/{id} reads full[id].
  * - dataset:v1:districts /v1/districts payload
  * - dataset:v1:tags      tag dictionary ({ tagId: description })
  * - dataset:v1:meta      { schema, generated_at, dataset_version,
- *                          discovery_stale, skipped }
+ *                          discovery_stale, skipped }; a failed cycle also
+ *                          writes last_error and last_error_at
  *
  * dataset_version is a content hash: the cron writes only when it changes,
  * and it doubles as the ETag for the read path.
@@ -32,9 +33,10 @@ export async function readMeta(env) {
 }
 
 /**
- * Persist a freshly built dataset. Writes all keys; callers only reach here
- * when the hash changed, so the per-key 1 write/s limit is never a risk
- * (cron runs every 5 min).
+ * Persist a freshly built dataset. Writes all keys; callers reach here when
+ * the hash changed, or unchanged-but-recovering (a prior cycle left
+ * discovery_stale). Either way it is at most one write per cron cycle, so
+ * the per-key 1 write/s limit is never a risk (cron runs every 5 min).
  */
 export async function writeDataset(env, { full, districts, tags, meta }) {
   await Promise.all([
