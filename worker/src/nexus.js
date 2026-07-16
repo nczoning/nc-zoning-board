@@ -1,5 +1,5 @@
 /**
- * Nexus V2 GraphQL auto-discovery fetch — server-side port of the
+ * Nexus V2 GraphQL auto-discovery fetch: server-side port of the
  * pagination loop in assets/js/services.js fetchNexusTaggedMods, minus
  * the merge (that lives in merge.js) and the localStorage cache (KV plays
  * that role, in the B3 cron).
@@ -34,7 +34,7 @@ const QUERY = `
 `;
 
 /**
- * Fetch every mod tagged NCZoning for CP2077. Throws on any page failure —
+ * Fetch every mod tagged NCZoning for CP2077. Throws on any page failure:
  * a partial node list must never be mistaken for the full tag population
  * (missing mods would be dropped from the map).
  *
@@ -85,7 +85,7 @@ export async function fetchTaggedModNodes(fetchImpl = fetch) {
 
 /**
  * Composite UID Nexus expects for modsByUid: (gameId << 32) + modId, as a
- * single decimal string — NOT "gameId:modId". Must match the site's
+ * single decimal string, NOT "gameId:modId". Must match the site's
  * NCZ.toNexusUid (assets/js/utils.js) exactly, or Nexus silently drops the
  * UIDs and returns no images.
  */
@@ -145,7 +145,7 @@ export async function fetchModsByUidThumbs(fetchImpl = fetch, numericIds = []) {
       }
       return map;
     } catch {
-      return {}; // cosmetic — swallow and let the caller serve what it has
+      return {}; // cosmetic: swallow and let the caller serve what it has
     }
   };
 

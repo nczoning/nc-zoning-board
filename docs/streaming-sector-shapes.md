@@ -6,7 +6,7 @@ How to extract boundary polygons from CP2077 streaming sector files for district
 
 The in-game 3D map entity (`3dmap_view.ent`) only contains trigger polygons for the 8 main city districts and their 16 subdistricts. The Badlands subdistricts (and any other zones not shown on the in-game map) store their boundary data in **streaming sector files** as `worldLocationAreaNode` entries.
 
-These were previously considered too complex to decode because the `AreaShapeOutline.points` field is a placeholder unit square `(-1,-1)` to `(1,1)`. The actual shape data is in a **binary buffer** field — which turns out to have a simple format.
+These were previously considered too complex to decode because the `AreaShapeOutline.points` field is a placeholder unit square `(-1,-1)` to `(1,1)`. The actual shape data is in a **binary buffer** field, which turns out to have a simple format.
 
 ## Finding the Right Sector Files
 
@@ -44,13 +44,13 @@ Each exported `.streamingsector.json` has this structure:
 
 ```
 Data.RootChunk
-├── nodes[]              — Array of world nodes (meshes, triggers, areas, etc.)
-│   └── [i].Data.$type   — Node type (e.g., "worldLocationAreaNode")
-│   └── [i].Data.outline  — Contains the AreaShapeOutline with buffer
-├── nodeData.Data[]      — Array of transform data (position, orientation, scale)
-│   └── [i].NodeIndex    — Maps to the node index in nodes[]
-│   └── [i].Position     — World-space position (Vector4: X, Y, Z, W)
-└── nodeRefs[]           — Node reference strings
+├── nodes[]              - Array of world nodes (meshes, triggers, areas, etc.)
+│   └── [i].Data.$type   - Node type (e.g., "worldLocationAreaNode")
+│   └── [i].Data.outline  - Contains the AreaShapeOutline with buffer
+├── nodeData.Data[]      - Array of transform data (position, orientation, scale)
+│   └── [i].NodeIndex    - Maps to the node index in nodes[]
+│   └── [i].Position     - World-space position (Vector4: X, Y, Z, W)
+└── nodeRefs[]           - Node reference strings
 ```
 
 ## Finding worldLocationAreaNode Entries
@@ -62,7 +62,7 @@ Filter `nodes[]` where `Data.$type == "worldLocationAreaNode"`. Each has:
 | `Data.debugName.$value` | Human-readable name (e.g., `"{laguna_bend}"`) |
 | `Data.notifiers[0].Data.districtID.$value` | TweakDB path (e.g., `"Districts.LagunaBend"`) |
 | `Data.outline.Data.buffer` | Base64-encoded binary polygon data |
-| `Data.outline.Data.points` | **Placeholder only** — always a unit square, ignore this |
+| `Data.outline.Data.points` | **Placeholder only**: always a unit square, ignore this |
 
 The node's world position comes from `nodeData.Data[]` where `NodeIndex` matches the node's index in the `nodes[]` array.
 
@@ -79,10 +79,10 @@ Offset  Size    Type        Description
 ```
 
 Each point is 4 little-endian float32 values:
-- **x** — local X coordinate
-- **y** — local Y coordinate
-- **z** — local Z coordinate (usually constant for a flat boundary; can be used for height)
-- **w** — always 1.0
+- **x**: local X coordinate
+- **y**: local Y coordinate
+- **z**: local Z coordinate (usually constant for a flat boundary; can be used for height)
+- **w**: always 1.0
 
 **To get CET world coordinates**, apply the node's `Orientation` quaternion (yaw rotation) then add the world `Position` from `nodeData`:
 
@@ -98,7 +98,7 @@ CET_Y = rotated_y + nodeData.Position.Y
 
 Most nodes have identity rotation (`r=1, k=0` → yaw=0°), but some like SoCal Border Crossing have significant rotation (-37.6°).
 
-The trailing 4 bytes after the point data are a float32 representing the **boundary volume height** — how tall the trigger area extends vertically. Areas with more elevation variation have larger values (Laguna Bend: 895, Jackson Plains: 463, SoCal: 43). Not needed for 2D map rendering.
+The trailing 4 bytes after the point data are a float32 representing the **boundary volume height**: how tall the trigger area extends vertically. Areas with more elevation variation have larger values (Laguna Bend: 895, Jackson Plains: 463, SoCal: 43). Not needed for 2D map rendering.
 
 ### Rotation Data
 
@@ -294,7 +294,7 @@ These were also found in the sectors but are nomad lifepath start areas, not geo
 
 ## Overlap Issues & Clipping
 
-The `worldLocationAreaNode` polygons are **3D trigger volumes** — they detect when the player enters a zone to update the HUD district name. They were never designed to be rendered as non-overlapping 2D map regions. As a result:
+The `worldLocationAreaNode` polygons are **3D trigger volumes**: they detect when the player enters a zone to update the HUD district name. They were never designed to be rendered as non-overlapping 2D map regions. As a result:
 
 1. **Badlands subdistricts overlap city districts.** Red Peaks, Rocky Ridge, Jackson Plains, Biotechnica Flats, and North Sunrise Oil Field all have edges that cross into city district territory (1-3% overlap each).
 
@@ -319,7 +319,7 @@ for sub in badlands_subdistricts:
     sub["polygon"] = extract_coords(clipped)
 ```
 
-**Pass 2: Resolve inter-subdistrict overlaps.** Process subdistricts in order of area, smallest first. Each subdistrict subtracts all previously processed shapes. This gives priority to smaller, more specific zones — SoCal Border Crossing (tiny) won't get consumed by the much larger Jackson Plains or Rattlesnake Creek.
+**Pass 2: Resolve inter-subdistrict overlaps.** Process subdistricts in order of area, smallest first. Each subdistrict subtracts all previously processed shapes. This gives priority to smaller, more specific zones: SoCal Border Crossing (tiny) won't get consumed by the much larger Jackson Plains or Rattlesnake Creek.
 
 ```python
 # Sort indices by area (smallest first = highest priority)
@@ -337,23 +337,23 @@ for idx in indexed:
 
 ### Pass 3: Gap filling between Badlands subdistricts
 
-After Passes 1 and 2, small geometric voids remain between adjacent Badlands subdistricts. These occur because the original trigger volumes were authored independently — their edges meet at single vertices, not shared lines, leaving slivers of unclaimed space that are visually obvious as dark voids in the rendered map.
+After Passes 1 and 2, small geometric voids remain between adjacent Badlands subdistricts. These occur because the original trigger volumes were authored independently: their edges meet at single vertices, not shared lines, leaving slivers of unclaimed space that are visually obvious as dark voids in the rendered map.
 
 **Detection method:** Buffer the union of all Badlands subdistricts by a small amount (50 CET units), subtract the original union and all city districts, keep only pieces smaller than 200,000 sq units. The large open wasteland area always appears as a single large piece and is excluded by this size filter.
 
-**Why `distance() == 0` is misleading:** Shapely's `distance()` returns 0 if two polygons share even a single vertex. Two polygons can share one point and still have a triangular gap between them — they are topologically touching but not edge-sharing.
+**Why `distance() == 0` is misleading:** Shapely's `distance()` returns 0 if two polygons share even a single vertex. Two polygons can share one point and still have a triangular gap between them: they are topologically touching but not edge-sharing.
 
-**Assignment rule:** Single-neighbor gaps are merged directly into that neighbor. Multi-neighbor gaps are split using a centroid-distance priority rule — each neighbor claims the portion of the gap closer to it than to any other neighbor.
+**Assignment rule:** Single-neighbour gaps are merged directly into that neighbour. Multi-neighbour gaps are split using a centroid-distance priority rule: each neighbour claims the portion of the gap closer to it than to any other neighbour.
 
 **Results of Pass 3:**
 
 | Gap | Area (sq) | Resolution |
 |-----|-----------|------------|
 | Biotechnica Flats general gaps | 31,164 + 502 | Merged into Biotechnica Flats |
-| Sierra Sonora / Rocky Ridge / Vasquez Pass / Laguna Bend triangle | 6,609 | Split between 4 neighbors |
+| Sierra Sonora / Rocky Ridge / Vasquez Pass / Laguna Bend triangle | 6,609 | Split between 4 neighbours |
 | Red Peaks south edge (borders Rancho Coronado) | 4,706 | Merged into Red Peaks |
-| Red Peaks / Rocky Ridge junction | 108 | Split between 2 neighbors |
-| Jackson Plains / Biotechnica / Rattlesnake Creek junction | 16 | Split between 3 neighbors |
+| Red Peaks / Rocky Ridge junction | 108 | Split between 2 neighbours |
+| Jackson Plains / Biotechnica / Rattlesnake Creek junction | 16 | Split between 3 neighbours |
 
 ### Known unfixable gaps
 
@@ -361,33 +361,33 @@ Two gaps cannot be resolved without modifying authoritative city district polygo
 
 **1. SoCal Border Crossing wedges**
 
-SoCal Border Crossing is a small rotated rectangle (4 points, -37.6° yaw). Its straight edges create wedge-shaped voids against the irregular polygon edges of Rattlesnake Creek and Jackson Plains. These voids connect directly to the large open-wasteland void, so the buffer detection method sees them as part of the wasteland and excludes them. The gap edges exist inside the coordinate space between SoCal and its neighbors but cannot be isolated cleanly.
+SoCal Border Crossing is a small rotated rectangle (4 points, -37.6° yaw). Its straight edges create wedge-shaped voids against the irregular polygon edges of Rattlesnake Creek and Jackson Plains. These voids connect directly to the large open-wasteland void, so the buffer detection method sees them as part of the wasteland and excludes them. The gap edges exist inside the coordinate space between SoCal and its neighbours but cannot be isolated cleanly.
 
-This is consistent with the nature of the SoCal zone — it marks the exact point where the nomad lifepath start connects to Night City. The geometry reflects that it was authored as a standalone trigger, not designed to tile with surrounding zones.
+This is consistent with the nature of the SoCal zone: it marks the exact point where the nomad lifepath start connects to Night City. The geometry reflects that it was authored as a standalone trigger, not designed to tile with surrounding zones.
 
 **2. Biotechnica Flats / Dogtown / West Wind Estate triangle**
 
 A triangular dark void is visible at the point where the Dogtown district (city, authoritative) and West Wind Estate subdistrict (Pacifica, authoritative) touch at a single vertex (-2437.95, -2593.64). Biotechnica Flats' nearest boundary is 381 CET units south of this meeting point.
 
 Investigation confirmed:
-- Dogtown and West Wind Estate touch at exactly one vertex — their boundary is a degenerate zero-length line
+- Dogtown and West Wind Estate touch at exactly one vertex: their boundary is a degenerate zero-length line
 - The triangle between that vertex and Biotechnica's north edge lies **inside Dogtown's polygon** (99.6% of the triangle area overlaps with Dogtown)
 - Biotechnica cannot be expanded to fill this area without crossing into Dogtown's city district boundary
-- The void is geometrically a property of how CDPR authored the Dogtown and West Wind Estate trigger volumes — they were designed for 3D trigger detection, not 2D tiling
+- The void is geometrically a property of how CDPR authored the Dogtown and West Wind Estate trigger volumes: they were designed for 3D trigger detection, not 2D tiling
 
-**Why both are unfixable:** The correct fix for both would require editing Dogtown, West Wind Estate, or the Pacifica subdistricts — all of which are authoritative CDPR-defined boundaries that must not be modified. In the actual frontend implementation, these zones use border-only rendering (no fill), so the dark voids are only visible in the preview SVG, not in the final map.
+**Why both are unfixable:** The correct fix for both would require editing Dogtown, West Wind Estate, or the Pacifica subdistricts, all of which are authoritative CDPR-defined boundaries that must not be modified. In the actual frontend implementation, these zones use border-only rendering (no fill), so the dark voids are only visible in the preview SVG, not in the final map.
 
 ### For modding: using raw polygons vs clipped polygons
 
-If you're creating a mod that adds Badlands subdistricts to the in-game map (e.g., via `gameStaticTriggerAreaComponent` in a custom entity), you probably want the **raw unclipped polygons** from this document. The game's trigger system handles overlaps naturally — the district manager uses a stack, and the most specific (innermost) zone takes precedence. The clipping is only needed for 2D flat map rendering where overlapping fills look wrong.
+If you're creating a mod that adds Badlands subdistricts to the in-game map (e.g., via `gameStaticTriggerAreaComponent` in a custom entity), you probably want the **raw unclipped polygons** from this document. The game's trigger system handles overlaps naturally: the district manager uses a stack, and the most specific (innermost) zone takes precedence. The clipping is only needed for 2D flat map rendering where overlapping fills look wrong.
 
 The raw polygon coordinates in this document are the **unclipped originals** as decoded from the streaming sectors. For the clipped versions used in the NC Zoning Board map, see `data/subdistricts.json` (regenerated by `scripts/regenerate_subdistricts.py`).
 
 ## Notes
 
-- The `AreaShapeOutline.points` field is always a placeholder unit square — ignore it
-- The `z` coordinate in buffer points is usually constant per polygon (the boundary height above sea level) — useful for 3D rendering but not needed for 2D map overlays
-- Some nodes have `isVisibleInGame: 1` — this controls whether the area name shows in the HUD when the player enters
-- The `sourcePrefabHash` field is shared across nodes in the same sector — it identifies the prefab template
+- The `AreaShapeOutline.points` field is always a placeholder unit square, ignore it
+- The `z` coordinate in buffer points is usually constant per polygon (the boundary height above sea level), useful for 3D rendering but not needed for 2D map overlays
+- Some nodes have `isVisibleInGame: 1`, which controls whether the area name shows in the HUD when the player enters
+- The `sourcePrefabHash` field is shared across nodes in the same sector: it identifies the prefab template
 - World coordinates are CET space: X increases east, Y increases north
 - For a mod adding these to the in-game map, you'd create `gameStaticTriggerAreaComponent` entries in a custom `.ent` file, similar to how `3dmap_view.ent` defines city district triggers. The polygon points go in the `outline.Data.points` array, and the `notifiers` array links to the TweakDB `District_Record` via `districtID`

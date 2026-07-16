@@ -3,12 +3,12 @@
  * Auto-discovery health monitor.
  *
  * Purpose: catch NCZoning-tagged mods that AREN'T showing on the map because
- * their metadata block is missing or unparseable — so a broken block is caught
+ * their metadata block is missing or unparseable, so a broken block is caught
  * within a day instead of when an author complains.
  *
  * Since B7 the block parsing + merge runs SERVER-SIDE (the Data API cron), and
  * the API exposes the result at `/v1/meta.skipped`: every mod tagged NCZoning
- * that isn't excluded, isn't a manual entry, and whose block didn't parse —
+ * that isn't excluded, isn't a manual entry, and whose block didn't parse:
  * exactly the "tagged but not on the map" set. Reading that instead of
  * re-parsing client-side means ONE source of truth (no client/server parser
  * drift) and no live Nexus fetch. Before B7 this script ran the client-side
@@ -17,7 +17,7 @@
  *
  * Run: node scripts/monitor_auto_discovery.js
  * Target: API_META_URL (default https://api.nczoning.net/v1/meta)
- * Alerts: NCZ_ALERTS_DISCORD_WEBHOOK_URL — the dedicated map-alerts channel,
+ * Alerts: NCZ_ALERTS_DISCORD_WEBHOOK_URL, the dedicated map-alerts channel,
  *         separate from submissions (prints a preview instead if unset).
  * Exit 0 on a clean run OR flagged mods (it's a report, not a gate); exit 1
  * only on an infrastructure error.
@@ -46,7 +46,7 @@ async function postDiscord(skipped) {
           `BBCode Generator, add a manual registry entry if it belongs on the map, or add the ` +
           `id to \`data/excluded_mods.json\` to stop this alert.\n\n` +
           lines.join("\n"),
-        color: 15105570, // amber/orange — warning, not error
+        color: 15105570, // amber/orange: warning, not error
         footer: { text: "NC Zoning Board • source: /v1/meta.skipped" },
       },
     ],
@@ -77,7 +77,7 @@ async function postDiscord(skipped) {
     if (!Array.isArray(skipped)) throw new Error("meta.skipped missing or not an array");
 
     if (json.data.discovery_stale) {
-      // Still worth reporting — the last-known-good skipped list is what the map reflects.
+      // Still worth reporting: the last-known-good skipped list is what the map reflects.
       console.log("Note: discovery_stale=true — the API is serving last-known-good data.");
     }
 
@@ -89,7 +89,7 @@ async function postDiscord(skipped) {
     console.log(`❌ ${skipped.length} tagged mod(s) skipped by the API:`);
     for (const m of skipped) console.log(`   - ${m.nexus_id}  ${m.name}`);
     await postDiscord(skipped);
-    // exitCode stays 0 — this is a report, not a gate.
+    // exitCode stays 0: this is a report, not a gate.
   } catch (err) {
     console.error("Monitor failed (infrastructure error):", err.message);
     process.exitCode = 1;

@@ -1,7 +1,7 @@
 /**
  * Interactive API docs served from the Worker root. The OpenAPI spec
  * (worker/openapi.json) is the source of truth; the root page renders it
- * with Scalar (loaded from a CDN — this is a human docs page, not a
+ * with Scalar (loaded from a CDN; this is a human docs page, not a
  * CSP-restricted context). Modders browsing to api.nczoning.net land here.
  */
 

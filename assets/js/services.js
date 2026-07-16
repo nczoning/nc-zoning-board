@@ -1,5 +1,5 @@
 /**
- * NC Zoning Board — API & Data Services
+ * NC Zoning Board: API & Data Services
  * All fetch/network functions. Depends on NCZ constants + utils.
  */
 
@@ -18,7 +18,7 @@ NCZ.fetchNexusThumbnails = async function (nexusIds) {
   // Return cached thumbnails if still fresh
   const cached = NCZ.cacheGet(NCZ.THUMB_CACHE_KEY, NCZ.THUMB_CACHE_TTL);
   if (cached) {
-    // Check if all requested IDs are in the cache — if so, skip the API call
+    // Check if all requested IDs are in the cache; if so, skip the API call
     const missing = validIds.filter((id) => !cached[id]);
     if (missing.length === 0) {
       console.log(`Thumbnails: serving ${validIds.length} from cache`);
@@ -40,7 +40,7 @@ NCZ.fetchNexusThumbnails = async function (nexusIds) {
 NCZ.fetchNexusThumbnailsFromApi = async function (validIds) {
   if (validIds.length === 0) return {};
 
-  // Chunk the request — large modsByUid calls silently return a partial subset
+  // Chunk the request: large modsByUid calls silently return a partial subset
   // of nodes, leaving some pins without thumbnails on first load. Mirrors the
   // pagination already used in fetchNexusTaggedMods.
   const CHUNK = NCZ.NEXUS_BATCH_SIZE;
@@ -85,7 +85,7 @@ NCZ.fetchNexusThumbnailsFromApi = async function (validIds) {
     }
   };
 
-  // Single in-flight retry for UIDs the API silently dropped — covers the
+  // Single in-flight retry for UIDs the API silently dropped; covers the
   // residual per-UID flakiness that batching alone doesn't fix. UIDs still
   // missing after the retry are likely deleted/hidden mods on Nexus.
   const fetchChunk = async (chunkIds) => {
@@ -116,7 +116,7 @@ NCZ.fetchNexusThumbnailsFromApi = async function (validIds) {
 // Fields use [BaseFilterValue] = array of { value: ... } objects.
 // "uploader" on the Mod type is a plain string (username), not a nested object.
 NCZ.fetchNexusTaggedMods = async function (existingNexusIds, validTagNames, excludedNexusIds) {
-  // Mods tagged NCZoning by mistake (or too minor to map) — never rendered,
+  // Mods tagged NCZoning by mistake (or too minor to map): never rendered,
   // even if their block parses. Optional arg so existing callers/tests don't break.
   const excluded = excludedNexusIds || new Set();
   // Return cached auto-discovery results if still fresh
@@ -196,7 +196,7 @@ NCZ.fetchNexusTaggedMods = async function (existingNexusIds, validTagNames, excl
       for (const node of nodes) {
         const nexusId = String(node.modId);
         if (excluded.has(nexusId)) {
-          // Intentionally off the map — skip without creating a meta entry.
+          // Intentionally off the map: skip without creating a meta entry.
           console.log(`NCZoning: excluding mod ${nexusId} (${node.name}) — on the exclusion list`);
           continue;
         }
@@ -279,13 +279,13 @@ NCZ.fetchModData = async function () {
 
 // Primary data path: fetch the whole registry from the server-built Data API
 // (/v1/locations?full=1). This replaces the client-side manual + Nexus
-// auto-discovery merge — the server already does that merge (plus district
+// auto-discovery merge; the server already does that merge (plus district
 // enrichment and, since B7, manual-mod thumbnails), so the browser makes ZERO
 // Nexus calls here. Uses If-None-Match/304 against a localStorage-cached body.
 //
 // Returns { mods, nexusThumbs } in the same shapes the rest of app.js expects.
 // THROWS on any failure (network, non-2xx, malformed) so the caller can fall
-// back to the legacy client-side path — never a silent empty map.
+// back to the legacy client-side path: never a silent empty map.
 NCZ.fetchLocationsFromApi = async function () {
   const url = `${NCZ.API_BASE}/v1/locations?full=1`;
 
@@ -303,26 +303,32 @@ NCZ.fetchLocationsFromApi = async function () {
 
   let rawLocations;
   let freshEtag = null; // set only on a fresh 200 we should cache
+  // The recency window, read straight off the response envelope. Cached with the
+  // data so the 304 path keeps it; null when an older API omits it (the caller
+  // falls back to NCZ.RECENTLY_UPDATED_DAYS).
+  let recentlyUpdatedDays = null;
   if (res.status === 304 && Array.isArray(cached?.data)) {
     console.log(`Data API: 304 Not Modified — reusing ${cached.data.length} cached locations`);
     rawLocations = cached.data;
+    recentlyUpdatedDays = cached.recentlyUpdatedDays ?? null;
   } else if (res.ok) {
     const envelope = await res.json();
     rawLocations = envelope?.data;
     if (!Array.isArray(rawLocations)) {
       throw new Error("Data API: malformed payload (envelope.data is not an array)");
     }
+    recentlyUpdatedDays = envelope?.recently_updated_days ?? null;
     freshEtag = res.headers.get("ETag");
     console.log(`Data API: loaded ${rawLocations.length} locations (dataset ${String(envelope.dataset_version).slice(0, 8)})`);
   } else {
     throw new Error(`Data API: HTTP ${res.status}`);
   }
 
-  // Guard against a slim payload (an API that doesn't honour ?full=1 — e.g. an
+  // Guard against a slim payload (an API that doesn't honour ?full=1, e.g. an
   // older deploy still on the endpoint). Full entries always carry a
   // `description` key; if it's missing the popups/cluster list would render
   // empty, so treat it as unusable and let the caller fall back rather than
-  // ship a degraded map. (Zero locations is a valid dataset — don't trip on it.)
+  // ship a degraded map. (Zero locations is a valid dataset; don't trip on it.)
   // Runs before caching so a rejected slim body is never stored.
   if (rawLocations.length > 0 && !("description" in rawLocations[0])) {
     throw new Error("Data API: slim payload (full=1 not honoured) — falling back");
@@ -330,9 +336,9 @@ NCZ.fetchLocationsFromApi = async function () {
 
   if (freshEtag !== null) {
     try {
-      localStorage.setItem(NCZ.API_LOCATIONS_CACHE_KEY, JSON.stringify({ etag: freshEtag, data: rawLocations }));
+      localStorage.setItem(NCZ.API_LOCATIONS_CACHE_KEY, JSON.stringify({ etag: freshEtag, data: rawLocations, recentlyUpdatedDays }));
     } catch {
-      /* localStorage quota — fine, we just won't get a 304 next load */
+      /* localStorage quota: fine, we just won't get a 304 next load */
     }
   }
 
@@ -358,14 +364,14 @@ NCZ.fetchLocationsFromApi = async function () {
     };
   });
 
-  return { mods, nexusThumbs };
+  return { mods, nexusThumbs, recentlyUpdatedDays };
 };
 
 // Legacy client-side data path (pre-B7): load mods.json + tags.json +
 // excluded_mods.json, merge Nexus auto-discovery, fetch thumbnails via
 // modsByUid, backfill _updatedAt. Retained as the graceful FALLBACK for when
 // the Data API is unavailable; a follow-up deletes it once B7 parity has baked.
-// Returns { mods, nexusThumbs, tagsDict } — the same trio the API path yields
+// Returns { mods, nexusThumbs, tagsDict }, the same trio the API path yields
 // (plus tagsDict, which the API path fetches locally alongside).
 NCZ.fetchModDataClientSide = async function () {
   const { mods, tagsDict, excludedIds } = await NCZ.fetchModData();

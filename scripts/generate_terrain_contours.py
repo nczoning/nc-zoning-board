@@ -1,5 +1,5 @@
 """
-generate_terrain_contours.py — Terrain elevation contour lines for the NC Zoning Board map.
+generate_terrain_contours.py: Terrain elevation contour lines for the NC Zoning Board map.
 
 Loads 3dmap_terrain.glb, interpolates face heights to a grid, and extracts elevation isolines.
 
@@ -30,7 +30,7 @@ OUTPUT_DIR = os.path.join(SCRIPT_DIR, "output")
 DATA_DIR   = os.path.join(REPO_DIR, "data")
 
 # ---------------------------------------------------------------------------
-# Constants — imported from shared map_constants.py
+# Constants: imported from shared map_constants.py
 # ---------------------------------------------------------------------------
 from map_constants import (
     WORLD_MIN_X, WORLD_MAX_X, WORLD_MIN_Y, WORLD_MAX_Y,
@@ -49,16 +49,16 @@ def load_terrain_heights():
     """
     Load 3dmap_terrain.glb and return per-face centroid CET coords + heights.
 
-    Axis mapping (terrain GLB — identity transform, no world yaw):
+    Axis mapping (terrain GLB has an identity transform, no world yaw):
       CET_X = +GLB_X,  CET_Y = +GLB_Z,  height = +GLB_Y
 
-    NOTE — convention mismatch with the 3D scene:
+    NOTE (convention mismatch with the 3D scene):
       The Three.js scene and docs/coordinate-system-3d.md use GLB_Z = -CET_Y
       (negated). This script uses GLB_Z = +CET_Y (unflipped). The script
       still produces correct Leaflet output because the error cancels through
       cet_to_leaflet, but if you copy this code to query terrain heights for
       the 3D pipeline you MUST flip the Y sign on lookup.
-      Validated 2026-05-01 by in-game teleport experiment — CET Z and terrain
+      Validated 2026-05-01 by in-game teleport experiment: CET Z and terrain
       GLB Y are in the same coordinate space (within ±6m noise across 5 samples).
     """
     try:

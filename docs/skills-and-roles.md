@@ -1,6 +1,6 @@
-# NC Zoning Board — How You Can Help
+# NC Zoning Board: How You Can Help
 
-This is a passion project built by and for the Cyberpunk 2077 modding community. No hierarchy, no job titles, no obligations — just modders helping modders. If you see something interesting and want to help, jump in! No experience required either — we're happy to learn together.
+This is a passion project built by and for the Cyberpunk 2077 modding community. No hierarchy, no job titles, no obligations: just modders helping modders. If you see something interesting and want to help, jump in! No experience required either: we're happy to learn together.
 
 Here are the main areas where help would be awesome:
 
@@ -34,7 +34,7 @@ Depending on what excites you, here are some natural areas where people tend to 
 
 ### 🖥️ Website & UI Work
 
-Like working on interactive web stuff? The frontend is where a lot of the magic happens. We're actively building **district overlays** and **building/road/metro overlays** — extracting game geometry and aligning it to our map coordinate system. You'd use Leaflet.js, vanilla JS/CSS, and maybe some coordinate transforms.
+Like working on interactive web stuff? The frontend is where a lot of the magic happens. We're actively building **district overlays** and **building/road/metro overlays**: extracting game geometry and aligning it to our map coordinate system. You'd use Leaflet.js, vanilla JS/CSS, and maybe some coordinate transforms.
 
 Current active work: **[Spuddeh](https://www.nexusmods.com/profile/Spuddeh/mods?gameId=3333)** is developing overlays and **[Akiway](https://www.nexusmods.com/profile/Akiway/mods?gameId=3333)** leads UI/UX. If you want to collaborate, reach out!
 
@@ -50,7 +50,7 @@ Areas that sometimes need tweaks: submission workflows, CI/CD validation, secret
 
 ### 🎨 Design & Icons
 
-Want to make things look cool? Visual polish, **dark theme refinements**, UI refinements — this is where aesthetics meet functionality.
+Want to make things look cool? Visual polish, **dark theme refinements**, UI refinements: this is where aesthetics meet functionality.
 
 ---
 

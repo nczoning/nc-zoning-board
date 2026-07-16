@@ -4,10 +4,10 @@
 
 The map uses two coordinate systems that are linked by a simple linear transform:
 
-1. **CET Coordinates** — the in-game `[X, Y, Z]` values from Cyber Engine Tweaks (X=east/west, Y=north/south, Z=height)
-2. **Leaflet Coordinates** — the `[lat, lng]` values used internally by the map
+1. **CET Coordinates**: the in-game `[X, Y, Z]` values from Cyber Engine Tweaks (X=east/west, Y=north/south, Z=height)
+2. **Leaflet Coordinates**: the `[lat, lng]` values used internally by the map
 
-**Note:** The 2D map placement uses only X and Y coordinates. The Z (height/elevation) coordinate is stored for reference and future features (like teleport scripts or 3D visualization). 
+**Note:** The 2D map placement uses only X and Y coordinates. The Z (height/elevation) coordinate is stored for reference and future features (like teleport scripts or 3D visualisation). 
 
 Mod authors only need to know CET coordinates. The app handles the conversion automatically.
 
@@ -49,7 +49,7 @@ eyJjYXRlZ29yaWVzIjpbeyJuYW1lIjoiTkMgWm9uaW5nIiwiaWNvbiI6IkZsb29yUGxhbiJ9LHsibmFt
 
 ### Formulas
 
-The mapping is a simple linear transform with **decoupled axes** — latitude depends only on CET Y, and longitude depends only on CET X:
+The mapping is a simple linear transform with **decoupled axes**: latitude depends only on CET Y, and longitude depends only on CET X:
 
 ```
 Leaflet lat = 0.02101335 × CET_Y − 93.68566
@@ -63,7 +63,7 @@ CET_X = (lng − 132.80160) / 0.02086230
 CET_Y = (lat + 93.68566) / 0.02101335
 ```
 
-These coefficients were derived from a **16-point uniform grid calibration** — see below.
+These coefficients were derived from a **16-point uniform grid calibration** (see below).
 
 ### Implementation
 
@@ -85,7 +85,7 @@ function leafletToCet(lat, lng) {
 
 ### Leaflet Coordinate Space
 
-The map uses `L.CRS.Simple` — a flat, non-geographic coordinate reference system. The 8192×8192px image is mapped by `map.unproject()` at zoom level 5 to:
+The map uses `L.CRS.Simple`, a flat, non-geographic coordinate reference system. The 8192×8192px image is mapped by `map.unproject()` at zoom level 5 to:
 
 - **Latitude:** −256 (bottom/south) to 0 (top/north)
 - **Longitude:** 0 (left/west) to 256 (right/east)
@@ -126,7 +126,7 @@ The transform was calibrated by placing 16 markers in a 4×4 grid on the Leaflet
 
 If the map image changes (new source, different crop, etc.), you'll need to recalibrate:
 
-1. **Enable the calibration grid** in `app.js` — uncomment the `CALIBRATION GRID` block
+1. **Enable the calibration grid** in `app.js`: uncomment the `CALIBRATION GRID` block
 2. **Place markers** at known Leaflet positions on the map
 3. **Import the SLM preset** (above) or manually visit each marker location in-game
 4. **Record CET coordinates** for each grid point

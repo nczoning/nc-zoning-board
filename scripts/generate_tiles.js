@@ -1,5 +1,5 @@
 /**
- * generate_tiles.js — Slice a map image into Leaflet-compatible WebP tiles
+ * generate_tiles.js: Slice a map image into Leaflet-compatible WebP tiles
  *
  * Usage: node scripts/generate_tiles.js
  *
@@ -21,8 +21,8 @@ const TILE_SIZE = 256;
 const MAX_ZOOM = 6; // 2^6 = 64 tiles per axis → 64×256 = 16384
 
 // WebP encoding options:
-//   quality 90 — visually indistinguishable from lossless at tile size, ~5× smaller
-//   effort 6  — maximum compression effort (slower encode, smaller files)
+//   quality 90: visually indistinguishable from lossless at tile size, ~5× smaller
+//   effort 6:   maximum compression effort (slower encode, smaller files)
 const WEBP_OPTIONS = { quality: 90, effort: 6 };
 
 function reportProgress(completedTiles, totalTiles, zoomLevel) {

@@ -1,15 +1,14 @@
 """
-map_constants.py — Single source of truth for all coordinate transforms.
+map_constants.py: Single source of truth for all coordinate transforms.
 
 All Python scripts in this project should import from here instead of defining
 their own WORLD_MIN/MAX constants.
 
-The world extent values come from the game's TweakDB:
-  WorldMap.DefaultSettings.cursorBoundaryMin = Vector2(-5500, -7300)
-  WorldMap.DefaultSettings.cursorBoundaryMax = Vector2(6050,  5000)
-
-These define the in-game map viewport pan limits in CET world-space coordinates.
-The image canvas (8192×8192 pixels) maps to this exact world extent.
+The world extent values come from the Realistic Map 8k mod's terrain quad
+UV→world mapping (see the Authoritative world extent block below). TweakDB's
+WorldMap.DefaultSettings cursorBoundary values define only the in-game pan
+limit, not the render extent. The image canvas (8192×8192 pixels) maps to the
+quad's exact world extent.
 
 Leaflet uses L.CRS.Simple with tileSize=256 and maxNativeZoom=5:
   - Full image = 256 × 2^5 = 8192 pixels
@@ -33,12 +32,12 @@ Leaflet uses L.CRS.Simple with tileSize=256 and maxNativeZoom=5:
 # ---------------------------------------------------------------------------
 WORLD_MIN_X = -6298.0   # UV U=0 → CET_X (western edge)
 WORLD_MAX_X =  5815.0   # UV U=1 → CET_X (eastern edge)
-WORLD_MIN_Y = -7684.0   # UV V=0 → CET_Y (southern edge) — mod quad uses CET_Y = -GLB_Z
+WORLD_MIN_Y = -7684.0   # UV V=0 → CET_Y (southern edge); mod quad uses CET_Y = -GLB_Z
 WORLD_MAX_Y =  4427.0   # UV V=1 → CET_Y (northern edge)
 
 # Derived ranges
-WORLD_WIDTH  = WORLD_MAX_X - WORLD_MIN_X   # 11550.0
-WORLD_HEIGHT = WORLD_MAX_Y - WORLD_MIN_Y   # 12300.0
+WORLD_WIDTH  = WORLD_MAX_X - WORLD_MIN_X   # 12113.0
+WORLD_HEIGHT = WORLD_MAX_Y - WORLD_MIN_Y   # 12111.0
 
 # ---------------------------------------------------------------------------
 # Canvas / tile constants
@@ -111,8 +110,9 @@ LEAFLET_DISTRICT_ZOOM_MAX = 3      # Districts visible at zoom <= 3
 LEAFLET_SUBDISTRICT_ZOOM_MIN = 4   # Subdistricts visible at zoom >= 4
 
 # ---------------------------------------------------------------------------
-# District colors (UiState CNames from TweakDB District_Record)
-# These map to Ink widget states; actual RGB values TBD (need in-game extraction)
+# District colours (UiState CNames from TweakDB District_Record)
+# These map to Ink widget states; the extracted RGB values live in
+# DISTRICT_COLORS below.
 # ---------------------------------------------------------------------------
 DISTRICT_UI_STATES = {
     "CityCenter":   "CityCenter",
@@ -126,7 +126,7 @@ DISTRICT_UI_STATES = {
     # Badlands, NorthBadlands, SouthBadlands have UiState="None"
 }
 
-# Actual RGB colors from game Ink styles:
+# Actual RGB colours from game Ink styles:
 #   world_map_style.inkstyle → District.outlineColor → MainColors.*
 #   main_colors.inkstyle → HDR RGBA float values → clamped to 0-255
 # Default outline opacity: 0.6
@@ -143,16 +143,16 @@ DISTRICT_COLORS = {
 DISTRICT_OUTLINE_OPACITY = 0.6
 
 # ---------------------------------------------------------------------------
-# Base tile colors (theme-agnostic, used for permanent terrain tiles)
+# Base tile colours (theme-agnostic, used for permanent terrain tiles)
 # ---------------------------------------------------------------------------
-# Neutral dark grey palette — subtle land/water distinction, won't compete
+# Neutral dark grey palette: subtle land/water distinction, won't compete
 # with any theme's accent colours. These can't be changed per theme.
-TILE_TERRAIN_COLOR  = (45,   48,  55)   # #2d3037 — neutral dark grey
-TILE_WATER_COLOR    = (25,   35,  50)   # #192332 — slightly cooler/darker
-TILE_BACKGROUND     = (0,     0,   0)   # black — outside map area
+TILE_TERRAIN_COLOR  = (45,   48,  55)   # #2d3037, neutral dark grey
+TILE_WATER_COLOR    = (25,   35,  50)   # #192332, slightly cooler/darker
+TILE_BACKGROUND     = (0,     0,   0)   # black, outside map area
 
 # ---------------------------------------------------------------------------
-# Game material colors (from 3dmap Material.json files, for reference/SVGs)
+# Game material colours (from 3dmap Material.json files, for reference/SVGs)
 # ---------------------------------------------------------------------------
 TERRAIN_BASE_COLOR  = (86,  108, 136)   # 3dmap_terrain BaseColorScale
 TERRAIN_LINES_COLOR = (109, 138, 176)   # 3dmap_terrain LinesColor

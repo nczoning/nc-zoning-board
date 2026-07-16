@@ -29,7 +29,7 @@ curl http://127.0.0.1:8787/v1/health
 
 ## Deploy
 
-Normally you don't — CI deploys on merge (see the table above). Manual
+Normally you don't: CI deploys on merge (see the table above). Manual
 deploy for local iteration:
 
 ```bash
@@ -41,7 +41,7 @@ npx wrangler deploy --env staging     # staging
 
 CI needs one GitHub Actions secret: `CLOUDFLARE_API_TOKEN` (a token with
 Workers Scripts:Edit, Workers KV Storage:Edit, and Zone DNS:Edit on the
-nczoning.net zone — DNS is needed so the custom-domain route can be created).
+nczoning.net zone; DNS is needed so the custom-domain route can be created).
 Refresh-failure alerts post to the dedicated map-alerts channel via the
 `NCZ_ALERTS_DISCORD_WEBHOOK_URL` Worker secret (set once per environment:
 `wrangler secret put NCZ_ALERTS_DISCORD_WEBHOOK_URL` and again with
@@ -61,7 +61,7 @@ fetch `mods.json` + tags + exclusions + `subdistricts.json` from
 `SITE_ORIGIN`, run the Nexus auto-discovery merge with district enrichment,
 and write to KV **only when the content hash changes**. On any source
 failure it keeps the last-known-good dataset, sets `discovery_stale` in the
-meta record, and (if configured) posts a Discord alert — it never serves an
+meta record, and (if configured) posts a Discord alert. It never serves an
 empty or partial dataset.
 
 KV keys: `dataset:v1` (slim), `dataset:v1:full`, `dataset:v1:districts`,
@@ -96,7 +96,7 @@ copy is current. Before the first cron tick the dataset routes return `503
 not_ready`.
 
 Docs: `openapi.json` is the source of truth (drift-guarded by
-`test/openapi.test.js` — every served route must be documented and vice
+`test/openapi.test.js`: every served route must be documented and vice
 versa). The human-facing reference with redscript/CET snippets is
 [docs/api-reference.md](../docs/api-reference.md).
 
@@ -116,7 +116,7 @@ not `wrangler deploy`):
 rate-limiting rule only matches on **URI Path** (hostname isn't offered),
 the period is fixed at **10 seconds**, and the only action is **Block**.
 Matching `/v1/` is unaffected by this because that path only exists on the
-API — the main site has no `/v1/` routes — so one rule covers both the prod
+API (the main site has no `/v1/` routes), so one rule covers both the prod
 and staging API hosts and never touches the site. The `/` docs page and
 `/openapi.json` are intentionally left uncovered (`/` would collide with the
 site homepage). Verified by burst test: request 101 within a 10 s window

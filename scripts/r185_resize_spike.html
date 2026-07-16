@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- SCRATCH SPIKE — r185 resize/destroyed-texture investigation. Delete after. -->
+<!-- SCRATCH SPIKE: r185 resize/destroyed-texture investigation. Delete after. -->
 <html>
 <head><meta charset="utf-8"><title>r185 resize spike</title>
 <style>html,body{margin:0;height:100%;background:#0a192f;overflow:hidden}#c{width:100vw;height:100vh}</style>
@@ -90,7 +90,7 @@ container.appendChild(renderer.domElement);
 
 await renderer.init();
 
-// Optional compute pass — mimics our per-frame building cull (instancedArray + compute()).
+// Optional compute pass: mimics our per-frame building cull (instancedArray + compute()).
 let computeNode = null;
 if (COMPUTE) {
   const buf = instancedArray(1024, 'vec4');

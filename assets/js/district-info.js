@@ -1,8 +1,8 @@
 /**
- * NC Zoning Board — District Info Panel
+ * NC Zoning Board: District Info Panel
  * Namespace: NCZ.DistrictInfo
  *
- * The hover info panel (top-right, under the header) — a parity nod to the
+ * The hover info panel (top-right, under the header), a parity nod to the
  * in-game world map's bottom-right district readout. Shows the district icon +
  * name, the subdistrict (when one is hovered), and location stats for that
  * area: count, category breakdown, share of the whole map, and how many were
@@ -12,10 +12,10 @@
  * and the 2D (SAT) hover (onMapMouseMove in overlay) drive it via show()/hide().
  *
  * Public API:
- *   NCZ.DistrictInfo.init()                 — cache DOM + load district polygons
- *   NCZ.DistrictInfo.setMods(mods)          — (re)compute per-area stats
- *   NCZ.DistrictInfo.show(districtId, subId) — populate + reveal for a hover
- *   NCZ.DistrictInfo.hide()                 — hide on hover-exit
+ *   NCZ.DistrictInfo.init()                 - cache DOM + load district polygons
+ *   NCZ.DistrictInfo.setMods(mods)          - (re)compute per-area stats
+ *   NCZ.DistrictInfo.show(districtId, subId) - populate + reveal for a hover
+ *   NCZ.DistrictInfo.hide()                 - hide on hover-exit
  *
  * Depends on: constants.js (DISTRICT_COLORS, CATEGORY_STYLES), utils.js
  *   (pointInPolygon, isRecentlyUpdated, escapeHtml).
@@ -27,18 +27,21 @@ NCZ.DistrictInfo = (() => {
   let _districts = [];            // subdistricts.json districts[]
   const _districtMeta = {};       // id → { name, color }
   const _subMeta = {};            // subId → { name, districtId, color }
+  const _distIdByName = {};       // district name → id (served labels → panel ids)
+  const _subIdByName = {};        // subdistrict name → id
   let _stats = { districts: {}, subs: {}, total: 0 };
   let _ready = false;
   let _pendingMods = null;        // setMods() called before init() finished
   let _defaultDistrict = null;    // the game's catch-all district (Badlands)
 
   // The game's default district: anywhere outside every district polygon is
-  // Badlands (it has no polygon of its own — the parent is the catch-all).
-  // Mirrors DEFAULT_DISTRICT_ID in worker/src/districts.js assignDistrict()
-  // so the panel's stats and the API's `district` field can never disagree.
+  // Badlands (it has no polygon of its own; the parent is the catch-all).
+  // Mirrors DEFAULT_DISTRICT_ID in worker/src/districts.js assignDistrict().
+  // Used only when resolving from coordinates on the API-down fallback path;
+  // on the normal API path the served label is already "Badlands".
   const DEFAULT_DISTRICT_ID = "badlands";
 
-  // Shoelace area (absolute) — smallest matching polygon wins, so a mod inside
+  // Shoelace area (absolute): smallest matching polygon wins, so a mod inside
   // both a subdistrict and its parent district is attributed to the subdistrict.
   function polyArea(ring) {
     let a = 0;
@@ -56,7 +59,7 @@ NCZ.DistrictInfo = (() => {
   // subdistrict containing it (and that sub's parent district), else the
   // smallest containing district polygon. Returns { dist, sub } or null. Used
   // both to attribute mods (setMods) and to drive the panel from the cursor
-  // (showAt) — independent of which outline tier is currently drawn.
+  // (showAt), independent of which outline tier is currently drawn.
   function resolveArea(pt) {
     let sub = null, subArea = Infinity, dist = null;
     for (const d of _districts) {
@@ -96,8 +99,10 @@ NCZ.DistrictInfo = (() => {
       for (const d of _districts) {
         const color = NCZ.DISTRICT_COLORS[d.id] || "#ffffff";
         _districtMeta[d.id] = { name: d.name, color };
+        _distIdByName[d.name] = d.id;
         for (const s of d.subdistricts || []) {
           _subMeta[s.id] = { name: s.name, districtId: d.id, color };
+          _subIdByName[s.name] = s.id;
         }
       }
       _defaultDistrict = _districts.find(d => d.id === DEFAULT_DISTRICT_ID) || null;
@@ -108,33 +113,39 @@ NCZ.DistrictInfo = (() => {
     }
   }
 
-  // Attribute every mod to its smallest containing subdistrict (and that sub's
-  // parent district); mods outside all subs fall back to a containing district
-  // polygon. Aggregate count / category / recently-updated per area.
+  // Aggregate count / category / recently-updated per area. Normal (API) path:
+  // group by the district/subdistrict the API already assigned (served as names,
+  // mapped to panel ids); counting the API's own labels is what keeps the panel
+  // from ever disagreeing with the API (the root of #823; the ex-ocean mods are
+  // already labelled Badlands server-side). API-down fallback path: mods carry
+  // no served label, so resolve from coordinates (with the Badlands default),
+  // exactly as the API would.
   function setMods(mods) {
     if (!_ready) { _pendingMods = mods; return; }
     const dStats = {}, sStats = {};
     let total = 0;
 
     for (const m of mods || []) {
-      const c = m.coordinates;
-      if (!c || c.length < 2) continue;
-      // Outside every polygon → the game's default district (Badlands), matching
-      // the API's assignDistrict(). Skipping these dropped them from every
-      // district's stats AND from _stats.total, so shares were computed against
-      // a denominator that was too small. See issue #823.
-      const area = resolveArea([c[0], c[1]]) || (_defaultDistrict && { dist: _defaultDistrict, sub: null });
-      if (!area) continue; // no default district at all (shouldn't happen with real data)
-      const { dist, sub } = area;
+      let distId = m.district ? _distIdByName[m.district] : undefined;
+      let subId = m.subdistrict ? (_subIdByName[m.subdistrict] ?? null) : null;
+      if (!distId) {
+        // No served label (fallback path): resolve from coordinates.
+        const c = m.coordinates;
+        if (!c || c.length < 2) continue;
+        const area = resolveArea([c[0], c[1]]) || (_defaultDistrict && { dist: _defaultDistrict, sub: null });
+        if (!area) continue; // no default district at all (shouldn't happen with real data)
+        distId = area.dist.id;
+        subId = area.sub ? area.sub.id : null;
+      }
 
       const catKey = (m.category in emptyBucket().cat) ? m.category : "other";
       const recent = NCZ.isRecentlyUpdated(m);
       total++;
 
-      const ds = (dStats[dist.id] ||= emptyBucket());
+      const ds = (dStats[distId] ||= emptyBucket());
       ds.total++; ds.cat[catKey]++; if (recent) ds.recent++;
-      if (sub) {
-        const ss = (sStats[sub.id] ||= emptyBucket());
+      if (subId) {
+        const ss = (sStats[subId] ||= emptyBucket());
         ss.total++; ss.cat[catKey]++; if (recent) ss.recent++;
       }
     }
@@ -195,7 +206,7 @@ NCZ.DistrictInfo = (() => {
   // Crop the district's icon out of the atlas (district_icons.png) and scale it
   // to fit the icon box, centred. (All our badlands subdistricts are children of
   // the central Districts.Badlands in TweakDB, so badlands always uses the
-  // central icon — the North/South atlas icons belong to subdistricts we don't map.)
+  // central icon; the North/South atlas icons belong to subdistricts we don't map.)
   function setDistrictIcon(districtId) {
     const el = _els.icon;
     const atlas = NCZ.DISTRICT_ICON_ATLAS;
@@ -205,7 +216,7 @@ NCZ.DistrictInfo = (() => {
     if (!rect) { el.style.backgroundImage = "none"; return; }
 
     // Box = the icon's EXACT scaled rect (no margin) so adjacent atlas icons
-    // can't bleed into it — a fixed square box + centred crop would show e.g.
+    // can't bleed into it; a fixed square box + centred crop would show e.g.
     // Watson's edge above City Center. Normalise by HEIGHT so every district
     // icon renders at the same height (their native slices vary in aspect);
     // width follows the icon's aspect.
@@ -222,7 +233,7 @@ NCZ.DistrictInfo = (() => {
     el.style.backgroundPosition = `${-rect.l * atlas.w * scale}px ${-rect.t * atlas.h * scale}px`;
   }
 
-  // Resolve + show from a CET cursor point — the panel always reports the most
+  // Resolve + show from a CET cursor point: the panel always reports the most
   // specific subdistrict under the cursor, even at the district zoom tier where
   // only district outlines are drawn (matches the in-game readout).
   function showAt(cetX, cetY, statsLevel) {

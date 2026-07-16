@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * validate_3dmap_assets.js — sanity-check the 3D-map building DDS textures.
+ * validate_3dmap_assets.js: sanity-check the 3D-map building DDS textures.
  *
  * Run after dropping in new/updated assets (e.g. a malgalad "3D World Map Fixed"
- * release — see docs/3dmap-fixed-assets.md). Read-only; no encoding.
+ * release; see docs/3dmap-fixed-assets.md). Read-only; no encoding.
  *
  * Checks, per _data.dds:
  *   - DX10 header present, format R16G16B16A16_UNORM (the point-cloud format)

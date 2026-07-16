@@ -2,7 +2,7 @@ name: Monitor Auto-Discovery Health
 
 # Authors add NCZoning metadata blocks to their Nexus descriptions at any time,
 # and a parse failure is silent. Since B7 the parsing runs server-side (the Data
-# API cron) and the result is exposed at /v1/meta.skipped — mods tagged NCZoning
+# API cron) and the result is exposed at /v1/meta.skipped: mods tagged NCZoning
 # that aren't excluded/manual and didn't parse. This reads that list and pings
 # Discord when it's non-empty, so a broken block is caught within a day instead
 # of when an author complains. (One source of truth: no client/server drift.)

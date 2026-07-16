@@ -3,11 +3,11 @@
 Full district hierarchy extracted from TweakDB `District_Record` entries (132 records).
 Source: `scripts/extract_tweakdb_map.wscript` run in WolvenKit.
 
-## District Outline Colors
+## District Outline Colours
 
 From `world_map_style.inkstyle` → `MainColors` in `main_colors.inkstyle`:
 
-| District | UiState | Ink Color | HDR RGBA | RGB | Hex |
+| District | UiState | Ink Colour | HDR RGBA | RGB | Hex |
 |----------|---------|-----------|----------|-----|-----|
 | Default (base) | Default | MainColors.White | [1, 1, 1, 1] | (255, 255, 255) | #ffffff |
 | City Center | CityCenter | MainColors.Yellow | [1.119, 0.844, 0.257, 1] | (255, 215, 65) | #ffd741 |
@@ -39,7 +39,7 @@ All levels use FOV=25 and Yaw=-85 rotation.
 
 ## Map Bounds
 
-### Render Extent (authoritative — used for tile/overlay projection)
+### Render Extent (authoritative: used for tile/overlay projection)
 
 From the Realistic Map mod terrain quad UV mapping (see `docs/coordinate-system.md`):
 
@@ -53,9 +53,9 @@ From the Realistic Map mod terrain quad UV mapping (see `docs/coordinate-system.
 | Height | 12111 CET units |
 | Centre | (-242, -1628) |
 
-### In-Game Pan Limit (TweakDB — NOT the render extent)
+### In-Game Pan Limit (TweakDB, NOT the render extent)
 
-From TweakDB `WorldMap.DefaultSettings` — defines how far the player can scroll the map in-game, not what is rendered:
+From TweakDB `WorldMap.DefaultSettings` (defines how far the player can scroll the map in-game, not what is rendered):
 
 | Parameter | Value |
 |-----------|-------|
@@ -65,13 +65,13 @@ From TweakDB `WorldMap.DefaultSettings` — defines how far the player can scrol
 ## Full Hierarchy
 
 Legend:
-- **Bold** = has UiState color (rendered on map)
+- **Bold** = has UiState colour (rendered on map)
 - `[Q]` = isQuestDistrict
 - Gang affiliations shown where applicable
 
 ### Night City Districts
 
-#### **City Center** `[Q]` — UiState: CityCenter (Yellow #ffd741)
+#### **City Center** `[Q]`, UiState: CityCenter (Yellow #ffd741)
 - Corpo Plaza `[Q]`
   - Arasaka Tower Atrium
   - Arasaka Tower CEO Floor
@@ -88,7 +88,7 @@ Legend:
   - Jinguji
   - The Hammer
 
-#### **Watson** `[Q]` — UiState: Watson (CombatRed #ff3e34) — Maelstrom
+#### **Watson** `[Q]`, UiState: Watson (CombatRed #ff3e34), Maelstrom
 - Arasaka Waterfront
   - Abandoned Warehouse
   - Konpeki Plaza
@@ -111,11 +111,11 @@ Legend:
   - Totentanz
   - WNS
 
-#### **Westbrook** `[Q]` — UiState: Westbrook (Orange #ff5100)
+#### **Westbrook** `[Q]`, UiState: Westbrook (Orange #ff5100)
 - Charter Hill
   - Au Cabanon
   - Power Plant
-- Japantown — Tyger Claws
+- Japantown (Tyger Claws)
   - Clouds
   - Dark Matter
   - Fingers
@@ -131,7 +131,7 @@ Legend:
   - Denny's Estate
   - Kerry's Estate
 
-#### **Heywood** `[Q]` — UiState: Heywood (Green #1ded83) — Valentinos
+#### **Heywood** `[Q]`, UiState: Heywood (Green #1ded83), Valentinos
 - The Glen
   - Embers
   - Glen Apartment
@@ -145,7 +145,7 @@ Legend:
   - La Catrina
 - Wellsprings
 
-#### **Santo Domingo** `[Q]` — UiState: SantoDomingo (Blue #5ef6ff) — 6th Street
+#### **Santo Domingo** `[Q]`, UiState: SantoDomingo (Blue #5ef6ff), 6th Street
 - Arroyo
   - Arasaka Warehouse
   - Claire's Garage
@@ -162,8 +162,8 @@ Legend:
   - Softsys
   - Stylishly
 
-#### **Pacifica** `[Q]` — UiState: Pacifica (Red #ff6158) — Voodoo Boys
-- Coastview — Voodoo Boys
+#### **Pacifica** `[Q]`, UiState: Pacifica (Red #ff6158), Voodoo Boys
+- Coastview (Voodoo Boys)
   - Batty's Hotel
   - Butcher Shop
   - Grand Imperial Mall
@@ -171,9 +171,9 @@ Legend:
   - VDB Chapel
   - VDB Maglev
   - q110 Cyberspace
-- West Wind Estate — Animals
+- West Wind Estate (Animals)
 
-#### **Dogtown** `[Q]` — UiState: Dogtown (DarkGreen #00a32c) — Barghest
+#### **Dogtown** `[Q]`, UiState: Dogtown (DarkGreen #00a32c), Barghest
 - Akebono
 - Capitan Caliente
 - Cynosure Facility
@@ -181,12 +181,12 @@ Legend:
 - Hideout
 - Worldmap Sub
 
-#### **Morro Rock** — UiState: MorroRock (MildBlue #349197)
+#### **Morro Rock**, UiState: MorroRock (MildBlue #349197)
 - NCX (Spaceport)
 
-### Badlands — UiState: None (no map border)
+### Badlands, UiState: None (no map border)
 
-#### Badlands `[Q]` — Aldecaldos
+#### Badlands `[Q]` (Aldecaldos)
 - Biotechnica Flats
 - ~~Dry Creek~~ *(nomad lifepath start, not on world map)*
 - Jackson Plains
@@ -215,7 +215,7 @@ Legend:
 - q201 Space Station
 
 ### Other
-- Brooklyn (Dogtown sub, orphaned — parentDistrict: None in TweakDB)
+- Brooklyn (Dogtown sub, orphaned; parentDistrict: None in TweakDB)
 - q307 Langley Clinic (orphaned)
 
 ## Boundary Data Sources

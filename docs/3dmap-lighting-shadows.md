@@ -1,10 +1,10 @@
-# 3D Map — Lighting and Shadows
+# 3D Map: Lighting and Shadows
 
 Reference for the sun/shadow/lighting system in the Three.js schematic view.
 
 > **Renderer:** this scene runs on `WebGPURenderer` (three r184) with TSL node
 > materials. There is **no `onBeforeCompile` / GLSL-chunk injection** and no
-> `MeshLambertMaterial` — every material is a `*NodeMaterial`. Shadow state lives on
+> `MeshLambertMaterial`: every material is a `*NodeMaterial`. Shadow state lives on
 > the **light** (`light.shadow.*`), not on `renderer.shadowMap` (which under WebGPU
 > only carries `{ enabled, transmitted, type }`).
 
@@ -42,6 +42,9 @@ out and the cool moon (gated by its own altitude) crossfades in; the ambient ler
 cool night skyglow, boosted toward `AMBIENT_INTENSITY_NIGHT_MOONLESS` as the moon sets
 so a moonless deep night stays legible. See `docs/3d-map-lighting.md` for the full
 colour/exposure model.
+
+Sun : ambient ≈ 7.4 : 1 by day (envelope-fit). Cast shadows are layered on top as
+an intentional artistic choice: the in-game map has them disabled.
 
 > **Shadows belong to the sun.** Only `_dirLight` casts; the moon never does
 > (moonlight shadows are physically imperceptible, and a moon caster would re-introduce
@@ -103,7 +106,7 @@ dusk, **none at night** — and with the moon casting nothing, night has no cast
 all. This is what removes the night/dusk "shadow box" by construction: no caster ⇒
 nothing to clip against the coverage cap.
 
-### Shadow render-on-demand (WebGPU) — the gate is on the *light*
+### Shadow render-on-demand (WebGPU): the gate is on the *light*
 
 > ⚠️ Under `WebGPURenderer`, `renderer.shadowMap` only carries `{ enabled, transmitted,
 > type }`. **`renderer.shadowMap.autoUpdate` and `.needsUpdate` are inert** (silent no-ops).
@@ -113,16 +116,16 @@ nothing to clip against the coverage cap.
 So shadow render-on-demand is driven on the light:
 
 ```javascript
-_dirLight.shadow.autoUpdate = false;            // permanent — the real WebGPU gate
+_dirLight.shadow.autoUpdate = false;            // permanent - the real WebGPU gate
 
 function flagShadowUpdate() {                    // single chokepoint
   if (_shadowsOn && _dirLight) _dirLight.shadow.needsUpdate = true;
 }
 ```
 
-`flagShadowUpdate()` is called only when the shadow silhouette actually changes —
+`flagShadowUpdate()` is called only when the shadow silhouette actually changes:
 `setSunPosition()` (sun moved), `updateShadowCamera()` (camera/resize/terrain/flyover/
-re-enable), and **the async caster loads** (`loadBuildings`, `loadLandmarks` — they finish
+re-enable), and **the async caster loads** (`loadBuildings`, `loadLandmarks`, which finish
 after the post-terrain refit, so nothing else flags them). It is **not** called on
 theme/colour transitions (shadow depth is geometry-only). The result: the 4096² depth pass
 re-renders only on shadow-relevant frames, and the **Shadows toggle off** simply stops
@@ -158,7 +161,7 @@ function updateShadowCamera(renderCam = camera) {
   shadowCam.far  = NCZ.SHADOW_CAM_FAR;
   shadowCam.updateProjectionMatrix();
 
-  // normalBias in WORLD units = N texels × (2·half / mapSize) — constant texel
+  // normalBias in WORLD units = N texels × (2·half / mapSize) - constant texel
   // offset at every zoom (a constant world bias is too small zoomed out → acne,
   // too large zoomed in → shadows detach)
   _dirLight.shadow.normalBias = NCZ.SHADOW_NORMAL_BIAS_TEXELS * (2 * half / NCZ.SHADOW_MAP_SIZE);
@@ -182,8 +185,8 @@ Key constants:
 | `SHADOW_MAX_DISTANCE` | 8600 | Cap on the footprint half-side (≈ world half-diagonal; nothing renders past the world bounds). Past the cap the box world-locks. |
 | `SHADOW_GROUND_MARGIN` | 600 | Footprint extends this far past the visible ground (building heights + a sliver of off-screen casters) |
 | `SHADOW_CAM_NEAR` | 1 | Shadow camera near clip |
-| `SHADOW_CAM_FAR` | 40000 | Far clip — the camera sits `SUN_DIST` up the sun ray, so this must reach the far edge even at a low sun (orthographic ⇒ wide range is free) |
-| `SHADOW_BIAS` | 0 | Depth bias — native `depth32float` + reverse-Z need none |
+| `SHADOW_CAM_FAR` | 40000 | Far clip: the camera sits `SUN_DIST` up the sun ray, so this must reach the far edge even at a low sun (orthographic ⇒ wide range is free) |
+| `SHADOW_BIAS` | 0 | Depth bias: native `depth32float` + reverse-Z need none |
 | `SHADOW_NORMAL_BIAS_TEXELS` | 2.5 | Receiver-sample offset along the surface normal, in shadow-texel widths (→ world units per-frame) |
 | `SUN_DIST` | 22000 | How far up the sun ray the light + shadow camera sit from the footprint centre |
 
@@ -191,15 +194,15 @@ Key constants:
 
 | Object | castShadow | receiveShadow | Material | Notes |
 | --- | --- | --- | --- | --- |
-| Terrain | — | ✓ | `MeshLambertNodeMaterial` + `flatShading` | `frustumCulled=false`; faceted look is intentional (community vote — see PR #748) |
-| Water | — | ✓ | `MeshLambertNodeMaterial` (terrain material, brightness 0.7) | Receives terrain shadows |
+| Terrain | ✗ | ✓ | `MeshLambertNodeMaterial` + `flatShading` | `frustumCulled=false`; faceted look is intentional (community vote, see PR #748) |
+| Water | ✗ | ✓ | `MeshLambertNodeMaterial` (terrain material, brightness 0.7) | Receives terrain shadows |
 | Cliffs | ✓ | ✓ | `MeshLambertNodeMaterial` + `flatShading` | `frustumCulled=false` |
 | Landmarks | ✓ | ✓ | `MeshLambertNodeMaterial` | Dogtown structures etc. |
 | Buildings | ✓ | ✓ | `MeshLambertNodeMaterial` + TSL nodes | Instanced; stencil=1 |
-| Roads | — | — | `MeshBasicNodeMaterial` (additive) | Overlay layer; no shadow |
-| Metro | — | — | `MeshBasicNodeMaterial` (additive) | Overlay layer; no shadow |
-| Sun disc | — | — | `MeshBasicNodeMaterial` | Visible orb; traces the solar arc, terrain-occluded |
-| Moon disc | — | — | `MeshBasicNodeMaterial` | Visible orb; traces the lunar arc (incl. daytime) |
+| Roads | ✗ | ✗ | `MeshBasicNodeMaterial` (additive) | Overlay layer; no shadow |
+| Metro | ✗ | ✗ | `MeshBasicNodeMaterial` (additive) | Overlay layer; no shadow |
+| Sun disc | ✗ | ✗ | `MeshBasicNodeMaterial` | Visible orb; traces the solar arc, terrain-occluded |
+| Moon disc | ✗ | ✗ | `MeshBasicNodeMaterial` | Visible orb; traces the lunar arc (incl. daytime) |
 
 **Note on `frustumCulled=false`:** terrain and cliffs are always included in the shadow
 pass regardless of the dynamic shadow camera position.
@@ -215,20 +218,20 @@ need them.
 
 Buildings use `MeshLambertNodeMaterial` driven by **TSL nodes** (no `onBeforeCompile`).
 Standard Three.js handles shadow casting/receiving (`castShadow`/`receiveShadow = true`)
-via the engine's depth pass — no `customDepthMaterial` needed. Per-district values that
+via the engine's depth pass: no `customDepthMaterial` needed. Per-district values that
 the WebGL build passed as `onBeforeCompile` uniforms are now plain TSL `uniform()` nodes.
 
 The material wires three nodes:
 
-1. **`normalNode`** — per-instance view-space normals. The instance matrix is applied to
+1. **`normalNode`**: per-instance view-space normals. The instance matrix is applied to
    the local normal (inverse-transpose form, for non-uniform building scale) → world, then
    `transformNormalToView()` → view. `NodeMaterial.setupNormal()` consumes `normalNode`
    *directly* for lighting, so it must already be in view space.
-2. **`colorNode`** — `_m.dds` surface modulation (`0.4 + 0.5·m`, the decoded
+2. **`colorNode`**: `_m.dds` surface modulation (`0.4 + 0.5·m`, the decoded
    `3d_map_cubes.mt` value) applied to the albedo, plus the procedural **edge highlight**
    (`saturate(pow(max(|1-2u|,|1-2v|), EdgeSharpnessPower))` over a synthesised per-face UV,
    `lerp`'d onto albedo pre-lighting) with `fwidth` anti-aliasing.
-3. **`emissiveNode`** (optional) — when **edge glow** is on, the edge term is also written
+3. **`emissiveNode`** (optional): when **edge glow** is on, the edge term is also written
    to emissive so it stays self-lit regardless of sun/shadow. Binary on/off at
    `NCZ.EDGE_GLOW_INTENSITY`; per-theme default from `--scene-edge-glow`, overridable in
    Settings.
@@ -260,11 +263,11 @@ NCZ.ThreeScene.setCameraState(JSON.parse('...'));
 
 Two generations preceded the current pipeline:
 
-- **Gen 2 — `RawShaderMaterial`** (`gl_InstanceID` + `texelFetch()`): required
+- **Gen 2: `RawShaderMaterial`** (`gl_InstanceID` + `texelFetch()`): required
   `customDepthMaterial`, identity matrices for the bounding sphere, `frustumCulled=false`,
   and exact `packDepthToRGBA` matching Three.js's `modf`-based implementation. Replaced by
   the DDS + CPU-matrix instancing pipeline.
-- **Gen 3 (WebGL/r170) — `MeshLambertMaterial` + `onBeforeCompile`**: the planar UV,
+- **Gen 3 (WebGL/r170), `MeshLambertMaterial` + `onBeforeCompile`**: the planar UV,
   `_m` modulation and edge highlight were injected as GLSL chunk replacements
   (`project_vertex`, `color_fragment`, `outgoingLight`). The WebGPU migration ported all
   of these to TSL `colorNode`/`normalNode`/`emissiveNode` on `MeshLambertNodeMaterial`;

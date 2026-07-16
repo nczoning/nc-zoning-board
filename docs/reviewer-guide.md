@@ -14,10 +14,10 @@ Reviewers are coordinated through the **[Locations Hub Discord](https://discord.
 
 ### Discord Notification Statuses
 
-The notification in Discord will update its color and status automatically:
+The notification in Discord will update its colour and status automatically:
 
 - ⏳ **Awaiting review** (Yellow): Initial submission, needs a human eye.
-- ✅ **Approved — pin is now live!** (Green): PR merged successfully.
+- ✅ **Approved: pin is now live!** (Green): PR merged successfully.
 - ❌ **Closed without merging** (Red): PR was closed or rejected.
 
 ---

@@ -1,4 +1,4 @@
-# Three.js 3D Scene — Coordinate System Reference
+# Three.js 3D Scene: Coordinate System Reference
 
 Everything discovered about how CP2077's 3D map assets relate to CET game coordinates and how they should map into Three.js.
 
@@ -10,15 +10,15 @@ What `GetPlayer():GetWorldPosition()` returns. What mod authors use. What our lo
 - **Y** = north/south  
 - **Z** = height above sea level (elevation)
 - World extent: X[-6298, 5815], Y[-7684, 4427], Z[0, ~500]
-- This is our **source of truth** — all NC Zoning Board data uses CET coordinates.
+- This is our **source of truth**: all NC Zoning Board data uses CET coordinates.
 
 ### B. GLB / Engine Rendering Coordinates
 What the WolvenKit-exported GLB meshes (terrain, roads, water, cliffs, metro) use internally.
 - **GLB_X** = CET_X (east/west, same axis, same units, same origin)
 - **GLB_Z** = -CET_Y (north/south, negated)
-- **GLB_Y** = elevation (height) — positive Y is upward (correct rendering)
+- **GLB_Y** = elevation (height): positive Y is upward (correct rendering)
 - Terrain bbox: X[-8000, 8000], Y[-99, 879], Z[-8000, 8001]
-- The terrain covers MORE area than the CET world bounds (extra ocean and outer badlands). CET coordinates sit inside the terrain's XZ range at 1:1 scale — **there is no scaling factor**, the terrain just extends further.
+- The terrain covers MORE area than the CET world bounds (extra ocean and outer badlands). CET coordinates sit inside the terrain's XZ range at 1:1 scale: **there is no scaling factor**, the terrain just extends further.
 
 ### C. Building Instance Texture Coordinates
 Decoded from `*_data.png` textures via `TRANS_MIN/MAX` and `CUBE_SIZE` values.
@@ -27,7 +27,7 @@ Decoded from `*_data.png` textures via `TRANS_MIN/MAX` and `CUBE_SIZE` values.
 - Position: `cetZ = TRANS_MIN_Z + (TRANS_MAX_Z - TRANS_MIN_Z) * B_channel` (no Z offset)
 - Scale: `half_width = R_scale * CUBE_SIZE`, `half_depth = G_scale * CUBE_SIZE`, `half_height = B_scale * CUBE_SIZE`
 - Rotation: quaternion from Block 2, used for yaw extraction
-- These decode directly to **CET coordinates** — verified against player CET Z positions (within 1–6 units).
+- These decode directly to **CET coordinates**: verified against player CET Z positions (within 1–6 units).
 
 ## Coordinate System Validation
 
@@ -63,12 +63,12 @@ All five samples agree within ±6m. The delta is consistent with:
 
 #### Earlier (incorrect) measurement
 
-A previous version of this doc listed an "elevation gap" of 7–23m between CET Z and terrain GLB Y, derived from samples at the Pier, Koi Fish, and Nash Hideout. Those readings were taken on top of buildings/platforms, not on bare terrain — they measured infrastructure height, not a coordinate-space mismatch. Findings retracted.
+A previous version of this doc listed an "elevation gap" of 7–23m between CET Z and terrain GLB Y, derived from samples at the Pier, Koi Fish, and Nash Hideout. Those readings were taken on top of buildings/platforms, not on bare terrain: they measured infrastructure height, not a coordinate-space mismatch. Findings retracted.
 
-Validated 2026-05-01 by an in-game teleport experiment to six bare-terrain points across the map; all five usable samples landed within ±6m of terrain GLB Y, mean delta −0.17m. CET Z and terrain GLB Y are in the same coordinate space — `pinYFor(cetZ)` works without a raycast.
+Validated 2026-05-01 by an in-game teleport experiment to six bare-terrain points across the map; all five usable samples landed within ±6m of terrain GLB Y, mean delta −0.17m. CET Z and terrain GLB Y are in the same coordinate space: `pinYFor(cetZ)` works without a raycast.
 
 ### Building Rotation
-Buildings have per-instance quaternion rotations (Block 2 of instance texture). All four components (qx, qy, qz, qw) are kept — pitch and roll are used by the game shader to form non-upright primitives (wedges, ramps, bridges, gap-fillers), not just upright buildings.
+Buildings have per-instance quaternion rotations (Block 2 of instance texture). All four components (qx, qy, qz, qw) are kept: pitch and roll are used by the game shader to form non-upright primitives (wedges, ramps, bridges, gap-fillers), not just upright buildings.
 
 Applied in Three.js with CET→Three.js axis remapping:
 
@@ -79,7 +79,7 @@ dummy.quaternion.set(gQx, gQz, -gQy, gQw);
 // CET Y → Three.js -Z (CET north becomes Three.js -forward)
 ```
 
-Verified: yaw-only case (gQx≈0, gQy≈0) reduces to `set(0, sin(θ/2), 0, cos(θ/2))` — a pure Three.js Y rotation matching the previously verified Biotechnica Flats orientation.
+Verified: yaw-only case (gQx≈0, gQy≈0) reduces to `set(0, sin(θ/2), 0, cos(θ/2))`, a pure Three.js Y rotation matching the previously verified Biotechnica Flats orientation.
 
 ## The HLSL Shader (`minimap_instance_shader.hlsl`)
 
@@ -107,7 +107,7 @@ In `map_data_export/source/raw/base/worlds/03_night_city/sectors/`:
 
 | File | Size | Format | Description |
 |------|------|--------|-------------|
-| `world_map_albedo.png` | 2.1 MB | 1008×1016 RGBA | Base color texture |
+| `world_map_albedo.png` | 2.1 MB | 1008×1016 RGBA | Base colour texture |
 | `world_map_depth.png` | 243 KB | 1008×1016 Greyscale | Height/elevation map |
 | `world_map_normal.png` | 1.5 MB | 1008×1016 RGBA | Normal map |
 
@@ -122,12 +122,12 @@ From `cyberpunk-decompiled-scripts/cyberpunk/UI/fullscreen/map/worldMap.swift`:
 - Zoom range: 800 (in) to 15000 (out), default 3000
 - District view states: None, Districts, SubDistricts
 
-## Data Pipeline — Evolution
+## Data Pipeline: Evolution
 
 ### Generation 1 (obsolete): Python script → JSON → InstancedMesh
 
 ```
-*_data.png (WolvenKit 8-bit PNG export — precision loss from 16-bit source)
+*_data.png (WolvenKit 8-bit PNG export - precision loss from 16-bit source)
     ↓ scripts/build_buildings_3d.py
     ↓   Decodes position/rotation/scale; samples _m.png for per-instance brightness
     ↓
@@ -146,7 +146,7 @@ problem, and was later removed.
 ### Generation 2 (obsolete): xbm.json → GPU instancing via DataTexture
 
 ```
-*_data.xbm.json (WolvenKit JSON sidecar — 16-bit RGBA base64 in textureData.Bytes)
+*_data.xbm.json (WolvenKit JSON sidecar - 16-bit RGBA base64 in textureData.Bytes)
     ↓ loadXbmDataTexture() → Uint16 → Float32 → THREE.DataTexture
     ↓
 RawShaderMaterial BUILDING_VERT reads via gl_InstanceID + texelFetch()
@@ -168,7 +168,7 @@ Three.js's exact algorithm, identity matrix workarounds for shadow bounding sphe
 ### Generation 3 (current): DDS binary → CPU matrices → MeshLambertMaterial
 
 ```
-assets/dds/*_data.dds  (DXGI_FORMAT_R16G16B16A16_UNORM — raw binary, DX10 header)
+assets/dds/*_data.dds  (DXGI_FORMAT_R16G16B16A16_UNORM - raw binary, DX10 header)
     ↓ loadDataDds() → fetch → Uint16Array (skip 148-byte DX10 header)
     ↓ CPU decode: position / quaternion / scale per valid pixel
     ↓ setMatrixAt() → InstancedMesh with correct bounding sphere
@@ -178,7 +178,7 @@ MeshLambertMaterial + onBeforeCompile
     → Correct bounding sphere → frustum culling works automatically
     → onBeforeCompile patches: world-space planar UV, _m texture, edge highlight
 
-assets/dds/*_m.dds  (DXGI_FORMAT_R8_UNORM — 8-bit greyscale, DX10 header)
+assets/dds/*_m.dds  (DXGI_FORMAT_R8_UNORM - 8-bit greyscale, DX10 header)
     ↓ loadMDds() → Uint8Array (mip 0) → DataTexture (RedFormat, generateMipmaps)
     ↓
 Fragment shader samples surface detail via world-space planar UV

@@ -1,4 +1,4 @@
-// NC Zoning Data API — Cloudflare Worker config.
+// NC Zoning Data API: Cloudflare Worker config.
 // Deploys independently of the Pages site; shares only the nczoning.net zone.
 // See docs/data-api-plan.md for the architecture.
 //
@@ -8,7 +8,7 @@
 //   `wrangler deploy --env staging`   → STAGING (env.staging)
 //                                       nczoning-api-staging @ api-dev.nczoning.net
 // CI (.github/workflows/deploy-api.yml) deploys prod from `main`, staging
-// from `dev`. Named environments do NOT inherit vars/kv/routes/triggers —
+// from `dev`. Named environments do NOT inherit vars/kv/routes/triggers;
 // each is declared in full.
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
@@ -44,7 +44,7 @@
 		}
 	],
 	// Rebuild the dataset every 5 minutes (faster mod propagation after a
-	// submission). Nexus load stays well under limits — see docs/nexus-api-reference.md.
+	// submission). Nexus load stays well under limits; see docs/nexus-api-reference.md.
 	"triggers": {
 		"crons": [
 			"*/5 * * * *"
@@ -55,7 +55,7 @@
 	//   wrangler secret put NCZ_ALERTS_DISCORD_WEBHOOK_URL --env staging
 	// Falls back to the legacy DISCORD_WEBHOOK_URL secret if the new one isn't
 	// set (no alerting gap during the move). Secrets aren't committed here.
-	// Optional — refresh runs without either.
+	// Optional: refresh runs without either.
 
 	"env": {
 		// Staging: pulls source files from the dev site, writes to a separate

@@ -1,21 +1,20 @@
 /**
- * DistrictLineMaterial — custom TSL wide-line material for the district
+ * DistrictLineMaterial: custom TSL wide-line material for the district
  * outlines (issue #775), replacing three's Line2NodeMaterial.
  *
  * Why not Line2NodeMaterial: the r185 rewrite doesn't support real
- * transparency ("not supported, yet" — it forces NoBlending and fakes
+ * transparency ("not supported, yet"; it forces NoBlending and fakes
  * semi-transparent lines by blending against viewportOpaqueMipTexture(), a
  * canvas-size copy of the opaque-only framebuffer, in-shader). For our
  * outlines that fake was the root of three bugs at once: the #771 resize
  * wedge (stale binding to the destroyed framebuffer copy), the unhovered
  * colour regression (lines composited against the opaque backdrop, ignoring
  * the roads/metro/water actually beneath them), and the alphaToCoverage
- * quantisation of faint lines. See wiki
- * learnings/line2-fake-transparency-root-of-r185-issues.
+ * quantisation of faint lines.
  *
  * What this ports from upstream (r185 Line2NodeMaterial, screen-space path):
  *   - the instanced quad expansion from LineGeometry's instanceStart /
- *     instanceEnd attributes (geometry pipeline unchanged — only the
+ *     instanceEnd attributes (geometry pipeline unchanged; only the
  *     material is swapped)
  *   - the reversed-depth-aware near-plane segment trim (upstream #33572,
  *     the fix this repo tracked as mrdoob#33570)
@@ -26,7 +25,7 @@
  *     the hover fade tween and the faint resting opacity composite against
  *     whatever is actually behind the line (r184-equivalent look)
  *   - endcap edges are fwidth-AA'd unconditionally (no alphaToCoverage, no
- *     MSAA sample-count gate — the sub-pixel-detail lesson from the terrain
+ *     MSAA sample-count gate; the sub-pixel-detail lesson from the terrain
  *     grid / building edges applies here too)
  *   - degenerate segments (zero NDC length after projection) are guarded
  *     in-shader: belt-and-braces alongside dedupRing()'s data hygiene, so
@@ -36,10 +35,10 @@
  * colors, raycast support.
  *
  * Joint dedup (the `stencilRef` parameter): every segment is an independent
- * quad with cap extensions, so a ring self-overlaps at each corner — under
+ * quad with cap extensions, so a ring self-overlaps at each corner; under
  * real alpha blending that double-blend reads as a brighter dot at partial
  * opacity. (r184 never showed it: its backdrop-premix fake made overlapping
- * writes idempotent.) Fix: per-ring stencil ref with NotEqual + Replace —
+ * writes idempotent.) Fix: per-ring stencil ref with NotEqual + Replace;
  * within a frame each ring's first fragment at a pixel stamps the ref and
  * later fragments of the SAME ring fail the test, so a ring touches each
  * pixel once. Coincident neighbour borders carry different refs and still
@@ -58,7 +57,7 @@ import {
 
 // Near-plane estimate from the projection matrix, branching on the depth
 // convention: te[10] is positive under a reversed depth buffer, so its sign
-// selects the formula (verbatim port of r185's trimSegmentAlpha — the r184
+// selects the formula (verbatim port of r185's trimSegmentAlpha; the r184
 // version assumed the WebGL layout and returned ~-far/2 under reversed-Z,
 // the rays-across-viewport bug).
 const trimSegmentAlpha = Fn(({ start, end }) => {
@@ -81,7 +80,7 @@ const districtLineClipPosition = /*@__PURE__*/ Fn(() => {
 
   const aspect = viewport.z.div(viewport.w);
 
-  // Trim segments that cross the camera plane under perspective projection —
+  // Trim segments that cross the camera plane under perspective projection:
   // NDC math below is meaningless for endpoints behind the camera.
   const perspective = cameraProjectionMatrix.element(2).element(3).equal(-1.0);
   If(perspective, () => {
@@ -100,7 +99,7 @@ const districtLineClipPosition = /*@__PURE__*/ Fn(() => {
   const ndcStart  = clipStart.xyz.div(clipStart.w);
   const ndcEnd    = clipEnd.xyz.div(clipEnd.w);
 
-  // segment direction in aspect-corrected NDC — guarded against degenerate
+  // segment direction in aspect-corrected NDC, guarded against degenerate
   // (zero-length after projection) segments instead of normalize(0,0) = NaN
   const dir = ndcEnd.xy.sub(ndcStart.xy).toVar('dir');
   dir.x.assign(dir.x.mul(aspect));
@@ -133,7 +132,7 @@ const districtLineClipPosition = /*@__PURE__*/ Fn(() => {
 })();
 
 // Fragment coverage: 1 in the quad body; round endcaps beyond uv.y ∈ [-1, 1]
-// with an fwidth-AA'd circular edge (always on — no sample-count gate).
+// with an fwidth-AA'd circular edge (always on: no sample-count gate).
 const districtLineCoverage = /*@__PURE__*/ Fn(() => {
   const vUv = uv();
   const alpha = float(1).toVar('alpha');
@@ -157,7 +156,7 @@ export class DistrictLineMaterial extends THREE.NodeMaterial {
     this.isDistrictLineMaterial = true;
 
     // Properties the TSL accessors read (materialColor / materialOpacity /
-    // materialLineWidth) — must exist before setValues copies parameters in.
+    // materialLineWidth); must exist before setValues copies parameters in.
     this.color = new THREE.Color(0xffffff);
     this.linewidth = 1;
 
@@ -179,7 +178,7 @@ export class DistrictLineMaterial extends THREE.NodeMaterial {
       this.stencilWriteMask = 0xff;
     }
 
-    // Wired once here, NOT in setup() — assigning node properties during
+    // Wired once here, NOT in setup(): assigning node properties during
     // setup() dirties the material every build and forces a full pipeline
     // recompile per frame (~1 s/frame when first tried). The nodes are
     // module-level singletons shared by all instances.

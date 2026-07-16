@@ -5,11 +5,13 @@
  * overwrites X, Y (and optionally Z, Yaw) in data/locations/*.json, then marks
  * each item "Processed".
  *
- * Required project fields:
- *   X Coordinate  (number) — new CET X value (required)
- *   Y Coordinate  (number) — new CET Y value (required)
- *   Z Coordinate  (number) — new Z value (optional, keeps existing if blank)
- *   Yaw           (number) — new Yaw value (optional, keeps existing if blank)
+ * Required project fields (Number):
+ *   CET X         new CET X value
+ *   CET Y         new CET Y value
+ *   Z Coordinate  new Z value
+ *   Yaw           new Yaw value
+ * The processing loop skips any item with one of the four blank, so in
+ * practice every field must be filled in per item.
  *
  * Usage:
  *   GITHUB_TOKEN=<projects_token> node scripts/fix_coords_from_project.js
@@ -260,13 +262,14 @@ async function main() {
       const existing = JSON.parse(fs.readFileSync(filePath, 'utf8'));
       const oldCoords = existing.coordinates;
 
-      // Always update X and Y; use new Z if provided, else keep existing
+      // Always update X and Y. The missing-fields skip above guarantees z is
+      // non-null here; the keep-existing fallback is defensive only.
       const newZ = item.z !== null ? item.z : (oldCoords[2] ?? null);
       existing.coordinates = newZ !== null
         ? [item.x, item.y, newZ]
         : [item.x, item.y];
 
-      // Update Yaw if provided; remove if explicitly cleared (not applicable here — null means keep)
+      // The missing-fields skip above guarantees yaw is non-null here; the guard is defensive only.
       if (item.yaw !== null) {
         existing.yaw = item.yaw;
       }
