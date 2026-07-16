@@ -188,9 +188,9 @@ const ThreeScene = (() => {
   // off-screen building still in the shadow ortho box gets into the indirect
   // buffer and casts its shadow into the visible area. (Phase 2B originally
   // tested only the camera frustum, which made shadows pop in at screen
-  // edges on pan and vanish on small rotations at high zoom.) See
-  // [[webgpu-migration-execution]] risk register row for the rationale of
-  // Approach A (12-plane test) over sun-direction dilation or AABB union.
+  // edges on pan and vanish on small rotations at high zoom.) Approach A
+  // (the 12-plane test) was chosen over sun-direction dilation or an AABB
+  // union of the two frusta.
   //
   // Each plane is a vec4 packing `(normal.xyz, constant)`; the visibility
   // test against the bounding sphere is
@@ -1555,9 +1555,8 @@ const ThreeScene = (() => {
       // shows over the bay, after the road passes so it layers above both.
       //
       // LOD discard: COLOR_0 vertex attribute carries the LOD tier as one
-      // mutually-exclusive channel per vertex (per the building/metro extraction
-      // pipeline — see `[[phase3-building-rendering]]` and the metro LOD-channel
-      // mapping note in CLAUDE.md). Discard rules:
+      // mutually-exclusive channel per vertex (from the building/metro
+      // extraction pipeline). Discard rules:
       //   B=wide solid:  show only at far zoom    (zoom <= LOD_MED)
       //   G=thin solid:  show only at medium zoom (LOD_MED <= zoom <= LOD_NEAR)
       //   R=dotted:      show only at close zoom  (zoom >= LOD_NEAR)
@@ -2086,7 +2085,7 @@ const ThreeScene = (() => {
         mesh.castShadow    = true;
         mesh.receiveShadow = true;
         // Three.js's default frustum cull was already broken for our cube-
-        // at-origin setup (recon: instWiki [[iigpu-perf-investigation]]). The
+        // at-origin setup. The
         // storage-buffer pattern moves all positioning to the GPU, so the host
         // bounding sphere is even more meaningless — disable cull explicitly
         // until Phase 2B's compute pass owns visibility.
@@ -3382,8 +3381,7 @@ const ThreeScene = (() => {
   // extreme. Re-centres the sun light + its target on that footprint so the
   // shadow tracks what you see. Called on every camera change, on resize, after
   // terrain loads, on flyover frames (renderCam = the fly cam), and from
-  // startRenderLoop. Single map for now; CSM is a queued follow-up
-  // (see [[align-schematic-camera-to-game]] for the rationale shift).
+  // startRenderLoop. Single map for now; CSM is a queued follow-up.
   function updateShadowCamera(renderCam = camera) {
     if (!_dirLight || !renderCam) return;
     const shadowCam = _dirLight.shadow.camera;

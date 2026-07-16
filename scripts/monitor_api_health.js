@@ -49,8 +49,7 @@ const FETCH_TIMEOUT_MS = 15000;
 // zone-wide (a /v1 rate-limit rule is the compensating control; DDoS + WAF stay
 // on). With BFM off the UA is unchallenged, so keep the honest, self-describing
 // one — and keep X-Health-Probe as a stable, spoof-resistant identifier for CF
-// logs / a future rate-limit exception. See wiki learning:
-// cloudflare-bot-fight-mode-403s-health-monitor.
+// logs / a future rate-limit exception.
 const PROBE_HEADERS = {
   "User-Agent": "nczoning-health-monitor",
   "X-Health-Probe": "nczoning-health-monitor",
