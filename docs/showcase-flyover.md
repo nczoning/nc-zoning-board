@@ -1,6 +1,6 @@
 # Showcase Flyover
 
-A cinematic flyover of Night City synced to the in-game radio broadcast *Good Morning Night City*. Implemented as an opt-in module (`flyover.js`) — add or remove the `<script>` tag in `index.html` to include or exclude the feature.
+A cinematic flyover of Night City synced to the in-game radio broadcast *Good Morning Night City*. Implemented as an opt-in module (`flyover.js`): add or remove the `<script>` tag in `index.html` to include or exclude the feature.
 
 ## Activation
 
@@ -8,7 +8,7 @@ Click the **Showcase** button in the 3D scene controls. The browser enters nativ
 
 ## Audio
 
-`assets/audio/GMNC.mp3` — *Good Morning Night City*, a Cyberpunk 2077 radio broadcast (~800 KB, ~57 s). The audio clock (`audio.currentTime`) drives:
+`assets/audio/GMNC.mp3`: *Good Morning Night City*, a Cyberpunk 2077 radio broadcast (~800 KB, ~57 s). The audio clock (`audio.currentTime`) drives:
 
 - Beat-triggered theme transitions
 - Sun position (sunrise → sunset arc)
@@ -29,7 +29,7 @@ Click the **Showcase** button in the 3D scene controls. The browser enters nativ
 | 6 | 34.743 | Westbrook | Approach from east |
 | 7 | 43.377 | Pacifica | Top-down |
 | 8 | 48.077 | Dogtown | Low sweep |
-| 9 | 52.747 | Badlands | Rising, looking east — districts off |
+| 9 | 52.747 | Badlands | Rising, looking east, districts off |
 | 10 | 57.417 | Rocky Ridge | High, city silhouette on the horizon |
 
 Waypoint positions are in GLB space (`X = CET_X`, `Y = elevation`, `Z = -CET_Y`). Edit `FLYOVER_WAYPOINTS` in `flyover.js` to adjust.
@@ -42,7 +42,7 @@ The `FLYOVER_REVEAL_LAYERS` constant at the top of `flyover.js` controls the sta
 
 | Value | Behaviour |
 |-------|-----------|
-| `false` (default) | Roads, metro, and buildings are **on from frame 1** — building shadows visible immediately during the ocean/coastline approach |
+| `false` (default) | Roads, metro, and buildings are **on from frame 1**: building shadows visible immediately during the ocean/coastline approach |
 | `true` | All layers hidden at WP0, staggered back in over 6.9 s (original cinematic reveal) |
 
 Either way, WP0 always applies Night Corp theme. At WP9 (Badlands, city behind camera) districts are turned off. On exit, all overlay checkboxes and the sun slider are restored exactly.
@@ -54,7 +54,7 @@ Either way, WP0 always applies Night Corp theme. At WP9 (Badlands, city behind c
 | +1.5 s | Roads |
 | +3.0 s | Metro |
 | +4.5 s | Buildings |
-| ~~+6.0 s~~ | ~~Districts~~ (omitted — cleaner showcase without boundary lines) |
+| ~~+6.0 s~~ | ~~Districts~~ (omitted: cleaner showcase without boundary lines) |
 
 ## Beat-Driven Theme Visualiser
 
@@ -62,7 +62,7 @@ Either way, WP0 always applies Night Corp theme. At WP9 (Badlands, city behind c
 
 **Night Corp → Militech → Arasaka → Aldecaldos → Synthwave → repeat**
 
-Colors are read directly from CSS custom properties at first use via `readThemeColors(themeId)` — the function temporarily swaps the theme class on `<html>`, reads computed styles, then restores. This means the beat cycle **automatically stays in sync with `theme.css`** — no hardcoded color values, no separate update needed when themes change.
+Colours are read directly from CSS custom properties at first use via `readThemeColors(themeId)`: the function temporarily swaps the theme class on `<html>`, reads computed styles, then restores. This means the beat cycle **automatically stays in sync with `theme.css`**: no hardcoded colour values, no separate update needed when themes change.
 
 Buildings are included in beat transitions (terrain, water, cliffs, roads, metro, and buildings all transition together).
 
@@ -70,7 +70,7 @@ Beat timestamps are defined in `BEAT_TIMESTAMPS_MS` in `flyover.js`. To update t
 
 ## Sun Animation
 
-`updateFlyoverSun(audio.currentTime)` is called every frame. It maps `audio.currentTime / FLYOVER_DURATION_S` to the summer solstice (June 21) sunrise→sunset window at **Morro Bay, CA** (35.37°N, 120.85°W) — Night City's real-world location — via SunCalc.
+`updateFlyoverSun(audio.currentTime)` is called every frame. It maps `audio.currentTime / FLYOVER_DURATION_S` to the summer solstice (June 21) sunrise→sunset window at **Morro Bay, CA** (35.37°N, 120.85°W), Night City's real-world location, via SunCalc.
 
 - Directional light colour: warm orange at the horizon, neutral white overhead
 - Sun sphere: visible orb in the sky, tracks the exact sun direction
@@ -132,9 +132,9 @@ E:\Audio\Cyberpunk 2077\GMNC - District beats.txt
 | `setControlsEnabled(bool)` | Disable OrbitControls during flyover |
 | `renderFrame(camera)` | Render one frame with the perspective camera |
 | `getCanvasElement()` | Size the perspective camera on creation |
-| `captureColors()` | Snapshot material colors before a theme transition (includes buildings) |
+| `captureColors()` | Snapshot material colours before a theme transition (includes buildings) |
 | `transitionMaterials(from, ms)` | Lerp materials to new CSS theme values |
-| `transitionToColors(from, to, ms)` | Lerp materials to explicit colors — beat cycle (includes buildings) |
+| `transitionToColors(from, to, ms)` | Lerp materials to explicit colours: beat cycle (includes buildings) |
 | `setLayerVisibility(name, bool)` | Toggle terrain/water/cliffs/roads/metro/buildings/districts |
 | `getLayerVisibility(name)` | Read current layer visibility (used for state save/restore) |
 | `setSunPosition(az, alt)` | Move directional light + sun sphere |

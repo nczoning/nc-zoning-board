@@ -1,6 +1,6 @@
 # Adding Mods to the Map
 
-> **Looking for the easiest way to add your mod?** Use [NCZoning Auto-Discovery](nczoning-auto-discovery.md) — tag your mod on Nexus and paste a metadata block into your description. No GitHub required.
+> **Looking for the easiest way to add your mod?** Use [NCZoning Auto-Discovery](nczoning-auto-discovery.md): tag your mod on Nexus and paste a metadata block into your description. No GitHub required.
 >
 > This guide covers the GitHub issue and manual PR methods for permanent, manually curated entries.
 
@@ -24,20 +24,20 @@ Each mod entry is stored in its own file in `data/locations/<UUID>.json`. The sc
 
 | Field | Type | Rules |
 | --- | --- | --- |
-| `id` | string | UUID v4 — **auto-generated**, do not set manually |
+| `id` | string | UUID v4 (**auto-generated**, do not set manually) |
 | `name` | string | Min 3 characters |
 | `authors` | array[string] | Array of modding aliases |
-| `coordinates` | [number, number, number] | `[CET_X, CET_Y, CET_Z]` — in-game coordinates from CET (X=east/west, Y=north/south, Z=height) |
+| `coordinates` | [number, number, number] | `[CET_X, CET_Y, CET_Z]`, in-game coordinates from CET (X=east/west, Y=north/south, Z=height) |
 | `yaw` | number | (Optional) Player facing direction in degrees from CET |
 | `nexus_id` | string | Numeric Nexus ID (Used to automatically fetch thumbnails/images via API), or "WIP" / "Dummy" |
 | `category` | string | `location-overhaul`, `new-location`, or `other` |
-| `tags` | array[string] | Tags from `data/tags.json` — see [Tag Registry](tags.md) for the full list |
+| `tags` | array[string] | Tags from `data/tags.json` (see [Tag Registry](tags.md) for the full list) |
 | `description` | string | Max 500 characters |
-| `credits` | string | (Optional) Team name or secondary acknowledgments |
+| `credits` | string | (Optional) Team name or secondary acknowledgements |
 
 ### Important: Coordinate Order
 
-Coordinates are stored as **`[X, Y, Z]`** — matching the order CET reports them. Z (height/elevation) is required for new submissions.
+Coordinates are stored as **`[X, Y, Z]`**, matching the order CET reports them. Z (height/elevation) is required for new submissions.
 
 ## Getting Your Coordinates
 
@@ -68,7 +68,7 @@ Best for modders who don't use Git:
 1. Go to the [Issues tab](https://github.com/spuddeh/nc-zoning-board/issues)
 2. Click **New Issue** → **"📍 Submit a New Mod Location"**
 3. Fill in the form fields
-4. Submit — the automated bot creates a PR (with `validate-json` running automatically)
+4. Submit. The automated bot creates a PR (with `validate-json` running automatically)
 5. A maintainer reviews and merges → **the issue closes automatically**, pin appears on the map
 
 ### Method 2: Manual Pull Request
