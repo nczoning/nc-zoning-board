@@ -1,6 +1,6 @@
 # NC Zoning Board
 
-**An interactive web map and coordinate registry for Cyberpunk 2077 location mods — helping the community track what's been built and where.**
+**An interactive web map and coordinate registry for Cyberpunk 2077 location mods, helping the community track what's been built and where.**
 
 > ⚠️ **Fan Content Disclaimer:** This is an unofficial fan project not approved or endorsed by CD PROJEKT RED. See [ASSETS.md](ASSETS.md) for licensing details and game asset attribution.
 
@@ -8,9 +8,9 @@
 
 ## What is This?
 
-As the CP2077 modding community grows, so does the number of custom locations, apartments, and overhauled zones. This repository is a centralized registry where mod authors can **register their in-game coordinates** to help the community track what's been built and where.
+As the CP2077 modding community grows, so does the number of custom locations, apartments, and overhauled zones. This repository is a centralised registry where mod authors can **register their in-game coordinates** to help the community track what's been built and where.
 
-The live interactive map displays all registered mods on an 8k Night City map, allowing authors to see what's been built and coordinate with other projects. By registering a valid Nexus ID, the application will automatically fetch and display the mod's official thumbnail and promotional image using the free Nexus Mods GraphQL API.
+The live interactive map displays all registered mods on an 8k Night City map, allowing authors to see what's been built and coordinate with other projects. Register a valid Nexus ID and the app automatically fetches and displays the mod's official thumbnail and promotional image via the free Nexus Mods GraphQL API.
 
 > [!NOTE]
 > The NC Zoning Board was originally envisioned and spearheaded by **[Kaoziun](https://www.nexusmods.com/profile/Kaoziun/mods?gameId=3333)**.
@@ -19,11 +19,11 @@ The live interactive map displays all registered mods on an 8k Night City map, a
 
 ### Viewing the Map
 
-Just visit the [Live Map](https://nczoning.net/) — no setup needed.
+Just visit the [Live Map](https://nczoning.net/), no setup needed.
 
 ### Join the Community
 
-Join the **[Locations Hub Discord](https://discord.gg/sc4yEx2fNf)** — a community dedicated to Cyberpunk 2077 location mods and collaborative projects. Players and authors are welcome!
+Join the **[Locations Hub Discord](https://discord.gg/sc4yEx2fNf)**, a community dedicated to Cyberpunk 2077 location mods and collaborative projects. Players and authors are welcome!
 
 The NC Zoning Board is a side project of the Locations Hub. Visit the **#nc-zoning-board** channels to discuss mapping, get help with submissions, and coordinate with other modders.
 
@@ -42,7 +42,7 @@ npx serve .
 # Open http://localhost:3000
 ```
 
-> **Note:** The app uses `fetch()` to load mod data, so you need a local HTTP server — opening `index.html` directly will cause CORS errors.
+> **Note:** The app uses `fetch()` to load mod data, so you need a local HTTP server. Opening `index.html` directly will cause CORS errors.
 
 ### Regenerating Map Tiles
 
@@ -60,7 +60,7 @@ See [Tile Generation Guide](docs/tile-generation.md) for details.
 
 ### Preferred Method (NCZoning Auto-Discovery)
 
-Add your mod to the map directly from Nexus — no GitHub account required:
+Add your mod to the map directly from Nexus (no GitHub account required):
 
 1. Tag your mod on Nexus with **NCZoning**
 2. Use the **[+] Submit** button on the map to generate your metadata block
@@ -85,23 +85,23 @@ Prefer a permanent, manually curated entry? See **[docs/adding-mods.md](docs/add
 
 ## Tech Stack
 
-- **[Leaflet.js](https://leafletjs.com/)** — Interactive map (`L.CRS.Simple` with custom tiles)
-- **Vanilla JS / CSS** — No frameworks, purely static files
-- **[Sharp](https://sharp.pixelplumbing.com/)** — 8k map tile generation (dev dependency)
-- **GitHub Actions** — Automated JSON validation and PR pipeline
-- **Cloudflare Pages** — Static hosting (Git integration)
+- **[Leaflet.js](https://leafletjs.com/)**: Interactive map (`L.CRS.Simple` with custom tiles)
+- **Vanilla JS / CSS**: No frameworks, purely static files
+- **[Sharp](https://sharp.pixelplumbing.com/)**: 8k map tile generation (dev dependency)
+- **GitHub Actions**: Automated JSON validation and PR pipeline
+- **Cloudflare Pages**: Static hosting (Git integration)
 
 ## Contributors & Community
 
 Built by modders, for modders. A huge thanks to everyone who's contributed:
 
-- **[Kaoziun](https://www.nexusmods.com/profile/Kaoziun/mods?gameId=3333)** — Original vision & community leadership
-- **[manavortex](https://www.nexusmods.com/profile/manavortex/mods?gameId=3333)** — Data structure & guidance
-- **[Spuddeh](https://www.nexusmods.com/profile/Spuddeh/mods?gameId=3333)** — Active development
-- **[Akiway](https://www.nexusmods.com/profile/Akiway/mods?gameId=3333)** — UI/UX & design
-- **Locations Hub Council & community** — Testing, ideas, and support
+- **[Kaoziun](https://www.nexusmods.com/profile/Kaoziun/mods?gameId=3333)**: Original vision & community leadership
+- **[manavortex](https://www.nexusmods.com/profile/manavortex/mods?gameId=3333)**: Data structure & guidance
+- **[Spuddeh](https://www.nexusmods.com/profile/Spuddeh/mods?gameId=3333)**: Active development
+- **[Akiway](https://www.nexusmods.com/profile/Akiway/mods?gameId=3333)**: UI/UX & design
+- **Locations Hub Council & community**: Testing, ideas, and support
 
-Want to help? See **[CONTRIBUTING.md](CONTRIBUTING.md)** — we'd love to have you!
+Want to help? See **[CONTRIBUTING.md](CONTRIBUTING.md)**. We'd love to have you!
 
 ## Licensing
 

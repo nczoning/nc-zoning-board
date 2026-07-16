@@ -5,15 +5,15 @@
 All original software code, scripts, stylesheets, and HTML markup are licensed under the **MIT License** (see `LICENSE` file).
 
 This includes:
-- `assets/js/` — Application logic, API integrations, utilities
-- `assets/css/` — Styling and theming
-- `scripts/` — Build and generation scripts
-- `.github/workflows/` — CI/CD automation
+- `assets/js/`: Application logic, API integrations, utilities
+- `assets/css/`: Styling and theming
+- `scripts/`: Build and generation scripts
+- `.github/workflows/`: CI/CD automation
 - Configuration files
 
 ## Game Assets
 
-The following assets are extracted from **Cyberpunk 2077** and are **NOT** covered by the MIT license. They are subject to **CD PROJEKT RED's Fan Content Policy**:
+The following assets are extracted from **Cyberpunk 2077** and are **NOT** covered by the MIT License. They are subject to **CD PROJEKT RED's Fan Content Policy**:
 
 - Building footprints and geometry
 - Road networks and metro systems
@@ -27,7 +27,7 @@ The following assets are extracted from **Cyberpunk 2077** and are **NOT** cover
 **Non-Commercial Use Only**
 - This project is free and non-commercial
 - No revenue is generated from game assets
-- Platform monetization (YouTube/Twitch) is permitted for community creators
+- Platform monetisation (YouTube/Twitch) is permitted for community creators
 
 **Attribution Required**
 This project displays the following notice in the Credits section of the in-app About panel:
@@ -52,9 +52,9 @@ If you have questions about specific uses of game assets or need an exception to
 ## Extracted Data Files
 
 The `data/locations/` and `data/subdistricts.json` directories contain coordinate data and metadata submitted by community members. This data is:
-- **Original contributor work** — contributors retain ownership
+- **Original contributor work**: contributors retain ownership
 - **Licensed under MIT** (same as the software)
-- **Validated against game coordinates** — accuracy verified through player testing
+- **Validated against game coordinates**: accuracy verified through player testing
 
 ## Attribution
 
@@ -67,7 +67,7 @@ The `data/locations/` and `data/subdistricts.json` directories contain coordinat
 
 ## Summary
 
-| Component | License | Notes |
+| Component | Licence | Notes |
 |-----------|---------|-------|
 | Code & Scripts | MIT | Full source available |
 | Documentation | MIT | All docs in `docs/` |
