@@ -6,7 +6,7 @@ The game's 3D minimap renders Night City using a GPU instancing shader. Building
 
 This pipeline was inspired by [a Reddit post](https://www.reddit.com/r/cyberpunk2077mods/comments/1rzqh2m/in_game_minimap_extraction/) that decoded the same textures into 3D OBJ meshes for 3D printing. Our version skips the 3D boolean union and projects everything to 2D instead.
 
-> **Note:** This document covers `scripts/cp2077_extract_footprints.py` — the **2D extraction pipeline** used for district borders, roads, metro, and landmark SVGs. The **Three.js 3D building rendering** uses a completely separate pipeline that reads DDS files directly and renders via `MeshLambertMaterial`. See [`coordinate-system-3d.md`](coordinate-system-3d.md) for the 3D pipeline.
+> **Note:** This document covers `scripts/cp2077_extract_footprints.py`: the **2D extraction pipeline** used for district borders, roads, metro, and landmark SVGs. The **Three.js 3D building rendering** uses a completely separate pipeline that reads DDS files directly and renders via `MeshLambertMaterial`. See [`coordinate-system-3d.md`](coordinate-system-3d.md) for the 3D pipeline.
 
 ## Prerequisites
 
@@ -25,7 +25,7 @@ All source files must be exported from the game archive using [WolvenKit](https:
 GLB_DIR = r"<your WolvenKit export path>\base\entities\cameras\3dmap"
 ```
 
-The scripts expect files at `<export root>\base\...` — point `GLB_DIR` and the texture/entity paths at the top of each script to wherever WolvenKit wrote the exports on your machine.
+The scripts expect files at `<export root>\base\...`. Point `GLB_DIR` and the texture/entity paths at the top of each script to wherever WolvenKit wrote the exports on your machine.
 
 **Required exports:**
 
@@ -37,7 +37,7 @@ The scripts expect files at `<export root>\base\...` — point `GLB_DIR` and the
 | Road/metro meshes | `base\entities\cameras\3dmap\3dmap_roads.mesh`, `3dmap_metro.mesh` | Export as GLB |
 | District icons | `base\gameplay\gui\common\icons\district_icons.xbm` + `.inkatlas` | Export PNG + convert inkatlas to JSON |
 
-> **Warning:** Do NOT open/re-save the exported PNGs in Photoshop or any colour-managed tool. The pixel values encode coordinates — any gamma or sRGB correction will corrupt them. The script uses pypng which reads raw bytes and ignores colour profile chunks.
+> **Warning:** Do NOT open/re-save the exported PNGs in Photoshop or any colour-managed tool. The pixel values encode coordinates: any gamma or sRGB correction will corrupt them. The script uses pypng which reads raw bytes and ignores colour profile chunks.
 
 ## Scripts
 
@@ -46,16 +46,16 @@ The scripts expect files at `<export root>\base\...` — point `GLB_DIR` and the
 Main extraction script. Decodes building textures, renders overlays, and produces all output files.
 
 ```bash
-# Pass 1 — Analyze building positions (fast, no rendering)
+# Pass 1: Analyze building positions (fast, no rendering)
 python scripts/cp2077_extract_footprints.py --analyze
 
-# Pass 2 — Full output (buildings.png, buildings.svg, buildings.json, etc.)
+# Pass 2: Full output (buildings.png, buildings.svg, buildings.json, etc.)
 python scripts/cp2077_extract_footprints.py
 ```
 
 **Pass 1 (`--analyze`)** decodes centre positions only and outputs:
-- `scripts/output/analysis.txt` — per-district position ranges
-- `scripts/output/analysis_scatter.png` — scatter plot of all building positions
+- `scripts/output/analysis.txt`: per-district position ranges
+- `scripts/output/analysis_scatter.png`: scatter plot of all building positions
 
 Use this to verify the world extent constants (`WORLD_MIN/MAX_X/Y`) before running the full pipeline.
 
@@ -71,7 +71,7 @@ python scripts/regenerate_subdistricts.py
 
 ### `scripts/cp2077_3dmap_to_manifold.py` (reference)
 
-Original Reddit script for 3D printing. Not used in the pipeline — kept as reference for the texture decoding logic.
+Original Reddit script for 3D printing. Not used in the pipeline. Kept as reference for the texture decoding logic.
 
 ## How It Works
 
@@ -127,7 +127,7 @@ component → parentTransform.bindName → parent → grandparent → ...
 
 At each level: **rotate** points by the component's yaw, then **translate** by its position.
 
-Example — Pacifica's chain:
+Example (Pacifica's chain):
 ```
 pacifica_trigger (offset, no rotation)
   → pacifica_transform (65° yaw + offset)  ← THIS ROTATION IS CRITICAL
@@ -138,7 +138,7 @@ pacifica_trigger (offset, no rotation)
 
 Without walking the full chain, Pacifica's trigger polygon is oriented ~65° wrong.
 
-Example — NCX/Spaceport's chain:
+Example (NCX/Spaceport's chain):
 ```
 ncx_trigger (no offset)
   → ncx_transform (identity)
@@ -150,28 +150,28 @@ ncx_trigger (no offset)
 
 GLB meshes are rendered in two separate passes via `render_glb_base_layer()`, which is called twice in `run_full_output()`:
 
-1. **Roads + metro pass** (`GLB_LAYERS[:2]`) — composited under buildings
-2. **Landmark pass** (`GLB_LAYERS[2:]`, `combined_label="landmarks"`) — composited over buildings, under district borders
+1. **Roads + metro pass** (`GLB_LAYERS[:2]`): composited under buildings
+2. **Landmark pass** (`GLB_LAYERS[2:]`, `combined_label="landmarks"`): composited over buildings, under district borders
 
 The `combined_label` parameter controls SVG/JSON output grouping. When set, all layers are written to a single file per type. Each landmark gets its own `<g id="{label}">` (fill) and `<g id="{label}_outline">` (boundary edges) group in the SVG. The JSON uses the structure `{label: {"faces": [...], "edges": [...]}}`. When `None` (roads/metro), each layer writes its own flat file.
 
 World placement and orientation are read from the ent JSON via `load_mesh_transforms()`.
 
-**Axis mapping** (determined empirically — roads 180° from buildings without this):
+**Axis mapping** (determined empirically: roads 180° from buildings without this):
 - `-GLB_X` → CET_X (X is negated; corrects for coordinate handedness difference)
 - `+GLB_Z` → CET_Y (Z maps directly to north-south)
-- `+GLB_Y` → CET_Z (height — projected out, but used during 3D rotation)
+- `+GLB_Y` → CET_Z (height: projected out, but used during 3D rotation)
 
 **Orientation:** `load_mesh_transforms()` walks the full `parentTransform` chain for each `entMeshComponent` and accumulates the world-space orientation as a quaternion (Hamilton product up the chain). For rendering, the full quaternion is converted to a 3×3 rotation matrix and applied to the GLB vertices in CET space before projection. This correctly handles pitch and roll (e.g. the collapsed ferris wheel lying on its side) not just yaw.
 
-**Roads/metro orientation exception:** The road and metro meshes have a **116.6° world yaw** in the ent (confirmed from entity quaternion: both instances of 3dmap_roads.mesh and 3dmap_metro.mesh). The net effect of this rotation when projected top-down is equivalent to negating the X axis, so the projection formula uses `-GLB_X` = `CET_X`. This was confirmed empirically — roads appear 180° mirrored from buildings without the negation. These meshes use `offset_key=None` in `GLB_LAYERS`, which suppresses the ent quaternion so it isn't double-applied.
+**Roads/metro orientation exception:** The road and metro meshes have a **116.6° world yaw** in the ent (confirmed from entity quaternion: both instances of 3dmap_roads.mesh and 3dmap_metro.mesh). The net effect of this rotation when projected top-down is equivalent to negating the X axis, so the projection formula uses `-GLB_X` = `CET_X`. This was confirmed empirically: roads appear 180° mirrored from buildings without the negation. These meshes use `offset_key=None` in `GLB_LAYERS`, which suppresses the ent quaternion so it isn't double-applied.
 
 **Rendering approaches per mesh type:**
-- **Roads:** Fill faces at low opacity — shows grey road areas between buildings
-- **Metro:** Boundary edges only (edges belonging to exactly 1 face) — clean track lines without interior mesh tessellation
-- **Landmarks:** Fill faces + boundary edge outline, both using the district colour resolved from the landmark's world CET position via `classify_district()`. Alpha 200/255 for fill, 240/255 for outline — matching building visual style. Each landmark's colour is looked up at render time so it blends with the surrounding district rather than being visually distinct
-- **Water:** Excluded — world-scale flat plane floods the entire canvas
-- **Terrain/Cliffs:** Excluded — terrain is too large and obscures the map at 2D projection scale; `3dmap_cliffs.glb` in particular overwhelms the Dogtown/Badlands border area
+- **Roads:** Fill faces at low opacity: shows grey road areas between buildings
+- **Metro:** Boundary edges only (edges belonging to exactly 1 face): clean track lines without interior mesh tessellation
+- **Landmarks:** Fill faces + boundary edge outline, both using the district colour resolved from the landmark's world CET position via `classify_district()`. Alpha 200/255 for fill, 240/255 for outline, matching building visual style. Each landmark's colour is looked up at render time so it blends with the surrounding district rather than being visually distinct
+- **Water:** Excluded: world-scale flat plane floods the entire canvas
+- **Terrain/Cliffs:** Excluded: terrain is too large and obscures the map at 2D projection scale; `3dmap_cliffs.glb` in particular overwhelms the Dogtown/Badlands border area
 
 ### 5a. Landmark Mesh Transforms
 
@@ -215,13 +215,13 @@ World extent constants were derived by inverting the existing `cetToLeaflet` for
 | File | Description | Size |
 |------|-------------|------|
 | `scripts/output/combined_8k.png` | Z-sorted composite: roads + metro + buildings + landmarks + borders | ~large |
-| `scripts/output/combined.svg` | Z-sorted combined SVG — all categories, cross-category depth correct | ~17 MB |
+| `scripts/output/combined.svg` | Z-sorted combined SVG: all categories, cross-category depth correct | ~17 MB |
 | `scripts/output/buildings.svg` | Building footprints by district; Z-sorted within each `<g>` | ~large |
 | `scripts/output/roads.svg` | Road surface fills; Z-sorted within file | ~3.6 MB |
 | `scripts/output/metro.svg` | Metro track boundary edges; Z-sorted within file | ~0.9 MB |
 | `scripts/output/landmarks.svg` | Landmark fills and outlines as `<g id="label">` / `<g id="label_outline">`; Z-sorted within each group | ~5.5 MB |
 | `scripts/output/district_borders.svg` | District boundary outlines from trigger polygons | ~6 KB |
-| `data/buildings.json` | Building polygons by district; each polygon: `{"z": float, "pts": [[lat,lng],...]}` — **gitignored, no longer used by the Three.js 3D view** | ~13 MB |
+| `data/buildings.json` | Building polygons by district; each polygon: `{"z": float, "pts": [[lat,lng],...]}`: **gitignored, no longer used by the Three.js 3D view** | ~13 MB |
 | `data/roads.json` | Road face polygons; each entry: `{"z": float, "pts": [[lat,lng],...]}` | ~3.7 MB |
 | `data/metro.json` | Metro edge segments; each entry: `{"z": float, "pts": [[lat,lng],[lat,lng]]}` | ~0.7 MB |
 | `data/landmarks.json` | `{label: {"faces": [{"z":,"pts":},...], "edges": [{"z":,"pts":},...}]}}` | ~5.0 MB |
@@ -229,7 +229,7 @@ World extent constants were derived by inverting the existing `cetToLeaflet` for
 
 ### Output Statistics (as of 2026-04-01)
 
-- **255,220** total building instances decoded across 8 district textures (no area filter — all instances extracted)
+- **255,220** total building instances decoded across 8 district textures (no area filter: all instances extracted)
 - **236,010** classified into districts, **19,210** classified as badlands
 - All buildings include `hz` (height half-extent) for shadow/extrusion rendering
 - **8** landmark meshes with names and district classification
@@ -245,7 +245,7 @@ Terrain and satellite base layers are delivered as WebP `L.imageOverlay` files (
 | `assets/img/terrain_8k.webp` | 290 KB | Schematic terrain, neutral dark grey |
 | `assets/img/satellite_8k.webp` | 9.6 MB | Satellite photograph, RGBA with transparency |
 
-Overlay data (roads, buildings, metro, landmarks) is rendered via a canvas-based `L.GridLayer` (`overlay.js`) with unified z-sorted drawing and grid-based spatial index. (Note: this section describes the legacy 2D overlay; the current schema view uses the live Three.js scene — see [`three-js-scene.md`](three-js-scene.md).)
+Overlay data (roads, buildings, metro, landmarks) is rendered via a canvas-based `L.GridLayer` (`overlay.js`) with unified z-sorted drawing and grid-based spatial index. (Note: this section describes the legacy 2D overlay; the current schema view uses the live Three.js scene, see [`three-js-scene.md`](three-js-scene.md).)
 
 ## District Colours (from game Ink styles)
 

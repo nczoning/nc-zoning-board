@@ -1,6 +1,6 @@
 # Architecture
 
-This document explains how the NC Zoning Board is organized and how data flows through the system. **If you're new here:** Start with the [Project Overview](../README.md) — then read this to understand how the pieces fit together. You don't need to know every detail to contribute, but this gives you the full picture of where things live and how they interact.
+This document explains how the NC Zoning Board is organised and how data flows through the system. **If you're new here:** Start with the [Project Overview](../README.md), then read this to understand how the pieces fit together. You don't need to know every detail to contribute, but this gives you the full picture of where things live and how they interact.
 
 ---
 
@@ -32,7 +32,7 @@ nc-zoning-board/
 │   ├── validate_tags.js    # Validates tags in data/ against tags.json
 │   └── generate_tiles.js   # Slices 16k source image into 256×256 WebP tiles
 │
-├── raw maps/               # Source map images (not committed — too large)
+├── raw maps/               # Source map images (not committed - too large)
 │   ├── 4k/night_city.png   # 4096×4096, 27 MB
 │   ├── 8k/night_city.png   # 8192×8192, 108 MB (archive)
 │   ├── 16k/night_city_16k.png  # 16384×16384, 529 MB (current tile source)
@@ -97,10 +97,10 @@ The core frontend JS is four files loaded via `<script>` tags (no ES modules, no
 
 | File | Role |
 | --- | --- |
-| `constants.js` | All config values — category styles, API endpoints, cache keys, UI sizing, 3D scene constants |
-| `utils.js` | Pure functions — `escapeHtml`, `cetToLeaflet`, `cetToThree`, positioning algorithm, BBCode parser |
-| `services.js` | Fetch functions — Nexus thumbnail API, auto-discovery, `fetchModData()` |
-| `app.js` | DOM logic — map init, sidebar, cluster panel, modals, image gallery, view switching |
+| `constants.js` | All config values: category styles, API endpoints, cache keys, UI sizing, 3D scene constants |
+| `utils.js` | Pure functions: `escapeHtml`, `cetToLeaflet`, `cetToThree`, positioning algorithm, BBCode parser |
+| `services.js` | Fetch functions: Nexus thumbnail API, auto-discovery, `fetchModData()` |
+| `app.js` | DOM logic: map init, sidebar, cluster panel, modals, image gallery, view switching |
 
 Load order on `main`: `constants.js` → `utils.js` → `services.js` → `app.js`
 
@@ -110,8 +110,8 @@ Load order on `main`: `constants.js` → `utils.js` → `services.js` → `app.j
 | --- | --- |
 | `overlay.js` | District/subdistrict GeoJSON border overlays for the satellite view |
 | `three-scene.js` | Three.js scene: renderer, camera, GLBs, buildings, sun/shadows (`NCZ.ThreeScene`) |
-| `three-markers.js` | 3D pin/popup/tooltip/cluster layer — interactive parity with Leaflet (`NCZ.ThreeMarkers`). See [three-markers.md](three-markers.md) for the full architecture. |
-| `flyover.js` | Optional cinematic flyover showcase — include/exclude via `<script>` tag |
+| `three-markers.js` | 3D pin/popup/tooltip/cluster layer: interactive parity with Leaflet (`NCZ.ThreeMarkers`). See [three-markers.md](three-markers.md) for the full architecture. |
+| `flyover.js` | Optional cinematic flyover showcase, include/exclude via `<script>` tag |
 
 Load order on `dev`/feature branches: `constants.js` → `utils.js` → `services.js` → `overlay.js` → `three-scene.js` (module) → `three-markers.js` (module) → `app.js` → `[flyover.js optional]`
 
@@ -124,16 +124,16 @@ Load order on `dev`/feature branches: `constants.js` → `utils.js` → `service
 
 ### Coordinate Transform (`utils.js`)
 
-- `NCZ.cetToLeaflet(x, y)` — converts CET game coordinates to Leaflet `[lat, lng]`
-- Exact linear mapping derived from `NCZ.WORLD_MIN/MAX_X/Y` constants (from the Realistic Map mod terrain quad UV mapping) — not a calibrated approximation
-- `NCZ.cetToThree(x, y, z)` — converts CET coordinates to Three.js scene space (`[x, z||0, -y]`)
+- `NCZ.cetToLeaflet(x, y)` converts CET game coordinates to Leaflet `[lat, lng]`
+- Exact linear mapping derived from `NCZ.WORLD_MIN/MAX_X/Y` constants (from the Realistic Map mod terrain quad UV mapping), not a calibrated approximation
+- `NCZ.cetToThree(x, y, z)` converts CET coordinates to Three.js scene space (`[x, z||0, -y]`)
 - See [Coordinate System](coordinate-system.md) for full details
 
 ### Mod Data (`data/locations/*.json`)
 
 - Individual JSON files per mod to prevent merge conflicts.
 - **Attributes**: `id` (UUID), `name`, `authors` (array), `coordinates` ([X, Y]), `nexus_id` (ID string, "WIP", or "Dummy"), `category`, `tags` (array), and `description`.
-- **Credits**: Optional field for team-based acknowledgments.
+- **Credits**: Optional field for team-based acknowledgements.
 - **Validation**: Individual tags are checked against `data/tags.json` and the final compiled `mods.json` is validated against `mods.schema.json` in CI.
 
 ### Styling (`style.css`)
@@ -143,7 +143,7 @@ Load order on `dev`/feature branches: `constants.js` → `utils.js` → `service
 - Colour palette: `--primary` (#0a192f), `--secondary` (#00f0ff), `--tertiary` (#ffb300), `--white` (#e6f1ff), `--gray` (#8892b0)
 - Custom Leaflet popup, tooltip, and cluster styling
 - MarkerCluster CSS is inlined (no external CDN dependency)
-- Uses native CSS nesting — see [browser support](https://caniuse.com/css-nesting)
+- Uses native CSS nesting; see [browser support](https://caniuse.com/css-nesting)
 
 ## Repo Setup (for new maintainers)
 
@@ -152,21 +152,21 @@ The auto-PR pipeline and Discord notifications require two secrets configured in
 | Secret | Value |
 | --- | --- |
 | `ACTIONS_PAT` | A GitHub Personal Access Token (fine-grained) with `Contents: Read/Write` and `Pull requests: Read/Write` on this repo |
-| `DISCORD_WEBHOOK_URL` | Webhook for the **submissions** channel — new/modified submission embeds and their PR-status edits (channel Settings → Integrations → Webhooks) |
-| `NCZ_ALERTS_DISCORD_WEBHOOK_URL` | Webhook for the dedicated **map-alerts** channel — auto-discovery parse failures and Data API health/outage alerts, kept separate from submissions |
+| `DISCORD_WEBHOOK_URL` | Webhook for the **submissions** channel: new/modified submission embeds and their PR-status edits (channel Settings → Integrations → Webhooks) |
+| `NCZ_ALERTS_DISCORD_WEBHOOK_URL` | Webhook for the dedicated **map-alerts** channel: auto-discovery parse failures and Data API health/outage alerts, kept separate from submissions |
 
 > **Why ACTIONS_PAT?** GitHub's `GITHUB_TOKEN` cannot trigger other workflow runs (a security design). Using a PAT for `create-pull-request` allows the `validate-json` check to fire automatically on the generated PR.
 
 ### Discord Notifications
 
-Two channels, two webhooks. **Submissions** (`DISCORD_WEBHOOK_URL`) — the mod
+Two channels, two webhooks. **Submissions** (`DISCORD_WEBHOOK_URL`) covers the mod
 submission lifecycle:
 
-- **`auto-pr-submission.yml`** — Posts a new embed when a submission PR is created (status: ⏳ Awaiting review). Stores the Discord message ID as a hidden comment on the issue.
-- **`modify-location-submission.yml`** — Posts an embed for modification/removal requests.
-- **`notify-discord-pr-status.yml`** — When the PR is merged or closed, edits the original embed in-place to show the outcome (✅ Approved or ❌ Closed). Must use the same webhook that posted the message.
+- **`auto-pr-submission.yml`**: Posts a new embed when a submission PR is created (status: ⏳ Awaiting review). Stores the Discord message ID as a hidden comment on the issue.
+- **`modify-location-submission.yml`**: Posts an embed for modification/removal requests.
+- **`notify-discord-pr-status.yml`**: When the PR is merged or closed, edits the original embed in-place to show the outcome (✅ Approved or ❌ Closed). Must use the same webhook that posted the message.
 
-**Alerts** (`NCZ_ALERTS_DISCORD_WEBHOOK_URL`) — operational health, separate channel:
+**Alerts** (`NCZ_ALERTS_DISCORD_WEBHOOK_URL`) covers operational health on a separate channel:
 
-- **`monitor-auto-discovery.yml`** — Daily scan; alerts when a NCZoning-tagged mod fails to parse and isn't covered by a manual entry.
-- **`monitor-api-health.yml`** — Every 15 min; alerts when the Data API (`/v1`) isn't serving. The Worker's own refresh-failure alert (`worker/src/refresh.js`) posts here too (Cloudflare Worker secret, set separately via `wrangler secret put`).
+- **`monitor-auto-discovery.yml`**: Daily scan; alerts when a NCZoning-tagged mod fails to parse and isn't covered by a manual entry.
+- **`monitor-api-health.yml`**: Every 15 min; alerts when the Data API (`/v1`) isn't serving. The Worker's own refresh-failure alert (`worker/src/refresh.js`) posts here too (Cloudflare Worker secret, set separately via `wrangler secret put`).

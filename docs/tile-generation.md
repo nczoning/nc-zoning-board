@@ -6,7 +6,7 @@ The map image is too large to load as a single file. Instead, we slice it into 2
 
 ## Source Image
 
-Tiles are generated from the **16k PNG** source (lossless) and encoded directly to WebP. This avoids double lossy compression — Sharp decodes the PNG into raw pixels, then encodes each tile to WebP in one step.
+Tiles are generated from the **16k PNG** source (lossless) and encoded directly to WebP. This avoids double lossy compression: Sharp decodes the PNG into raw pixels, then encodes each tile to WebP in one step.
 
 Source images are stored in `raw maps/` (not committed due to size):
 
@@ -66,14 +66,14 @@ The script (`scripts/generate_tiles.js`) uses [Sharp](https://sharp.pixelplumbin
 ### WebP Encoding
 
 - **Quality 90**: Visually indistinguishable from lossless at 256×256 tile size, ~5× smaller than PNG
-- **Effort 6**: Maximum compression effort — slower encode, smaller files. One-time generation cost.
+- **Effort 6**: Maximum compression effort (slower encode, smaller files). One-time generation cost.
 - **Source format matters**: Tiles are generated from PNG (lossless) to avoid generation loss from double lossy compression
 
 ### Tile Coordinates
 
-- `{z}` — zoom level (0 = zoomed out, 6 = native resolution)
-- `{x}` — column index (0 = left)
-- `{y}` — row index (0 = top)
+- `{z}`: zoom level (0 = zoomed out, 6 = native resolution)
+- `{x}`: column index (0 = left)
+- `{y}`: row index (0 = top)
 
 At zoom 6: 64 columns × 64 rows = 4,096 tiles.
 
@@ -97,9 +97,9 @@ L.tileLayer('assets/tiles/{z}/{x}/{y}.webp', {
 }).addTo(map);
 ```
 
-- `maxNativeZoom: 6` — Leaflet knows zoom 6 is the best available
-- `maxZoom: 8` — Users can zoom 2 levels deeper (tiles are upscaled 4×)
-- `bounds` — Calculated via `map.unproject()` to align pixel coords with `CRS.Simple`
+- `maxNativeZoom: 6` tells Leaflet zoom 6 is the best available
+- `maxZoom: 8` lets users zoom 2 levels deeper (tiles are upscaled 4×)
+- `bounds` is calculated via `map.unproject()` to align pixel coords with `CRS.Simple`
 
 ### Coordinate Projection
 
@@ -107,4 +107,4 @@ L.tileLayer('assets/tiles/{z}/{x}/{y}.webp', {
 
 ## Why Not 32k?
 
-The 32k source would give zoom 7 (128×128 = 16,384 tiles at native, ~21,845 total). That alone exceeds Cloudflare Pages' 20,000-files-per-deployment limit (before counting the ~5,461 existing tiles and all other assets), and adds significant repo size (~100+ MB) for diminishing returns — users already get sharp detail at zoom 6 with only 4× upscaling at max zoom. The 32k source is available if we move tiles to external object storage (e.g. Cloudflare R2) in the future.
+The 32k source would give zoom 7 (128×128 = 16,384 tiles at native, ~21,845 total). That alone exceeds Cloudflare Pages' 20,000-files-per-deployment limit (before counting the ~5,461 existing tiles and all other assets), and adds significant repo size (~100+ MB) for diminishing returns: users already get sharp detail at zoom 6 with only 4× upscaling at max zoom. The 32k source is available if we move tiles to external object storage (e.g. Cloudflare R2) in the future.

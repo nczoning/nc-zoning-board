@@ -43,7 +43,7 @@ This workflow triggers whenever the `mod-submission` label is applied to an issu
 
 Within the same `auto-pr-submission.yml` workflow, the bot reaches out to a Discord channel (using the `DISCORD_WEBHOOK_URL` secret) with an embedded message noting that a PR is awaiting review.
 
-> `DISCORD_WEBHOOK_URL` is the **submissions** channel. Operational alerts (health/monitoring) go to a separate channel via `NCZ_ALERTS_DISCORD_WEBHOOK_URL` — see [architecture.md](architecture.md#discord-notifications).
+> `DISCORD_WEBHOOK_URL` is the **submissions** channel. Operational alerts (health/monitoring) go to a separate channel via `NCZ_ALERTS_DISCORD_WEBHOOK_URL`. See [architecture.md](architecture.md#discord-notifications).
 
 **The Clever Part:**
 To allow the bot to update this exact discord message later on, the webhook returns a unique `message_id`. The bot saves this ID as a hidden HTML comment at the bottom of the original GitHub Issue `<!-- discord_message_id: XXXXX -->`.
@@ -54,11 +54,11 @@ To allow the bot to update this exact discord message later on, the webhook retu
 
 When a PR is opened, GitHub Actions launches this workflow. It **always runs** on every PR (so the required status check is always reported), but skips the validation steps if no data files changed.
 
-1. **Change Detection**: Diffs the PR branch against its base — if no `data/locations/`, `data/tags.json`, or `mods.schema.json` files changed, the remaining steps are skipped and the check passes immediately.
+1. **Change Detection**: Diffs the PR branch against its base: if no `data/locations/`, `data/tags.json`, or `mods.schema.json` files changed, the remaining steps are skipped and the check passes immediately.
 2. **Schema Validation**: Uses `ajv-cli` to compare the compiled `mods.json` (after a test build) against `mods.schema.json`.
 3. **Tag Validation**: Runs `node scripts/validate_tags.js` to ensure all tags used in the PR exist in the `data/tags.json` registry.
 
-## 🎉 Stage 5: Finalization & Merge
+## 🎉 Stage 5: Finalisation & Merge
 
 When a maintainer reviews the PR and hits Merge, the newly added mod goes live on the `main` branch.
 
@@ -74,6 +74,6 @@ If a user wants to update their mod's coordinates, tags, or authors (or request 
 
 1. **Issue Form**: They click "Suggest Edit" on the map popup, which pre-fills the [**`modify_location.yml`**](../.github/ISSUE_TEMPLATE/modify_location.yml) GitHub Issue template with the mod's UUID.
 2. **Bot Processing**: The [**`modify-location-submission.yml`**](../.github/workflows/modify-location-submission.yml) workflow fires when the `mod-modification` label is applied. It parses the new values, merging them with the existing file (blank fields keep their current value).
-3. **Discord Notification**: Follows the same stored-ID pattern as submissions — the initial "Awaiting Review" message ID is saved as a hidden comment on the issue so it can be edited (not reposted) on merge/close.
+3. **Discord Notification**: Follows the same stored-ID pattern as submissions: the initial "Awaiting Review" message ID is saved as a hidden comment on the issue so it can be edited (not reposted) on merge/close.
 4. **PR Creation**: The bot modifies the existing `data/locations/<UUID>.json` file and creates a Pull Request reflecting the diff.
 5. **Validation & Merge**: Functions identically to the standard submission pipeline. Once merged, the map updates.

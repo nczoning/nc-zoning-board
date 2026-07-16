@@ -2,15 +2,15 @@
 
 This guide explains how to add a new district or subdistrict to the in-game map.
 
-It uses the **North Oaks Casino** as a worked example — a cut-content area between North Oak, Red Peaks, and Rocky Ridge that the NC Zoning Board has computed a boundary polygon for.
+It uses the **North Oaks Casino** as a worked example, a cut-content area between North Oak, Red Peaks, and Rocky Ridge that the NC Zoning Board has computed a boundary polygon for.
 
 ---
 
 ## What You Need
 
-- **WolvenKit** — the main modding tool for CP2077 files
-- A **boundary polygon** — a list of X, Y coordinates in CET world-space that form the outline of your district
-- A **TweakDB record** — configuration for the district (name, parent, colors, etc.)
+- **WolvenKit**: the main modding tool for CP2077 files
+- A **boundary polygon**: a list of X, Y coordinates in CET world-space that form the outline of your district
+- A **TweakDB record**: configuration for the district (name, parent, colours, etc.)
 
 The NC Zoning Board has already computed the boundary polygon for North Oaks Casino. See [Step 1](#step-1-the-boundary-polygon) below.
 
@@ -20,7 +20,7 @@ The NC Zoning Board has already computed the boundary polygon for North Oaks Cas
 
 **CET world coordinates** are the same coordinates you see when you use the Cyber Engine Tweaks console in-game. X increases to the east, Y increases to the north.
 
-**TweakDB** is the game's database of configuration records. Districts are stored here with their names, colors, and parent relationships.
+**TweakDB** is the game's database of configuration records. Districts are stored here with their names, colours, and parent relationships.
 
 **`gameStaticTriggerAreaComponent`** is the game object that detects when the player enters an area. Each district has one, with a polygon outline defining its shape.
 
@@ -90,13 +90,13 @@ Districts.NorthOaksCasino:
 | `$type: gamedataDistrict_Record` | Tells the game this is a district record. Do not change this. |
 | `localizedName: LocKey#NorthOaksCasino` | The display name (we will set the actual text in Step 2.2). |
 | `parentDistrict: Districts.NorthOaks` | North Oaks is the parent. The game uses this for the district hierarchy. |
-| `uiState: Westbrook` | Uses Westbrook's orange color (`#ff5100`) on the map. Change if you want a different color (see color list below). |
+| `uiState: Westbrook` | Uses Westbrook's orange colour (`#ff5100`) on the map. Change if you want a different colour (see colour list below). |
 | `uiIcon: None` | No map icon. Set to `ico_district_westbrook_large` or similar if you add an icon. |
 | `isQuestDistrict: False` | Set to `True` if quests reference this district. |
 
-**Available `uiState` values and their colors:**
+**Available `uiState` values and their colours:**
 
-| uiState | Color | Hex |
+| uiState | Colour | Hex |
 | ------- | ----- | --- |
 | `CityCenter` | Yellow | #ffd741 |
 | `Watson` | Red | #ff3e34 |
@@ -107,9 +107,9 @@ Districts.NorthOaksCasino:
 | `Dogtown` | Dark green | #00a32c |
 | `MorroRock` | Teal | #349197 |
 
-### 2.2 Add the localized name
+### 2.2 Add the localised name
 
-Create a file called `north_oaks_casino_loc.json` in your mod's `r6/tweaks/` folder (or use an existing localization file):
+Create a file called `north_oaks_casino_loc.json` in your mod's `r6/tweaks/` folder (or use an existing localisation file):
 
 ```json
 {
@@ -123,7 +123,7 @@ Create a file called `north_oaks_casino_loc.json` in your mod's `r6/tweaks/` fol
 }
 ```
 
-> **Note:** CP2077 localization uses "femaleVariant" for the default text. Leave "maleVariant" empty to use the same text for everyone.
+> **Note:** CP2077 localisation uses "femaleVariant" for the default text. Leave "maleVariant" empty to use the same text for everyone.
 
 ---
 
@@ -228,11 +228,11 @@ In JSON format (WolvenKit can import this), the structure looks like this:
 **Key things to check:**
 
 - The `"$value": "Districts.NorthOaksCasino"` in the `districtID` must match exactly the TweakDB path you defined in Step 2.1.
-- The `"Z": 0` on each point is fine — the game extends the trigger volume up and down automatically.
+- The `"Z": 0` on each point is fine: the game extends the trigger volume up and down automatically.
 
 ### 3.3 Set the entity's world position
 
-The trigger component polygon points are in **world space** (they already include the absolute CET coordinates). Set the entity's root transform to position `(0, 0, 0)` with no rotation. Do not add an offset — the polygon coordinates already place it in the correct location.
+The trigger component polygon points are in **world space** (they already include the absolute CET coordinates). Set the entity's root transform to position `(0, 0, 0)` with no rotation. Do not add an offset: the polygon coordinates already place it in the correct location.
 
 ---
 
@@ -263,7 +263,7 @@ streaming:
 
 You can add the entity directly to a streaming sector that covers the North Oak area:
 
-- The relevant sector is near grid coordinates (0, 0) — look for exterior sectors around that area
+- The relevant sector is near grid coordinates (0, 0): look for exterior sectors around that area
 - Add your entity as a new node in the sector's `nodes` array
 
 ---
@@ -278,21 +278,21 @@ You can add the entity directly to a streaming sector that covers the North Oak 
 If the HUD does not update:
 - Check that `Districts.NorthOaksCasino` in the trigger's `districtID` exactly matches the TweakDB record path
 - Check that the entity is loaded (use CET console: `GetPlayer():GetCurrentDistrict()` to query the active district)
-- Check that the polygon points are correct — use CET to print your current position (`print(GetPlayer():GetWorldPosition())`) and verify you are inside the expected coordinate range: X[397, 1565] Y[1219, 2069]
+- Check that the polygon points are correct: use CET to print your current position (`print(GetPlayer():GetWorldPosition())`) and verify you are inside the expected coordinate range: X[397, 1565] Y[1219, 2069]
 
 ---
 
 ## Coordinate Reference
 
-These are the approximate boundary positions between North Oaks Casino and its neighbors:
+These are the approximate boundary positions between North Oaks Casino and its neighbours:
 
-| Neighbor | Shared border direction |
+| Neighbour | Shared border direction |
 | -------- | ---------------------- |
 | North Oak (Westbrook) | West and north edge |
 | Red Peaks (Badlands) | South edge |
 | Rocky Ridge (Badlands) | East edge |
 
-The approximate center of the casino area is around **(880, 1640)** in CET world-space.
+The approximate centre of the casino area is around **(880, 1640)** in CET world-space.
 
 ---
 
@@ -301,15 +301,15 @@ The approximate center of the casino area is around **(880, 1640)** in CET world
 | File | Location | Purpose |
 | ---- | -------- | ------- |
 | `north_oaks_casino.yaml` | `r6/tweaks/` | TweakDB district record |
-| `north_oaks_casino_loc.json` | `r6/tweaks/` | Localized display name |
+| `north_oaks_casino_loc.json` | `r6/tweaks/` | Localised display name |
 | `north_oaks_casino_district.ent` | `your_mod/districts/` | Trigger area entity |
 
 ---
 
 ## About the Boundary Polygon
 
-The 50-point polygon in this document was computed mathematically by the NC Zoning Board project. It was not hand-traced — it was generated by finding the geometric area that is simultaneously within 1200 CET units of all three surrounding districts (North Oak, Red Peaks, Rocky Ridge), minus those districts themselves.
+The 50-point polygon in this document was computed mathematically by the NC Zoning Board project. It was not hand-traced: it was generated by finding the geometric area that is simultaneously within 1200 CET units of all three surrounding districts (North Oak, Red Peaks, Rocky Ridge), minus those districts themselves.
 
-This gives the natural "pocket" shape of the cut-content zone. If you need to adjust edges — for example if your mod adds geometry that changes where the district boundary should be — you can modify individual points in the polygon freely.
+This gives the natural "pocket" shape of the cut-content zone. If you need to adjust edges (for example if your mod adds geometry that changes where the district boundary should be), you can modify individual points in the polygon freely.
 
 The polygon is stored in `data/subdistricts.json` in the NC Zoning Board repository with `"canonical": false`, which means it is included in the map data but hidden by default in the public map unless a user specifically enables it. When the North Oaks Casino mod releases, this flag can be updated.
