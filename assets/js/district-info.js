@@ -27,6 +27,8 @@ NCZ.DistrictInfo = (() => {
   let _districts = [];            // subdistricts.json districts[]
   const _districtMeta = {};       // id → { name, color }
   const _subMeta = {};            // subId → { name, districtId, color }
+  const _distIdByName = {};       // district name → id (served labels → panel ids)
+  const _subIdByName = {};        // subdistrict name → id
   let _stats = { districts: {}, subs: {}, total: 0 };
   let _ready = false;
   let _pendingMods = null;        // setMods() called before init() finished
@@ -34,8 +36,9 @@ NCZ.DistrictInfo = (() => {
 
   // The game's default district: anywhere outside every district polygon is
   // Badlands (it has no polygon of its own — the parent is the catch-all).
-  // Mirrors DEFAULT_DISTRICT_ID in worker/src/districts.js assignDistrict()
-  // so the panel's stats and the API's `district` field can never disagree.
+  // Mirrors DEFAULT_DISTRICT_ID in worker/src/districts.js assignDistrict().
+  // Used only when resolving from coordinates on the API-down fallback path;
+  // on the normal API path the served label is already "Badlands".
   const DEFAULT_DISTRICT_ID = "badlands";
 
   // Shoelace area (absolute) — smallest matching polygon wins, so a mod inside
@@ -96,8 +99,10 @@ NCZ.DistrictInfo = (() => {
       for (const d of _districts) {
         const color = NCZ.DISTRICT_COLORS[d.id] || "#ffffff";
         _districtMeta[d.id] = { name: d.name, color };
+        _distIdByName[d.name] = d.id;
         for (const s of d.subdistricts || []) {
           _subMeta[s.id] = { name: s.name, districtId: d.id, color };
+          _subIdByName[s.name] = s.id;
         }
       }
       _defaultDistrict = _districts.find(d => d.id === DEFAULT_DISTRICT_ID) || null;
@@ -108,33 +113,39 @@ NCZ.DistrictInfo = (() => {
     }
   }
 
-  // Attribute every mod to its smallest containing subdistrict (and that sub's
-  // parent district); mods outside all subs fall back to a containing district
-  // polygon. Aggregate count / category / recently-updated per area.
+  // Aggregate count / category / recently-updated per area. Normal (API) path:
+  // group by the district/subdistrict the API already assigned (served as names,
+  // mapped to panel ids) — counting the API's own labels is what keeps the panel
+  // from ever disagreeing with the API (the root of #823; the ex-ocean mods are
+  // already labelled Badlands server-side). API-down fallback path: mods carry
+  // no served label, so resolve from coordinates (with the Badlands default),
+  // exactly as the API would.
   function setMods(mods) {
     if (!_ready) { _pendingMods = mods; return; }
     const dStats = {}, sStats = {};
     let total = 0;
 
     for (const m of mods || []) {
-      const c = m.coordinates;
-      if (!c || c.length < 2) continue;
-      // Outside every polygon → the game's default district (Badlands), matching
-      // the API's assignDistrict(). Skipping these dropped them from every
-      // district's stats AND from _stats.total, so shares were computed against
-      // a denominator that was too small. See issue #823.
-      const area = resolveArea([c[0], c[1]]) || (_defaultDistrict && { dist: _defaultDistrict, sub: null });
-      if (!area) continue; // no default district at all (shouldn't happen with real data)
-      const { dist, sub } = area;
+      let distId = m.district ? _distIdByName[m.district] : undefined;
+      let subId = m.subdistrict ? (_subIdByName[m.subdistrict] ?? null) : null;
+      if (!distId) {
+        // No served label (fallback path) — resolve from coordinates.
+        const c = m.coordinates;
+        if (!c || c.length < 2) continue;
+        const area = resolveArea([c[0], c[1]]) || (_defaultDistrict && { dist: _defaultDistrict, sub: null });
+        if (!area) continue; // no default district at all (shouldn't happen with real data)
+        distId = area.dist.id;
+        subId = area.sub ? area.sub.id : null;
+      }
 
       const catKey = (m.category in emptyBucket().cat) ? m.category : "other";
       const recent = NCZ.isRecentlyUpdated(m);
       total++;
 
-      const ds = (dStats[dist.id] ||= emptyBucket());
+      const ds = (dStats[distId] ||= emptyBucket());
       ds.total++; ds.cat[catKey]++; if (recent) ds.recent++;
-      if (sub) {
-        const ss = (sStats[sub.id] ||= emptyBucket());
+      if (subId) {
+        const ss = (sStats[subId] ||= emptyBucket());
         ss.total++; ss.cat[catKey]++; if (recent) ss.recent++;
       }
     }

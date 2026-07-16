@@ -145,6 +145,11 @@ NCZ.CET_UNITS_PER_METER = 1;
 // LocalStorage cache keys & TTLs
 NCZ.THEME_PREFERENCE_KEY = "nc_theme_id";
 NCZ.SHOWCASE_OPTIONS_KEY = "nc_showcase_options";
+// Fallback recency window (days). The API owns this rule — it computes each
+// mod's `recently_updated` bool and publishes the window as
+// `recently_updated_days` on the response envelope, which the app adopts into
+// NCZ.recentlyUpdatedDays. This constant is only used when the API is
+// unavailable (client-side fallback path) or omits the field.
 NCZ.RECENTLY_UPDATED_DAYS = 7;
 NCZ.UPDATED_LABEL = "RECENTLY UPDATED";
 NCZ.THUMB_CACHE_KEY = "nc_nexus_thumbs";
@@ -300,7 +305,7 @@ NCZ.CAMERA_ROTATE_SPEED = 0.6;            // rotateSpeed     (Three.js default: 
 // single depth32float texture (the WebGPU `shadowMapping` pattern). Single map
 // for now; a CSM revisit is queued — the original "no cascades because schema
 // is ortho" rationale no longer holds since the schema camera moved to perspective
-// (FOV 25°, TweakDB-aligned), see [[align-schematic-camera-to-game]].
+// (FOV 25°, TweakDB-aligned).
 NCZ.SHADOW_MAP_SIZE      = 8192;  // px² — ~1.5 u/texel at a whole-city zoom, razor-sharp zoomed in. Always-on (interactive + showcase): the fine texels keep the showcase's fast sun from shimmering. One fixed size, not resized per-mode (maintainer call).
 NCZ.SHADOW_MAX_DISTANCE  =  8600; // CET units — cap on the footprint half-side. Matches the world half-diagonal (sqrt((WORLD_MAX_X-WORLD_MIN_X)² + (WORLD_MAX_Y-WORLD_MIN_Y)²) / 2 ≈ 8565 wu) with tiny headroom: nothing renders past the world bounds, so a larger cap just stretches texels over empty void. Trace data on PR #656 showed `half` pinned at the cap (12600 = 12000 cap + 600 margin) every showcase frame; reducing the cap shrinks the box uniformly → ~1.4× sharper texels for free at no performance cost.
 NCZ.SHADOW_GROUND_MARGIN =   600; // CET units the footprint extends past the visible ground — covers building heights / terrain relief + a sliver of just-off-screen casters. Wider off-screen-caster coverage waits on the union-frustum cull (a follow-up).

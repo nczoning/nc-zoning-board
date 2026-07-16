@@ -18,7 +18,7 @@ When your mod is discovered, the map reads these fields from the Nexus V2 GraphQ
 | `description` | Metadata source | Full BBCode body; only used to extract the `[NCZoning]` block, then discarded |
 | `uploader.name` | First author | Always prepended to the author list; additional authors come from `authors=` in the block |
 | `thumbnailUrl` | Thumbnail image | Displayed in the popup and sidebar entry |
-| `updatedAt` | Recently Updated badge | If within the last `NCZ.RECENTLY_UPDATED_DAYS` days, an `UPDATED` badge is shown on the pin popup, sidebar entry, and cluster flyout |
+| `updatedAt` | Recently Updated badge | Drives the server-computed `recently_updated` bool (window = the API's `recently_updated_days`); when true, an `UPDATED` badge is shown on the pin popup, sidebar entry, and cluster flyout |
 
 **Nothing else is read.** Tags, changelogs, version history, endorsements, file downloads, and all other mod fields are ignored.
 
@@ -28,7 +28,7 @@ When your mod is discovered, the map reads these fields from the Nexus V2 GraphQ
 
 When the map loads, it queries the Nexus Mods API for all Cyberpunk 2077 mods tagged with **NCZoning**. For each result it finds, it looks for a `[NCZoning]` metadata block inside the mod description. If a valid block is found, the mod is automatically added to the map as a live pin, with no GitHub account or pull request required.
 
-Auto-discovered pins are identical to manually submitted ones, with a small amber **[ N ]** badge in the popup title and sidebar entry (tooltip: "Sourced automatically from Nexus Mods"). They are also automatically tagged with **nczoning**, which appears as a tag badge on their popup and can be used in the tag filter to show only auto-discovered mods. If the mod was updated on Nexus within the last `NCZ.RECENTLY_UPDATED_DAYS` days, an additional **UPDATED** badge is shown alongside the title.
+Auto-discovered pins are identical to manually submitted ones, with a small amber **[ N ]** badge in the popup title and sidebar entry (tooltip: "Sourced automatically from Nexus Mods"). They are also automatically tagged with **nczoning**, which appears as a tag badge on their popup and can be used in the tag filter to show only auto-discovered mods. If the mod is recently updated (the API's server-computed `recently_updated` bool, within the `recently_updated_days` window), an additional **UPDATED** badge is shown alongside the title.
 
 ---
 

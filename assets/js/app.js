@@ -1719,7 +1719,7 @@ async function initMap() {
           <span class="cluster-mod-layout">
             ${thumbMarkup}
             <span class="cluster-mod-content">
-              <span class="cluster-mod-name">${NCZ.escapeHtml(mod.name)}${NCZ.isRecentlyUpdated(mod) ? ` <span class="badge-updated" title="Updated on Nexus within the last ${NCZ.RECENTLY_UPDATED_DAYS} days">${NCZ.UPDATED_LABEL}</span>` : ""}</span>
+              <span class="cluster-mod-name">${NCZ.escapeHtml(mod.name)}${NCZ.isRecentlyUpdated(mod) ? ` <span class="badge-updated" title="Updated on Nexus within the last ${NCZ.recentlyUpdatedDays ?? NCZ.RECENTLY_UPDATED_DAYS} days">${NCZ.UPDATED_LABEL}</span>` : ""}</span>
               <span class="cluster-mod-separator"></span>
               <span class="cluster-mod-meta">by ${NCZ.escapeHtml(mod.authors.join(", "))}</span>
               <span class="cluster-mod-tags">
@@ -1826,6 +1826,10 @@ async function initMap() {
       mods = apiResult.mods;
       nexusThumbs = apiResult.nexusThumbs;
       tagsDict = localTags;
+      // The API owns the recency window (it computes each mod's recently_updated
+      // bool against it). Adopt it so the tooltip text matches; fall back to the
+      // local constant if an older API omits it.
+      NCZ.recentlyUpdatedDays = apiResult.recentlyUpdatedDays ?? NCZ.RECENTLY_UPDATED_DAYS;
       console.log(`Data source: /v1 API — ${mods.length} mods`);
     } catch (apiErr) {
       console.warn("Data API unavailable — falling back to client-side merge:", apiErr);
@@ -1833,6 +1837,8 @@ async function initMap() {
       mods = fb.mods;
       nexusThumbs = fb.nexusThumbs;
       tagsDict = fb.tagsDict;
+      // No API envelope on the fallback path — compute recency with the constant.
+      NCZ.recentlyUpdatedDays = NCZ.RECENTLY_UPDATED_DAYS;
       console.log(`Data source: client-side fallback — ${mods.length} mods`);
     }
 
@@ -2086,7 +2092,7 @@ async function initMap() {
           ? ` <span class="nexus-auto-badge" title="Sourced automatically from Nexus Mods" aria-hidden="true"></span>`
           : "";
         const sidebarUpdatedBadge = NCZ.isRecentlyUpdated(mod)
-          ? ` <span class="badge-updated" title="Updated on Nexus within the last ${NCZ.RECENTLY_UPDATED_DAYS} days">${NCZ.UPDATED_LABEL}</span>`
+          ? ` <span class="badge-updated" title="Updated on Nexus within the last ${NCZ.recentlyUpdatedDays ?? NCZ.RECENTLY_UPDATED_DAYS} days">${NCZ.UPDATED_LABEL}</span>`
           : "";
         li.innerHTML = `
                 <div class="mod-item-header">
@@ -2247,7 +2253,7 @@ async function initMap() {
       const btn = document.createElement("button");
       btn.className = "tag-filter-btn";
       btn.textContent = NCZ.UPDATED_LABEL;
-      btn.title = `Updated on Nexus within the last ${NCZ.RECENTLY_UPDATED_DAYS} days`;
+      btn.title = `Updated on Nexus within the last ${NCZ.recentlyUpdatedDays ?? NCZ.RECENTLY_UPDATED_DAYS} days`;
       btn.dataset.tag = "updated";
       btn.addEventListener("click", () => { btn.classList.toggle("active"); applyFilters(); });
       tagsFilterContainer.appendChild(btn);

@@ -7,9 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-07-16
+
+### Changed
+
+- **Data API now carries per-location records only.** `/v1/locations` is a single representation — the slim/full split is gone (`?full=1` is a no-op alias) — and `/v1/meta` no longer ships aggregate `counts`. Consumers derive counts by grouping records.
+- Each location carries a server-computed `recently_updated` boolean, and the response envelope publishes the `recently_updated_days` window — so the clockless in-game mod can show recency, and the website reads the bool instead of computing it.
+- The district info panel now groups stats by the API's assigned district/subdistrict labels rather than recomputing them client-side.
+
 ### Fixed
 
-- District info panel no longer undercounts: locations outside every district/subdistrict polygon now fall back to Badlands (matching the API), instead of being dropped from all stats. Fixes Badlands count (41 → 44) and the `% of all locations` denominator (292 → 295). ([#823](https://github.com/spuddeh/nc-zoning-board/issues/823))
+- District info panel no longer undercounts: locations outside every district/subdistrict polygon are now counted under Badlands (the API's assignment), instead of being dropped from all stats. Fixes Badlands count (41 → 44) and the `% of all locations` denominator (292 → 295). ([#823](https://github.com/spuddeh/nc-zoning-board/issues/823))
 
 ## [1.3.0] - 2026-07-09
 

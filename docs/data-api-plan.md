@@ -48,10 +48,10 @@ Every response uses the envelope
 
 | Route | Returns |
 | --- | --- |
-| `GET /v1/locations` | Slim list: id, name, nexus_id, coordinates, yaw, category, tags, authors, source, district, subdistrict |
-| `GET /v1/locations/{id}` | Full entry (adds description, credits) |
+| `GET /v1/locations` | Full records (one representation): id, name, nexus_id, coordinates, yaw, category, tags, authors, source, district, subdistrict, recently_updated, description, credits, image URLs. `?full=1` is a no-op alias. Consumers derive aggregates by grouping these. |
+| `GET /v1/locations/{id}` | One location record |
 | `GET /v1/districts` | District/subdistrict hierarchy with names, centroids and boundaries |
-| `GET /v1/meta` | dataset_version, generated_at, counts, discovery_stale, min_client, notices |
+| `GET /v1/meta` | discovery_stale, skipped (operational health flags; no aggregate counts). dataset_version + generated_at + recently_updated_days live on the envelope. |
 | `GET /v1/tags` | Tag dictionary |
 | `GET /v1/health` | 200 + Worker version |
 

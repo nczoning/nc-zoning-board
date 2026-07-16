@@ -390,8 +390,8 @@ html.theme-preem {
     /* Preem Map theme — based on the Preem Map mod by CyanideX (permission
        granted 2026-05-01; attribution required at ship time). 3D-scene colours
        are renderer-calibrated: the eyedropped in-game Preem look inverted
-       through the measured renderer transfer (see the theme-renderer-colour-
-       calibration wiki learning). UI chrome derived from the Preem 3D palette. */
+       through the measured renderer transfer. UI chrome derived from the
+       Preem 3D palette. */
     /* UI chrome — canonical Preem material colours where one exists.
        Preem Map ships no UI inkstyle, so there is no canonical page-background
        or text colour; --primary/--dark-accent reuse Preem's dark teal map

@@ -59,21 +59,23 @@ const dataset = buildDataset({
   nexusNodes: NODES,
   districts: DISTRICTS,
 });
+// The list endpoint serves the values of `full` (one representation, sorted).
+const LOCS = Object.values(dataset.full);
 
 test('merges manual + auto with exclusions and duplicates handled', () => {
-  assert.equal(dataset.locations.length, 3); // 2 manual + 1 auto
-  const ids = dataset.locations.map((l) => l.id);
+  assert.equal(LOCS.length, 3); // 2 manual + 1 auto
+  const ids = LOCS.map((l) => l.id);
   assert.ok(ids.includes('nexus-888'), 'stable nexus-<id> for auto entries');
   assert.ok(!ids.some((id) => id.includes('777')), 'excluded mod absent');
 });
 
 test('sorted alphabetically by name', () => {
-  const names = dataset.locations.map((l) => l.name);
+  const names = LOCS.map((l) => l.name);
   assert.deepEqual(names, [...names].sort((a, b) => a.localeCompare(b)));
 });
 
 test('manual entry wins by nexus_id; node contributes thumbnail backfill', () => {
-  const zeta = dataset.locations.find((l) => l.nexus_id === '12345');
+  const zeta = dataset.full['aaaa-1111'];
   assert.equal(zeta.name, 'Zeta Manual Loft'); // manual name, not the Nexus page name
   assert.equal(zeta.source, 'manual');
   assert.deepEqual(dataset.meta.nexus_thumbs['12345'], {
@@ -107,39 +109,53 @@ test('manualThumbs backfills manual mods that are not NCZoning-tagged (modsByUid
 });
 
 test('auto entry: authors, tags (nczoning + known only), yaw, images in full', () => {
-  const auto = dataset.locations.find((l) => l.id === 'nexus-888');
+  const auto = dataset.full['nexus-888'];
   assert.deepEqual(auto.authors, ['Uploader888', 'Friend']);
   assert.deepEqual(auto.tags, ['nczoning', 'corpo']); // 'bogus' dropped
   assert.equal(auto.yaw, 45);
   assert.equal(auto.source, 'auto');
-  const fullAuto = dataset.full['nexus-888'];
-  assert.equal(fullAuto.credits, 'Team X');
-  assert.equal(fullAuto.thumbnail_url, 'thumb-888');
+  assert.equal(auto.credits, 'Team X');
+  assert.equal(auto.thumbnail_url, 'thumb-888');
 });
 
 test('district enrichment: subdistrict wins inside it, district elsewhere', () => {
-  const zeta = dataset.locations.find((l) => l.id === 'aaaa-1111'); // (250,250) in SW quarter
+  const zeta = dataset.full['aaaa-1111']; // (250,250) in SW quarter
   assert.equal(zeta.district, 'Testville');
   assert.equal(zeta.subdistrict, 'Little Fixture');
-  const auto = dataset.locations.find((l) => l.id === 'nexus-888'); // (600,600) outside sub
+  const auto = dataset.full['nexus-888']; // (600,600) outside sub
   assert.equal(auto.district, 'Testville');
   assert.equal(auto.subdistrict, null);
 });
 
-test('meta counts + skipped monitoring list', () => {
-  assert.deepEqual(dataset.meta.counts, {
-    manual: 2, auto: 1, total: 3,
-    per_district: { Testville: 3 },
+test('recently_updated: true inside the window, false outside, false when no date', () => {
+  const near = buildDataset({
+    manualMods: MANUAL, tagsDict: TAGS, excluded: { 777: 'x' },
+    nexusNodes: NODES, districts: DISTRICTS,
+    nowMs: Date.parse('2026-07-05T00:00:00Z'), // within 7d of the 2026-07-02 update
   });
+  assert.equal(near.full['nexus-888'].recently_updated, true);
+  assert.equal(near.full['aaaa-1111'].recently_updated, true); // updated 2026-07-01
+  assert.equal(near.full['bbbb-2222'].recently_updated, false); // WIP → no updated_at
+
+  const far = buildDataset({
+    manualMods: MANUAL, tagsDict: TAGS, excluded: { 777: 'x' },
+    nexusNodes: NODES, districts: DISTRICTS,
+    nowMs: Date.parse('2026-09-01T00:00:00Z'), // well past the window
+  });
+  assert.equal(far.full['nexus-888'].recently_updated, false);
+});
+
+test('meta carries only the skipped monitoring list — no aggregate counts', () => {
+  assert.ok(!('counts' in dataset.meta), 'aggregate counts removed');
   assert.deepEqual(dataset.meta.skipped, [{ nexus_id: '999', name: 'Blockless Mod' }]);
 });
 
-test('slim entries omit description; full carries it', () => {
-  for (const l of dataset.locations) assert.ok(!('description' in l));
+test('every record is the full shape (description present) — no slim variant', () => {
+  for (const l of LOCS) assert.ok('description' in l, `${l.id} missing description`);
   assert.equal(dataset.full['aaaa-1111'].description, 'A manual entry.');
 });
 
-test('DTO contract: no arrays-of-arrays anywhere in the slim payload', () => {
+test('DTO contract: no arrays-of-arrays anywhere in the location payload', () => {
   const walk = (v, path) => {
     if (Array.isArray(v)) {
       for (const [i, item] of v.entries()) {
@@ -150,5 +166,5 @@ test('DTO contract: no arrays-of-arrays anywhere in the slim payload', () => {
       for (const [k, val] of Object.entries(v)) walk(val, `${path}.${k}`);
     }
   };
-  walk(dataset.locations, 'locations');
+  walk(LOCS, 'locations');
 });

@@ -18,16 +18,14 @@ function fakeKV(entries = {}) {
 
 const META = {
   schema: 1, generated_at: '2026-07-04T00:00:00.000Z', dataset_version: 'abc123',
-  counts: { manual: 1, auto: 1, total: 2, per_district: { Watson: 2 } },
   skipped: [], discovery_stale: false,
 };
-const SLIM = [
-  { id: 'm1', name: 'Manual', nexus_id: '1', coordinates: [1, 2, 3], category: 'other', tags: [], authors: ['A'], source: 'manual', district: 'Watson', subdistrict: 'Kabuki' },
-  { id: 'nexus-2', name: 'Auto', nexus_id: '2', coordinates: [4, 5, 6], category: 'new-location', tags: ['nczoning'], authors: ['B'], source: 'auto', district: 'Watson', subdistrict: null },
-];
+// The single representation: full records keyed by id (what /v1/locations serves
+// the values of, and /v1/locations/{id} reads directly). Each carries the
+// server-computed recently_updated bool.
 const FULL = {
-  m1: { ...SLIM[0], description: 'a manual mod' },
-  'nexus-2': { ...SLIM[1], description: 'an auto mod' },
+  m1: { id: 'm1', name: 'Manual', nexus_id: '1', coordinates: [1, 2, 3], category: 'other', tags: [], authors: ['A'], source: 'manual', district: 'Watson', subdistrict: 'Kabuki', recently_updated: false, description: 'a manual mod' },
+  'nexus-2': { id: 'nexus-2', name: 'Auto', nexus_id: '2', coordinates: [4, 5, 6], category: 'new-location', tags: ['nczoning'], authors: ['B'], source: 'auto', district: 'Watson', subdistrict: null, recently_updated: true, description: 'an auto mod' },
 };
 const DISTRICTS = [{ id: 'watson', name: 'Watson', boundary: [0, 0, 10, 0, 10, 10], centroid: { x: 5, y: 5 }, subdistricts: [] }];
 const TAGS = { apartment: 'a place', corpo: 'suits' };
@@ -36,7 +34,7 @@ function seededEnv() {
   return {
     API_VERSION: '0.1.0',
     DATASET: fakeKV({
-      [KEYS.meta]: META, [KEYS.slim]: SLIM, [KEYS.full]: FULL,
+      [KEYS.meta]: META, [KEYS.full]: FULL,
       [KEYS.districts]: DISTRICTS, [KEYS.tags]: TAGS,
     }),
   };
@@ -53,7 +51,7 @@ test('GET /v1/health returns ok + version, no ETag', async () => {
   assert.equal(body.data.version, '0.1.0');
 });
 
-test('GET /v1/locations returns the slim array in an envelope with ETag', async () => {
+test('GET /v1/locations returns the full records with recently_updated + envelope window', async () => {
   const res = await worker.fetch(GET('/v1/locations'), seededEnv());
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('ETag'), '"abc123"');
@@ -62,29 +60,25 @@ test('GET /v1/locations returns the slim array in an envelope with ETag', async 
   const body = await res.json();
   assert.equal(body.schema, 1);
   assert.equal(body.dataset_version, 'abc123');
+  assert.equal(body.recently_updated_days, 7); // window published on the envelope
   assert.equal(body.data.length, 2);
-  assert.ok(!('description' in body.data[0])); // slim
+  assert.equal(body.data[0].description, 'a manual mod');     // single full representation
+  assert.equal(typeof body.data[0].recently_updated, 'boolean');
 });
 
-test('GET /v1/locations?full=1 returns full entries as an array, with a -full ETag', async () => {
+test('GET /v1/locations?full=1 is a no-op alias: same body, same ETag', async () => {
   const res = await worker.fetch(GET('/v1/locations?full=1'), seededEnv());
   assert.equal(res.status, 200);
-  assert.equal(res.headers.get('ETag'), '"abc123-full"'); // variant ETag, not the slim one
+  assert.equal(res.headers.get('ETag'), '"abc123"'); // one representation → one ETag, no -full variant
   const body = await res.json();
   assert.equal(body.data.length, 2);
-  assert.equal(body.data[0].description, 'a manual mod'); // full carries description
+  assert.equal(body.data[0].description, 'a manual mod');
 });
 
-test('a slim ETag does not satisfy a ?full=1 request (distinct representations)', async () => {
+test('the base ETag satisfies a ?full=1 request (one representation, shared ETag)', async () => {
   const res = await worker.fetch(
     GET('/v1/locations?full=1', { 'If-None-Match': '"abc123"' }), seededEnv());
-  assert.equal(res.status, 200); // slim etag ≠ full etag → fresh 200, never a wrong 304
-});
-
-test('matching -full ETag yields 304 for ?full=1', async () => {
-  const res = await worker.fetch(
-    GET('/v1/locations?full=1', { 'If-None-Match': '"abc123-full"' }), seededEnv());
-  assert.equal(res.status, 304);
+  assert.equal(res.status, 304); // same hash, same body → a correct 304
 });
 
 test('matching If-None-Match yields 304 with no body', async () => {
@@ -104,6 +98,7 @@ test('GET /v1/locations/{id} returns the full entry', async () => {
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.data.description, 'an auto mod');
+  assert.equal(body.data.recently_updated, true);
 });
 
 test('GET /v1/locations/{unknown} → 404', async () => {
@@ -124,12 +119,13 @@ test('GET /v1/tags returns the dictionary', async () => {
   assert.deepEqual((await res.json()).data, TAGS);
 });
 
-test('GET /v1/meta returns counts + discovery_stale (not the raw record)', async () => {
+test('GET /v1/meta returns health flags only — no aggregate counts', async () => {
   const res = await worker.fetch(GET('/v1/meta'), seededEnv());
   const body = await res.json();
-  assert.equal(body.data.counts.total, 2);
   assert.equal(body.data.discovery_stale, false);
-  assert.ok(!('dataset_version' in body.data)); // version lives on the envelope
+  assert.deepEqual(body.data.skipped, []);
+  assert.ok(!('counts' in body.data));          // aggregates removed
+  assert.ok(!('dataset_version' in body.data));  // version lives on the envelope
 });
 
 test('empty KV (pre-first-cron) → 503 not_ready', async () => {

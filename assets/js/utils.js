@@ -278,10 +278,15 @@ NCZ.parseNcZoningBlock = function (description, validTagNames) {
 };
 
 // Returns true when a mod was updated on Nexus within the recent window.
+// The API computes this server-side (so the clockless in-game consumer can read
+// it too) and ships it as `recently_updated` on every record — trust that when
+// present. Only the client-side fallback path (API down, no bool) computes it
+// from the raw timestamp, using the effective window.
 NCZ.isRecentlyUpdated = function (mod) {
+  if (typeof mod.recently_updated === "boolean") return mod.recently_updated;
   if (!mod._updatedAt) return false;
-  const cutoff = Date.now() - NCZ.RECENTLY_UPDATED_DAYS * 86400000;
-  return new Date(mod._updatedAt).getTime() > cutoff;
+  const days = NCZ.recentlyUpdatedDays ?? NCZ.RECENTLY_UPDATED_DAYS;
+  return new Date(mod._updatedAt).getTime() > Date.now() - days * 86400000;
 };
 
 // CET → Three.js world coords. Game Y axis becomes -Z (both right-handed, but Y/Z are swapped).
@@ -362,7 +367,7 @@ NCZ.buildPopupHtml = function (mod, catStyle, nexusThumbs, tagsDict) {
     ? ` <span class="nexus-auto-badge" title="Sourced automatically from Nexus Mods" aria-hidden="true"></span>`
     : "";
   const updatedPopupBadge = NCZ.isRecentlyUpdated(mod)
-    ? ` <span class="badge-updated" title="Updated on Nexus within the last ${NCZ.RECENTLY_UPDATED_DAYS} days">${NCZ.UPDATED_LABEL}</span>`
+    ? ` <span class="badge-updated" title="Updated on Nexus within the last ${NCZ.recentlyUpdatedDays ?? NCZ.RECENTLY_UPDATED_DAYS} days">${NCZ.UPDATED_LABEL}</span>`
     : "";
 
   const authorsHtml = mod.authors

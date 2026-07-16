@@ -110,15 +110,20 @@ export async function runRefresh(env, fetchImpl = fetch) {
       .filter((id) => /^\d+$/.test(id));
     const manualThumbs = await fetchModsByUidThumbs(fetchImpl, manualNumericIds);
 
-    const { locations, full, meta } = buildDataset({
+    const { full, meta } = buildDataset({
       manualMods, tagsDict, excluded, nexusNodes, districts, manualThumbs,
+      nowMs: Date.parse(generatedAt),
     });
     const districtsOut = districtsPayload(districts);
 
     // Hash the content that actually varies (not generated_at). Tags are
-    // included so a tags.json edit propagates through the ETag.
+    // included so a tags.json edit propagates through the ETag. `full` carries
+    // the recently_updated bool, so its clock-driven flips move the ETag —
+    // that is deliberate (a location aging past the window must invalidate
+    // caches even though nothing on Nexus changed). This is why the cron
+    // rebuilds every tick against a fresh clock, with no Nexus short-circuit.
     const version = await contentHash(
-      JSON.stringify({ locations, full, districts: districtsOut, tags: tagsDict }),
+      JSON.stringify({ full, districts: districtsOut, tags: tagsDict }),
     );
 
     const prev = await readMeta(env);
@@ -131,7 +136,6 @@ export async function runRefresh(env, fetchImpl = fetch) {
     const recovered = prev?.discovery_stale === true;
 
     await writeDataset(env, {
-      slim: locations,
       full,
       districts: districtsOut,
       tags: tagsDict,
@@ -139,7 +143,6 @@ export async function runRefresh(env, fetchImpl = fetch) {
         schema: SCHEMA_VERSION,
         generated_at: generatedAt,
         dataset_version: version,
-        counts: meta.counts,
         skipped: meta.skipped,
         discovery_stale: false,
       },
