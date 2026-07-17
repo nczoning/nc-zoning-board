@@ -30,7 +30,7 @@ test('real subdistricts.json loads with the expected shape', () => {
   assert.ok(districts.length >= 8, `expected >=8 districts, got ${districts.length}`);
   for (const d of districts) {
     assert.equal(typeof d.name, 'string');
-    // Badlands has no parent polygon — only subdistrict polygons.
+    // Badlands has no parent polygon, only subdistrict polygons.
     const hasOwnRing = Array.isArray(d.polygon) && d.polygon.length >= 3;
     const hasSubRings = (d.subdistricts || []).some(
       (s) => Array.isArray(s.polygon) && s.polygon.length >= 3,

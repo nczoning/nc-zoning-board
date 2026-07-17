@@ -1,9 +1,9 @@
 /**
- * NC Zoning Board — Pure Utility Functions
+ * NC Zoning Board: Pure Utility Functions
  * No DOM manipulation, no fetch. Operates on provided parameters + NCZ constants.
  */
 
-// HTML escape — prevents XSS from user-supplied data (Nexus API, submitted JSON)
+// HTML escape: prevents XSS from user-supplied data (Nexus API, submitted JSON)
 NCZ.escapeHtml = function (text) {
   const map = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
   return String(text).replace(/[&<>"']/g, (m) => map[m]);
@@ -22,7 +22,7 @@ NCZ.cacheGet = function (key, ttl) {
 
 NCZ.cacheSet = function (key, data) {
   try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); }
-  catch { /* quota exceeded — silently skip */ }
+  catch { /* quota exceeded; silently skip */ }
 };
 
 // Convert gameId + modId → Nexus UID (composite BigInt key)
@@ -58,7 +58,7 @@ NCZ.leafletDistanceMeters = function (a, b) {
 };
 
 // View-sync bridge between the 2D Leaflet map and the 3D perspective camera.
-// Both directions match the *horizontal* visible CET width at screen centre —
+// Both directions match the *horizontal* visible CET width at screen centre:
 // exact at any camera tilt, since the camera's right vector stays in world XZ
 // (same reasoning as updateScaleBar()). The look-direction extent foreshortens
 // when tilted, so the vertical match is approximate by design; we preserve the
@@ -95,7 +95,7 @@ NCZ.clamp = function (value, min, max) {
  * Tone-mapping exposure for a given sun elevation, from NCZ.SCENE_EXPOSURE_CURVE
  * (piecewise-linear, clamped to the endpoints). Shared by the time-of-day
  * slider (applySunTime) and the showcase flyover (updateFlyoverSun) so both
- * drive exposure identically — see the curve comment in constants.js.
+ * drive exposure identically; see the curve comment in constants.js.
  * @param {number} elevationRad sun elevation above the horizon, in radians
  */
 NCZ.exposureForSunElevation = function (elevationRad) {
@@ -200,20 +200,20 @@ NCZ.pickDirectionAndPosition = function (anchorPoint, size, mapSize, config) {
  *  - lost [code] wrapper or stray styling ([spoiler]/[size]/[font]/
  *    [color], often per-line) from a copy-paste round-trip
  *  - the sentinel glued to the end of a sentence (e.g. `...Making!
- *    [code]NCZoning:` — stripping [code] fuses it onto the prose)
+ *    [code]NCZoning:`; stripping [code] fuses it onto the prose)
  *  - a false-positive "NCZoning:" mention earlier in the description
  *
  * Strategy: strip all BBCode, then treat `NCZoning:` as a token that
  * can appear anywhere (not a whole line). Every occurrence is tried as
  * a candidate; the first one whose following lines yield valid coords +
- * category wins, so the coords/category validation — not the sentinel's
- * position — is what disambiguates the real block from prose.
+ * category wins, so the coords/category validation (not the sentinel's
+ * position) is what disambiguates the real block from prose.
  */
 NCZ.parseNcZoningBlock = function (description, validTagNames) {
   if (!description) return null;
 
-  // Normalize HTML line breaks, then strip every BBCode [tag]/[/tag].
-  // This subsumes the old [spoiler] unwrap and the [code] requirement —
+  // Normalise HTML line breaks, then strip every BBCode [tag]/[/tag].
+  // This subsumes the old [spoiler] unwrap and the [code] requirement:
   // both become tag noise that disappears, leaving plain key=value text.
   const text = description
     .replace(/<br\s*\/?>/gi, "\n")
@@ -236,7 +236,7 @@ NCZ.parseNcZoningBlock = function (description, validTagNames) {
     return {
       coordinates: coordParts,
       category: data.category,
-      // tags: filter to known tags only — unknown tags silently dropped
+      // tags: filter to known tags only; unknown tags silently dropped
       tags: data.tags
         ? data.tags.split(",").map((t) => t.trim()).filter((t) => validTagNames.has(t))
         : [],
@@ -249,7 +249,7 @@ NCZ.parseNcZoningBlock = function (description, validTagNames) {
     };
   };
 
-  // `NCZoning:` is a token, not a line — authors paste it inline after
+  // `NCZoning:` is a token, not a line; authors paste it inline after
   // prose. [ \t]* (not \s*) tolerates `NCZoning :` without swallowing the
   // newline that separates it from the first field.
   const sentinel = /NCZoning[ \t]*:/gi;
@@ -272,14 +272,14 @@ NCZ.parseNcZoningBlock = function (description, validTagNames) {
     }
     const parsed = finalize(data);
     if (parsed) return parsed;
-    // Not a valid block (false-positive mention) — try the next occurrence.
+    // Not a valid block (false-positive mention); try the next occurrence.
   }
   return null;
 };
 
 // Returns true when a mod was updated on Nexus within the recent window.
 // The API computes this server-side (so the clockless in-game consumer can read
-// it too) and ships it as `recently_updated` on every record — trust that when
+// it too) and ships it as `recently_updated` on every record; trust that when
 // present. Only the client-side fallback path (API down, no bool) computes it
 // from the raw timestamp, using the effective window.
 NCZ.isRecentlyUpdated = function (mod) {
@@ -295,7 +295,7 @@ NCZ.cetToThree = function (cetX, cetY, cetZ) {
 };
 
 // Area-weighted polygon centroid (shoelace) for a ring of [x, y] vertices.
-// Center of mass, so it handles non-convex rings far better than a plain vertex
+// Centre of mass, so it handles non-convex rings far better than a plain vertex
 // average (which drifts toward dense corners). Returns [cx, cy] in the ring's
 // own space. Falls back to the vertex average for a degenerate (zero-area) ring.
 // Matches scripts/preview_district_borders.py's Shapely centroid.
@@ -317,7 +317,7 @@ NCZ.polygonCentroid = function (ring) {
   return [cx / (6 * a), cy / (6 * a)];
 };
 
-// Ray-casting point-in-polygon test. Generic over coordinate space — `point`
+// Ray-casting point-in-polygon test. Generic over coordinate space: `point`
 // and `ring` vertices are both [a, b] pairs in the SAME space (3D passes world
 // [x, -z]; 2D passes [lat, lng]). `ring` is the polygon's vertex list; the
 // closing edge back to ring[0] is handled implicitly. Returns true if the point
@@ -467,7 +467,7 @@ NCZ.computeVisibleMods = function (allMods, filters) {
   return visible;
 };
 
-// Comparator for Array.sort — orders mods by Nexus updatedAt descending.
+// Comparator for Array.sort: orders mods by Nexus updatedAt descending.
 // Mods with no Nexus date (WIP/Dummy) fall to end, sorted alphabetically.
 NCZ.sortModsByUpdated = function (a, b) {
   const tsA = a._updatedAt ? new Date(a._updatedAt).getTime() : null;

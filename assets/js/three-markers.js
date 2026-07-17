@@ -1,5 +1,5 @@
 /**
- * NC Zoning Board — Three.js Pin/Marker Layer
+ * NC Zoning Board: Three.js Pin/Marker Layer
  * Namespace: NCZ.ThreeMarkers
  *
  * Mirrors the Leaflet marker behaviour for the 3D view: pins read from the same
@@ -7,14 +7,14 @@
  * NCZ.computeVisibleMods, popups reuse NCZ.buildPopupHtml.
  *
  * The shared "interface" both views satisfy:
- *   setMods(mods, nexusThumbs, tagsDict) — build pins from data
- *   applyFilters(visibleIdSet)           — toggle which pins render
- *   focusMod(modId)                       — fly to mod, then open popup
- *   setPanelPinFocus(modIds, selectedId)  — dim a cluster's pins, keep the
+ *   setMods(mods, nexusThumbs, tagsDict) - build pins from data
+ *   applyFilters(visibleIdSet)           - toggle which pins render
+ *   focusMod(modId)                       - fly to mod, then open popup
+ *   setPanelPinFocus(modIds, selectedId)  - dim a cluster's pins, keep the
  *                                           selected one at full opacity
- *   closePopup()                          — programmatic close
+ *   closePopup()                          - programmatic close
  *
- * Rendering uses CSS2DRenderer so each pin is a real DOM node — DOM events,
+ * Rendering uses CSS2DRenderer so each pin is a real DOM node: DOM events,
  * theme CSS, and the existing popup HTML all work without re-implementation.
  */
 
@@ -43,27 +43,27 @@ const ThreeMarkers = (() => {
   const pins = new Map(); // modId → CSS2DObject (the pin)
 
   // Camera fly-to tween state. Active when non-null. Holds start/end targets,
-  // start/end camera positions (XZ-plane only — height stays put), start/end
+  // start/end camera positions (XZ-plane only; height stays put), start/end
   // zoom, elapsed/total time, and an onComplete callback.
   let _flyTween = null;
   let _flyLastTime = 0;
 
-  // Clustering — pool CSS2DObjects (cluster bubbles), recompute on filter
+  // Clustering: pool CSS2DObjects (cluster bubbles), recompute on filter
   // change or camera move. Filter-visible set is tracked separately from
   // pin.visible because clustering OVERRIDES pin.visible to hide grouped pins.
   let _clusterLayer = null;
-  const _clusterPool = [];          // CSS2DObject[] — reused across recomputes
+  const _clusterPool = [];          // CSS2DObject[], reused across recomputes
   let _filterVisibleIds = new Set();
   let _unclusteredMode = false;     // showcase: every filter-visible pin shown
                                     // individually, cluster bubbles suppressed
   let _recomputeFrame = null;
   let _onClusterClick = null;       // cluster-click callback (set by app.js)
   let _onClustersChanged = null;    // recompute-fired callback (set by app.js)
-  let _onEmptyClick = null;         // empty-canvas click (set by app.js) —
+  let _onEmptyClick = null;         // empty-canvas click (set by app.js);
                                     // parity with Leaflet map.on('click')
-  let _activeClusterMods = null;    // Set<modId> | null — mods of the cluster
+  let _activeClusterMods = null;    // Set<modId> | null: mods of the cluster
                                     // whose contents the cluster panel is showing
-  let _forcedIndividualIds = null;  // Set<modId> | null — pins that must never
+  let _forcedIndividualIds = null;  // Set<modId> | null: pins that must never
                                     // be absorbed into a bubble (panel
                                     // comparison mode expands the whole set)
   const _projectVec = new THREE.Vector3();
@@ -81,7 +81,7 @@ const ThreeMarkers = (() => {
   // camera must call this so the CSS2DRenderer pass picks the change up.
   function _redraw() { NCZ.ThreeScene?.requestRender?.(); }
 
-  // Tooltip — single reusable CSS2DObject created at attach time. Hidden by
+  // Tooltip: single reusable CSS2DObject created at attach time. Hidden by
   // default; show()/hide() toggle .visible and update text/position.
   let tooltipObj = null;
   let tooltipText = null;
@@ -95,13 +95,13 @@ const ThreeMarkers = (() => {
     scene = _scene;
     _schemaCamera = _camera;
     // Schema camera sees the static scene (layer 0) AND the marker overlay
-    // (layer 1) by default — the "Pins" entry in the overlay-controls panel
+    // (layer 1) by default; the "Pins" entry in the overlay-controls panel
     // toggles this membership.
     _schemaCamera.layers.enable(NCZ.LAYER_PINS);
     container = _container;
     controls = _controls || null;
 
-    // Cancel any active fly-tween if the user starts a manual drag/zoom —
+    // Cancel any active fly-tween if the user starts a manual drag/zoom:
     // last-write-wins, user input always overrides an in-flight tween.
     if (controls) controls.addEventListener('start', () => { _flyTween = null; });
 
@@ -137,17 +137,17 @@ const ThreeMarkers = (() => {
     pinsLayer.name = 'three-markers';
     scene.add(pinsLayer);
 
-    // Cluster bubble layer — sibling of pinsLayer at scene root so buildPins
+    // Cluster bubble layer: sibling of pinsLayer at scene root so buildPins
     // doesn't disturb it. Pool grows on demand and is reused across recomputes.
     _clusterLayer = new THREE.Group();
     _clusterLayer.name = 'three-clusters';
     scene.add(_clusterLayer);
 
-    // Re-cluster on any camera move (rAF-debounced — at most one recompute
+    // Re-cluster on any camera move (rAF-debounced: at most one recompute
     // per frame, regardless of how often controls fires 'change').
     if (controls) controls.addEventListener('change', scheduleRecomputeClusters);
 
-    // Tooltip — one persistent CSS2DObject, hidden by default. Shown on pin
+    // Tooltip: one persistent CSS2DObject, hidden by default. Shown on pin
     // hover with the mod's name. renderOrder=999 places it above pins
     // (default renderOrder=0) but below the popup (renderOrder=1000).
     //
@@ -155,7 +155,7 @@ const ThreeMarkers = (() => {
     // direction class) so 2D and 3D hover tooltips render identically.
     // Always has the `.visible` class because CSS2DRenderer toggles real
     // display/hide via inline `style.display`, falling through to .pin-tooltip
-    // CSS only when visible — without `.visible` the CSS would force display:none.
+    // CSS only when visible; without `.visible` the CSS would force display:none.
     //
     // Added to `scene` (not `pinsLayer`) on purpose: buildPins() rebuilds
     // pinsLayer's contents on every setMods call, which would otherwise
@@ -178,11 +178,11 @@ const ThreeMarkers = (() => {
     tooltipObj.renderOrder = 999;
     scene.add(tooltipObj);
 
-    // Drag-vs-click discrimination — Leaflet pattern.
+    // Drag-vs-click discrimination: Leaflet pattern.
     //
     // OrbitControls is attached to the container (see three-scene.js), and
     // its setPointerCapture is monkey-patched to a no-op there so the
-    // natural click flow survives — mousedown on a pin → mouseup on a pin
+    // natural click flow survives: mousedown on a pin → mouseup on a pin
     // → click event fires on the pin. But a click ALSO fires if the user
     // pans the camera then releases over a pin (mousedown=pin, mouseup=pin
     // even with movement in between). Leaflet handles this by tracking
@@ -209,14 +209,14 @@ const ThreeMarkers = (() => {
         return;
       }
       // True click on empty space (canvas). Pin and cluster clicks are
-      // handled by their own element listeners — guard so this doesn't
+      // handled by their own element listeners; guard so this doesn't
       // double-act on them.
       if (e.target.closest('.three-popup')) return;
       if (e.target.closest('.three-marker')) return;
       if (e.target.closest('.marker-cluster')) return;
       // Close any open popup AND dismiss the cluster panel. The panel close
       // is routed through app.js (it owns the panel) so this matches
-      // Leaflet's `map.on('click', hideClusterPanel)` — empty-space click
+      // Leaflet's `map.on('click', hideClusterPanel)`: empty-space click
       // closes the panel in both views.
       if (popup) closePopup();
       _onEmptyClick?.();
@@ -226,10 +226,10 @@ const ThreeMarkers = (() => {
     if (_modsState.mods.length) buildPins();
   }
 
-  // CET Z is the gameplay surface — already in the right space (player position
+  // CET Z is the gameplay surface: already in the right space (player position
   // including platforms, plazas, building tops). A small lift keeps the pin's
   // diamond visible above the player rather than overlapping it. The lift is
-  // purely cosmetic — only used for pin rendering, never for any other Z read.
+  // purely cosmetic: only used for pin rendering, never for any other Z read.
   function pinYFor(mod) {
     return (mod.coordinates[2] || 0) + NCZ.PIN_3D_GROUND_OFFSET;
   }
@@ -269,12 +269,12 @@ const ThreeMarkers = (() => {
         // Leaflet pattern: a drag that ended on the pin still fires a click
         // event. _dragSuppressClick is set by the container-level pointerup
         // when the gesture moved beyond PIN_3D_DRAG_THRESHOLD_PX, so we
-        // ignore those — only true clicks open the popup.
+        // ignore those; only true clicks open the popup.
         if (_dragSuppressClick) return;
         e.stopPropagation();
         // Toggle behaviour to match Leaflet: clicking the already-selected
         // pin deselects it. Sidebar item clicks (focusMod) deliberately
-        // do NOT toggle — they always open, matching Leaflet's focusMarker.
+        // do NOT toggle; they always open, matching Leaflet's focusMarker.
         if (popupModId === mod.id) {
           closePopup();
         } else {
@@ -310,7 +310,7 @@ const ThreeMarkers = (() => {
 
   function showTooltip(mod) {
     if (!tooltipObj || !tooltipText) return;
-    // Suppress when the popup is already open for this pin — popup contains
+    // Suppress when the popup is already open for this pin: popup contains
     // the same name plus the rest, tooltip would be redundant.
     if (popupModId === mod.id) return;
     const pin = pins.get(mod.id);
@@ -339,7 +339,7 @@ const ThreeMarkers = (() => {
   }
 
   // Returns mod IDs of pins that pass the active filter (regardless of cluster
-  // grouping). Discover uses this to pick a random target — clustered pins
+  // grouping). Discover uses this to pick a random target; clustered pins
   // are valid choices because the fly-to tween zooms in past the cluster
   // radius, dissolving the cluster around the target by the time the fly ends.
   function getVisibleModIds() {
@@ -348,23 +348,23 @@ const ThreeMarkers = (() => {
 
   // ── Clustering ────────────────────────────────────────────────────────
   // World-space proximity grouping. Cluster radius is computed in world units
-  // from the equivalent pixel radius at current zoom — so clusters dissolve
+  // from the equivalent pixel radius at current zoom, so clusters dissolve
   // as the user zooms in (matching Leaflet's behaviour) but stay invariant
   // to camera tilt and rotation (unlike the original screen-space approach,
   // which produced tilt-distorted "close on screen but far in world" pairs).
   //
   // Trigger: zoom changes or filter changes only. Pan and tilt don't shift
   // world distances, so they don't recompute. This makes clusters stable
-  // while the user explores — no reshuffle on rotation. (Aki's UX call,
+  // while the user explores: no reshuffle on rotation. (Aki's UX call,
   // applied 2026-05-02. Earlier screen-space approach in git history if
   // you ever want to revisit.)
   let _lastDistanceForCluster = null;
 
   function scheduleRecomputeClusters() {
-    // Skip if camera-to-target distance hasn't changed (pan/tilt only) —
+    // Skip if camera-to-target distance hasn't changed (pan/tilt only);
     // world clusters don't move. Filter changes call recomputeClusters()
     // synchronously and bypass this guard.
-    // During the showcase the active camera is the perspective fly camera —
+    // During the showcase the active camera is the perspective fly camera;
     // bail out and let clusters keep their last-recomputed positions for the
     // duration of the cinematic.
     if (_activeCamera) return;
@@ -382,7 +382,7 @@ const ThreeMarkers = (() => {
   // `notify` (default true): fire _onClustersChanged so app.js can follow
   // the cluster the panel tracks. Programmatic recomputes triggered FROM
   // within panel code (setForcedIndividualIds / openPopup / closePopup) pass
-  // notify:false — otherwise the notification re-enters populateClusterPanel
+  // notify:false; otherwise the notification re-enters populateClusterPanel
   // → clearPanelPinFocus → setForcedIndividualIds → recomputeClusters →
   // _onClustersChanged → … (infinite recursion / stack overflow). Only
   // genuine camera/filter-driven recomputes should rebuild the panel.
@@ -392,8 +392,8 @@ const ThreeMarkers = (() => {
     if (!w) return;
 
     // Showcase (unclustered) mode: keep every filter-visible pin individual and
-    // bubbles hidden. Synchronous recompute callers — notably openPopup /
-    // closePopup on a pin click — must NOT rebuild clusters here, or clicking a
+    // bubbles hidden. Synchronous recompute callers (notably openPopup /
+    // closePopup on a pin click) must NOT rebuild clusters here, or clicking a
     // pin mid-cinematic snaps the scene back into number badges.
     if (_unclusteredMode) {
       pins.forEach((pin, id) => { pin.visible = _filterVisibleIds.has(id); });
@@ -416,7 +416,7 @@ const ThreeMarkers = (() => {
     const radiusSq = radiusWorld * radiusWorld;
 
     // Build the filter-visible pin list with world XZ coords (Y intentionally
-    // ignored — rooftop pins should still cluster with same-XZ ground pins).
+    // ignored; rooftop pins should still cluster with same-XZ ground pins).
     const points = [];
     for (const [id, pin] of pins) {
       if (!_filterVisibleIds.has(id)) continue;
@@ -435,7 +435,7 @@ const ThreeMarkers = (() => {
     }
 
     // Greedy proximity grouping. For each unassigned pin, sweep all unassigned
-    // pins and pull in any within radius. O(N²) — fine at our N (~207 max).
+    // pins and pull in any within radius. O(N²), fine at our N (~207 max).
     const groups = [];
     for (const p of points) {
       if (p.used) continue;
@@ -462,7 +462,7 @@ const ThreeMarkers = (() => {
       }
       for (const m of group) m.pin.visible = false;
       const cluster = getOrCreateClusterObj(poolIdx++);
-      // Centroid in world space — CSS2DRenderer projects this each frame
+      // Centroid in world space; CSS2DRenderer projects this each frame
       let cx = 0, cy = 0, cz = 0;
       for (const m of group) {
         cx += m.pin.position.x;
@@ -541,7 +541,7 @@ const ThreeMarkers = (() => {
   // expand/collapse is immediate, not deferred to the next camera move.
   function setForcedIndividualIds(idSet) {
     _forcedIndividualIds = idSet && idSet.size ? idSet : null;
-    // notify:false — this is called from app.js panel code; re-notifying
+    // notify:false; this is called from app.js panel code; re-notifying
     // would recurse back into populateClusterPanel.
     recomputeClusters({ notify: false });
   }
@@ -593,7 +593,7 @@ const ThreeMarkers = (() => {
     );
 
     // Anchor wrapper sits at the pin position (zero-size); inner card rises
-    // above with an arrow pointing down — mirrors Leaflet's popup chrome.
+    // above with an arrow pointing down (mirrors Leaflet's popup chrome).
     const anchor = document.createElement('div');
     anchor.className = 'three-popup-anchor';
 
@@ -608,16 +608,16 @@ const ThreeMarkers = (() => {
     // The popup card has pointer-events:auto so its buttons/links are
     // interactive. Because OrbitControls is now wired to the container
     // (see three-scene.js), every pointerdown that bubbles up to it
-    // arms a potential drag — a tiny mouse jiggle inside the popup would
+    // arms a potential drag: a tiny mouse jiggle inside the popup would
     // pan the camera. Stop pointer events at the card boundary so the
     // popup behaves like a self-contained widget, exactly as the 2D
     // Leaflet popup shields the map drag handler from its own clicks.
-    // Wheel left intentionally bubbling — we don't have scrollable
+    // Wheel left intentionally bubbling: we don't have scrollable
     // popup content today, and forwarding wheel-to-zoom while a popup
     // is open matches Leaflet behaviour.
     card.addEventListener('pointerdown', (e) => e.stopPropagation());
 
-    // Clipboard copy handler — same behaviour as Leaflet popup
+    // Clipboard copy handler: same behaviour as Leaflet popup
     const copyBtn = card.querySelector('.ui-popup-action-link-copy-link');
     if (copyBtn) {
       let copyRevertTimer = null;
@@ -649,7 +649,7 @@ const ThreeMarkers = (() => {
     // hidden in. flyTo's last recompute fires mid-tween (before openPopup,
     // the onComplete callback, sets popupModId), so without this the pin
     // stays clustered after Discover / deep-link / a tight panel pick.
-    // notify:false — popup open must not re-trigger the panel-rebuild path.
+    // notify:false; popup open must not re-trigger the panel-rebuild path.
     recomputeClusters({ notify: false });
     syncUrlForMod(mod);
     _redraw();
@@ -663,14 +663,14 @@ const ThreeMarkers = (() => {
     popupModId = null;
     if (!silent) clearUrlMod();
     // Re-cluster so the pin can rejoin a bubble now that it's no longer
-    // focused. Skip when silent — that path is buildPins (which recomputes
+    // focused. Skip when silent: that path is buildPins (which recomputes
     // itself) or openPopup's internal close (it recomputes after reopening).
-    // notify:false — popup close must not re-trigger the panel-rebuild path.
+    // notify:false; popup close must not re-trigger the panel-rebuild path.
     if (!silent) recomputeClusters({ notify: false });
     _redraw();
   }
 
-  // URL deep-link sync — matches the Leaflet popupopen/popupclose handlers
+  // URL deep-link sync: matches the Leaflet popupopen/popupclose handlers
   // so refreshing or switching views re-opens the same pin.
   function syncUrlForMod(mod) {
     const isNum = /^\d+$/.test(String(mod.nexus_id));
@@ -690,10 +690,9 @@ const ThreeMarkers = (() => {
     if (!pin) return;
     // Sync ?mod= EAGERLY. openPopup (which also syncs) runs deferred as the
     // flyTo onComplete (~0.7s); a view switch during the fly would otherwise
-    // see no ?mod= and fail to restore the pin in the other view — the
-    // "shared camera/popup broken on clustered pins" report (clustered pins
-    // reach the popup via this deferred focusMod path; unclustered pins call
-    // openPopup synchronously and were unaffected).
+    // see no ?mod= and fail to restore the pin in the other view (clustered
+    // pins reach the popup via this deferred focusMod path; unclustered pins
+    // call openPopup synchronously and were unaffected).
     syncUrlForMod(pin.userData.modData);
     // If we don't have controls (called before attach somehow), just open.
     if (!controls) {
@@ -706,7 +705,7 @@ const ThreeMarkers = (() => {
   // Cluster-panel emphasis: once the user picks a pin from the panel the
   // cluster has dissolved (flyTo zoomed in past the cluster radius), so all
   // its pins are individually visible. Dim every pin in `modIds` except
-  // `selectedId`, which stays at full opacity — the "top pin, rest fade"
+  // `selectedId`, which stays at full opacity: the "top pin, rest fade"
   // effect. Opacity is set on the inner `.marker-pin` so the existing
   // `transition: all` (style.css) animates the fade. Passing
   // (null, null) restores every pin (panel closed / view switched).
@@ -737,7 +736,7 @@ const ThreeMarkers = (() => {
 
   // Tween OrbitControls' target + camera.position toward the pin. For a
   // perspective camera the "zoom level" at the end of the fly is a fixed
-  // *distance* (SCHEMA_FLY_TO_DISTANCE — the game's TweakDB zoomToZoomValue):
+  // *distance* (SCHEMA_FLY_TO_DISTANCE, the game's TweakDB zoomToZoomValue):
   // end position = endTarget + currentDirection × that distance, so the camera
   // approach angle is preserved but always lands at the same close zoom.
   // Runs in the render loop via updateFlyTween().
@@ -761,7 +760,7 @@ const ThreeMarkers = (() => {
       onComplete,
     };
     _flyLastTime = performance.now();
-    _redraw(); // Kickstart the loop — direct camera mutation in updateFlyTween
+    _redraw(); // Kickstart the loop: direct camera mutation in updateFlyTween
                // doesn't fire OrbitControls 'change', so we need an explicit nudge.
   }
 
@@ -790,7 +789,7 @@ const ThreeMarkers = (() => {
 
   // Cheap per-frame check: if the popup's anchor is too close to the viewport
   // top to fit the card above, flip it below the pin. Re-evaluates every render
-  // so it stays correct as the user pans/tilts/zooms — costs one Vector3.project()
+  // so it stays correct as the user pans/tilts/zooms; costs one Vector3.project()
   // and a className toggle, which is negligible.
   const _projectV = new THREE.Vector3();
   function updatePopupPlacement() {
@@ -810,7 +809,7 @@ const ThreeMarkers = (() => {
   }
 
   // CSS2DRenderer culls a marker when its projected point falls outside the
-  // NDC depth range (`z >= -1 && z <= 1`) — a test that assumes a STANDARD
+  // NDC depth range (`z >= -1 && z <= 1`), a test that assumes a STANDARD
   // forward projection. Our WebGPU renderer runs with `reversedDepthBuffer:true`,
   // so the renderer rebuilds `camera.projectionMatrix` with reversed Z; under
   // it, behind-camera points land at z≈[-1,0) and slip through the test, getting
@@ -881,8 +880,8 @@ const ThreeMarkers = (() => {
   // Cinematic mode: hide every cluster bubble and unhide every filter-passing
   // pin so the showcase shows individual mods instead of number-badges.
   //
-  // CSS2DRenderer checks `object.visible` per-CSS2DObject (not on parent groups
-  // — the renderer walks all children regardless of group.visible), so we have
+  // CSS2DRenderer checks `object.visible` per-CSS2DObject (not on parent groups;
+  // the renderer walks all children regardless of group.visible), so we have
   // to flip `visible` on each cluster bubble individually rather than on the
   // parent _clusterLayer Group.
   //

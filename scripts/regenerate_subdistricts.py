@@ -4,7 +4,7 @@ Regenerate data/subdistricts.json with proper parent-chain transforms.
 Walks the full parent transform chain for each trigger component, applying
 rotation and translation at each level. This correctly handles:
   - Pacifica (65 degree yaw rotation in pacifica_transform)
-  - Pacifica sub-districts (coastview, west_wind_estate — also rotated)
+  - Pacifica sub-districts (coastview, west_wind_estate, also rotated)
   - NCX/Spaceport (parented to morro_rock_trigger)
   - Dogtown (chains through pacifica_data0633)
 
@@ -12,7 +12,7 @@ City sub-district polygons are clipped to their parent district boundary
 via Shapely intersection.
 
 Badlands sub-district polygons are extracted from streaming sector files
-(worldLocationAreaNode binary buffers) — these zones aren't in 3dmap_view.ent
+(worldLocationAreaNode binary buffers); these zones aren't in 3dmap_view.ent
 because they don't appear on the in-game map.
 """
 import base64
@@ -91,7 +91,7 @@ DISTRICT_STRUCTURE = [
         "subdistricts": []
     },
     {
-        # NCX trigger and morro_rock_trigger share the exact same outline —
+        # NCX trigger and morro_rock_trigger share the exact same outline:
         # NCX is parented to morro_rock_trigger. They're the same area.
         "id": "ncx_morro_rock", "name": "NCX Spaceport / Morro Rock", "trigger": "ncx_trigger",
         "subdistricts": []
@@ -407,7 +407,7 @@ def main():
             })
 
     # ── Pass 1: Subtract city districts from Badlands subdistricts ───────
-    # City district shapes are authoritative — Badlands zones must not overlap them.
+    # City district shapes are authoritative: Badlands zones must not overlap them.
     if badlands_entry["subdistricts"] and city_district_shapes:
         print("\n--- Pass 1: Clipping Badlands against city districts ---")
         city_union = unary_union(city_district_shapes)
@@ -431,7 +431,7 @@ def main():
                     print(f"  {sub['id']:25s} clipped {pct:.0f}%")
 
     # ── Pass 2: Resolve inter-subdistrict overlaps ────────────────────────
-    # Process smallest first — smaller/more specific zones take priority.
+    # Process smallest first: smaller/more specific zones take priority.
     if badlands_entry["subdistricts"]:
         print("\n--- Pass 2: Resolving Badlands inter-subdistrict overlaps ---")
         subs = badlands_entry["subdistricts"]
@@ -462,7 +462,7 @@ def main():
                 pct = (1 - shape.area / original_area) * 100
                 if pct > 0.1:
                     print(f"  {sub['id']:25s} trimmed {pct:.0f}% (overlap with smaller neighbors)")
-            # Add the ORIGINAL (unclipped) shape to processed list —
+            # Add the ORIGINAL (unclipped) shape to processed list:
             # this means later (larger) subs subtract the full original zone,
             # not the already-trimmed version
             processed_shapes.append(ShapelyPolygon(subs[idx]["polygon"]))
@@ -509,7 +509,7 @@ def main():
                 bl_shapes[sid] = merged
                 print(f"  -> Merged gap ({gap.area:.0f} sq) into {sid}")
             else:
-                # Split gap: each neighbor claims the portion closer to it
+                # Split gap: each neighbour claims the portion closer to it
                 for sid, shape, _ in neighbors:
                     claim = gap
                     for other_sid, other_shape, _ in neighbors:
@@ -529,13 +529,13 @@ def main():
                 print(f"  -> Split gap ({gap.area:.0f} sq) between: {[n[0] for n in neighbors]}")
 
         # Note: The gap between Biotechnica Flats, Dogtown, and West Wind Estate
-        # cannot be filled — the void lies inside Dogtown's city district polygon,
+        # cannot be filled; the void lies inside Dogtown's city district polygon,
         # and city district polygons are authoritative and cannot be modified.
 
         # Write updated polygons back, cleaning geometry with buffer(0)
         for sub in badlands_entry["subdistricts"]:
             if sub["id"] in bl_shapes:
-                shape = bl_shapes[sub["id"]].buffer(0)  # clean floating-point artifacts
+                shape = bl_shapes[sub["id"]].buffer(0)  # clean floating-point artefacts
                 if shape.geom_type == "MultiPolygon":
                     shape = max(shape.geoms, key=lambda g: g.area)
                 if not shape.is_empty and shape.geom_type == "Polygon":
@@ -546,7 +546,7 @@ def main():
         output["districts"].append(badlands_entry)
 
     # ── North Oaks Casino (optional, cut-content district) ───────────────
-    # The North Oaks Casino is cut content — a district void between North Oak
+    # The North Oaks Casino is cut content: a district void between North Oak
     # (Westbrook), Red Peaks, and Rocky Ridge. It exists as empty space in-game
     # and is the target of a community restoration mod led by Kao.
     #

@@ -16,7 +16,7 @@
  * sub-mesh-heavy GLBs, plus the decoder bundle is ~30 KB vs Draco's ~200 KB.
  * Three.js wires this up via gltfLoader.setMeshoptDecoder(MeshoptDecoder).
  *
- * Per-asset position quantization:
+ * Per-asset position quantisation:
  *   - World-coord meshes (terrain, cliffs, water, roads, metro): -vp 16 (CET 12 km extent)
  *   - Local-space landmarks: -vp 14 (small bounding box, sub-cm precision)
  */
@@ -29,7 +29,7 @@ const DEFAULT_SRC = path.join(__dirname, '..', 'assets', 'glb-source');
 const SRC = path.resolve(process.argv[2] || process.env.INPUT_GLB_DIR || DEFAULT_SRC);
 const DST = path.join(__dirname, '..', 'assets', 'glb-meshopt');
 
-// Per-asset position quantization bits — same precision targets as Draco settings.
+// Per-asset position quantisation bits: same precision targets as Draco settings.
 const PRESETS = {
   '3dmap_terrain.glb':       { vp: 16 },
   '3dmap_cliffs.glb':        { vp: 16 },
@@ -42,18 +42,18 @@ const LANDMARK_DEFAULT = { vp: 14 };
 
 // gltfpack flags shared across all assets:
 //   -cc: aggressive EXT_meshopt_compression
-//   -vn 10: normal quantization bits
-//   -vt 12: texcoord quantization bits
-//   -vc 8: vertex color quantization bits
+//   -vn 10: normal quantisation bits
+//   -vt 12: texcoord quantisation bits
+//   -vc 8: vertex colour quantisation bits
 //   -ke: keep extras (no-op for our GLBs but cheap insurance)
 //
 // Intentionally NOT using -kn (keep names): with -kn, gltfpack inserts named
-// wrapper groups above the dequantization transform nodes. Three.js r170's
+// wrapper groups above the dequantisation transform nodes. Three.js r170's
 // GLTFLoader appears to lose the child transform when the hierarchy is two
-// levels deep with quantization on the inner level — meshes render at int16
+// levels deep with quantisation on the inner level: meshes render at int16
 // scale (4–5× too large). Without -kn, gltfpack puts the dequant transform
 // directly on the root nodes, which Three.js handles correctly. Trade-off:
-// loses original mesh names like "submesh_00_LOD_1" — but our code doesn't
+// loses original mesh names like "submesh_00_LOD_1", but our code doesn't
 // reference them, so no functional impact.
 const SHARED_FLAGS = ['-cc', '-vn', '10', '-vt', '12', '-vc', '8', '-ke'];
 

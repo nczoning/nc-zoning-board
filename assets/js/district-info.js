@@ -1,8 +1,8 @@
 /**
- * NC Zoning Board — District Info Panel
+ * NC Zoning Board: District Info Panel
  * Namespace: NCZ.DistrictInfo
  *
- * The hover info panel (top-right, under the header) — a parity nod to the
+ * The hover info panel (top-right, under the header), a parity nod to the
  * in-game world map's bottom-right district readout. Shows the district icon +
  * name, the subdistrict (when one is hovered), and location stats for that
  * area: count, category breakdown, share of the whole map, and how many were
@@ -12,10 +12,10 @@
  * and the 2D (SAT) hover (onMapMouseMove in overlay) drive it via show()/hide().
  *
  * Public API:
- *   NCZ.DistrictInfo.init()                 — cache DOM + load district polygons
- *   NCZ.DistrictInfo.setMods(mods)          — (re)compute per-area stats
- *   NCZ.DistrictInfo.show(districtId, subId) — populate + reveal for a hover
- *   NCZ.DistrictInfo.hide()                 — hide on hover-exit
+ *   NCZ.DistrictInfo.init()                 - cache DOM + load district polygons
+ *   NCZ.DistrictInfo.setMods(mods)          - (re)compute per-area stats
+ *   NCZ.DistrictInfo.show(districtId, subId) - populate + reveal for a hover
+ *   NCZ.DistrictInfo.hide()                 - hide on hover-exit
  *
  * Depends on: constants.js (DISTRICT_COLORS, CATEGORY_STYLES), utils.js
  *   (pointInPolygon, isRecentlyUpdated, escapeHtml).
@@ -35,13 +35,13 @@ NCZ.DistrictInfo = (() => {
   let _defaultDistrict = null;    // the game's catch-all district (Badlands)
 
   // The game's default district: anywhere outside every district polygon is
-  // Badlands (it has no polygon of its own — the parent is the catch-all).
+  // Badlands (it has no polygon of its own; the parent is the catch-all).
   // Mirrors DEFAULT_DISTRICT_ID in worker/src/districts.js assignDistrict().
   // Used only when resolving from coordinates on the API-down fallback path;
   // on the normal API path the served label is already "Badlands".
   const DEFAULT_DISTRICT_ID = "badlands";
 
-  // Shoelace area (absolute) — smallest matching polygon wins, so a mod inside
+  // Shoelace area (absolute): smallest matching polygon wins, so a mod inside
   // both a subdistrict and its parent district is attributed to the subdistrict.
   function polyArea(ring) {
     let a = 0;
@@ -59,7 +59,7 @@ NCZ.DistrictInfo = (() => {
   // subdistrict containing it (and that sub's parent district), else the
   // smallest containing district polygon. Returns { dist, sub } or null. Used
   // both to attribute mods (setMods) and to drive the panel from the cursor
-  // (showAt) — independent of which outline tier is currently drawn.
+  // (showAt), independent of which outline tier is currently drawn.
   function resolveArea(pt) {
     let sub = null, subArea = Infinity, dist = null;
     for (const d of _districts) {
@@ -115,7 +115,7 @@ NCZ.DistrictInfo = (() => {
 
   // Aggregate count / category / recently-updated per area. Normal (API) path:
   // group by the district/subdistrict the API already assigned (served as names,
-  // mapped to panel ids) — counting the API's own labels is what keeps the panel
+  // mapped to panel ids); counting the API's own labels is what keeps the panel
   // from ever disagreeing with the API (the root of #823; the ex-ocean mods are
   // already labelled Badlands server-side). API-down fallback path: mods carry
   // no served label, so resolve from coordinates (with the Badlands default),
@@ -129,7 +129,7 @@ NCZ.DistrictInfo = (() => {
       let distId = m.district ? _distIdByName[m.district] : undefined;
       let subId = m.subdistrict ? (_subIdByName[m.subdistrict] ?? null) : null;
       if (!distId) {
-        // No served label (fallback path) — resolve from coordinates.
+        // No served label (fallback path): resolve from coordinates.
         const c = m.coordinates;
         if (!c || c.length < 2) continue;
         const area = resolveArea([c[0], c[1]]) || (_defaultDistrict && { dist: _defaultDistrict, sub: null });
@@ -206,7 +206,7 @@ NCZ.DistrictInfo = (() => {
   // Crop the district's icon out of the atlas (district_icons.png) and scale it
   // to fit the icon box, centred. (All our badlands subdistricts are children of
   // the central Districts.Badlands in TweakDB, so badlands always uses the
-  // central icon — the North/South atlas icons belong to subdistricts we don't map.)
+  // central icon; the North/South atlas icons belong to subdistricts we don't map.)
   function setDistrictIcon(districtId) {
     const el = _els.icon;
     const atlas = NCZ.DISTRICT_ICON_ATLAS;
@@ -216,7 +216,7 @@ NCZ.DistrictInfo = (() => {
     if (!rect) { el.style.backgroundImage = "none"; return; }
 
     // Box = the icon's EXACT scaled rect (no margin) so adjacent atlas icons
-    // can't bleed into it — a fixed square box + centred crop would show e.g.
+    // can't bleed into it; a fixed square box + centred crop would show e.g.
     // Watson's edge above City Center. Normalise by HEIGHT so every district
     // icon renders at the same height (their native slices vary in aspect);
     // width follows the icon's aspect.
@@ -233,7 +233,7 @@ NCZ.DistrictInfo = (() => {
     el.style.backgroundPosition = `${-rect.l * atlas.w * scale}px ${-rect.t * atlas.h * scale}px`;
   }
 
-  // Resolve + show from a CET cursor point — the panel always reports the most
+  // Resolve + show from a CET cursor point: the panel always reports the most
   // specific subdistrict under the cursor, even at the district zoom tier where
   // only district outlines are drawn (matches the in-game readout).
   function showAt(cetX, cetY, statsLevel) {

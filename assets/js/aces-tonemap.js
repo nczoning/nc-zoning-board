@@ -1,5 +1,5 @@
 /**
- * NC Zoning Board — CP2077 3D-map colour pipeline (ACES tonemap + grade + LUT)
+ * NC Zoning Board: CP2077 3D-map colour pipeline (ACES tonemap + grade + LUT)
  *
  * Reproduces the in-game 3D world map's full colour pipeline, decoded from
  * `base/weather/24h_basic/3dmap.envparam`. The map renders:
@@ -10,16 +10,16 @@
  * `THREE.NeutralToneMapping`). The grade + LUT are gated by `_gradeEnabled`:
  * on for the Game / Preem "replicate a real map" themes, off for the five
  * stylised themes, which keep their own colour identity. The ACES tonemap is
- * always on — it is the theme-agnostic HDR→display curve.
+ * always on; it is the theme-agnostic HDR→display curve.
  *
  * ── 1. ACES tonemap ─────────────────────────────────────────────────────────
- * The ACES **SSTS** (Single-Stage Tone Scale) — the parametric ACES Output
- * Transform tone curve — ported verbatim from the ACES 1.3 reference
+ * The ACES **SSTS** (Single-Stage Tone Scale), the parametric ACES Output
+ * Transform tone curve, ported verbatim from the ACES 1.3 reference
  * `ACESlib.SSTS.ctl` (ampas/aces-dev), driven by the decoded
  * `STonemappingACESParams`: minStops -7, maxStops 9, midGrayScale 1,
  * dimSurround 1, surroundGamma 1, desaturate 0, toneCurveSaturation 1,
  * tonemapLuminance 0. `tonemapLuminance: 0` ⇒ per-channel; `desaturate: 0` ⇒
- * no ACES desaturation — so it is the SSTS tone scale per RGB channel, no RRT
+ * no ACES desaturation, so it is the SSTS tone scale per RGB channel, no RRT
  * sweeteners. The SSTS `TsParams` depend only on the params, so they are built
  * once here in JS and baked into the TSL graph; the GPU evaluates a 4-knot
  * log-space quadratic B-spline per channel.
@@ -36,7 +36,7 @@
  * (the tonemap output is encoded to sRGB first). brightness/lift/offsets/hue
  * are all identity in the decoded data and omitted. The combination order
  * (contrast → gain → gamma → saturation) is the standard primary-correction
- * order — the *params* are exact, the formula is the conventional one.
+ * order: the *params* are exact, the formula is the conventional one.
  *
  * ── 3. Braindance LUT ───────────────────────────────────────────────────────
  * The envparam `ldrLut` → `cube_cp_braindance_v001.xbm`, a 32³ RGBA-float 3D
@@ -103,7 +103,7 @@ const log2js = (x) => Math.log2(x);
 
 // ── The braindance LUT (Data3DTexture) ──────────────────────────────────────
 // Created empty; loadBraindanceLUT() fills it from assets/data/braindance-lut.bin.
-// Referenced by the tone-mapping graph as a texture binding — the binding is to
+// Referenced by the tone-mapping graph as a texture binding; the binding is to
 // this stable object, so a later data fill + needsUpdate uploads transparently.
 const _lutTexture = new Data3DTexture(
   new Float32Array(LUT_SIZE * LUT_SIZE * LUT_SIZE * 4), LUT_SIZE, LUT_SIZE, LUT_SIZE);
@@ -114,11 +114,11 @@ _lutTexture.magFilter  = LinearFilter;
 _lutTexture.wrapS      = ClampToEdgeWrapping;
 _lutTexture.wrapT      = ClampToEdgeWrapping;
 _lutTexture.wrapR      = ClampToEdgeWrapping;
-_lutTexture.colorSpace = NoColorSpace; // LUT data is sampled raw — no decode
+_lutTexture.colorSpace = NoColorSpace; // LUT data is sampled raw, no decode
 _lutTexture.name       = 'braindance-lut';
 _lutTexture.needsUpdate = true;
 
-// Grade + LUT gate — 0 for the stylised themes (ACES tonemap only), 1 for the
+// Grade + LUT gate: 0 for the stylised themes (ACES tonemap only), 1 for the
 // Game / Preem themes. A uniform, so theme switches need no pipeline rebuild.
 const _gradeEnabled = uniform(0);
 
@@ -145,14 +145,14 @@ export function setSceneGradeEnabled(enabled) {
 
 // ── CPU: build the SSTS TsParams from the decoded params ────────────────────
 
-/** ACES `interpolate1D` — clamped linear interpolation on a sorted 2-point table. */
+/** ACES `interpolate1D`: clamped linear interpolation on a sorted 2-point table. */
 function interp1D([[x0, y0], [x1, y1]], x) {
   if (x <= x0) return y0;
   if (x >= x1) return y1;
   return y0 + (y1 - y0) * ((x - x0) / (x1 - x0));
 }
 
-/** Port of `init_coefsLow` — the 6 low-segment spline coefficients (log10 space). */
+/** Port of `init_coefsLow`: the 6 low-segment spline coefficients (log10 space). */
 function initCoefsLow(low, mid) {
   const knotInc = (log10(mid.x) - log10(low.x)) / 3;
   const c = [];
@@ -165,7 +165,7 @@ function initCoefsLow(low, mid) {
   return [c[0], c[1], c[2], c[3], c[4], c[4]]; // last duplicated, per init_TsParams
 }
 
-/** Port of `init_coefsHigh` — the 6 high-segment spline coefficients (log10 space). */
+/** Port of `init_coefsHigh`: the 6 high-segment spline coefficients (log10 space). */
 function initCoefsHigh(mid, max) {
   const knotInc = (log10(max.x) - log10(mid.x)) / 3;
   const c = [];
@@ -207,7 +207,7 @@ function makeToneMappingFn() {
   const logMinX = log10(P.min.x), logMidX = log10(P.mid.x), logMaxX = log10(P.max.x);
   const logMinY = log10(P.min.y), logMaxY = log10(P.max.y);
 
-  // Per-segment quadratic coefficients (knot j ∈ {0,1,2}) — compile-time
+  // Per-segment quadratic coefficients (knot j ∈ {0,1,2}): compile-time
   // constants; only `t` and the j-select run on the GPU.
   const lo = [
     quadraticABC([P.coefsLow[0],  P.coefsLow[1],  P.coefsLow[2]]),
@@ -226,7 +226,7 @@ function makeToneMappingFn() {
   const pick3 = (j, v0, v1, v2) =>
     select(j.lessThan(0.5), float(v0), select(j.lessThan(1.5), float(v1), float(v2)));
 
-  /** Evaluate one 4-knot SSTS segment — a log-space quadratic B-spline. */
+  /** Evaluate one 4-knot SSTS segment: a log-space quadratic B-spline. */
   const segment = (logx, logA, logB, seg) => {
     const knot = logx.sub(logA).div(logB - logA).mul(3); // N_KNOTS-1 = 3
     const j = clamp(floor(knot), float(0), float(2));
@@ -237,7 +237,7 @@ function makeToneMappingFn() {
     return a.mul(t).mul(t).add(b.mul(t)).add(c); // logy
   };
 
-  /** ACES `ssts()` on one channel — scene-linear x → display luminance. */
+  /** ACES `ssts()` on one channel: scene-linear x → display luminance. */
   const sstsChannel = (x) => {
     const logx = log2(max(x, float(1e-10))).mul(INV_LOG2_10);
     const logyLow  = segment(logx, logMinX, logMidX, lo);
@@ -262,14 +262,14 @@ function makeToneMappingFn() {
   const applyGrade = (c) => {
     // Contrast about the pivot.
     let g = c.sub(GRADE_CONTRAST_PIVOT).mul(GRADE_CONTRAST).add(GRADE_CONTRAST_PIVOT);
-    // Per-channel gain — the map's cool cast (G/B +30%).
+    // Per-channel gain: the map's cool cast (G/B +30%).
     g = g.mul(vec3(GRADE_GAIN[0], GRADE_GAIN[1], GRADE_GAIN[2]));
-    // Luminance gamma — applied to luma so chroma is preserved.
+    // Luminance gamma, applied to luma so chroma is preserved.
     const luma  = g.r.mul(REC709[0]).add(g.g.mul(REC709[1])).add(g.b.mul(REC709[2]));
     const lumaC = max(luma, float(1e-5));
     const scale = pow(lumaC, float(1 / GRADE_GAMMA_LUM)).div(lumaC);
     const gamma = max(g.mul(scale), float(0));
-    // Saturation about luma — `desat + (colour − desat)·saturation`, written
+    // Saturation about luma: `desat + (colour − desat)·saturation`, written
     // out (not the TSL `.mix()` method, which mis-orders operands).
     const sLuma = vec3(gamma.r.mul(REC709[0]).add(gamma.g.mul(REC709[1])).add(gamma.b.mul(REC709[2])));
     return max(sLuma.add(gamma.sub(sLuma).mul(float(GRADE_SATURATION))), float(0));
@@ -295,7 +295,7 @@ function makeToneMappingFn() {
       Y.sub(float(MIN_LUM_SDR)).div(float(MAX_LUM_SDR - MIN_LUM_SDR)),
       float(0), float(1));
 
-    // Dim-surround compensation (envparam dimSurround: 1) — ACES ODT viewing-
+    // Dim-surround compensation (envparam dimSurround: 1): ACES ODT viewing-
     // environment gamma on luminance, chroma preserved.
     if (DIM_SURROUND) {
       const g = DIM_SURROUND_GAMMA * SURROUND_GAMMA;
@@ -313,7 +313,7 @@ function makeToneMappingFn() {
     // Gate: stylised themes get the ACES result; Game/Preem get grade + LUT.
     const out = select(_gradeEnabled.greaterThan(0.5), lutOut, cv);
 
-    // Return linear display values — the renderer applies the sRGB OETF after.
+    // Return linear display values; the renderer applies the sRGB OETF after.
     return clamp(out, float(0), float(1));
   });
 }

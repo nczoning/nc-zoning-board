@@ -92,7 +92,7 @@ test('modsByUid: a thrown fetch degrades to empty, never throws', async () => {
 
 test('modsByUid: sends the composite (gameId<<32)+modId UID (not "gameId:modId")', async () => {
   // Wire-contract guard: Nexus silently drops UIDs in the wrong format and
-  // returns no images — a bug the shape-only tests above can't catch.
+  // returns no images, a bug the shape-only tests above can't catch.
   let sentUids = null;
   const impl = async (url, init) => {
     sentUids = JSON.parse(init.body).variables.uids;

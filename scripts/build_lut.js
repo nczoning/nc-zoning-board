@@ -1,14 +1,14 @@
 /**
- * build_lut.js — extract the in-game 3D-map colour-grading LUT to a runtime asset.
+ * build_lut.js: extract the in-game 3D-map colour-grading LUT to a runtime asset.
  *
  * The CP2077 world map render-to-texture scene applies a colour grade whose
  * LDR LUT is `base/weather/24h_basic/luts/cube_cp_braindance_v001.xbm`
  * (decoded from `3dmap.envparam`).
  * That `.xbm` is a 32×32×32 RGBA-float 3D colour cube.
  *
- * Source format — a `.cube` (Adobe Cube LUT): export the `.xbm` from WolvenKit
+ * Source format: a `.cube` (Adobe Cube LUT). Export the `.xbm` from WolvenKit
  * as `.cube` and place it in assets/lut-source/. NOTE: do *not* use WolvenKit's
- * DDS export of this texture — for a 3D float volume it re-lays-out the slices
+ * DDS export of this texture; for a 3D float volume it re-lays-out the slices
  * incorrectly (verified: its texel 0 differs from the raw `.xbm` bytes). The
  * `.cube` export is byte-faithful to the engine data.
  *
@@ -16,7 +16,7 @@
  * loads straight into a THREE.Data3DTexture (RGBAFormat + FloatType) and
  * samples in the Game theme's colour-grade pass.
  *
- * Source `.cube` lives in assets/lut-source/ (gitignored — needs WolvenKit +
+ * Source `.cube` lives in assets/lut-source/ (gitignored; needs WolvenKit +
  * the game files to produce); the committed runtime asset is assets/data/.
  * Mirrors the glb-source/ → glb-meshopt/ pattern.
  *
@@ -68,7 +68,7 @@ function build() {
   }
 
   // ── emit ────────────────────────────────────────────────────────────────
-  // .cube data is R-fastest, then G, then B — identical ordering to
+  // .cube data is R-fastest, then G, then B: identical ordering to
   // THREE.Data3DTexture (x-fastest, x = R). Expand RGB → RGBA (opaque) float32.
   const out = new Float32Array(texels * 4);
   for (let i = 0; i < texels; i++) {
