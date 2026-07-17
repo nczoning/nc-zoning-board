@@ -6,12 +6,12 @@
  * instead of percolating spatial clustering? Tests three hypotheses on the raw
  * texel stream (scan order = the order boxes are packed in the texture):
  *
- *   H1 ADJACENCY LOCALITY — are CONSECUTIVE valid boxes spatially close? If a
+ *   H1 ADJACENCY LOCALITY: are CONSECUTIVE valid boxes spatially close? If a
  *      building's boxes are packed contiguously, consecutive-box distance is
  *      mostly tiny with occasional big jumps at building boundaries.
- *   H2 EMPTY-RUN DELIMITERS — do runs of empty texels separate building groups?
+ *   H2 EMPTY-RUN DELIMITERS: do runs of empty texels separate building groups?
  *      (i.e. is a big spatial jump correlated with an empty gap before it?)
- *   H3 TEXEL↔WORLD LAYOUT — is the texture spatially sorted (monotone in world
+ *   H3 TEXEL↔WORLD LAYOUT: is the texture spatially sorted (monotone in world
  *      X/Y, or a space-filling curve)? Reveals how the packer ordered boxes.
  *
  * Output: console + _lighting_demo/tune/PROBE.md

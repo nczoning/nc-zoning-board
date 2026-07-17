@@ -4,19 +4,19 @@
  * ─────────────────────────────────────────────────────────────────────────
  * DOES A GLASS NODE'S PREFAB REF NAME A BUILDING, OR A SECTOR?
  *
- * The placement model assumes `ncz_prefabs.csv` supplies BUILDING IDENTITY — "which
+ * The placement model assumes `ncz_prefabs.csv` supplies BUILDING IDENTITY: "which
  * windows belong to which building". That assumption has never been tested, and there
  * is an obvious way for it to be false:
  *
  *   An INSTANCED node is a RENDERING batch, not a building. If the exporter batched
  *   every window pane in a sector into one worldInstancedMeshNode, that node has ONE
- *   nodeData entry, hence ONE prefab ref — and it would be the sector's architecture
+ *   nodeData entry, hence ONE prefab ref, and it would be the sector's architecture
  *   bucket, not any individual building. Every pane in the sector would then "belong"
  *   to the same prefab, and per-building glass share would be measuring a sector.
  *
  * 88.7% of glass instances are instanced, so if this is true it is true of nearly all
  * of the windows, and the prefab channel is worthless for identity (we would join panes
- * to buildings by POSITION instead — which we can now do).
+ * to buildings by POSITION instead, which we can now do).
  *
  * The test, on data already on disk:
  *
@@ -65,7 +65,7 @@ const refOf = {};
 for (const p of readCsv('ncz_prefabs.csv')) refOf[p.id] = p.ref;
 
 // Which meshes are glass? (same classifier window_where.js uses: the resolved .mi → .mt
-// chain, never a regex on the mesh name — a glass panel's material is `..._h400_w300_mlt.mi`
+// chain, never a regex on the mesh name: a glass panel's material is `..._h400_w300_mlt.mi`
 // and carries no window name at all.)
 const matRoot = {};
 for (const m of readCsv('ncz_materials.csv')) {

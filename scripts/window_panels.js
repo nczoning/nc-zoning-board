@@ -2,7 +2,7 @@
 /**
  * scripts/window_panels.js
  * ─────────────────────────────────────────────────────────────────────────
- * ROUTE A — THE REAL FACADE PANELS, AT THEIR REAL TRANSFORMS.
+ * ROUTE A: THE REAL FACADE PANELS, AT THEIR REAL TRANSFORMS.
  *
  * Every previous model painted windows onto OUR box cloud and then argued about the
  * denominator. The boxes are an approximation of the city; the panels are the city.
@@ -10,22 +10,22 @@
  *   A window is not an object. `window_parallax_interior` is a MATERIAL with roomWidth /
  *   roomHeight (3 x 4 m) that tiles a fake interior across whatever surface carries it.
  *   There is no per-window XYZ to extract, and the mesh's "chunks" are LOD levels, not
- *   spatial parts (lodMask 1/2/4) — so there is no glass chunk to pull out either.
+ *   spatial parts (lodMask 1/2/4), so there is no glass chunk to pull out either.
  *
  *   What DOES exist, exactly, is the PANEL: `cct_cpz_building_a_f_12m` is a 12 x 8 x 0.24 m
  *   facade slab, and we know its world position, rotation and scale to the centimetre.
  *
  * So: emit one quad per placed glass-bearing panel, in world space, and let the window grid
  * tile across the panel itself. No box join, no facade-area denominator, no classification.
- * The thing that was darkening Corpo Plaza — normalising real glass against the fictional
- * surface area of 1,374 interpenetrating slabs — cannot happen, because no box is involved.
+ * The thing that was darkening Corpo Plaza (normalising real glass against the fictional
+ * surface area of 1,374 interpenetrating slabs) cannot happen, because no box is involved.
  *
  * HONEST LIMIT (this is the A/B): a mesh is called glass if `window_parallax_interior` is in
  * its material library. On a multilayer facade (ml_*_masksset) the glass is a MASKED LAYER,
- * so part of the panel is wall and we will light all of it. Route B — decoding the mask
- * textures — is what fixes that, and is only worth doing if A's placement looks right.
+ * so part of the panel is wall and we will light all of it. Route B (decoding the mask
+ * textures) is what fixes that, and is only worth doing if A's placement looks right.
  *
- * Output (data/window-panels-<set>.bin): 9 floats per panel, in THREE space —
+ * Output (data/window-panels-<set>.bin): 9 floats per panel, in THREE space:
  *     px py pz   qx qy qz qw   sw sh
  * i.e. a unit quad (PlaneGeometry(1,1), +Z normal) scaled to the panel and placed on it.
  *
@@ -44,7 +44,7 @@ const RAW = process.argv.includes('--raw')
 const WANT_ROOF = process.argv.includes('--roof');
 
 // ONE definition of glass, shared (scripts/glass_lib.js). It now includes glass.mt and
-// glass_onesided.mt — 145 material definitions the old regex ignored outright.
+// glass_onesided.mt: 145 material definitions the old regex ignored outright.
 const { ARCH, makeGlassTest } = require('./glass_lib');
 
 function readCsv(file) {
@@ -110,7 +110,7 @@ for (const a of readCsv('ncz_assets.csv')) {
   if (!d.every((v) => v > 0)) continue;
   const glass = isGlass((a.mat_names || '').split('|'), (a.mat_paths || '').split('|'));
   if (!glass) continue;
-  // The bbox is NOT centred on the mesh origin — cct_cpz_building_a_f_12m runs X[-12,0],
+  // The bbox is NOT centred on the mesh origin: cct_cpz_building_a_f_12m runs X[-12,0],
   // Z[0,8]. Carry the centre, or every panel lands offset by half its own size.
   asset[a.id] = { dims: d, ctr: [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2] };
 }
@@ -143,7 +143,7 @@ function panel(id, x, y, z, q, sx, sy, sz) {
   const cw = [x + c[0], y + c[1], z + c[2]];
 
   // Build the quad's frame in THREE space. A PlaneGeometry(1,1) has +X right, +Y up,
-  // +Z normal — so map long→X, short→Y, thin→Z, and keep it right-handed.
+  // +Z normal, so map long→X, short→Y, thin→Z, and keep it right-handed.
   const U = toThree(uW), V = toThree(vW), N = toThree(nW);
   // Right-handedness: if U x V points against N, flip V (a mirrored basis makes matToQuat
   // return garbage and the panel renders inside-out).
@@ -167,7 +167,7 @@ async function stream(file, onRow) {
 }
 
 (async () => {
-  // Instanced copies — one row per placed copy, each with its own transform.
+  // Instanced copies: one row per placed copy, each with its own transform.
   await stream('ncz_instances.csv', (f, C) => {
     panel(f[C.asset], +f[C.x], +f[C.y], +f[C.z],
       [+f[C.qi], +f[C.qj], +f[C.qk], +f[C.qr]], +f[C.sx], +f[C.sy], +f[C.sz]);

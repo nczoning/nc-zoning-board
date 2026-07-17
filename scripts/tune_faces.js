@@ -1,7 +1,7 @@
 /**
  * scripts/tune_faces.js
  * ─────────────────────────────────────────────────────────────────────────
- * Headless validation of computeFaceOccluders() — the exterior-face occlusion
+ * Headless validation of computeFaceOccluders(), the exterior-face occlusion
  * precompute (see three-scene.js). Lifts the function VERBATIM from the live
  * source (anti-drift, same pattern as tune_lib's segmentBuildings), runs it
  * over every district's decoded box set, and emulates the shader's
@@ -148,7 +148,7 @@ function decodeDistrictMatrices(meta) {
 
 // ── district stats ───────────────────────────────────────────────────────────
 // litSample: emulate the gate at each box's 4 face centres and report the lit
-// share among boxes poking above grade — the "visible wall points" proxy.
+// share among boxes poking above grade, the "visible wall points" proxy.
 console.log('');
 const rows = [];
 let totalMs = 0, totalBoxes = 0;

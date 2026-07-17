@@ -23,21 +23,21 @@
  *   4. Report per subdistrict:
  *        GLASS SHARE  = glass AREA / (glass + wall) AREA → x0.5 = the lit fraction
  *        SIGN AREA    = emissive sign face area per km²  (a billboard is ~30 m2, a
- *                       shopfront neon ~2 m2 — counting them equally is meaningless)
+ *                       shopfront neon ~2 m2; counting them equally is meaningless)
  *   5. Harvest the game's own window parameters as a HISTOGRAM, and emit the whole
  *      lot to data/night-profile.json for the renderer to fetch.
  *
- * AREA, NOT COUNT — the bug this file already fixed once, in the other half.
+ * AREA, NOT COUNT: the bug this file already fixed once, in the other half.
  *   The share the SHADER needs is "what fraction of the facade is glass". Counting
- *   instances answers a different question — "what fraction of placed PIECES are glass
- *   pieces" — and the two agree only if every piece is the same size. They are not:
+ *   instances answers a different question ("what fraction of placed PIECES are glass
+ *   pieces"), and the two agree only if every piece is the same size. They are not:
  *   Corpo Plaza's bespoke towers carry glass as CHUNK MATERIALS on single huge meshes
  *   (one instance, vast area), while Kabuki and Charter Hill are kit-bashed from many
  *   small panels (many instances, small area each). Counting therefore systematically
  *   UNDER-weights monolithic glass and OVER-weights kit-bash.
  *
  *   The sign pass below already learned this and switched to area, with a comment
- *   saying counts are meaningless. The glass pass, ten lines above it, kept counting —
+ *   saying counts are meaningless. The glass pass, ten lines above it, kept counting,
  *   and produced a table where Charter Hill (35.6%) out-glasses Corpo Plaza (27.9%),
  *   which the maintainer's own footage contradicts. Both shares are now emitted so the
  *   correction is visible rather than asserted.
@@ -65,16 +65,16 @@ const MIN_ARCH_SAMPLES = 2000;
 // How much of the placed glass area a parameter value must cover before we treat it as
 // "the game's rule" rather than "the common case". A handful of special-case materials
 // (a lobby that never darkens, one that always does) should not overturn a rule that 95%
-// of the city's glass obeys — but a 60/40 split is not a rule, it is a variable we are
+// of the city's glass obeys, but a 60/40 split is not a rule, it is a variable we are
 // about to hard-code as a constant. This is where that line sits.
 const CLAIM_DOMINANCE = 0.90;
 
 // subId → districtId. Filled by loadPolys(); a key absent here is a DISTRICT-level row
-// (dogtown, ncx_morro_rock — the two with no subdistricts of their own).
+// (dogtown, ncx_morro_rock: the two with no subdistricts of their own).
 const PARENT = {};
 let MAT_N = 0, MESH_N = 0;
 
-// The committed, hand-tuned sign profile — read so the measurement can be compared
+// The committed, hand-tuned sign profile, read so the measurement can be compared
 // against it MECHANICALLY, and so a disagreement lands in the artefact as a flag rather
 // than in a comment nobody re-reads. It is NOT overwritten: the LLM-verified bands (127
 // curated shots) and the sector measurement are two measurements of different things,
@@ -120,7 +120,7 @@ function readCsv(file) {
 // ── 1. Material → root shader → what does it DO? ────────────────────────────
 // The game's own shader families, learned from the resolved chains (PASS A), not
 // guessed. `signages.mt` in particular was never found by searching .mt names for
-// "emissive" or "sign" — it only surfaced by walking the chain.
+// "emissive" or "sign"; it only surfaced by walking the chain.
 const WINDOW_MT   = /window_parallax_interior|window_interior_uv/i;
 const EMISSIVE_MT = /signages|emissive|diode|earth_globe_lights|vehicle_lights/i;
 // …and an ordinary shader (multilayered.mt et al.) that SETS an emissive value still
@@ -128,13 +128,13 @@ const EMISSIVE_MT = /signages|emissive|diode|earth_globe_lights|vehicle_lights/i
 const EMISSIVE_PARAM = /^(emissive|glow)/i;
 
 // The game's OWN window parameters, harvested across every window material as a
-// HISTOGRAM — not a first sample.
+// HISTOGRAM, not a first sample.
 //
 // "AmountTurnOffAtNight = 0.5, identical for every archetype" is the load-bearing claim
 // of the whole rebuild: it is the second term of `lit = glass_share x 0.5`. It is also
 // still a CLAIM. If this histogram comes back with more than one value, the claim is
-// false, the model is wrong, and we find that out here — offline, in ten seconds, for
-// free — rather than by tuning a shader against it for a week.
+// false, the model is wrong, and we find that out here (offline, in ten seconds, for
+// free) rather than by tuning a shader against it for a week.
 const WINDOW_PARAM = /^(amountturnoffatnight|tintcoloratnight|lightstempvariationatnight|emissiveev|roomwidth|roomheight|roomdepth)$/i;
 
 function classifyMaterials() {
@@ -176,21 +176,21 @@ function classifyMaterials() {
   return { byPath, gameParams };
 }
 
-// The AREA-WEIGHTED MEAN of a numeric histogram — and for a PROBABILITY parameter this,
+// The AREA-WEIGHTED MEAN of a numeric histogram, and for a PROBABILITY parameter this,
 // not the mode, is the number the shader wants.
 //
 // The shader has one global constant where the game has a distribution. The mode throws
 // away the tail; the mean is the unbiased estimate of what the city actually does. When
 // the distribution is nearly a spike (roomHeight: 4 on 97% of glass) mean and mode agree
 // and the choice is moot. When it is not (roomWidth: 3/4/6, no value over 41%) the mean is
-// the only honest single number — and the spread, which is reported next to it, is the
+// the only honest single number, and the spread, which is reported next to it, is the
 // warning that a single number is a compromise at all.
 function meanOf(hist) {
   if (!hist) return null;
   let sum = 0, w = 0;
   for (const [k, v] of Object.entries(hist)) {
     const x = parseFloat(k);
-    if (!Number.isFinite(x)) return null;      // non-numeric (a colour) — no mean exists
+    if (!Number.isFinite(x)) return null;      // non-numeric (a colour): no mean exists
     sum += x * v; w += v;
   }
   return w ? sum / w : null;
@@ -214,23 +214,23 @@ function modeOf(hist) {
 // A mesh is glass if ANY material it references is a window material. Chunk-material
 // NAMES are matched too, because a mesh can name `window_parallax_interior` directly
 // as a chunk material without an external .mi (that is exactly how Corpo Plaza's
-// bespoke towers carry their glass — and why the mesh-NAME test read them as 4%).
+// bespoke towers carry their glass, and why the mesh-NAME test read them as 4%).
 function classifyMeshes(matByPath) {
   const assets = readCsv('ncz_assets.csv');
   const byId = {};
   let glass = 0, emissive = 0, boxed = 0;
   for (const a of assets) {
-    // THE ASSET'S OWN BOUNDING BOX — local, exact, and present for every mesh.
+    // THE ASSET'S OWN BOUNDING BOX: local, exact, and present for every mesh.
     //
     // This replaces an entire pre-pass that tried to LEARN each asset's size and
     // orientation from its non-instanced placements, using the node's `Bounds` field.
     // That field is populated on 1.9% of nodes (InstancedMesh: 0.0%), so the "learned"
-    // sizes were a 2% sample nobody had checked was a sample — and they swung the
+    // sizes were a 2% sample nobody had checked was a sample, and they swung the
     // district glass shares 2x when a single filter changed. A mesh knows its own size.
     // Ask the mesh.
     //
     // Local dims x the node's Scale = the placed object's real box. That works for an
-    // INSTANCED node too — every copy is the same mesh at the same scale — so area
+    // INSTANCED node too (every copy is the same mesh at the same scale), so area
     // coverage goes from ~76% to ~100%. Only ORIENTATION still needs a quaternion, which
     // instanced nodes genuinely lack.
     const bx = [+a.bbx0, +a.bby0, +a.bbz0, +a.bbx1, +a.bby1, +a.bbz1];
@@ -240,7 +240,7 @@ function classifyMeshes(matByPath) {
     const names = (a.mat_names || '').split('|').filter(Boolean);
     const paths = (a.mat_paths || '').split('|').filter(Boolean);
     let isGlass = false, isEmissive = false;
-    const winMats = [];   // the WINDOW materials this mesh actually uses — so the game's
+    const winMats = [];   // the WINDOW materials this mesh actually uses, so the game's
                           // params can be weighted by the glass AREA that carries them.
     for (const n of names) {
       if (WINDOW_MT.test(n)) isGlass = true;
@@ -331,20 +331,20 @@ const inPoly = (x, y, r) => {
 
 // ── 4. Walk the nodes ───────────────────────────────────────────────────────
 // A WALL is a facade piece that is NOT glass. The glass share is glass/(glass+wall),
-// and only architecture counts — props, vehicles and street furniture are not facade.
+// and only architecture counts: props, vehicles and street furniture are not facade.
 const ARCH = /[\\/]architecture[\\/]|[\\/]megabuilding[\\/]/i;
 
 // SIGNAGE = it EMITS *and* it IS SIGNAGE. Both tests are needed, and neither is a fudge.
 //
-// The material answers "does it glow" — definitionally, via the shader chain. It does not
-// answer "is it a sign". Emissive alone counts vending machines (39,780 m2 — the single
+// The material answers "does it glow" (definitionally, via the shader chain). It does not
+// answer "is it a sign". Emissive alone counts vending machines (39,780 m2, the single
 // largest emitter in the city), servers (38,481), stand generators, spotlights, wall lamps
 // and BEER KEGS. 98.4% of all emissive area is environment\decoration\ props. The material
 // never lied: a vending machine really does have a glowing screen. I asked the wrong
 // question. It ranked empty Badlands (Red Peaks) as the city's second-loudest district.
 //
 // So the shader says WHETHER it emits; the asset tree says WHAT it is. Our map renders
-// buildings, windows and signage — it does not render vending machines.
+// buildings, windows and signage; it does not render vending machines.
 const SIGNAGE = /[\\/]advertising[\\/]|signage|billboard|neon_|screen_\d/i;
 // SECTOR_M IS GONE, and the note that used to be here had the answer in it the whole time:
 //
@@ -352,7 +352,7 @@ const SIGNAGE = /[\\/]advertising[\\/]|signage|billboard|neon_|screen_\d/i;
 //    grid coord times the cell size. LOD0 is half that: 64 m."
 //
 // A LEVEL-1 sector has 128 m cells and a level-0 sector has 64 m. The cell size DOUBLES per
-// streaming level — so a level-6 cell is 64 x 2^6 = 4,096 m, a quarter of Night City in one
+// streaming level, so a level-6 cell is 64 x 2^6 = 4,096 m, a quarter of Night City in one
 // sector. That is not a level of DETAIL, it is a level of SIZE: the game files each object
 // into the level whose cell can contain it, which is why every megabuilding lives in levels
 // 3-6 and why filtering the dump to level 0 read the city's props and none of its towers.
@@ -364,7 +364,7 @@ const APPEARANCE_OFF = /windows_off|_off$/i;
 
 // ── Quaternion (CET: x,y,z,w with Z UP) ─────────────────────────────────────
 const qConj = (q) => [-q[0], -q[1], -q[2], q[3]];
-// v' = v + 2·(q.xyz × (q.xyz × v + w·v)) — the standard Rodrigues form, no matrix needed.
+// v' = v + 2·(q.xyz × (q.xyz × v + w·v)): the standard Rodrigues form, no matrix needed.
 function qRot(q, v) {
   const [x, y, z, w] = q, [a, b, c] = v;
   const tx = 2 * (y * c - z * b), ty = 2 * (z * a - x * c), tz = 2 * (x * b - y * a);
@@ -373,7 +373,7 @@ function qRot(q, v) {
 
 // A surface's ROOFNESS = |world normal · Z|, CET being Z-up. 0 = a vertical wall,
 // 1 = a flat roof, and the middle is a rake. The bands below are what the SHADER can
-// actually act on — and they are not symmetric, because our geometry is not:
+// actually act on, and they are not symmetric, because our geometry is not:
 //
 //   WALL   (< 20° from vertical)  → our box's side faces. Lit today.
 //   ANGLED (20°–70°)              → a RAKED FACADE, e.g. the Downtown waterfront towers.
@@ -394,7 +394,7 @@ async function main() {
   const apps = {};
   for (const a of readCsv('ncz_appearances.csv')) apps[a.id] = a.appearance;
 
-  // NO PRE-PASS. There used to be an 80-line one here — a median over each asset's
+  // NO PRE-PASS. There used to be an 80-line one here: a median over each asset's
   // single placements to guess its size, and a "min-volume reference pose" trick to
   // recover its local normal by un-rotating the tightest AABB it was ever seen in.
   //
@@ -410,29 +410,29 @@ async function main() {
   //
   // and both work for INSTANCED nodes' area too (every copy is the same mesh at the same
   // scale), which is why coverage goes from ~76% to ~100%. Orientation still needs a
-  // quaternion, which instanced nodes genuinely do not have — that one is a real limit,
+  // quaternion, which instanced nodes genuinely do not have; that one is a real limit,
   // not an inference gap, and it is counted rather than guessed.
-  // WHAT COUNTS AS A PANEL — and it takes BOTH tests, because the ratio alone is a hole.
+  // WHAT COUNTS AS A PANEL; it takes BOTH tests, because the ratio alone is a hole.
   //
   // A ratio test says "thin relative to itself". A warehouse 100 x 80 x 30 m has a min/max
-  // ratio of 0.30 and sails through — so an ENTIRE FLAT BUILDING gets classified as a kit
+  // ratio of 0.30 and sails through, so an ENTIRE FLAT BUILDING gets classified as a kit
   // panel, and if any of its materials is a window material its whole 8,000 m2 footprint
   // lands in the glass bucket. That is the bespoke-megamesh problem the panel test exists
   // to exclude, walking back in through the front door.
   //
-  // It showed up as Jackson Plains — Badlands scrub — at 43.5% glass off 116 glass pieces
+  // It showed up as Jackson Plains (Badlands scrub) at 43.5% glass off 116 glass pieces
   // against 7,093 wall pieces, and Northside (a windowless industrial dock) at 17.7%.
   // Absurd on sight, which is the only reason it got caught.
   //
   // A panel is thin in METRES, not merely in proportion. The game's glass module is
   // 3 x 4 m; nothing that is a facade kit piece is 2 m thick.
-  const PANEL_THIN = 0.34;      // min/max dim ratio — thin relative to itself
+  const PANEL_THIN = 0.34;      // min/max dim ratio: thin relative to itself
   const PANEL_MAX_M = 2.0;      // ...AND thin in absolute metres. Both, or a building qualifies.
 
   // --top <subId>: which ASSETS actually supply this subdistrict's glass and wall area?
   // Probing from inside the real classifier, never with a re-implementation of it: a glass
-  // panel's material path is `..._h400_w300_mlt.mi`, which contains no window name at all
-  // — only the resolved .mi → root .mt chain knows it is glass. A regex on the CSV line
+  // panel's material path is `..._h400_w300_mlt.mi`, which contains no window name at all;
+  // only the resolved .mi → root .mt chain knows it is glass. A regex on the CSV line
   // finds nothing and reports it as zero.
   const TOP = process.argv.includes('--top') ? process.argv[process.argv.indexOf('--top') + 1] : null;
   const topTally = {};   // 'glass'|'wall' → assetPath → { m2, n, dims }
@@ -442,7 +442,7 @@ async function main() {
   // gameParams (from classifyMaterials) is the unweighted twin; both are reported, because
   // where they disagree is exactly where a rare material was masquerading as a common rule.
   const paramArea = {};
-  // GLASS PANEL SIZE — the game's glass module, weighted by how much of the city is built
+  // GLASS PANEL SIZE: the game's glass module, weighted by how much of the city is built
   // from it. Directly answers what the shader's GLASS_BLOCK grid should be: the block is
   // the kit panel, and the kit panel is a thing we can measure rather than choose.
   const panelSize = [];   // { long, short, m2 } per placed glass panel node
@@ -450,7 +450,7 @@ async function main() {
 
   // ncz_nodes.csv is ~2.4M rows / ~270 MB. Parsing it into objects would cost GBs, so
   // it is STREAMED line-by-line with positional field access. The columns are fixed and
-  // never quoted (ids and numbers only), so a plain split is safe here — unlike the
+  // never quoted (ids and numbers only), so a plain split is safe here, unlike the
   // other files, which carry quoted paths.
   const COL = {};
   const rl = require('readline').createInterface({
@@ -471,7 +471,7 @@ async function main() {
     if (!mesh) return;
     const inst = Math.max(1, +f[COL.inst] || 1);
 
-    // POSITION. NO FALLBACK — AND THE FALLBACK THAT WAS HERE IS NOW A HAZARD.
+    // POSITION. NO FALLBACK, AND THE FALLBACK THAT WAS HERE IS NOW A HAZARD.
     //
     // This used to bin position-less (instanced) nodes at their SECTOR CENTRE, on the
     // reasoning that "a LOD0 sector is a 64 m cell, so its centre is a ±32 m position".
@@ -479,11 +479,11 @@ async function main() {
     //
     //   1. Instanced nodes are NOT position-less. Their transforms were always in the
     //      sector's shared pool, behind a handle nobody dereferenced. Every copy has an
-    //      exact XYZ — see ncz_instances.csv and
+    //      exact XYZ; see ncz_instances.csv and
     //      [[instanced-transforms-were-always-readable]].
     //
     //   2. "A sector is a 64 m cell" is only true of STREAMING LEVEL 0. The trailing digit
-    //      of `exterior_X_Y_Z_L` is the level, and it sets the CELL SIZE — level 0 holds
+    //      of `exterior_X_Y_Z_L` is the level, and it sets the CELL SIZE: level 0 holds
     //      props, levels 3-6 hold megabuildings in enormous cells. The dump now reads all
     //      of them, so `(gx + 0.5) * 64` is not merely imprecise across levels, it points
     //      at the wrong part of the city entirely.
@@ -519,21 +519,21 @@ async function main() {
     const isArch = ARCH.test(mesh.path);
     if (isArch) {
       const off = APPEARANCE_OFF.test(apps[f[COL.app]] || '');
-      if (!box) t.noAreaArch += inst;   // mesh had no bounding box at all — reported, not hidden
+      if (!box) t.noAreaArch += inst;   // mesh had no bounding box at all: reported, not hidden
 
-      // PANELS ONLY, for the area share — the correction that makes the AREA column mean
+      // PANELS ONLY, for the area share: the correction that makes the AREA column mean
       // anything.
       //
       // A mesh is classified glass-or-wall WHOLESALE. For a kit-bashed panel that is true:
       // the panel really is all glass or all concrete. For a BESPOKE MEGATOWER it is a
-      // fiction — the tower is a mix, and weighting it by area dumps its ENTIRE 300 m
+      // fiction: the tower is a mix, and weighting it by area dumps its ENTIRE 300 m
       // facade into whichever bucket won the coin toss. One such mesh landing in "wall"
       // craters a district's glass share; by instance count it was worth 1, which is why
       // the bug stayed invisible until we started weighting by area.
       //
       // So the share is computed over the pieces where the binary IS valid (panels), and
       // the unapportionable bulk area is reported separately rather than silently shoved
-      // into one side. `thinness` is now the mesh's OWN aspect — not a guess from the one
+      // into one side. `thinness` is now the mesh's OWN aspect, not a guess from the one
       // placement that happened to be axis-aligned.
       const isPanel = box && box.thinness <= PANEL_THIN && box.minM <= PANEL_MAX_M;
       if (box && !isPanel) t.bulkArchA += m2;
@@ -552,13 +552,13 @@ async function main() {
         if (off) { t.glassOff += inst; t.glassOffA += m2; }
         else {
           t.glass += inst; t.glassA += m2;
-          // WALL / ANGLED / ROOF — the measurement behind whether the shader's
+          // WALL / ANGLED / ROOF: the measurement behind whether the shader's
           // vertical-surfaces-only rule is throwing away real light.
           //
           // The panel's normal is its thinnest LOCAL axis (from the mesh's own box), turned
           // into the world by this node's quaternion. `roofness` = |n.Z|, CET being Z-up.
           //
-          // An INSTANCED node still cannot be oriented — its per-copy transforms live in a
+          // An INSTANCED node still cannot be oriented: its per-copy transforms live in a
           // binary buffer WolvenKit will not expand, so it has no usable quaternion, and
           // one panel asset is placed at many rotations so the asset's own normal cannot
           // stand in. That is a REAL limit of the data, not an inference gap: it is counted
@@ -584,7 +584,7 @@ async function main() {
               panelSize.push({ w, h, m2 });
             }
           } else {
-            t.glassAUnk += m2;   // bulk mesh — no single normal exists to report
+            t.glassAUnk += m2;   // bulk mesh: no single normal exists to report
           }
           // Weight the game's window params by the glass AREA that actually carries them.
           // Counting MATERIALS would repeat, in the histogram, the exact bug this file
@@ -603,18 +603,18 @@ async function main() {
         }
       } else { t.wall += inst; t.wallA += m2; }
     }
-    // EMITS *and* IS SIGNAGE (see SIGNAGE above). Weighted by AREA — a billboard is ~30 m2
+    // EMITS *and* IS SIGNAGE (see SIGNAGE above). Weighted by AREA: a billboard is ~30 m2
     // against a shopfront neon's ~2 m2; counting them equally is meaningless.
     //
     // AREA COMES FROM THE MESH'S OWN BOX, NOT FROM THE NODE. The node's Bounds field would
     // be wrong twice over: on an INSTANCED node it encloses ALL the copies spread across a
     // block (`bounds x instances` gave a deco-font LETTER 32 m2 and a grocery sign 667 m2),
     // and it is absent on 98% of nodes anyway. The mesh box x the node's scale is the real
-    // size of one copy — and now that it works for instanced nodes too, the small repeated
+    // size of one copy, and now that it works for instanced nodes too, the small repeated
     // shopfront neons finally get counted at all.
     if (mesh.isEmissive && !isArch && SIGNAGE.test(mesh.path)) {
       if (box) { t.signArea += m2; t.signs += inst; }
-      else noArea += inst;   // mesh carries no bounding box — counted, not measured.
+      else noArea += inst;   // mesh carries no bounding box: counted, not measured.
     }
   });
   await new Promise((res) => rl.on('close', res));
@@ -671,14 +671,14 @@ async function main() {
   // THE SECOND TERM. Everything downstream multiplies glass_share by this number, so it
   // gets its own verdict rather than a footnote.
   //
-  // READ THE NAME. It is `AmountTurnOff AtNight` — the fraction that go DARK, not the
+  // READ THE NAME. It is `AmountTurnOff AtNight`: the fraction that go DARK, not the
   // fraction that stay lit. So:
   //
   //     lit_within_glass  =  1 - AmountTurnOffAtNight
   //
   // At the modal 0.5 the two readings coincide exactly, which is why the ambiguity
   // survived this long unnoticed. The OUTLIERS are what disambiguate it: a value of 0
-  // means "none of them turn off" — a lobby or shopfront lit all night, which is
+  // means "none of them turn off": a lobby or shopfront lit all night, which is
   // sensible. Under the other reading it would mean "0% lit", i.e. a window material
   // that is never lit at night, which is not a thing. The name is telling the truth.
   console.log('');
@@ -719,12 +719,12 @@ async function main() {
       // speaking for a minority of the district's facade.
       bulkArchShare: (t.pGlassA + t.pWallA + t.bulkArchA) ? t.bulkArchA / (t.pGlassA + t.pWallA + t.bulkArchA) : 0,
       // Fraction of arch instances we could size. With the mesh's own bounding box this
-      // should now be ~100% — it was ~76% when size was inferred from the node Bounds
+      // should now be ~100%; it was ~76% when size was inferred from the node Bounds
       // field. Anything materially below 1.0 here means meshes without a bounding box,
       // which is a NEW problem, not the old one.
       areaCoverage: cnt ? 1 - t.noAreaArch / cnt : 0,
       // Of the glass we CAN orient: how much is roof (killed by `onWall`) and how much is
-      // a raked facade (lands on our box sides, so already lit — but we cannot render its
+      // a raked facade (lands on our box sides, so already lit, but we cannot render its
       // rake)? `orientCoverage` is how much of the district's glass carried a usable
       // rotation at all; a low value means these two shares are a small sample talking.
       roofGlassShare:   glassKnown ? t.glassAH / glassKnown : 0,
@@ -738,7 +738,7 @@ async function main() {
   const maxSign = Math.max(...rows.map((r) => r.signM2PerKm2), 1);
   for (const r of rows) {
     r.signOrdinal = r.signM2PerKm2 / maxSign;
-    r.litFraction = r.sharePanel * LIT;             // stored DERIVED — nothing downstream re-applies the 0.5
+    r.litFraction = r.sharePanel * LIT;             // stored DERIVED: nothing downstream re-applies the 0.5
     r.flags = [];
     if (r.glass + r.wall < MIN_ARCH_SAMPLES) r.flags.push('low-sample');
     if (r.areaCoverage < 0.80) r.flags.push('low-area-coverage');
@@ -772,7 +772,7 @@ async function main() {
   }
 
   // City-wide verdict on the shader's `onWall` gate. Reported over the glass we could
-  // ORIENT — i.e. the non-instanced glass whose quaternion is real.
+  // ORIENT, i.e. the non-instanced glass whose quaternion is real.
   const sum = (k) => Object.values(tally).reduce((s, t) => s + t[k], 0);
   const gAV = sum('glassAV'), gAA = sum('glassAAng'), gAH = sum('glassAH'), gAU = sum('glassAUnk');
   const gKnown = gAV + gAA + gAH;
@@ -784,7 +784,7 @@ async function main() {
   console.log(`  (${(gAU / 1e6).toFixed(2)} km2 unoriented: instanced nodes carry no rotation, and non-panel`);
   console.log('   chunk-material meshes have no single normal. Neither is guessed at.)');
 
-  // ── THE GLASS MODULE — what the shader's GLASS_BLOCK grid should be ───────
+  // ── THE GLASS MODULE: what the shader's GLASS_BLOCK grid should be ────────
   // Weighted by placed area, so a panel that tiles half the city outweighs a one-off.
   // Median, not mean: panel sizes are a handful of discrete kit values with a long tail,
   // and a mean of a multi-modal set is a number that describes nothing.
@@ -861,7 +861,7 @@ async function main() {
     generator: 'scripts/night_analyse.js',
     sourceRaw: RAW,
     counts: { materials: MAT_N, meshes: MESH_N, nodes: total, binned: n, outsideAllPolygons: outside, placedBySectorCentre: viaSector },
-    // Straight from window_parallax_interior.mt, WEIGHTED BY PLACED GLASS AREA — `share`
+    // Straight from window_parallax_interior.mt, WEIGHTED BY PLACED GLASS AREA: `share`
     // is the fraction of Night City's glass wearing the modal value, and it is the number
     // that says whether a value is a RULE or merely the common case. The by-material-count
     // twin is kept beside it: they disagree, and the disagreement is the point.
@@ -881,11 +881,11 @@ async function main() {
       tintColorAtNight:     modeOf(gameParams.tintcoloratnight),
     },
     // Shares of the glass we could ORIENT (see orientedFraction). `angled` is raked
-    // FACADE — it lands on our boxes' side faces, so it is already lit; only `roof`
+    // FACADE: it lands on our boxes' side faces, so it is already lit; only `roof`
     // is what the shader's onWall gate discards.
     // The game's glass MODULE (area-weighted median over placed vertical glass panels).
-    // This is what the shader's GLASS_BLOCK grid should be — the coherent slab of window
-    // the city is kit-bashed from — as opposed to the window CELL inside it, which is the
+    // This is what the shader's GLASS_BLOCK grid should be (the coherent slab of window
+    // the city is kit-bashed from), as opposed to the window CELL inside it, which is the
     // ROOM (game.roomWidth x game.roomHeight).
     glassModule: { widthM: +panelW.toFixed(2), heightM: +panelH.toFixed(2), samples: panelSize.length },
     glassByTilt: {

@@ -15,18 +15,18 @@
  *     assets/js/three-scene.js at runtime (read as text → brace-match → eval).
  *     The tuner runs the EXACT clustering code the renderer runs.
  *   - The DDS decode is a faithful port of loadBuildings() (the .dds is
- *     uncompressed R16G16B16A16 — pure arithmetic, no GPU needed).
+ *     uncompressed R16G16B16A16; pure arithmetic, no GPU needed).
  *   - The classify chain is the one piece that can't be shared literally (it's
  *     TSL node-graph in the shader). It's mirrored numerically below with line
- *     references to three-scene.js — keep the two in sync. (See classifyBuilding.)
+ *     references to three-scene.js; keep the two in sync. (See classifyBuilding.)
  *
  * Metric (baseline, per the divisions-of-labour discussion 2026-06-20):
  *   class-distribution bands + cluster-count + gap-stability guardrails.
  *   Landmark ground-truth scoring is a later refinement layered on this baseline.
  *
  * Output (throwaway, gitignored-by-convention dir):
- *   _lighting_demo/tune/sweep.json   — full ranked results
- *   _lighting_demo/tune/RESULTS.md   — human-readable shortlist + recommendation
+ *   _lighting_demo/tune/sweep.json   (full ranked results)
+ *   _lighting_demo/tune/RESULTS.md   (human-readable shortlist + recommendation)
  *
  * Run: node scripts/tune_archetypes.js
  */
@@ -81,7 +81,7 @@ for (const k of REQUIRED) if (NCZ[k] === undefined) throw new Error(`missing NCZ
 // minus the `ugly_building` debug isolate (a single building → skews stats).
 const DISTRICTS = DISTRICT_META.filter((m) => m.name !== 'ugly_building');
 
-// ── 3. DDS decode — faithful port of loadBuildings() (three-scene.js ~2068) ──
+// ── 3. DDS decode: faithful port of loadBuildings() (three-scene.js ~2068) ──
 function loadDataDds(absPath) {
   const buf = fs.readFileSync(absPath);
   const width = buf.readUInt32LE(16);   // header uint32 index 4
@@ -147,7 +147,7 @@ function decodeDistrict(meta) {
   };
 }
 
-// ── 4. Classify — numeric mirror of the TSL chain (three-scene.js:2480-2517) ─
+// ── 4. Classify: numeric mirror of the TSL chain (three-scene.js:2480-2517) ─
 // IF YOU EDIT THE SHADER'S ARCHETYPE MATH, EDIT THIS TOO.
 function smoothstep(e0, e1, x) {
   let t = (x - e0) / (e1 - e0);
@@ -155,7 +155,7 @@ function smoothstep(e0, e1, x) {
   return t * t * (3 - 2 * t);
 }
 
-// dims: building (clustered) aggregate — h=heightHalf, fMax=footMaxHalf, fMin=footMinHalf.
+// dims: building (clustered) aggregate; h=heightHalf, fMax=footMaxHalf, fMin=footMinHalf.
 // Returns the discrete class matching the ?archdebug legend, plus the continuous
 // archMask "lit" weight (district-density stubbed to 1: it's region-gating, not
 // shape, and is independent of the params we sweep).
@@ -275,7 +275,7 @@ function main() {
   for (const d of decoded) console.log(`  ${d.name.padEnd(16)} ${d.count} boxes`);
 
   // Pre-cluster every district at every gap in GAP_SET (clustering depends only
-  // on gap, not the ARCH params — so the expensive step runs ~108×, not 13k×).
+  // on gap, not the ARCH params, so the expensive step runs ~108×, not 13k×).
   console.log('\nClustering at each gap…');
   const cache = {}; // cache[name][gap] = { dims, clusterCount }
   for (const d of decoded) {

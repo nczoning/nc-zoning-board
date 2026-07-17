@@ -54,20 +54,20 @@ The **daytime** base is decoded from `3dmap.envparam`:
 ### Night-time lighting (moon + `nightFactor`)
 
 A full day–night cycle is layered on the decoded daytime base, driven by one
-control — `nightFactor`, a `smoothstep` over the sun's elevation (0 by day, 1 at
+control: `nightFactor`, a `smoothstep` over the sun's elevation (0 by day, 1 at
 night; `NCZ.nightFactorForSunElevation`). At `nightFactor == 0` the scene is
 byte-identical to the calibrated daytime above.
 
 - **Sun** intensity fades to 0 as `nightFactor`→1; its colour stays the decoded warm.
-- **Moon** — a second `DirectionalLight` (cool, `MOON_COLOR_RGB (0.62, 0.74, 1.0)`),
+- **Moon**: a second `DirectionalLight` (cool, `MOON_COLOR_RGB (0.62, 0.74, 1.0)`),
   positioned from real `SunCalc.getMoonPosition` (the lunar arc). It casts **no**
   shadows. Intensity = `MOON_INTENSITY × MOON_PHASE × moon-altitude-gate × nightFactor`.
   `MOON_PHASE` is a tunable constant (default ~full) so a new-moon date can't leave the
-  night dark — the *arc* is real, the *phase brightness* is a rule-of-cool choice.
+  night dark: the *arc* is real, the *phase brightness* is a rule-of-cool choice.
 - **Ambient** lerps from the day cube to a cool **night skyglow** cube; when the moon
   is below the horizon it boosts toward `AMBIENT_INTENSITY_NIGHT_MOONLESS` so a moonless
   deep night stays legible without washing out moonlit nights.
-- **Visible discs** — the sun and moon are drawn as orbs (`MeshBasicNodeMaterial`)
+- **Visible discs**: the sun and moon are drawn as orbs (`MeshBasicNodeMaterial`)
   tracing their true arcs; terrain depth-occludes them at the horizon. The moon disc is
   ~0.6× the sun disc.
 

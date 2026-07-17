@@ -13,24 +13,24 @@ Reference for the sun/shadow/lighting system in the Three.js schematic view.
 ## Day–night lighting model
 
 The daytime base is calibrated to the in-game 3D map's environment file
-(`base/weather/24h_basic/3dmap.envparam`) — a low sun + a 6-direction ambient cube
+(`base/weather/24h_basic/3dmap.envparam`): a low sun + a 6-direction ambient cube
 through an ACES tonemap. Layered on top is a full **day–night cycle** driven by one
 control, `nightFactor` (a `smoothstep` over the sun's elevation: 0 by day, 1 at
 night; `NCZ.nightFactorForSunElevation`). At `nightFactor == 0` the scene is
 byte-identical to the original calibrated daytime.
 
-**Three lights — two celestial, one ambient:**
+**Three lights, two celestial and one ambient:**
 
 ```javascript
-// SUN — warm, casts shadows. Intensity fades out with nightFactor.
+// SUN: warm, casts shadows. Intensity fades out with nightFactor.
 _dirLight  = new THREE.DirectionalLight(0xffffff, NCZ.SUN_INTENSITY);   // 3.00 by day → 0 at night
 _dirLight.color.setRGB(...NCZ.SUN_COLOR_RGB, THREE.LinearSRGBColorSpace);  // [0.975, 0.869, 0.774]
 
-// MOON — cool, casts NO shadows (castShadow stays false, set once). Real lunar arc.
+// MOON: cool, casts NO shadows (castShadow stays false, set once). Real lunar arc.
 _moonLight = new THREE.DirectionalLight(0xffffff, 0);                    // → MOON_INTENSITY × phase × altitude × nightFactor
 _moonLight.color.setRGB(...NCZ.MOON_COLOR_RGB, THREE.LinearSRGBColorSpace); // [0.62, 0.74, 1.0]
 
-// AMBIENT — hemisphere; day cube ⇄ night skyglow cube by nightFactor.
+// AMBIENT: hemisphere; day cube ⇄ night skyglow cube by nightFactor.
 _hemiLight = new THREE.HemisphereLight(0xffffff, 0xffffff, NCZ.AMBIENT_INTENSITY); // 0.405 day
 ```
 
@@ -58,19 +58,19 @@ body's az/el (`_sunAz/_sunEl`, `_moonAz/_moonEl`), move that body's visible disc
 call the shared **`updateDayNightLighting()`** which recomputes everything from
 `nightFactor`: both light directions/colours/intensities, the ambient lerp, and the
 sun-shadow fade. `setSunPosition` stores its az/el **before** the lights-exist guard
-(so an early pre-`init()` call still propagates to the UI-sync poll — PR #733).
+(so an early pre-`init()` call still propagates to the UI-sync poll; PR #733).
 
 - The **sun** drives the shadow camera. `_sunDir`'s Y is floored at
   `NCZ.KEY_LIGHT_MIN_DIR_Y` (~5.7°) so the shadow camera's `lookAt` can't go
   degenerate near the horizon.
 - The **visible discs** use the *unclamped* elevation (`positionSkyBody`) so they
-  trace their true arcs — they're not gated on/off; terrain depth-occludes them at the
+  trace their true arcs: they're not gated on/off; terrain depth-occludes them at the
   horizon (they crest ridgelines naturally). Over open sea, with no terrain, a low disc
-  simply hovers (accepted — no horizon to set behind).
+  simply hovers (accepted; no horizon to set behind).
 - `flagShadowUpdate()` fires only when the sun actually casts (`_sunShadowFade > 0`).
 
 The showcase flyover drives **both** `setSunPosition()` and `setMoonPosition()` each
-frame from the same SunCalc data — so the map and showcase share one path.
+frame from the same SunCalc data, so the map and showcase share one path.
 
 ---
 
@@ -102,7 +102,7 @@ handled entirely by the **normal bias** instead.
 `_shadowsOn ? _shadowIntensity × _sunShadowFade : 0`, where `_sunShadowFade` is a
 `smoothstep` over the sun's elevation: full at/above `SUN_SHADOW_FADE_FULL_DEG` (12°),
 0 at/below `SUN_SHADOW_FADE_OFF_DEG` (3°). So crisp shadows in daylight, fading through
-dusk, **none at night** — and with the moon casting nothing, night has no caster at
+dusk, **none at night**; and with the moon casting nothing, night has no caster at
 all. This is what removes the night/dusk "shadow box" by construction: no caster ⇒
 nothing to clip against the coverage cap.
 
@@ -138,12 +138,12 @@ casters stop being drawn into the main pass. (PR #751.)
 
 The single shadow camera (an `OrthographicCamera`) is **re-fitted every camera change**
 in `updateShadowCamera(renderCam = camera)` to concentrate the 8192² map on the visible
-ground — far sharper shadows when zoomed in. The fit switches by *regime*, not by camera:
+ground: far sharper shadows when zoomed in. The fit switches by *regime*, not by camera:
 
-- **Zoomed in** (visible-ground sphere radius ≤ `SHADOW_MAX_DISTANCE`): **camera-fit** —
+- **Zoomed in** (visible-ground sphere radius ≤ `SHADOW_MAX_DISTANCE`): **camera-fit**,
   bounding-sphere of the view's NDC corners ray-cast to `Y=0`. Tight, sharp, tracks
   what you see.
-- **Zoomed out** (radius > the cap) **and the showcase fly cam**: **world-locked box** —
+- **Zoomed out** (radius > the cap) **and the showcase fly cam**: **world-locked box**,
   centred on the world, half = cap. The box already spans the whole ~12 km world, so
   following the camera buys no sharpness and only causes the **"moving shadow box"**
   (a capped, camera-tracking slice whose centre clamps to a world edge, leaving the far
@@ -180,7 +180,7 @@ Key constants:
 | Constant | Value | Purpose |
 | --- | --- | --- |
 | `SHADOW_MAP_SIZE` | 8192 | Shadow map resolution (8192² texels). Always-on (not resized per-mode): the fine texels keep the showcase's fast sun from shimmering; runtime resize is unreliable on r184 (three.js #30766, fixed r185). Interactive cost is bounded by render-on-demand (re-renders only on camera moves). |
-| `SUN_SHADOW_FADE_OFF_DEG` / `…_FULL_DEG` | 3 / 12 | Sun elevation over which cast-shadow strength ramps 0→full. Below 3° (dusk/night) shadows fade out — no caster ⇒ no shadow box. |
+| `SUN_SHADOW_FADE_OFF_DEG` / `…_FULL_DEG` | 3 / 12 | Sun elevation over which cast-shadow strength ramps 0→full. Below 3° (dusk/night) shadows fade out: no caster ⇒ no shadow box. |
 | `KEY_LIGHT_MIN_DIR_Y` | 0.10 | Floor on the sun direction's Y (~5.7°) so the shadow camera's `lookAt` can't degenerate near the horizon. |
 | `SHADOW_MAX_DISTANCE` | 8600 | Cap on the footprint half-side (≈ world half-diagonal; nothing renders past the world bounds). Past the cap the box world-locks. |
 | `SHADOW_GROUND_MARGIN` | 600 | Footprint extends this far past the visible ground (building heights + a sliver of off-screen casters) |

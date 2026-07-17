@@ -6,7 +6,7 @@
  *
  * Every window model this project has shipped was tuned BY EYE. That is how we got a 24 x 18 m
  * grid (each "window" 291x the area of a real one) and a hash deciding which cells glow. Nobody
- * was being careless — there was nothing to check against.
+ * was being careless; there was nothing to check against.
  *
  * There is now. `data/window-faces-{set}.bin` holds 768,736 REAL windows, each already landed on
  * the face of one of our boxes, in that face's own (u, v) metres. So a model can be asked the only
@@ -19,7 +19,7 @@
  *
  * ─── WHY BOTH NUMBERS ────────────────────────────────────────────────────────
  * RECALL alone is gameable: a grid with a 10 cm pitch scores ~100% recall and is a solid wall of
- * light. So we also report PRECISION — of the windows the model DRAWS, what fraction is near a
+ * light. So we also report PRECISION: of the windows the model DRAWS, what fraction is near a
  * real one. A model that lights the right city has to win both.
  *
  * ─── THE MODELS ──────────────────────────────────────────────────────────────
@@ -28,7 +28,7 @@
  *   measured+   2.33 x  4.00 m, BEST phase per face   the kickoff, given a free gift
  *   oracle      BEST pitch AND phase per face, fitted from that face's OWN real windows
  *
- * `oracle` is the one that decides it. It is not shippable — it needs per-face params fitted from
+ * `oracle` is the one that decides it. It is not shippable: it needs per-face params fitted from
  * the very windows we are trying to predict, which is more data than just carrying the rectangles.
  * It is the CEILING on any lattice model whatsoever. If the ceiling is low, no procedural grid can
  * be rescued by better constants, and window_faces.js's call ("only 31% of facades are regular
@@ -66,7 +66,7 @@ console.log(`  ${manifest.faces.toLocaleString()} faces carrying ${manifest.uniq
 
 // ── pull one face's UNIQUE windows ──────────────────────────────────────────
 // A window straddling a tile edge was written into every tile it touches, so the rect list has
-// 1,075,215 entries for 768,736 windows. Dedupe or the duplicates get scored twice — and they are
+// 1,075,215 entries for 768,736 windows. Dedupe or the duplicates get scored twice, and they are
 // not uniformly distributed (a big window straddles more tiles), so they would silently weight the
 // score toward large panes.
 function faceWindows(rec) {
@@ -106,7 +106,7 @@ function fitAxis(vals) {
 }
 
 // Best phase for a KNOWN pitch: sweep it. Closed-form (circular mean) is the textbook answer and
-// it is wrong here — the residuals are not von Mises, they are multi-modal (a facade often has two
+// it is wrong here: the residuals are not von Mises, they are multi-modal (a facade often has two
 // window columns offset by half a pitch), and the circular mean lands between them, fitting neither.
 function bestPhase(vals, pitch) {
   let best = 0, bestErr = Infinity;
@@ -141,13 +141,13 @@ const MODELS = {
 };
 
 // A TRUE per-face ceiling. The median-gap estimator in fitAxis() is an ESTIMATOR, not an
-// optimiser — it was written to answer "is this face regular?", and on an irregular face it
+// optimiser: it was written to answer "is this face regular?", and on an irregular face it
 // happily returns a pitch that fits nothing. Used as a ceiling it is not even an upper bound:
 // it scored WORSE than the fixed 2.33 m grid at ±1 m, which is impossible for a real optimum.
 //
 // So search. Every pitch from 1.0 to 8.0 m, every phase within it, keep whichever lattice lands
 // nearest to the most of this face's own windows. That is the best any grid could POSSIBLY do
-// here — fitted to the very data it is scored against, per face, which is already more per-face
+// here, fitted to the very data it is scored against, per face, which is already more per-face
 // state than a procedural model is allowed. Nothing shippable can beat it.
 function bestLattice(vals, isV) {
   let best = { pitch: 2.33, phase: 0 }, bestHit = -1;
@@ -186,7 +186,7 @@ for (let gi = 0; gi < glassBoxes; gi++) {
       const m = MODELS[n](face);
       if (!(m.pu > 0) || !(m.pv > 0)) continue;
 
-      // RECALL — every real window, how far to the nearest lattice intersection.
+      // RECALL: every real window, how far to the nearest lattice intersection.
       for (const w of face.win) {
         const du = toLattice(w.u, m.pu, m.phu);
         const dv = toLattice(w.v, m.pv, m.phv);
@@ -194,7 +194,7 @@ for (let gi = 0; gi < glassBoxes; gi++) {
         for (let t = 0; t < TOLS.length; t++) if (d <= TOLS[t]) hit[n][t]++;
       }
 
-      // PRECISION — walk the lattice over the face; how many drawn windows sit near a real one?
+      // PRECISION: walk the lattice over the face; how many drawn windows sit near a real one?
       const nu = Math.floor(face.uSize / m.pu) + 1;
       const nv = Math.floor(face.vSize / m.pv) + 1;
       if (nu * nv > 200000) continue;                     // a degenerate sub-cm pitch; skip, don't hang

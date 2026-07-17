@@ -7,7 +7,7 @@
  * `cct_cpz_building_a_b_6m_window` is ONE 6 x 8 m facade slab holding TWO submeshes:
  *
  *     submesh_00   194 verts   224 tris   0.24 m thick   the CONCRETE
- *     submesh_01    16 verts     8 tris   0.00 m thick   the GLASS — four window strips
+ *     submesh_01    16 verts     8 tris   0.00 m thick   the GLASS: four window strips
  *
  * Every window model this project has built measured the SLAB:
  *
@@ -23,16 +23,16 @@
  * ─── HOW A SUBMESH IS KNOWN TO BE GLASS ──────────────────────────────────────
  * BY MATERIAL, and only by material. `<mesh>.Material.json` -> `Appearances.<first>` is the
  * chunk material list, one name per chunk. GLB submesh names are `submesh_NN_LOD_L` and NN
- * indexes that list (world-asset-reference S9, confirmed on 3 meshes from 3 kits) — the name
+ * indexes that list (world-asset-reference S9, confirmed on 3 meshes from 3 kits); the name
  * CARRIES the index, so nothing is inferred from array order. Look the name up in
  * `Materials[]` and read `MaterialTemplate`: the ROOT .mt, ALREADY RESOLVED by WolvenKit.
  *
- * So this file needs NO NAME REGEX. `glass_windows` — the material that defeated every
- * previous name-based test — resolves correctly here for free. The classifier is the game's
+ * So this file needs NO NAME REGEX. `glass_windows` (the material that defeated every
+ * previous name-based test) resolves correctly here for free. The classifier is the game's
  * own chunk->material assignment, which is what the renderer itself shades. It is not a
  * heuristic and it cannot be "widened" later.
  *
- * ─── THE SHAPE HEURISTIC DOES NOT GENERALISE — MEASURED, 2026-07-14 ──────────
+ * ─── THE SHAPE HEURISTIC DOES NOT GENERALISE: MEASURED, 2026-07-14 ───────────
  * The plan said glass could be cross-checked by shape: "flat (thinnest dim 0.0), 4-16 verts,
  * while concrete is 0.24-0.6 m thick". That was derived from ONE kit and it is FALSE city-wide:
  *
@@ -40,27 +40,27 @@
  *     a single flat quad whose AABB is 2.8 m "thick". Corpo Plaza is full of them.
  *   - Corner glazing is genuinely non-planar: `..._slope_corner_a_v1_a_window` is 6 facets.
  *   - "Has a back face" does not separate glass from concrete either: 43% of GLASS submeshes
- *     have opposing faces — and so do 73% of NON-glass ones.
+ *     have opposing faces, and so do 73% of NON-glass ones.
  *
  * The shape test is therefore kept only as a REPORTED DIAGNOSTIC. It is not a gate and it does
  * not get a vote. Material is authoritative BY CONSTRUCTION; shape was only ever a proxy for it.
  *
- * ─── GLASS IS OFTEN DOUBLE-SIDED — COUNT ONE SIDE ────────────────────────────
+ * ─── GLASS IS OFTEN DOUBLE-SIDED: COUNT ONE SIDE ─────────────────────────────
  * 43% of glass submeshes, holding 44% of all glass area, are modelled as TWO COINCIDENT SHEETS
  * facing opposite ways (you can see a window from inside and out). Summing every triangle
- * double-counts those — a 1.8x error, and the SAME class of bug as the panel-vs-window one this
+ * double-counts those: a 1.8x error, and the SAME class of bug as the panel-vs-window one this
  * script exists to fix, just one level further down.
  *
  * So: cluster triangles by normal; where two clusters are near-antiparallel AND of comparable
- * area, they are the two faces of one sheet — keep the larger, drop the smaller.
+ * area, they are the two faces of one sheet: keep the larger, drop the smaller.
  *
  * The check that this is right: `cct_cpz_building_a_a_24m_h16m_st` is a 24 x 16 m tower panel
  * (384 m2 of face). Raw triangle area 762.6 m2; one-sided 381.3 m2. It is a fully-glazed curtain
- * wall, and the corrected number lands on its own face area. That is not a fitted constant —
+ * wall, and the corrected number lands on its own face area. That is not a fitted constant;
  * it is the geometry agreeing with itself.
  *
  * ─── GLASS IS NOT A WINDOW. EMISSIVE IS. ────────────────────────────────────
- * 43% of the glass area we were counting DOES NOT GLOW — 40,300 m2 of it. `glass.mt` and
+ * 43% of the glass area we were counting DOES NOT GLOW: 40,300 m2 of it. `glass.mt` and
  * `glass_onesided.mt` are doors, balustrades, shopfronts, railings, the Corpo Plaza roundabout
  * canopy. They are glass. They are not windows, and lighting them lights the wrong city.
  *
@@ -69,12 +69,12 @@
  *   NOT        Glass · glass · glass_1 · z_glass · xx_glass · glass_a       40.3k m2   43%
  *
  * So the classifier is EMISSIVE, and it is asked of the material, which states it outright.
- * NOT "does it glow at night" — `AmountTurnOffAtNight` is a night MODIFIER (the fraction that
+ * NOT "does it glow at night": `AmountTurnOffAtNight` is a night MODIFIER (the fraction that
  * go dark; lit = 1 - it), not the definition. A thing that glows, glows.
  *
  * AND NO PARAMETER ALLOW-LIST. Emissive is spelled differently on different templates
- * (`EmissiveEV`, `EmissiveColor`, `EmissiveIntensity`, …), so match on the NAME —
- * /emissive/i with a non-zero value — rather than on the handful this file happens to know.
+ * (`EmissiveEV`, `EmissiveColor`, `EmissiveIntensity`, …), so match on the NAME
+ * (/emissive/i with a non-zero value) rather than on the handful this file happens to know.
  * Listing the params you "know" you want is the same mistake as name-matching a material, one
  * level up, and this pipeline has now made it three times.
  *
@@ -100,15 +100,15 @@ const OUT = arg('--out', path.join(__dirname, '..', 'data', 'window-geom.json'))
 const VERBOSE = process.argv.includes('--verbose');
 
 // The ROOT .mt templates that are glass. Applied ONLY to a resolved `MaterialTemplate` from
-// the Material.json — never to a material's name. (scripts/glass_lib.js is the shared
+// the Material.json, never to a material's name. (scripts/glass_lib.js is the shared
 // definition; this is the same set, matched against a .mt path rather than a CSV column.)
 // `_proxy` VARIANTS. A PROXY building's windows resolve to
-// `base\materials\window_parallax_interior_proxy.mt` — a DIFFERENT TEMPLATE FILE. Anchoring to
+// `base\materials\window_parallax_interior_proxy.mt`: a DIFFERENT TEMPLATE FILE. Anchoring to
 // `\.mt$` right after the name misses it, and misses every proxy building's glass with it. The
 // optional suffix is not cosmetic: 7,016 tall glazed proxy-only buildings hang on it.
 //
 // And the proxy templates carry MORE than the detailed ones. The game bakes the LIT PATTERN into
-// them — `wat_nid_building_a_v38`'s proxy has four window chunks:
+// them: `wat_nid_building_a_v38`'s proxy has four window chunks:
 //
 //     Windows_0  EV 0  turnOffAtNight 1   OFF
 //     Windows_4  EV 0  turnOffAtNight 1   OFF
@@ -116,19 +116,19 @@ const VERBOSE = process.argv.includes('--verbose');
 //     Windows_5  EV 5  turnOffAtNight 0   LIT, brighter
 //
 // each its own submesh with its own geometry. Which windows are on, which are off, and how
-// bright — as placed geometry. The emissive test below then does the right thing for free:
+// bright, as placed geometry. The emissive test below then does the right thing for free:
 // EV 0 is not emissive, so the dark windows stay dark.
 const GLASS_MT = /(^|[\\/])(window_parallax_interior|window_interior_uv|glass|glass_onesided)(_proxy)?\.mt$/i;
 
 // A submesh is FLAT if its thinnest extent is under this. The glass in the reference mesh is
-// 0.000 m; the concrete it is set into is 0.240 m. There is no ambiguous middle in practice —
+// 0.000 m; the concrete it is set into is 0.240 m. There is no ambiguous middle in practice:
 // this threshold sits in a gap, it does not cut through a distribution.
 const FLAT_M = 0.02;
 
 /**
  * DOES THIS MATERIAL GLOW?
  *
- * Asked of the material's own parameters, by NAME — /emissive/i with a non-zero value — not
+ * Asked of the material's own parameters, by NAME (/emissive/i with a non-zero value), not
  * against a list of the fields this file happens to know about. `EmissiveEV` is what the window
  * templates use; other templates spell it differently, and an allow-list would silently miss
  * them exactly the way a material-name regex silently missed `glass_windows`.
@@ -136,7 +136,7 @@ const FLAT_M = 0.02;
  * Returns null when nothing emissive is set: that is a pane of glass, not a window.
  */
 // An emissive parameter that is a FLAG or a TWEAK, not an intensity. `EnableRaytracedEmissive: 1`
-// is set on windows that are switched OFF (EV 0, turnOffAtNight 1) — so a bare "any emissive-named
+// is set on windows that are switched OFF (EV 0, turnOffAtNight 1), so a bare "any emissive-named
 // param is non-zero" test calls a dark window a light. A generous regex over-matching is the mirror
 // image of the strict one that under-matched, and both are the same mistake.
 const EMISSIVE_FLAG = /^Enable|Bias$|Directionality$/i;
@@ -168,7 +168,7 @@ function emissiveOf(mat) {
   //     Windows_1  EV 3  turnOff 0   LIT
   //     Windows_5  EV 5  turnOff 0   LIT, 4x brighter
   //
-  // So `emissive` is not a boolean — it is an INTENSITY with a night term, and the geometry is
+  // So `emissive` is not a boolean: it is an INTENSITY with a night term, and the geometry is
   // already sorted into lit and unlit chunks. Carry both, and let the consumer compute
   // `2^EV * (1 - turnOff)`. That is the number the shader currently invents with a hash.
   const d = mat.Data;
@@ -176,7 +176,7 @@ function emissiveOf(mat) {
   if (d.TintColorAtNight) out.tintAtNight = [d.TintColorAtNight.Red, d.TintColorAtNight.Green, d.TintColorAtNight.Blue];
   if (typeof d.LightsTempVariationAtNight === 'number') out.tempVarAtNight = d.LightsTempVariationAtNight;
 
-  // Convenience, derived — but stated, not assumed. `nightLit` is 0 for a window the game turns
+  // Convenience, derived (but stated, not assumed). `nightLit` is 0 for a window the game turns
   // off after dark, whatever its EV says.
   const ev = typeof d.EmissiveEV === 'number' ? d.EmissiveEV : null;
   out.ev = ev;
@@ -188,7 +188,7 @@ function emissiveOf(mat) {
 // ── GLB: minimal reader ─────────────────────────────────────────────────────
 // WolvenKit's export is uncompressed float32 with indices (no Draco, no meshopt), verified on
 // the reference mesh. If `extensionsUsed` ever appears, this reader must be told about it
-// rather than silently reading garbage — so it THROWS instead.
+// rather than silently reading garbage, so it THROWS instead.
 function readGlb(file) {
   const b = fs.readFileSync(file);
   if (b.readUInt32LE(0) !== 0x46546c67) throw new Error(`not a GLB: ${file}`);
@@ -264,9 +264,9 @@ function faces(P, I) {
 /**
  * THE definition of glass area, and the only one in this file.
  *
- * Sum of TRIANGLE areas — never a bounding box, because a box drawn around four separate
+ * Sum of TRIANGLE areas, never a bounding box, because a box drawn around four separate
  * window strips is mostly the gaps between them (35.13 m2 vs a true 17.10 m2 on the reference
- * mesh) — MINUS the back face of any double-sided sheet, because a pane you can see from both
+ * mesh); MINUS the back face of any double-sided sheet, because a pane you can see from both
  * sides is modelled twice and is still one pane of glass.
  */
 function glassArea(P, I) {
@@ -294,7 +294,7 @@ function glassArea(P, I) {
  * buffer recovers them: 8 triangles -> 4 panes, without assuming a quad layout, a winding, or
  * a vertex count.
  *
- * Each pane's rect is its own bbox — which is FINE, because a single pane IS a rectangle. The
+ * Each pane's rect is its own bbox, which is FINE, because a single pane IS a rectangle. The
  * error that this whole file exists to kill comes from taking a bbox over MULTIPLE panes.
  */
 function panes(P, I) {
@@ -340,7 +340,7 @@ function extents(acc) {
 //
 // EVERYTHING THIS FILE EMITS IS IN GAME SPACE. It has to be: the consumer rotates these vectors
 // by the node's GAME-space quaternion. Handing it a GLB-space normal and a game-space rotation
-// silently turns every wall into a roof — the glass normal [0,0,-1] reads as "up", and the city's
+// silently turns every wall into a roof: the glass normal [0,0,-1] reads as "up", and the city's
 // glass share came out 85% ROOF, which is how this was caught. A wrong basis does not throw; it
 // produces a complete, plausible, and entirely wrong answer.
 const toGame = (v) => [v[0], -v[2], v[1]];
@@ -367,7 +367,7 @@ console.log(`\n${glbs.length} exported .glb found under ${roots.map((r) => path.
 // 30.2% of the city's 7.6M placed instances use a NON-DEFAULT appearance, and on 190 meshes a
 // non-default appearance glazes DIFFERENT CHUNKS than the default does (`default0` glazes
 // chunks 1,3,4; `yellow2` glazes 1,3,5). Resolving glass against the default appearance alone
-// would therefore misglaze up to a third of Night City — the same shape of silent, plausible,
+// would therefore misglaze up to a third of Night City: the same shape of silent, plausible,
 // city-wide error as every other bug in this pipeline.
 //
 // So geometry is stored PER CHUNK (a chunk's triangles are the same whatever material is
@@ -383,7 +383,7 @@ let totalGlass = 0, totalRaw = 0, totalPanel = 0, totalEmis = 0, totalNonEmis = 
 
 for (const file of glbs) {
   const matFile = file.replace(/\.glb$/i, '.Material.json');
-  // Key by the DEPOT path (`base\environment\...\x.mesh`) — that is what ncz_assets.csv holds,
+  // Key by the DEPOT path (`base\environment\...\x.mesh`); that is what ncz_assets.csv holds,
   // and the join downstream is on that string.
   const depot = path.relative(RAW, file).replace(/\//g, '\\').replace(/\.glb$/i, '.mesh');
   stat.meshes++;
@@ -408,7 +408,7 @@ for (const file of glbs) {
   };
 
   // WolvenKit appends the appearance's INDEX to its name: `default0`, `yellow2`,
-  // `brighter_ep17`. Strip it BY POSITION — a regex for trailing digits turns `brighter_ep17`
+  // `brighter_ep17`. Strip it BY POSITION: a regex for trailing digits turns `brighter_ep17`
   // into `brighter_ep`, losing the `1` that is part of the real name (`brighter_ep1`).
   const appKeys = Object.keys(mat.Appearances || {});
   const appName = (key, i) => (key.endsWith(String(i)) ? key.slice(0, key.length - String(i).length) : key);
@@ -419,7 +419,7 @@ for (const file of glbs) {
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
 
   for (const m of (glb.json.meshes || [])) {
-    // `submesh_NN_LOD_L` — NN is the CHUNK INDEX. Read it; never infer it from array order
+    // `submesh_NN_LOD_L`: NN is the CHUNK INDEX. Read it; never infer it from array order
     // (the GLB exports one LOD, so the array is NOT the chunk list).
     const nn = /^submesh_(\d+)/.exec(m.name);
     if (!nn) continue;
@@ -444,7 +444,7 @@ for (const file of glbs) {
       if (!(g.area > 0)) continue;
 
       // The shape heuristic, RECORDED not enforced (see the header). AABB-thick glass is a
-      // SLOPED or CORNER pane — Corpo Plaza is full of them, and gating on flatness would
+      // SLOPED or CORNER pane; Corpo Plaza is full of them, and gating on flatness would
       // silently delete the most glazed district in Night City.
       const flat = [...extents(acc)].sort((a, b) => a - b)[0];
       if (flat >= FLAT_M) stat.aabbThick++;
@@ -453,7 +453,7 @@ for (const file of glbs) {
       chunks[c] = {
         area: +g.area.toFixed(4),
         raw: +g.raw.toFixed(4),
-        // Dominant glass normal, LOCAL mesh space — but converted to the GAME's Z-up basis,
+        // Dominant glass normal, LOCAL mesh space, but converted to the GAME's Z-up basis,
         // because the consumer rotates it by the node's game-space quaternion.
         n: toGame(faces(P, I)[0].n).map((v) => +v.toFixed(4)),
         rects: panes(P, I).map((r) => ({ c: toGame(r.c), s: sizeToGame(r.s), a: r.a })),
@@ -481,7 +481,7 @@ for (const file of glbs) {
   // THREE lists, because there are three different questions and the answers differ:
   //
   //   g  GLAZED    it is glass.                       (a door, a balustrade, a window)
-  //   e  EMISSIVE  its material declares an emissive.  (a window — lit OR unlit)
+  //   e  EMISSIVE  its material declares an emissive.  (a window, lit OR unlit)
   //   l  NIGHT-LIT it is ON after dark:  2^EV * (1 - turnOffAtNight) > 0
   //
   // The third is not a refinement of the second, it is a different fact. A proxy tower's
@@ -505,7 +505,7 @@ for (const file of glbs) {
       if (!p) continue;                        // it does not glow. A door, not a window.
       e.push(c);
       // ON after dark? `nightLit` is 2^EV x (1 - turnOffAtNight), straight from the material.
-      // null means the material declares an emissive with no EV (a texture, a colour) — treat it
+      // null means the material declares an emissive with no EV (a texture, a colour); treat it
       // as lit rather than silently dropping it, and let the count say so.
       if (p.nightLit === null || p.nightLit > 0) l.push(c);
     }
@@ -534,7 +534,7 @@ for (const file of glbs) {
     glassArea: +defArea.toFixed(4),      // ALL glass, default appearance. One-sided, m2.
     emisArea: +defEmis.toFixed(4),       // …of which is an emissive WINDOW (lit or unlit).
     litArea: +defLit.toFixed(4),         // …of which is ON AFTER DARK. The night bake uses this.
-    panelArea: +panelArea.toFixed(4),    // what the old model lit — for the report only
+    panelArea: +panelArea.toFixed(4),    // what the old model lit; for the report only
     chunks,                              // chunk -> { area, raw, n, rects }
     apps,                                // appearance -> { g: glazed chunks, e: EMISSIVE chunks, m: chunk->material }
     matParams,                           // material -> its emissive params, or null if it does not glow
@@ -543,7 +543,7 @@ for (const file of glbs) {
 
 // ── report ──────────────────────────────────────────────────────────────────
 // COVERAGE NEXT TO EVERY AGGREGATE. Every hole in this pipeline was a silent filter that
-// produced a complete-looking number, and not one was caught by tooling — each was caught by
+// produced a complete-looking number, and not one was caught by tooling; each was caught by
 // someone looking at a total and saying "that cannot be right". Make that easy to do.
 const pct = (n, d) => (d ? `${((n / d) * 100).toFixed(1)}%` : '—');
 

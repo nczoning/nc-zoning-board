@@ -4,14 +4,14 @@
  * ─────────────────────────────────────────────────────────────────────────
  * Diagnostic data for two structural questions (not param tuning):
  *
- *  1. "Red sections inside a building" — buildings show mixed archetype colours
+ *  1. "Red sections inside a building": buildings show mixed archetype colours
  *     because adjacent boxes DON'T all merge into one cluster; the thin/short
  *     offshoots become their own clusters and classify red/grey. We quantify:
  *       - cluster-size distribution (how fragmented is each .dds?)
  *       - ABSORBABLE FRAGMENTS: thin/short clusters whose centroid sits inside a
  *         taller building-class cluster's XZ footprint → should inherit it.
  *
- *  2. ".dds clouds span districts" — my_district / pacifica cover much of the map,
+ *  2. ".dds clouds span districts": my_district / pacifica cover much of the map,
  *     so "which .dds" is NOT "which district". We tag each building centroid to
  *     the real subdistrict polygon (data/subdistricts.json, CET space) and report
  *     how many districts each cloud actually spans + how many fall outside any

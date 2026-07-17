@@ -1,5 +1,5 @@
 /**
- * NC Zoning Board — In-3D Building-Zone Drawing Tool (dev only, ?zonetool)
+ * NC Zoning Board: In-3D Building-Zone Drawing Tool (dev only, ?zonetool)
  * ─────────────────────────────────────────────────────────────────────────
  * Authors CET zone VOLUMES (footprint polygon + height range) for the building
  * metadata/override system. Draw a footprint by clicking ground points, close
@@ -9,7 +9,7 @@
  *
  * WebGPU-safe by construction: handles use THREE.MeshBasicNodeMaterial, edges
  * use Line2 + THREE.Line2NodeMaterial (same as the district outlines). No
- * TransformControls — manipulations are constrained (footprint vertices move on
+ * TransformControls: manipulations are constrained (footprint vertices move on
  * the ground plane via groundPointAt; extrude moves only vertically), so a
  * couple of raycasts replace the gizmo and dodge its unverified WebGPU path.
  *
@@ -21,12 +21,12 @@ import { Line2 } from 'three/addons/lines/webgpu/Line2.js';
 import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 
 // `debug` FIRST, and therefore the DEFAULT. It is an annotation: a shape drawn on the map to
-// point at something, with NO effect on the scene. It is inert by construction — the zone engine
-// looks its op up in OP_CODE, finds nothing, and skips it (three-scene.js, `if (!code) continue`)
-// — and it is not a merge zone, so the segmenter never sees it either.
+// point at something, with NO effect on the scene. It is inert by construction: the zone engine
+// looks its op up in OP_CODE, finds nothing, and skips it (three-scene.js, `if (!code) continue`);
+// and it is not a merge zone, so the segmenter never sees it either.
 //
 // WHY IT IS THE DEFAULT, and why it exists at all: to mark Santo Domingo's biggest building for
-// inspection, a zone was drawn round it with the only op to hand — `merge`. Merge zones are FED
+// inspection, a zone was drawn round it with the only op to hand, `merge`. Merge zones are FED
 // TO THE SEGMENTER. So the zone fused those boxes into one building, and the screenshot "showing"
 // a megablob was showing the probe, not the bug. THE INSTRUMENT CHANGED WHAT IT MEASURED.
 //
@@ -56,7 +56,7 @@ export function initZoneTool(ctx) {
   let drag = null;            // active drag: { kind:'vertex'|'extrude', handle, vIndex }
   let down = null;            // left pointerdown bookkeeping for click-vs-drag
   let rdown = null;           // right pointerdown bookkeeping (right-click removes a point; right-drag tilts)
-  let shape = 'poly';         // 'poly' | 'circle' | 'ellipse' — active draw shape
+  let shape = 'poly';         // 'poly' | 'circle' | 'ellipse': active draw shape
   let shapeCentre = null;     // CET centre while awaiting the radius/corner click
   const CIRCLE_SEGMENTS = 24; // vertices in a generated circle/ellipse footprint
 
@@ -349,7 +349,7 @@ export function initZoneTool(ctx) {
     if (e.button === 2) { rdown = { x: e.clientX, y: e.clientY, moved: false }; return; } // right: maybe remove a point (or tilt if dragged)
     if (e.button !== 0) return;
     // Handles are draggable only in EDIT mode (after the loop is closed). In DRAW
-    // mode every click is a ground click — clicking the first point CLOSES the
+    // mode every click is a ground click; clicking the first point CLOSES the
     // loop (via the screen-distance snap in onUp), so we must not start a drag here.
     if (mode === 'edit') {
       const h = pickHandle(e.clientX, e.clientY);
@@ -420,7 +420,7 @@ export function initZoneTool(ctx) {
       const cet = groundPointAt(e.clientX, e.clientY);
       if (cet) addVertex(cet);
     } else if (mode === 'edit' && cur.closed) {
-      // click on an edge (not a handle — handles are consumed in onDown) → split it
+      // click on an edge (not a handle; handles are consumed in onDown) → split it
       const cet = groundPointAt(e.clientX, e.clientY);
       if (cet) trySplitEdge(cet);
     }

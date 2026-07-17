@@ -2,11 +2,11 @@
 /**
  * scripts/tune_segment.js
  * ─────────────────────────────────────────────────────────────────────────
- * Building segmentation by HEIGHT DISCONTINUITY (the evidence-backed splitter —
+ * Building segmentation by HEIGHT DISCONTINUITY (the evidence-backed splitter;
  * see tune_probe_megablob: downtown is one solid footprint, but the height field
  * resolves individual buildings). Morphology-AGNOSTIC: segments by roof-height
  * plateaus separated by cliffs, so flat / round / horizontal / vertical
- * structures each come out as their own region — no "fat-bottom" assumption.
+ * structures each come out as their own region; no "fat-bottom" assumption.
  *
  * Algorithm:
  *   1. Ground grid (cell = CELL). Per cell: roof = max box-top elevation.
@@ -31,7 +31,7 @@ const OUT_DIR = path.join(L.ROOT, '_lighting_demo', 'tune');
 const CAP_DIR = path.join(OUT_DIR, 'cap');
 const TARGETS = ['city_center', 'watson'];
 const CELL = 8;             // ground-grid cell (CET)
-const DH_SWEEP = [10, 18, 30];  // roof-height cliff threshold (CET) — granularity knob
+const DH_SWEEP = [10, 18, 30];  // roof-height cliff threshold (CET); granularity knob
 const RENDER_DH = 18;
 const MIN_CELLS = 3;       // regions smaller than this get absorbed
 const OUT_MAX_PX = 1100;

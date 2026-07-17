@@ -2,17 +2,17 @@
 /**
  * scripts/wkit/check_export.js
  * ─────────────────────────────────────────────────────────────────────────
- * VERIFY A WOLVENKIT GLB EXPORT — FROM OUTSIDE, AND ONLY ONCE IT HAS STOPPED MOVING.
+ * VERIFY A WOLVENKIT GLB EXPORT: FROM OUTSIDE, AND ONLY ONCE IT HAS STOPPED MOVING.
  *
  * `wkit.ExportFiles()` is ASYNCHRONOUS. It returns immediately and writes on a background
- * thread. A wscript cannot sleep, so it cannot check its own work — and when it tried, it
+ * thread. A wscript cannot sleep, so it cannot check its own work. When it tried, it
  * reported `ONLY 798/2257 .glb FILES EXIST — 1459 MISSING` 0.9 seconds in. Nothing was wrong.
  * It did the same thing again on 2026-07-14 (2257/5429). Both were false alarms.
  *
  * A count is only evidence once it has stopped changing. That is what this does.
  *
  * ─── AND IT WATCHES WRITES, NOT THE TOTAL ────────────────────────────────────
- * The obvious meter — "has the .glb count stopped rising?" — is WRONG, and wrong in the
+ * The obvious meter ("has the .glb count stopped rising?") is WRONG, and wrong in the
  * dangerous direction. The export OVERWRITES meshes already on disk, and an overwrite does not
  * move the total. A long run of overwrites is indistinguishable from a finished export, so the
  * obvious meter reports SUCCESS in the middle of the run.
@@ -43,7 +43,7 @@ if (s) {
   since = d.getTime();
   // A --since in the FUTURE makes `written` stick at 0 forever. The settle rule then sees a
   // number that never changes, calls it quiet, and reports the export DEAD while it is running
-  // flat out. That is not hypothetical — it happened on the first run of this script (--since
+  // flat out. That is not hypothetical: it happened on the first run of this script (--since
   // 23:05, passed at 22:5x), which declared `SHORT BY 2,242 — the export stopped early` while
   // the on-disk count was visibly climbing two columns to the left.
   //
@@ -85,7 +85,7 @@ const t0 = Date.now();
 let last = -1, lastChange = Date.now();
 // RATE MUST BE MEASURED FROM PROGRESS, NOT FROM THE ABSOLUTE COUNT.
 // Dividing the total on disk by the watcher's own uptime says "1,195/min, ETA 2 min" thirty
-// seconds after starting — because most of that total was already there. It reads as good news
+// seconds after starting, because most of that total was already there. It reads as good news
 // and it is arithmetic about nothing. Baseline at the first sample and measure the delta.
 let n0 = null;
 

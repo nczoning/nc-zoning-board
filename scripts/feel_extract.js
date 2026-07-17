@@ -35,13 +35,13 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..', '_lighting_demo', 'game_examples');
-const FPS = 2;            // frames per second of clip — the pixel pass wants density, it is cheap
+const FPS = 2;            // frames per second of clip; the pixel pass wants density, it is cheap
 const WIDTH = 640;        // working downscale; hue + area fractions are scale-invariant
 const QUALITY = 3;        // ffmpeg -q:v (2 = best, 5 = meh). 3 keeps neon edges clean.
 const VIDEO_RE = /\.(mp4|mkv|mov|avi)$/i;
 
 // FULL-SIZE ARCHIVE. The working frames/ are 640 px (all the pixel pass needs, and
-// the model is no better at 1280 — measured). The originals are worth keeping
+// the model is no better at 1280; measured). The originals are worth keeping
 // anyway: they're a reusable Night City reference library, and a candidate for a
 // public gallery. WebP q88 at native 1440p is ~6x smaller than PNG with no visible
 // loss on neon, and is directly web-servable.
@@ -63,7 +63,7 @@ const RESET = args.includes('--reset');
 const FILTER = args.find((a) => !a.startsWith('--'));
 
 // The committed cull manifest (scripts/feel-culled-frames.json). Authoritative
-// record of every frame culled by hand — see scripts/feel_cull.js.
+// record of every frame culled by hand; see scripts/feel_cull.js.
 const MANIFEST_PATH = path.join(__dirname, 'feel-culled-frames.json');
 const MANIFEST = fs.existsSync(MANIFEST_PATH)
   ? JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'))
@@ -110,14 +110,14 @@ for (const video of videos) {
 
   // PRESERVE THE HAND-CULL ACROSS A RE-EXTRACT.
   // Frames showing the world map / menus / glitches are culled by eye. A naive
-  // re-extract resurrects every one of them, in BOTH outputs, silently — and a map
+  // re-extract resurrects every one of them, in BOTH outputs, silently, and a map
   // screen is a full-frame wall of the exact cyan and red we measure.
   //
   // Two sources, checked in order:
-  //   1. scripts/feel-culled-frames.json — the COMMITTED manifest, keyed by clip
+  //   1. scripts/feel-culled-frames.json: the COMMITTED manifest, keyed by clip
   //      stem and holding ffmpeg FRAME INDICES. Authoritative, and the only source
   //      that survives an archive rebuild or a fresh clone.
-  //   2. whatever the archive currently holds — the fallback when a clip has been
+  //   2. whatever the archive currently holds: the fallback when a clip has been
   //      culled but not yet recorded (run `node scripts/feel_cull.js`).
   // --reset deliberately discards the cull and starts over from the raw video.
   let dropIdx = null;     // Set of frame INDICES to delete after extraction
@@ -140,7 +140,7 @@ for (const video of videos) {
       }
     }
   }
-  // Unified predicate, by frame index — the index is what ffmpeg hands us, and it
+  // Unified predicate, by frame index: the index is what ffmpeg hands us, and it
   // is stable across the timestamp-rounding in the filename.
   const isCulled = (idx) => (dropIdx ? dropIdx.has(idx) : keepIdx ? !keepIdx.has(idx) : false);
 
@@ -148,7 +148,7 @@ for (const video of videos) {
   if (!ARCHIVE_ONLY) {
     for (const f of existing) fs.unlinkSync(path.join(framesDir, f));
 
-    // ffmpeg's %05d counts extracted frames, not seconds — at FPS=2, frame N is at
+    // ffmpeg's %05d counts extracted frames, not seconds: at FPS=2, frame N is at
     // t = (N-1)/FPS. We rename to the real timestamp below so the filename means
     // something when culling by eye.
     const tmp = path.join(framesDir, `.tmp_${stem}_%05d.jpg`);
@@ -165,7 +165,7 @@ for (const video of videos) {
       const idx = Number(f.match(/_(\d+)\.jpg$/)[1]);          // 1-based
       const secs = (idx - 1) / FPS;
       const name = `${stem}__t${String(Math.round(secs)).padStart(4, '0')}_${String(idx).padStart(5, '0')}.jpg`;
-      if (isCulled(idx)) {   // previously hand-culled — don't resurrect
+      if (isCulled(idx)) {   // previously hand-culled; don't resurrect
         fs.unlinkSync(path.join(framesDir, f));
         continue;
       }
@@ -183,7 +183,7 @@ for (const video of videos) {
     fs.mkdirSync(archDir, { recursive: true });
     execFileSync('ffmpeg', [
       '-v', 'error', '-i', video,
-      '-vf', `fps=${FPS}`,                       // native resolution — no scale filter
+      '-vf', `fps=${FPS}`,                       // native resolution, no scale filter
       '-c:v', 'libwebp', '-quality', String(ARCHIVE_QUALITY), '-compression_level', '5',
       path.join(archDir, `.tmp_${stem}_%05d.webp`),
     ], { stdio: 'inherit' });

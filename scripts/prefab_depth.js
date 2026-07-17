@@ -4,7 +4,7 @@
  * ─────────────────────────────────────────────────────────────────────────
  * WHAT LEVEL OF THE PREFAB PATH IS "A BUILDING"?
  *
- * ncz_prefabs.csv's `ref` is not an id — it is a NodeRef PATH into the world's
+ * ncz_prefabs.csv's `ref` is not an id; it is a NodeRef PATH into the world's
  * scene graph, and it is per-PLACEMENT:
  *
  *   $/03_night_city/#c_santo_domingo/rancho_coronado
@@ -14,7 +14,7 @@
  *     /decoset_.../airconditioner_003_prefab   <- one air conditioner
  *
  * window_where.js grouped by the WHOLE ref, i.e. by whatever leaf depth each mesh
- * happened to sit at. That is not "per building" — it is "per deepest prefab", which
+ * happened to sit at. That is not "per building"; it is "per deepest prefab", which
  * for one building is many different groups, and its 4,024-both-glass-and-wall figure
  * is an artefact of that choice.
  *
@@ -23,7 +23,7 @@
  *
  *   1. How deep do refs go, and how deep are the ones carrying ARCHITECTURE meshes?
  *   2. Is there a consistent naming level (an `_architecture_` bucket) to anchor on?
- *   3. At each candidate depth, how many groups hold BOTH glass and wall — and how
+ *   3. At each candidate depth, how many groups hold BOTH glass and wall, and how
  *      big is a group? (Too shallow: one group = a whole district. Too deep: glass
  *      and wall never co-occur and every group is one kit part.)
  *
@@ -37,7 +37,7 @@ const RAW = process.argv.includes('--raw')
   ? process.argv[process.argv.indexOf('--raw') + 1]
   : 'd:/Modding/CP2077 Mods/MyMods/map_data_export/source/raw';
 
-// ncz_prefabs.csv is id,"ref" — the ref is quoted and contains no quotes of its own.
+// ncz_prefabs.csv is id,"ref"; the ref is quoted and contains no quotes of its own.
 function readPrefabs() {
   const lines = fs.readFileSync(path.join(RAW, 'ncz_prefabs.csv'), 'utf8').split(/\r?\n/);
   const out = {};
@@ -71,7 +71,7 @@ for (const d of Object.keys(depth).map(Number).sort((a, b) => a - b)) {
 
 // ── 2. IS THERE AN ANCHOR LEVEL? ─────────────────────────────────────────
 // If `_architecture_prefab` is a consistent bucket node, then "the building" is the
-// segment IMMEDIATELY AFTER it, at a stable index — which gives us a rule rather than
+// segment IMMEDIATELY AFTER it, at a stable index, which gives us a rule rather than
 // a magic depth number.
 console.log('\n=== 2. ANCHOR SEGMENTS — which naming levels actually recur?\n');
 const seg = {};   // segment "kind" (the _word_ before `_prefab`) → count, by position from root

@@ -18,7 +18,7 @@
  * Only the world dump goes stale.
  *
  * PRINTS THE HEADLINE NUMBERS AT EACH STEP so a regression is visible while it happens rather
- * than three scripts later. If a number moves in a direction you did not expect, stop — that is
+ * than three scripts later. If a number moves in a direction you did not expect, stop: that is
  * the only warning this pipeline has ever given, and today it gave it six times.
  *
  * Usage:  node scripts/rebuild_night_data.js [--skip-merge]

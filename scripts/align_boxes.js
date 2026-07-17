@@ -2,19 +2,19 @@
 /**
  * scripts/align_boxes.js
  * ─────────────────────────────────────────────────────────────────────────
- * THE ALIGNMENT TEST. How well does the .dds building box cloud — the thing we
- * actually render — line up with the REAL architecture in the game's streaming
+ * THE ALIGNMENT TEST. How well does the .dds building box cloud (the thing we
+ * actually render) line up with the REAL architecture in the game's streaming
  * sectors?
  *
  * This one measurement decides three things at once, which is why it comes before
  * any more engine work:
  *
- *   1. Issue #824 — can we GENERATE our own box cloud from the streaming sectors?
+ *   1. Issue #824: can we GENERATE our own box cloud from the streaming sectors?
  *      If we can, modded buildings appear on the map, because mods ship sectors and
  *      the .dds is a baked artefact they cannot touch. Viability hinges on whether
  *      the sectors even contain what the .dds contains.
  *
- *   2. ?archdebug / ?segdebug / ?partdebug — today these are views of a HEURISTIC
+ *   2. ?archdebug / ?segdebug / ?partdebug: today these are views of a HEURISTIC
  *      (boxes clustered by proximity, classified by dimensions). If each box maps to
  *      real architecture, they can become views of KNOWN FACTS.
  *
@@ -22,22 +22,22 @@
  *      uniform grid over 100% of every lit facade, because the panel dump cannot say
  *      how glass CLUSTERS on a building (75% of glass panels are instanced and carry
  *      no position). If our boxes correspond to real geometry, the sectors can tell
- *      us which box is a glazed slab and which is a blank service core — and the
+ *      us which box is a glazed slab and which is a blank service core, and the
  *      "uniform everywhere" default stops being a guess.
  *
  * WHAT IT COMPARES
- *   OURS  — the .dds instance cloud, decoded by tune_lib.decodeDistrict() (lifted
+ *   OURS:   the .dds instance cloud, decoded by tune_lib.decodeDistrict() (lifted
  *           VERBATIM from three-scene.js loadBuildings, so this tests what we RENDER,
  *           not a reimplementation of it).
- *   REAL  — architecture nodes from ncz_nodes.csv (dump_night_raw.wscript), which
+ *   REAL:   architecture nodes from ncz_nodes.csv (dump_night_raw.wscript), which
  *           carry a CET position and a world-space AABB.
  *
  * THE HONEST CAVEATS, stated up front because they bound every number below:
  *   · An INSTANCED node has no position (the per-copy transforms are in a binary
- *     buffer WolvenKit will not expand). Those are excluded from REAL — so REAL is
+ *     buffer WolvenKit will not expand). Those are excluded from REAL, so REAL is
  *     the non-instanced architecture only. It is a floor on coverage, not the truth.
  *   · ncz_nodes gives a node's POSITION and its AABB EXTENTS, but not the AABB's
- *     min/max — so we cannot know whether Position is the box's CENTRE or its BASE
+ *     min/max, so we cannot know whether Position is the box's CENTRE or its BASE
  *     ORIGIN. Both readings are computed and reported. If they disagree wildly, that
  *     ambiguity is the finding and nothing downstream can be trusted until it is
  *     resolved.
@@ -58,7 +58,7 @@ const CELL = process.argv.includes('--cell')
   ? parseFloat(process.argv[process.argv.indexOf('--cell') + 1])
   : 8;   // metres. Fine enough to see a building, coarse enough to hold the city in RAM.
 
-// WHICH BOX CLOUD — and this is not a detail, it is the whole validity of the test.
+// WHICH BOX CLOUD. This is not a detail; it is the whole validity of the test.
 //
 // The sectors are VANILLA game data. The 'fixed' asset set is malgalad's 3D World Map
 // Fixed, and it is a REBUILD, not an alignment nudge: median box displacement runs
@@ -77,7 +77,7 @@ const SET = process.argv.includes('--set')
   ? process.argv[process.argv.indexOf('--set') + 1]
   : 'both';
 
-// Same definition of "architecture" the night analyser uses — props, vehicles and
+// Same definition of "architecture" the night analyser uses: props, vehicles and
 // street furniture are not buildings and must not count as missed coverage.
 const ARCH = /[\\/]architecture[\\/]|[\\/]megabuilding[\\/]/i;
 
@@ -96,11 +96,11 @@ console.log(`grid ${GW} x ${GH} @ ${CELL} m  (${(GW * GH / 1e6).toFixed(1)}M cel
 // world-AABB half-extents. Convert back to CET so both sides speak one language.
 function rasterCloud(setName) {
   const ours = new Uint8Array(GW * GH);
-  const ourTop = new Float32Array(GW * GH);   // CET z of the box top — for the height check
+  const ourTop = new Float32Array(GW * GH);   // CET z of the box top, for the height check
   let boxes = 0, clouds = 0;
   for (const meta of DISTRICTS) {
     // decodeDistrict prefers dataDdsFixed. To force VANILLA, hand it a meta with the
-    // fixed path removed — the decode is otherwise byte-identical, so this tests the
+    // fixed path removed; the decode is otherwise byte-identical, so this tests the
     // same code path against a different texture rather than a second implementation.
     const m = setName === 'vanilla' ? { ...meta, dataDdsFixed: null } : meta;
     if (!(m.dataDdsFixed || m.dataDds)) continue;
@@ -146,7 +146,7 @@ const archBox = new Map();   // asset id → [dx, dy, dz] local dims
   for (let i = 1; i < rows.length; i++) {
     const L = rows[i]; if (!L || !ARCH.test(L)) continue;
     // Quoted paths contain no commas in practice, but split defensively on the leading
-    // numeric columns only — id is first, and the bbox columns sit before mat_names.
+    // numeric columns only: id is first, and the bbox columns sit before mat_names.
     const f = L.split(',');
     const id = f[0];
     const b = [+f[c.bbx0], +f[c.bby0], +f[c.bbz0], +f[c.bbx1], +f[c.bby1], +f[c.bbz1]];
@@ -156,7 +156,7 @@ const archBox = new Map();   // asset id → [dx, dy, dz] local dims
 }
 console.log(`REAL: ${archBox.size.toLocaleString()} architecture assets with a bounding box`);
 
-// Position is either the AABB CENTRE or the BASE ORIGIN — the dump does not say which.
+// Position is either the AABB CENTRE or the BASE ORIGIN; the dump does not say which.
 // Build BOTH interpretations and let the numbers pick.
 const realC = new Uint8Array(GW * GH);        // footprint under "Position = centre"
 const realTopC = new Float32Array(GW * GH);
@@ -175,7 +175,7 @@ rl.on('line', (line) => {
   const f = line.split(',');
   const dims = archBox.get(f[COL.asset]);
   if (!dims) return;
-  // Instanced nodes carry no POSITION — the per-copy transforms live in a binary buffer
+  // Instanced nodes carry no POSITION; the per-copy transforms live in a binary buffer
   // WolvenKit will not expand. The asset box fixes their SIZE but not their PLACEMENT, so
   // they still cannot be rasterised. Excluded, and COUNTED, so recall is always read as
   // "of the architecture we can actually locate".
@@ -183,7 +183,7 @@ rl.on('line', (line) => {
   const x = +f[COL.x], y = +f[COL.y], z = +f[COL.z];
   if (!Number.isFinite(x) || !Number.isFinite(y) || (x === 0 && y === 0)) return;
   // The placed box: the mesh's local dims x this node's Scale. An axis-aligned footprint
-  // is a slight over-estimate for a rotated node, which is the safe direction here — it
+  // is a slight over-estimate for a rotated node, which is the safe direction here: it
   // can only make our boxes look WORSE at covering it, never better.
   const bw = dims[0] * (+f[COL.sx] || 1);
   const bh = dims[1] * (+f[COL.sy] || 1);
@@ -247,7 +247,7 @@ rl.on('close', () => {
     console.log(`   IoU        ${(100 * iou).toFixed(1)}%`);
     console.log(`   (both ${both.toLocaleString()} · ours-only ${onlyOurs.toLocaleString()} · real-only ${onlyReal.toLocaleString()} cells)\n`);
 
-    // ── 2. POINT TEST — robust to the centre-vs-origin ambiguity in XY ──────
+    // ── 2. POINT TEST: robust to the centre-vs-origin ambiguity in XY ──────
     let hit = 0, hitArea = 0, totArea = 0;
     for (let p = 0; p < nodePts.length; p += 3) {
       const i = gx(nodePts[p]), j = gy(nodePts[p + 1]), a = nodePts[p + 2];
@@ -259,7 +259,7 @@ rl.on('close', () => {
 
     // ── 3. HEIGHT ──────────────────────────────────────────────────────────
     // Both readings of Position, because the dump does not say which it is. The one that
-    // agrees is the one that is true — and if NEITHER agrees, that is the finding.
+    // agrees is the one that is true, and if NEITHER agrees, that is the finding.
     for (const [label, realTop] of [['centre', realTopC], ['base', realTopB]]) {
       const diffs = [];
       for (let k = 0; k < ours.length; k++) {

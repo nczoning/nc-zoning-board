@@ -2,18 +2,18 @@
 /**
  * scripts/tune_seg_roads.js
  * ─────────────────────────────────────────────────────────────────────────
- * ROAD-AWARE segmentation lab. The building `_data.dds` has NO street gaps —
+ * ROAD-AWARE segmentation lab. The building `_data.dds` has NO street gaps:
  * dense districts percolate into one footprint component, so the height
  * segmenter over-merges flat same-height areas (Watson core etc.). But the ROAD
  * network exists separately (3dmap_roads.glb). This rasterises the roads into a
  * GLOBAL grid ONCE, then per district carves the street grid out of the building
- * footprint as a BARRIER — so region-grow can't cross a street → buildings
+ * footprint as a BARRIER, so region-grow can't cross a street → buildings
  * separate by CITY BLOCK. HEIGHT-AWARE: a road cell is only a barrier where the
  * building roof above it is street-level (< ROAD_CLEARANCE); where a tall building
  * BRIDGES the road (roof >> road), it stays connected (buildings go over roads).
  *
  * Runs EVERY district. Headless A/B (current vs road-carved): building count,
- * largest-share, + colour-per-building PNGs. Lab only — no renderer change until
+ * largest-share, + colour-per-building PNGs. Lab only: no renderer change until
  * it validates, then the carve ports into segmentBuildings.
  *
  * Road GLB → world: renderer rotates the road scene 180° about Y, so
@@ -122,7 +122,7 @@ function buildGrid(d) {
 
 // Road barrier for this district's grid, gated by STRUCTURE THICKNESS so it's
 // robust to 3D: a road cell carves the footprint ONLY where it's open street OR
-// the building stuff there is THIN (roof-floor < ROAD_CLEARANCE) — a surface
+// the building stuff there is THIN (roof-floor < ROAD_CLEARANCE), a surface
 // street / podium deck / skywalk. Where a real (thick) building sits, the cell is
 // kept connected, which correctly handles a building OVER a tunnel AND a building
 // UNDER an elevated highway (both: thick structure → not carved).

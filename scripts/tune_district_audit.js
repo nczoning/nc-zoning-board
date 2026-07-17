@@ -5,7 +5,7 @@
  * Headless per-district / per-subdistrict classification audit for the night
  * lighting work. Runs the REAL decode + segmentation + classify chain (lifted
  * from three-scene.js via tune_lib) so it can't drift from what renders, then
- * reports per-district building counts, class distribution, and — the point —
+ * reports per-district building counts, class distribution, and (the point)
  * the MEGA-BLOB outliers (over-merged "buildings" of thousands of boxes spanning
  * 1000+ CET) that drive the giant-billboard + mis-classification artefacts.
  *
@@ -67,7 +67,7 @@ function aggregateBuildings(decoded, attr) {
 // Subdivide any building whose footprint full-span exceeds SPLIT_MIN by a world
 // grid of SPLIT_CELL, so an over-merged mega-blob becomes building-sized chunks.
 // Pure spatial chop: flat same-height plateaus carry no geometric split signal,
-// so the grid is the pragmatic fallback (per the percolation learning). Returns a
+// so the grid is the pragmatic fallback. Returns a
 // NEW per-box id array.
 function splitOversized(decoded, attr, opts) {
   const { cell, minSpan } = opts;
@@ -105,7 +105,7 @@ function splitOversized(decoded, attr, opts) {
     newId[i] = nid;
   }
   // rebuild attr with re-aggregated dims per new id (h/fMax/fMin recomputed from
-  // each chunk's own world AABB — that's the whole point: chunk dims, not blob dims)
+  // each chunk's own world AABB; that's the whole point: chunk dims, not blob dims)
   const agg = new Map();
   for (let i = 0; i < decoded.count; i++) {
     const id = newId[i];

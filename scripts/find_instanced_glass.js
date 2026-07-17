@@ -12,8 +12,8 @@
  * instead of placed. If the buffer CAN be read, the placement model gets exact positions
  * for the whole city.
  *
- * This finds the biggest single instanced GLASS node — one node, many window copies, and a
- * recorded Position of (0,0,0) — so it can be opened in WolvenKit and looked at directly.
+ * This finds the biggest single instanced GLASS node: one node, many window copies, and a
+ * recorded Position of (0,0,0). It can then be opened in WolvenKit and looked at directly.
  */
 'use strict';
 const fs = require('fs');

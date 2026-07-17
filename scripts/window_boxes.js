@@ -5,11 +5,11 @@
  * LAND THE REAL WINDOWS ON THE SURFACES WE ACTUALLY RENDER.
  *
  * We render a cloud of axis-aligned BOXES decoded from the .dds instance textures. The game
- * has 157,436 glass panes, and — since the transform pools were opened — every one of them
+ * has 157,436 glass panes, and (since the transform pools were opened) every one of them
  * has an exact CET position, a rotation, and a size. This script joins the two.
  *
  * WHY NOT PREFABS. The plan said prefabs were "building identity". They are not: a
- * glass-bearing prefab is a KIT ASSEMBLY, median 16 m across and 8 m tall, max 112 m — there
+ * glass-bearing prefab is a KIT ASSEMBLY, median 16 m across and 8 m tall, max 112 m; there
  * is not one megabuilding-scale prefab in the set. Normalising a pane's height against an 8 m
  * assembly and averaging it with a 112 m one destroys exactly the vertical structure we are
  * trying to measure. Prefabs were a proxy for position, and we no longer need a proxy.
@@ -34,7 +34,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 // DISTRICT_META, not DISTRICTS. tune_lib's DISTRICTS drops `ugly_building` as "the
-// single-building debug isolate" — but the RENDERER still renders it (522 boxes), so a bake
+// single-building debug isolate", but the RENDERER still renders it (522 boxes), so a bake
 // built from DISTRICTS has no entry for it, the per-district count guard refuses it, and
 // those 522 boxes silently fall back to the old per-district model: a lit blob standing in
 // an otherwise measured city. Bake exactly what is rendered.
@@ -49,10 +49,10 @@ const RAW = process.argv.includes('--raw')
 const SET = process.argv.includes('--set') ? process.argv[process.argv.indexOf('--set') + 1] : 'fixed';
 // Panes sit ON a facade, i.e. slightly OUTSIDE the box's own surface, and our boxes are an
 // approximation of a building rather than a tracing of it. A few metres of slack is physical,
-// not a fudge — but it is REPORTED, and the sensitivity sweep at the end shows what it buys.
+// not a fudge, but it is REPORTED, and the sensitivity sweep at the end shows what it buys.
 const MARGIN = process.argv.includes('--margin')
   ? parseFloat(process.argv[process.argv.indexOf('--margin') + 1]) : 4;
-// How a pane picks its box. See the comment at the assignment site — `volume` is the naive
+// How a pane picks its box. See the comment at the assignment site: `volume` is the naive
 // rule and it loses facade panes to interior slabs in dense box soup; `surface` mounts a
 // pane on the FACE it actually sits on.
 const ASSIGN = process.argv.includes('--assign')
@@ -88,7 +88,7 @@ function qRot(q, v) {
   return [a + w * tx + (y * tz - z * ty), b + w * ty + (z * tx - x * tz), c + w * tz + (x * ty - y * tx)];
 }
 
-// ── THE BOXES WE RENDER — ORIENTED ──────────────────────────────────────────
+// ── THE BOXES WE RENDER: ORIENTED ───────────────────────────────────────────
 // THE BOXES ARE ROTATED. This script used to join windows against each box's world AABB, which
 // for a yawed box is a DIFFERENT, BIGGER box: median 1.96x the volume, and its walls point at
 // the world axes instead of at the building. Only 26.6% of the city's boxes are within 5 deg of
@@ -100,7 +100,7 @@ function qRot(q, v) {
 //   "no wall faces that way"   48.7%   ->        0.9%
 //   landed (margin 2 m)        22.9%   ->       43.4%
 //
-// Half the city's windows matched no wall AT ALL — not because Night City's walls are strange,
+// Half the city's windows matched no wall AT ALL, not because Night City's walls are strange,
 // but because we were asking a bounding box which way its walls faced. The renderer never had
 // this bug (three-scene.js keeps the quaternion); every SCRIPT did.
 //
@@ -108,7 +108,7 @@ function qRot(q, v) {
 const bx = [], by = [], bz = [];                  // centre, CET
 const thx = [], thy = [], thz = [];               // TRUE half-extents, CET
 const bqx = [], bqy = [], bqz = [], bqw = [];     // orientation, CET
-const bhx = [], bhy = [], bhz = [];               // world AABB — BROAD-PHASE ONLY (the spatial hash)
+const bhx = [], bhy = [], bhz = [];               // world AABB: BROAD-PHASE ONLY (the spatial hash)
 const bDist = [];
 for (const meta of DISTRICTS) {
   const m = SET === 'vanilla' ? { ...meta, dataDdsFixed: null } : meta;
@@ -164,13 +164,13 @@ for (let b = 0; b < NB; b++) {
 // it. Its true glass area is 17.10 m2. Every window model this project has built lit the slab,
 // and no amount of re-normalising a denominator was ever going to fix a numerator that was
 // measuring the wall. scripts/window_geom.js pulls the glass submesh out of the mesh's GLB and
-// sums its TRIANGLES (one-sided — 45% of panes are modelled front AND back).
+// sums its TRIANGLES (one-sided; 45% of panes are modelled front AND back).
 //
 // NO FALLBACK. An asset with no entry in window-geom.json contributes NO glass and is COUNTED.
 // It does not get a guessed area, because a guessed area is indistinguishable from a measured
 // one three months later. If a district goes dark, the console says exactly how many assets and
-// how many placed copies were missing geometry, and that is a bug to fix upstream — in the
-// export — not to paper over here.
+// how many placed copies were missing geometry, and that is a bug to fix upstream (in the
+// export), not to paper over here.
 const GEOM_FILE = path.join(__dirname, '..', 'data', 'window-geom.json');
 if (!fs.existsSync(GEOM_FILE)) {
   console.error(`\nMISSING ${GEOM_FILE}\nRun:  node scripts/window_geom.js\n`);
@@ -185,7 +185,7 @@ const APP_NAME = {};
 for (const r of readCsv('ncz_appearances.csv')) APP_NAME[r.id] = r.appearance;
 
 // The CSV-based glass test is kept for ONE purpose: to count what the GLB export MISSED. It is
-// no longer what decides whether a pane is glass — the mesh's own chunk->material assignment is
+// no longer what decides whether a pane is glass: the mesh's own chunk->material assignment is
 // (see window_geom.js). Two independent answers to "is this glass", and the gap between them is
 // a number we print rather than a difference we hide.
 const isGlassMat = makeGlassTest(readCsv('ncz_materials.csv'));
@@ -193,28 +193,28 @@ const asset = {};
 // "The CSV says glass but we have no geometry" is TWO DIFFERENT FACTS, and adding them together
 // produces one big scary number that hides the only one worth acting on:
 //
-//   NOT EXPORTED — the GLB is not on disk. A HOLE. The building goes dark and it is our fault.
-//   NO GLASS     — the GLB is on disk and has no glass chunk. CORRECT, and the CSV is wrong.
+//   NOT EXPORTED:  the GLB is not on disk. A HOLE. The building goes dark and it is our fault.
+//   NO GLASS:      the GLB is on disk and has no glass chunk. CORRECT, and the CSV is wrong.
 //
 // The CSV reads the material LIBRARY; the mesh reads the material ASSIGNMENT (world-asset-
 // reference S3). `cct_cpz_building_a_shield_e_24m_h16m` ADVERTISES window_parallax_interior and
-// assigns it to no chunk in any appearance — its GLB has a single submesh, the concrete. It is a
+// assigns it to no chunk in any appearance: its GLB has a single submesh, the concrete. It is a
 // solid cladding panel. Verified on 5 of these; all 5 are glassless and the GLB is right.
 //
 // 308 assets / 396k placed copies land in the second bucket. Reporting them as "missing" would
 // send the next person to fix an export that is not broken.
-const noGlass = {};                           // exported, genuinely renders no glass  — CORRECT
-const notExported = {};                       // no GLB on disk                        — A HOLE
+const noGlass = {};                           // exported, genuinely renders no glass:  CORRECT
+const notExported = {};                       // no GLB on disk:                        A HOLE
 const assetPath = {}, assetFoot = {}, assetTop = {};
 for (const a of readCsv('ncz_assets.csv')) {
   // BUILDING, not ARCH: a PROXY is a building too. Arasaka Waterfront's twelve towers are nine
   // kit-built ones and three proxies, and `architecture` is not in a proxy's path. But a proxy is
-  // only COUNTED where no detailed geometry covers it — see the dedup below, or every glazed
+  // only COUNTED where no detailed geometry covers it; see the dedup below, or every glazed
   // building in the city gets its windows twice.
   if (!BUILDING.test(a.path)) continue;
   assetPath[a.id] = a.path;
   assetFoot[a.id] = Math.max(+a.bbx1 - +a.bbx0, +a.bby1 - +a.bby0) || 0;
-  assetTop[a.id] = (+a.bbz1) || 0;      // local top of the mesh bbox — the dedup's missing axis
+  assetTop[a.id] = (+a.bbz1) || 0;      // local top of the mesh bbox: the dedup's missing axis
   const g = GEOM[(a.path || '').toLowerCase()];
   if (g) { asset[a.id] = g; continue; }
   if (!isGlassMat((a.mat_names || '').split('|'), (a.mat_paths || '').split('|'))) continue;
@@ -226,16 +226,16 @@ for (const a of readCsv('ncz_assets.csv')) {
 /**
  * Which chunks of this instance's appearance are WINDOWS?
  *
- * EMISSIVE ONES. Not "glass" — 43% of this city's glass area (40,300 m2) never lights up:
+ * EMISSIVE ONES. Not "glass"; 43% of this city's glass area (40,300 m2) never lights up:
  * `glass.mt` on doors, balustrades, shopfronts and the Corpo Plaza roundabout canopy. It is
  * glass. It is not a window, and counting it as one lights the wrong city.
  *
- * The material says which is which — `EmissiveEV`, and window_geom.js records it per (appearance,
+ * The material says which is which: `EmissiveEV`, and window_geom.js records it per (appearance,
  * chunk) because the SAME chunk can be an emissive window in one appearance and plain glass in
  * another. `--allglass` restores the old behaviour for comparison.
  *
- * An appearance the mesh does not define (or a blank `app`) falls back to the mesh's default —
- * which is what the engine does — and is counted.
+ * An appearance the mesh does not define (or a blank `app`) falls back to the mesh's default
+ * (which is what the engine does) and is counted.
  */
 const ALL_GLASS = process.argv.includes('--allglass');
 let appFallback = 0;
@@ -245,7 +245,7 @@ function glazed(g, appId) {
   if (!a && name && name !== 'default' && name !== '' && name !== 'None') appFallback++;
   const rec = a || g.apps[Object.keys(g.apps)[0]] || { g: [], e: [] };
   // `l` = ON AFTER DARK: 2^EV x (1 - turnOffAtNight) > 0. A proxy tower's Windows_0 chunk is an
-  // emissive window that the game switches OFF at night — 48 panes of geometry we must NOT light.
+  // emissive window that the game switches OFF at night: 48 panes of geometry we must NOT light.
   // This is the NIGHT bake, so it uses `l`. --allglass falls back to every glazed chunk.
   return ALL_GLASS ? (rec.g || []) : (rec.l || rec.e || []);
 }
@@ -253,7 +253,7 @@ function glazed(g, appId) {
 /**
  * The area of a planar patch with unit normal `n` after scaling by diag(sx,sy,sz).
  *
- * NOT "multiply the two non-thin axes". Sloped glazing has no thin AXIS — Corpo Plaza's
+ * NOT "multiply the two non-thin axes". Sloped glazing has no thin AXIS: Corpo Plaza's
  * `*_slope_window` panes are flat quads tilted off every axis, and 61% of glass chunks are
  * AABB-thick for exactly this reason. For a plane, the exact factor is  |det S| * |S^-T n|,
  * which is 1.0 for unit scale and correct at any orientation.
@@ -280,7 +280,7 @@ let panelAreaWould = 0, glassAreaReal = 0;  // the instance-WEIGHTED overcount, 
 function pane(a, x, y, z, q, sx, sy, sz, appId) {
   const g = asset[a];
   if (g === undefined) {
-    // Neither silently dropped nor given a fallback area — counted, and split by CAUSE.
+    // Neither silently dropped nor given a fallback area: counted, and split by CAUSE.
     if (notExported[a] !== undefined) missGeom++;        // a hole. Our fault.
     else if (noGlass[a] !== undefined) csvFalsePos++;    // the CSV was wrong. Correctly dark.
     return;
@@ -288,7 +288,7 @@ function pane(a, x, y, z, q, sx, sy, sz, appId) {
   panes++;
   sx = sx || 1; sy = sy || 1; sz = sz || 1;
 
-  // THE AREA. Sum the glass CHUNKS this instance's appearance actually glazes — the real
+  // THE AREA. Sum the glass CHUNKS this instance's appearance actually glazes: the real
   // window submeshes, one-sided, scaled into world space. Never a bounding box.
   const chunks = glazed(g, appId);
   let area = 0;
@@ -303,7 +303,7 @@ function pane(a, x, y, z, q, sx, sy, sz, appId) {
   if (!(area > 0)) { noGlassInApp++; return; }   // this appearance glazes nothing. Legitimate.
 
   // What the OLD model would have lit for this same placed copy: the whole facade slab. Kept
-  // ONLY to report the instance-weighted overcount — the per-asset ratio is meaningless because
+  // ONLY to report the instance-weighted overcount; the per-asset ratio is meaningless because
   // a mesh placed once would count the same as one placed 40,000 times.
   glassAreaReal += area;
   panelAreaWould += g.panelArea * (sx * sy);
@@ -320,7 +320,7 @@ function pane(a, x, y, z, q, sx, sy, sz, appId) {
   // WHICH BOX DOES THIS PANE BELONG TO?
   //
   // EVERY TEST BELOW IS IN THE BOX'S OWN FRAME. Rotate the pane's position and normal by the
-  // box's inverse quaternion and the box becomes axis-aligned again — so "which wall is this
+  // box's inverse quaternion and the box becomes axis-aligned again, so "which wall is this
   // window on" is the simple question it always looked like, asked of the RIGHT wall.
   //
   // Doing it in world space against the AABB is what broke this: a 33-deg-yawed slab has walls
@@ -330,12 +330,12 @@ function pane(a, x, y, z, q, sx, sy, sz, appId) {
   // ASSIGN=volume (the shipped rule): the smallest box CONTAINING the pane. Buildings are
   // interpenetrating slab SOUP, so "contains" is satisfied by every slab the pane sits inside,
   // and "smallest" can hand a facade window to a tiny INTERIOR slab. Kept because it is what the
-  // shipped bake used — and it is now at least being asked of the right boxes.
+  // shipped bake used, and it is now at least being asked of the right boxes.
   //
-  // ASSIGN=surface: a window is mounted ON A FACE. Find the box whose FACE it sits on — the
+  // ASSIGN=surface: a window is mounted ON A FACE. Find the box whose FACE it sits on: the
   // normal must AGREE with that face's. An interior slab has no face there, so it cannot claim it.
   //
-  // ASSIGN=near: every box containing the pane gets credit, non-exclusively (facemask reasoning —
+  // ASSIGN=near: every box containing the pane gets credit, non-exclusively (facemask reasoning:
   // stop trying to reach a per-box verdict in slab soup; the fragment decides).
   const cand = grid.get(key(Math.floor(x / CELL), Math.floor(y / CELL)));
   let best = -1, bestScore = Infinity;
@@ -374,7 +374,7 @@ function pane(a, x, y, z, q, sx, sy, sz, appId) {
   }
 
   // Record which of the box's OWN faces the glass is on, and where up the box it sits. Both are
-  // box-local now — a yawed tower's "+X wall" is its wall, not a compass direction.
+  // box-local now: a yawed tower's "+X wall" is its wall, not a compass direction.
   const account = (b) => {
     const p = lp(b), m = ln(b);
     const h = 2 * thz[b];
@@ -415,7 +415,7 @@ function pane(a, x, y, z, q, sx, sy, sz, appId) {
   // DO NOT CLAMP the profile. The join allows a MARGIN, so a pane may legitimately sit slightly
   // below a box's base or above its top. Clamping those into t=0 / t=1 dumps them into the end
   // bands and MANUFACTURES a U-shaped profile out of the join margin itself. They are counted
-  // (`below` / `above`) and excluded — a pane outside the box's own height is not evidence about
+  // (`below` / `above`) and excluded: a pane outside the box's own height is not evidence about
   // where glass sits on a facade, it is evidence about how badly the box fits the building.
 }
 
@@ -438,12 +438,12 @@ async function stream(file, onRow) {
   // that ground is a duplicate of a building we already have, and counting both doubles it.
   //
   // This must be a SPATIAL test, not a prefab one. A per-building proxy shares its prefab with the
-  // detail — but an AGGREGATE proxy (`*_mproxy`, one mesh for a whole block) does not, so a prefab
+  // detail, but an AGGREGATE proxy (`*_mproxy`, one mesh for a whole block) does not, so a prefab
   // test keeps it and it lands on top of a dozen real buildings. Geometry is right; names are not.
   const detailGrid = makeDetailGrid();
   const seen = (f, C) => {
     const id = f[C.asset];
-    if (!asset[id]) return;                       // not glazed — it says nothing about coverage
+    if (!asset[id]) return;                       // not glazed: it says nothing about coverage
     if (PROXY.test(assetPath[id] || '')) return;  // a proxy cannot vouch for itself
     // ...and HOW HIGH it reaches. A 20 m podium must not veto the 150 m tower standing on it.
     detailGrid.add(+f[C.x], +f[C.y], +f[C.z] + (assetTop[id] || 0) * (+f[C.sz] || 1));
@@ -475,7 +475,7 @@ async function stream(file, onRow) {
 
   proxyFilter.report();
 
-  // ── 0. COVERAGE — before any aggregate, what did we FAIL to measure? ──────
+  // ── 0. COVERAGE: before any aggregate, what did we FAIL to measure? ───────
   // Every hole in this pipeline was a silent filter that produced a complete-looking number.
   // None was caught by tooling; each was caught by someone reading a total and saying "that
   // cannot be right". So the misses are printed FIRST, above the numbers they would corrupt.
@@ -502,7 +502,7 @@ async function stream(file, onRow) {
   console.log(`  TRUE glass area, same copies    ${(glassAreaReal / 1e6).toFixed(2)}M m2   <- the window submeshes`);
   console.log(`  we were lighting                ${(panelAreaWould / glassAreaReal).toFixed(2)}x too much glass`);
 
-  // ── 1. THE JOIN RATE — this is the validation, not a statistic ────────────
+  // ── 1. THE JOIN RATE: this is the validation, not a statistic ─────────────
   console.log('=== 1. DO THE REAL WINDOWS LAND ON THE BOXES WE RENDER?\n');
   console.log(`  glass panes             : ${panes.toLocaleString()}`);
   console.log(`  landed on a box         : ${joined.toLocaleString()}  (${(100 * joined / panes).toFixed(1)}%)   <- margin ${MARGIN} m`);
@@ -511,13 +511,13 @@ async function stream(file, onRow) {
   console.log(`  A join rate near that is the pass mark. Far below ⇒ our boxes are not where`);
   console.log(`  the buildings are. Near 100% ⇒ the margin is catching panes that belong to nothing.`);
 
-  // ── 2. PER-BOX GLASS SHARE — the number the shader wants ──────────────────
+  // ── 2. PER-BOX GLASS SHARE: the number the shader wants ───────────────────
   // A box's facade is its four sides: perimeter x height.
   console.log('\n=== 2. PER-BOX GLASS SHARE — glass area / facade area\n');
   const lit = [];
   for (let b = 0; b < NB; b++) {
     if (!gCount[b]) continue;
-    // THE TRUE facade — perimeter x height of the box we DRAW. Using the AABB here inflates the
+    // THE TRUE facade: perimeter x height of the box we DRAW. Using the AABB here inflates the
     // denominator (a 12 x 61 m yawed slab bounds to 57 x 43) and silently dilutes every share.
     const facade = 4 * (thx[b] + thy[b]) * (2 * thz[b]);
     if (facade <= 0) continue;
@@ -558,7 +558,7 @@ async function stream(file, onRow) {
 
   // ── 4b. THE CLASSIFIER WE NO LONGER HAVE TO WRITE ────────────────────────
   // If glass lands only on things that ARE buildings, then "which box is a building" stops
-  // being a question we answer with shape heuristics and zone overrides — CDPR already
+  // being a question we answer with shape heuristics and zone overrides: CDPR already
   // answered it by choosing where to put window material. A highway pylon, an oil tank, a
   // silo, a rooftop AC unit: no pane lands on them, so they get no windows, and nobody had
   // to decide what they were.
@@ -576,7 +576,7 @@ async function stream(file, onRow) {
     const D = perDist[bDist[b]] || (perDist[bDist[b]] = { n: 0, g: 0, gA: 0, fA: 0 });
     D.n++; if (gCount[b]) D.g++;
     // AREA, not box count. "Share of a district's BOXES that carry glass" is normalised by
-    // how many boxes a district's buildings happen to be chopped into — so a district of big
+    // how many boxes a district's buildings happen to be chopped into, so a district of big
     // towers (city_center: 40,128 boxes, the most of any) is penalised for being made of more
     // slabs, and comes out LOW however glazed it is. Glass area over facade area is the
     // quantity the shader actually consumes, and it does not care how the soup was diced.
@@ -600,13 +600,13 @@ async function stream(file, onRow) {
   console.log('\n  Corpo/downtown high and industrial/badlands low ⇒ the data is doing the');
   console.log('  classification for us, and no shape heuristic is required.');
 
-  // ── BAKE — per-box window density, in INSTANCE ORDER ─────────────────────
+  // ── BAKE: per-box window density, in INSTANCE ORDER ──────────────────────
   // The renderer decodes each district's _data.dds in raster order and keeps a running
   // validCount, so box i here IS instance i there (decodeDistrict is lifted verbatim from
-  // loadBuildings — that is why align_boxes.js can trust the same indices). One byte per
+  // loadBuildings; that is why align_boxes.js can trust the same indices). One byte per
   // box: the whole city is ~257 KB.
   //
-  // The VALUE is glass area over the box's own facade area — a DENSITY, not a lit fraction.
+  // The VALUE is glass area over the box's own facade area: a DENSITY, not a lit fraction.
   // Intensity is a separate knob and is tuned afterwards, deliberately: tuning brightness
   // against a wrong placement is how WINDOW_LIT_FRACTION = 0.20 got tuned into existence.
   if (process.argv.includes('--bake')) {
@@ -622,7 +622,7 @@ async function stream(file, onRow) {
       while (off + n < NB && bDist[off + n] === meta.name) n++;
       for (let i = 0; i < n; i++) {
         const b = off + i;
-        const facade = 4 * (thx[b] + thy[b]) * (2 * thz[b]);   // TRUE facade — see section 2
+        const facade = 4 * (thx[b] + thy[b]) * (2 * thz[b]);   // TRUE facade (see section 2)
         const share = facade > 0 ? gArea[b] / facade : 0;
         const v = Math.max(0, Math.min(255, Math.round(255 * share / SHARE_MAX)));
         out[b] = v;
@@ -634,8 +634,8 @@ async function stream(file, onRow) {
     // ONE BAKE PER ASSET SET, AND THE FILENAME SAYS WHICH.
     //
     // The two clouds are DIFFERENT GEOMETRY, not two views of one thing: vanilla decodes
-    // 271,022 boxes, malgalad's fixed set 263,258 (it is a rebuild — see
-    // wiki/learnings/fixed-asset-set-is-a-repack). The bake is indexed BY INSTANCE, so a
+    // 271,022 boxes, malgalad's fixed set 263,258 (it is a rebuild, not a
+    // filtered subset of vanilla). The bake is indexed BY INSTANCE, so a
     // fixed-set bake applied to the vanilla cloud is 263,258 correct indices followed by
     // garbage, i.e. a city that looks *plausibly* wrong. A single shared file cannot exist.
     fs.writeFileSync(path.join(__dirname, '..', 'data', `window-boxes-${SET}.bin`), out);
@@ -644,7 +644,7 @@ async function stream(file, onRow) {
     console.log(`    ${(out.length / 1024).toFixed(0)} KB, one byte per instance, shareMax ${SHARE_MAX}`);
   }
 
-  // ── 5. MARGIN SENSITIVITY — is the join rate real, or is it the slack? ────
+  // ── 5. MARGIN SENSITIVITY: is the join rate real, or is it the slack? ─────
   console.log('\n=== 5. IS THE JOIN REAL, OR IS IT THE MARGIN?\n');
   console.log('  (orphan Z distribution — if orphans are high in the air, they are real windows');
   console.log('   on towers our cloud is missing; if they are at ground level, they are shopfronts');

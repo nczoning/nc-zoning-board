@@ -4,20 +4,20 @@
  * ─────────────────────────────────────────────────────────────────────────
  * FIND THE WINDOW MATERIALS WE MISSED.
  *
- * We know two window shaders — window_parallax_interior.mt and window_interior_uv.mt —
- * and we found them by searching .mt names. That is a NAME search, and this project has
- * a wiki page about what name searches do. Night City has several different window
+ * We know two window shaders (window_parallax_interior.mt and window_interior_uv.mt),
+ * and we found them by searching .mt names. A NAME search only finds what is named the
+ * obvious way. Night City has several different window
  * SHAPES; there is no reason to believe two shaders cover them all.
  *
  * So work the other way: take the meshes we KNOW are windows (they root at one of the two
  * confirmed shaders), and look at every OTHER material those same meshes carry. A window
  * panel mesh that also carries an unknown emissive material is telling us that material is
- * probably window-ish too — a different pane shape in the same kit piece.
+ * probably window-ish too: a different pane shape in the same kit piece.
  *
  * Then expand: which OTHER meshes carry those co-occurring materials, and do they look
  * like windows (architecture, panel-shaped)? That is a graph walk, not a regex.
  *
- * Reports candidates ranked by how much placed AREA they would add — because a shader on
+ * Reports candidates ranked by how much placed AREA they would add, because a shader on
  * three meshes is a curiosity and a shader on thirty thousand is a hole in the model.
  */
 'use strict';
@@ -101,7 +101,7 @@ for (const [root, r] of Object.entries(coRoot).sort((a, b) => b[1].meshes.size -
 }
 
 // 4. The real question: which of these look EMISSIVE / window-ish by their PARAMS?
-//    A window material fakes a lit interior — it will carry night/interior/room params.
+//    A window material fakes a lit interior; it will carry night/interior/room params.
 const WINDOWY = /night|room|interior|emissive|glow|lightstemp|tintcolor/i;
 console.log('\n\nCANDIDATE WINDOW SHADERS — co-occurring roots whose MATERIALS carry window-ish params');
 console.log('  (AmountTurnOffAtNight / TintColorAtNight / roomWidth / EmissiveEV ...)\n');
@@ -119,7 +119,7 @@ for (const [root, r] of Object.entries(coRoot)) {
   console.log(`     window-ish params: ${keys.slice(0, 8).join(', ')}`);
 }
 
-// ── 5. THE EXPANSION — the point of the whole exercise ─────────────────────
+// ── 5. THE EXPANSION: the point of the whole exercise ──────────────────────
 // A candidate shader matters only if it appears on ARCHITECTURE meshes that we are NOT
 // already counting as windows. Those meshes are the hole in the model: real windows the
 // glass share never saw. Weighted by PLACED AREA, because a shader on three meshes is a
@@ -132,7 +132,7 @@ for (const a of assets) {
   for (const rt of roots) (rootToMeshes[rt] || (rootToMeshes[rt] = new Set())).add(a.id);
 }
 
-// Placed instance count per mesh — so "would add N placements" is real, not hypothetical.
+// Placed instance count per mesh, so "would add N placements" is real, not hypothetical.
 const placed = {};
 {
   const rl = require('readline').createInterface({

@@ -11,10 +11,10 @@
  *       field. If distinct tops/valleys are visible, a height-watershed can split
  *       where footprints touch.
  *
- * Renders top-down PNGs (top-down is correct HERE — segmentation is a footprint
+ * Renders top-down PNGs (top-down is correct HERE; segmentation is a footprint
  * question, not a verticality one):
- *   megablob_<d>_height.png   — height-above-ground (black=empty → bright=tall)
- *   megablob_<d>_cc<cell>.png — footprint connected-components, colour per piece
+ *   megablob_<d>_height.png:   height-above-ground (black=empty → bright=tall)
+ *   megablob_<d>_cc<cell>.png: footprint connected-components, colour per piece
  *
  * Output: PNGs + _lighting_demo/tune/MEGABLOB.md
  * Run: node scripts/tune_probe_megablob.js

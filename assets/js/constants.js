@@ -363,7 +363,7 @@ NCZ.SCENE_EXPOSURE     = 0.720;                     // renderer.toneMappingExpos
 // to the endpoints. Tune the two ends: row 0 = deep-night floor, the [0,…] row
 // = horizon cap (dawn/dusk), last row = midday base.
 //
-// Below the horizon (negative elevation) the night lighting takes over — a dim
+// Below the horizon (negative elevation) the night lighting takes over: a dim
 // cool moon key + warm skyglow ambient (see MOON_* / AMBIENT_*_NIGHT). Exposure
 // backs OFF from the dawn/dusk peak so the (already much dimmer) night radiance
 // reads dark-but-readable rather than being lifted into a washed-out "day".
@@ -395,55 +395,55 @@ NCZ.SUN_DIST           = 22000;  // CET units the sun light (and its shadow came
 NCZ.SUN_SPHERE_DIST    = 20000;  // visible sun disc distance from world centre
 NCZ.SUN_SPHERE_RADIUS  =   600;  // CET units: ≈1.7° apparent diameter at SUN_SPHERE_DIST (≈3× real sun)
 
-// ── Bloom — the in-game 3D map's post-process glow (envparam BloomAreaSettings,
+// ── Bloom: the in-game 3D map's post-process glow (envparam BloomAreaSettings,
 // base/weather/24h_basic/3dmap.envparam, decoded). It runs on the *linear* HDR
 // scene before the ACES tonemap: the scene renders through a RenderPipeline
-// (pass → bloom → composite → tonemap). Here it's a NIGHT effect — strength is
+// (pass → bloom → composite → tonemap). Here it's a NIGHT effect: strength is
 // faded in by nightFactor (updateDayNightLighting) so daytime stays bloom-free
 // (the parked daytime concern: day buildings render equiluminant with terrain →
 // flat haze; night gives bloom genuine bright-against-dark window/neon sources).
 // Decoded BloomAreaSettings: bloomColorScale 1, blurSizeX/Y 1, luminanceThreshold
 // Min 0 / Max 0.35, numDownsamplePasses 6, sceneColorScale 0.9. STRENGTH/RADIUS
-// are partly REDengine units with no 1:1 Three.js mapping — calibration knobs.
-NCZ.BLOOM_STRENGTH     = 0.4;   // envparam bloomColorScale (decoded 1.0) — pulled back further now the city glow carries the night look. NIGHT peak.
-NCZ.BLOOM_DAY_STRENGTH = 0.12;  // daytime baseline — bloom never fully off; the night ramp eases up from here (see updateDayNightLighting)
-NCZ.BLOOM_RADIUS       = 1.0;   // envparam blurSizeX/Y — pyramid blur spread (0..1, calibration knob)
+// are partly REDengine units with no 1:1 Three.js mapping: calibration knobs.
+NCZ.BLOOM_STRENGTH     = 0.4;   // envparam bloomColorScale (decoded 1.0); pulled back further now the city glow carries the night look. NIGHT peak.
+NCZ.BLOOM_DAY_STRENGTH = 0.12;  // daytime baseline: bloom never fully off; the night ramp eases up from here (see updateDayNightLighting)
+NCZ.BLOOM_RADIUS       = 1.0;   // envparam blurSizeX/Y: pyramid blur spread (0..1, calibration knob)
 NCZ.BLOOM_THRESHOLD    = 0.1;   // raised off the decoded 0.0 so only the brighter window/neon cores bloom (less overall haze)
-NCZ.BLOOM_SMOOTH_WIDTH = 0.35;  // luminanceThresholdMax − Min — knee width to full bloom weight
-NCZ.SCENE_COLOR_SCALE  = 0.9;   // envparam sceneColorScale — base scene dims to 0.9 at full night; bloom adds the energy back
+NCZ.BLOOM_SMOOTH_WIDTH = 0.35;  // luminanceThresholdMax − Min: knee width to full bloom weight
+NCZ.SCENE_COLOR_SCALE  = 0.9;   // envparam sceneColorScale: base scene dims to 0.9 at full night; bloom adds the energy back
 
 // ── Atmospheric haze (Night) ────────────────────────────────────────────────
 // A SECOND, wide, low-threshold bloom layer that spreads the lit windows/signage
-// into a broad soft glow — the night light-pollution haze in the reference
+// into a broad soft glow: the night light-pollution haze in the reference
 // shots. Separate from the tight bloom above so crisp glints and wide haze tune
 // independently. Night-only (strength = nf² · HAZE_STRENGTH; no daytime light
 // pollution). Tune live with ?night.
 NCZ.HAZE_STRENGTH     = 0.5;    // night-peak haze glow strength
-NCZ.HAZE_RADIUS       = 1.0;    // max mip spread — the wide, soft falloff
+NCZ.HAZE_RADIUS       = 1.0;    // max mip spread: the wide, soft falloff
 NCZ.HAZE_THRESHOLD    = 0.05;   // low, so haze comes from the actual lights (not dark terrain)
-NCZ.HAZE_SMOOTH_WIDTH = 0.6;    // soft knee — gentle ramp into the haze contribution
+NCZ.HAZE_SMOOTH_WIDTH = 0.6;    // soft knee: gentle ramp into the haze contribution
 
-// ── Night Stage 2 — procedural lit windows ──────────────────────────────────
+// ── Night Stage 2: procedural lit windows ──────────────────────────────────
 // At night the buildings light up like a real city: a world-space window grid on
 // the vertical facades, each cell hash-lit on/off, warm-white-dominant with
-// scattered neon accents. Emissive ONLY — the building albedo (theme colour) is
+// scattered neon accents. Emissive ONLY: the building albedo (theme colour) is
 // never touched. Ramped by nightFactor; bloom (above) gives the windows their
 // halo so they read as lights, not flat dots. World-space so window size is
 // constant and taller/wider buildings simply have more of them. First-cut;
 // calibrate live with ?night.
 // CELL SIZE IS A LEGIBILITY KNOB, and it is worth being clear that it is one.
 //
-// The game's room is 3 x 4 m. Ours is 24 x 18 CET — about 8 rooms wide by 4.5 floors
+// The game's room is 3 x 4 m. Ours is 24 x 18 CET: about 8 rooms wide by 4.5 floors
 // tall. That looks like a 6x error and it is not: because the lit AREA is
 // `paneArea x P(lit)` and the pane is sized from the district's measured glass share,
 // the average brightness is IDENTICAL at any cell size. The cell only decides how big
 // each window blob READS at map zoom. At a true 3 x 4 m a cell is far under one pixel
 // when zoomed out, the grid dissolves into a flat wash, and the city loses its window
-// texture entirely — which is the whole reason this is coarse.
+// texture entirely, which is the whole reason this is coarse.
 //
 // So: not measured, not pretending to be. Tune for how it looks. URL: ?wincellw/?wincellh
-NCZ.WINDOW_CELL_W        = 24;    // CET units — horizontal spacing of one window cell along a facade
-NCZ.WINDOW_CELL_H        = 18;    // CET units — vertical spacing (≈ one floor)
+NCZ.WINDOW_CELL_W        = 24;    // CET units: horizontal spacing of one window cell along a facade
+NCZ.WINDOW_CELL_H        = 18;    // CET units: vertical spacing (≈ one floor)
 // ── DEPRECATED. Legacy path only (?winmodel=legacy). ─────────────────────────
 // The pane is no longer a constant: its AREA is the district's measured glass share and
 // its SHAPE is the game's measured window aspect (WINDOW_PANE_ASPECT). A fixed 0.55 x
@@ -454,27 +454,27 @@ NCZ.WINDOW_PANE_H        = 0.55;  // lit fraction of a cell vertically
 NCZ.WINDOW_INTENSITY     = 2.0;   // emissive brightness of a lit window at full night (pre-bloom, pre-tonemap). Windows are night-only.
 NCZ.WINDOW_TINT_FRACTION = 0.45;  // fraction of lit windows that use a NON-default light temperature (rest = WINDOW_COLORS[0]); the colourful neon now lives in signage, windows are just warm/cool whites
 // Which surfaces get windows: only instances taller than this get the treatment,
-// so flat/low structures (overpasses, walls, kiosks, ground clutter) stay dark —
+// so flat/low structures (overpasses, walls, kiosks, ground clutter) stay dark;
 // not everything in the building cloud is a windowed tower. Value is the instance
 // matrix's Y-axis half-extent in CET units (length of column 1); soft-gated over
 // a band above it. Landmarks/monuments use a different material and never get windows.
 NCZ.WINDOW_MIN_HEIGHT   = 22;     // CET units (instance Y half-extent) below which a building stays dark
 NCZ.WINDOW_HEIGHT_BAND  = 12;     // soft-gate width above the threshold (full windows by MIN_HEIGHT+BAND)
 
-// ── Archetype rules — WHICH buildings get lit, and how densely ──────────────
+// ── Archetype rules: WHICH buildings get lit, and how densely ──────────────
 // The height gate above is the first filter; this is the second. Each instance
 // is classified purely from its own matrix (no per-building data needed):
-//   verticality = Yhalf / max(Xhalf, Zhalf)   — slender ⇒ tower, squat ⇒ block
-//   footprint   = max(Xhalf, Zhalf)            — horizontal half-extent (CET)
+//   verticality = Yhalf / max(Xhalf, Zhalf)   (slender ⇒ tower, squat ⇒ block)
+//   footprint   = max(Xhalf, Zhalf)            (horizontal half-extent, CET)
 // Towers (tall + slim) get DENSE windows; mid blocks get SPARSE windows; broad
 // low masses (podiums, parking, malls, industrial sheds, stadiums) are pushed
-// dark even if they clear WINDOW_MIN_HEIGHT — so "not everything is a windowed
+// dark even if they clear WINDOW_MIN_HEIGHT, so "not everything is a windowed
 // tower" holds. All continuous (smoothstep) so there are no hard class edges.
 NCZ.ARCH_VERTICALITY_LO   = 0.6;  // ≤ this verticality reads as a broad block (sparse windows)
 NCZ.ARCH_VERTICALITY_HI   = 1.8;  // ≥ this reads as a slender tower (dense windows + brighter)
 NCZ.ARCH_FOOTPRINT_BIG    = 90;   // CET half-extent: a non-slim mass this broad starts reading as podium/industrial
 // Height veto on podium/industrial: a genuinely TALL mass is never a podium,
-// however broad — a big-footprint skyscraper is a lit building, not a dark
+// however broad: a big-footprint skyscraper is a lit building, not a dark
 // podium. Only LOW broad squat masses (malls, parking, sheds, oil tanks) stay
 // industrial. Ramp on the BUILDING's height half-extent (bAttr.x, CET): below LO
 // full podium eligibility, above HI never podium. (Measured: real low podiums
@@ -482,23 +482,23 @@ NCZ.ARCH_FOOTPRINT_BIG    = 90;   // CET half-extent: a non-slim mass this broad
 NCZ.ARCH_PODIUM_HEIGHT_LO = 45;   // heightHalf below which a broad squat mass can read as podium
 NCZ.ARCH_PODIUM_HEIGHT_HI = 85;   // heightHalf above which a mass is never podium (lit block/tower)
 NCZ.ARCH_TOWER_BOOST      = 1.35; // tower windows this much brighter than block windows
-// (B) Shape discriminators — the layer is the whole built environment, not just
+// (B) Shape discriminators: the layer is the whole built environment, not just
 // buildings. A real windowed building is reasonably WIDE on its narrow side and
 // not too ELONGATED. These cull the infrastructure that geometry alone confuses
 // with towers/blocks:
-//   minFoot  = min(Xhalf, Zhalf)   — narrow-side half-extent. Below MIN_FOOTPRINT
+//   minFoot  = min(Xhalf, Zhalf): narrow-side half-extent. Below MIN_FOOTPRINT
 //     ⇒ pole / bridge pillar / wind turbine / thin wall → dark.
-//   elong    = maxFoot / minFoot   — above MAX_ELONGATION ⇒ wall / bridge deck /
+//   elong    = maxFoot / minFoot: above MAX_ELONGATION ⇒ wall / bridge deck /
 //     container row / pipe → dark.
 NCZ.ARCH_MIN_FOOTPRINT    = 8;    // CET narrow-side half-extent floor for "a building"
 NCZ.ARCH_MAX_ELONGATION   = 4;    // maxFoot/minFoot above which a box reads as linear infrastructure
-// Block clustering: the .dds has no building grouping — buildings are clusters of
+// Block clustering: the .dds has no building grouping: buildings are clusters of
 // adjacent boxes (thin slabs etc.). At load we union boxes whose world AABBs are
 // within this gap (CET) into one "building", then classify per BUILDING (a thin
 // slab inherits its building's height/footprint) instead of per box. Bigger gap =
 // merges across wider seams (risks fusing neighbours); smaller = more fragments.
 NCZ.BUILDING_CLUSTER_GAP  = -2;   // LEGACY (union-find): kept as the tuning-harness baseline; the live path now uses height-discontinuity segmentation below.
-// Building segmentation (height-discontinuity) — REPLACES the percolating
+// Building segmentation (height-discontinuity): REPLACES the percolating
 // union-find above. Adjacent .dds boxes share footprints with no street gap (the
 // dense downtowns collapse to ONE megablob under union-find), but their ROOF
 // heights resolve individual buildings. We rasterise box tops onto a CET ground
@@ -515,15 +515,15 @@ NCZ.BUILDING_SEG_MIN_CELLS = 3;    // regions smaller than this (cells) get abso
 // Connectivity gate on the height-split. Height-splitting is ONLY needed to crack
 // the percolated downtown megablob (one giant footprint-connected component of
 // tens of thousands of cells). An ISOLATED structure is its own small component
-// and must stay one building, however much its roof varies (e.g. Kujira — a ship
-// with a tall superstructure + low deck + masts — was being cut into 3). So a
+// and must stay one building, however much its roof varies (e.g. Kujira, a ship
+// with a tall superstructure + low deck + masts, was being cut into 3). So a
 // footprint-component at/below this many cells is kept WHOLE (connectivity only);
 // only larger components get height-split. Measured: dense districts have ONE
 // component > ~18000 cells, every other structure < ~700.
 NCZ.BUILDING_SEG_KEEP_WHOLE = 1200;
 // Mega-blob SPLIT. The height segmenter still percolates FLAT, same-roof-height
 // areas with no street gaps (Watson core, the spaceport apron, agri farms) into a
-// single building spanning 1000+ CET — which mis-classifies and grabs one giant
+// single building spanning 1000+ CET, which mis-classifies and grabs one giant
 // billboard. After segmentation, any region whose footprint SPAN exceeds
 // BUILDING_SPLIT_MIN_SPAN (CET, full extent) is chopped into BUILDING_SPLIT_CELL
 // world-grid chunks. Pure spatial chop (a flat plateau carries no split signal);
@@ -534,7 +534,7 @@ NCZ.BUILDING_SPLIT_MIN_SPAN = 900;  // region footprint span (CET) above which t
 // ROAD-aware segmentation. The building footprint has no street gaps; the road
 // network (3dmap_roads.glb) supplies the street grid. At load the roads are
 // rasterised into a coverage grid; segmentBuildings carves road-covered cells that
-// are STRUCTURALLY THIN (roof-floor < BUILDING_ROAD_CLEARANCE — a surface street /
+// are STRUCTURALLY THIN (roof-floor < BUILDING_ROAD_CLEARANCE: a surface street /
 // podium deck, not a real building) so region-grow can't merge buildings across a
 // street → buildings separate by CITY BLOCK. Thickness-gated, so a building OVER a
 // tunnel / UNDER an elevated highway is kept whole. Validated headless: largest-
@@ -553,7 +553,7 @@ NCZ.BUILDING_PODIUM_MERGE      = 1;    // 0 = disable
 NCZ.BUILDING_PODIUM_MERGE_FRAC = 0.45; // min fraction of a segment's perimeter bordering its podium to merge
 // ── PART level (sub-building strata) ─────────────────────────────────────────
 // A building is the unit the user names ("that tower"); a PART is the unit that
-// emits light coherently — a tower, the podium it rises from, a mast, a fuel
+// emits light coherently: a tower, the podium it rises from, a mast, a fuel
 // sphere. Parts are the same roof-cliff region-grow the building pass runs, with
 // the BUILDING_SEG_KEEP_WHOLE reprieve REMOVED (isolated structures get split
 // too) and no podium merge, then intersected with the final building label so a
@@ -563,16 +563,16 @@ NCZ.BUILDING_PODIUM_MERGE_FRAC = 0.45; // min fraction of a segment's perimeter 
 // Part     = connectivity + DH (always) + absorb, ∩ building.
 //
 // Parts exist because class is a per-PART property: the podium is dark, the tower
-// on it is lit. BUILDING_PODIUM_MERGE stays on — it is still correct for the
-// building level — but the labels it unions are exactly the parts we keep.
+// on it is lit. BUILDING_PODIUM_MERGE stays on (it is still correct for the
+// building level) but the labels it unions are exactly the parts we keep.
 // URL: ?partdh= (visualise with ?partdebug).
 NCZ.BUILDING_PART_DH = 18;   // roof-height cliff (CET) that separates two PARTS of one building
-// (A) World-region suppression — CET rects [minX, minY, maxX, maxY] where windows
+// (A) World-region suppression: CET rects [minX, minY, maxX, maxY] where windows
 // are forced off (ocean / oil fields / industrial zones the geometry can't tell
 // apart). Empty = no-op. Compile-time (rebuild materials to apply). Fill from the
 // map's coordinate readout. World→CET in shader: cetX = worldX, cetY = -worldZ.
 NCZ.WINDOW_SUPPRESS_ZONES = [];
-// (A) Per-DISTRICT window density — keyed by the TRUE district polygon
+// (A) Per-DISTRICT window density: keyed by the TRUE district polygon
 // (data/subdistricts.json), NOT the .dds cloud (which bleeds across boundaries:
 // Pacifica's cloud holds Badlands boxes). Rasterized into a CET-space mask
 // texture at load; the building shader samples it by world position and scales
@@ -581,7 +581,7 @@ NCZ.WINDOW_SUPPRESS_ZONES = [];
 // polygon (ocean / unzoned) → dark. Tune per district; reload to re-rasterize.
 // Badlands is broadly dark here; specific lit spots come later via the polygon
 // exception system.
-// Feather distance (CET) for the density mask — after the polygons are painted,
+// Feather distance (CET) for the density mask: after the polygons are painted,
 // the mask is blurred by this radius so the glow/windows fall off SMOOTHLY past
 // district edges (a light-pollution halo bleeding into the surroundings) instead
 // of a hard polygon cutoff. Bigger = softer, wider bleed. 0 = hard edges.
@@ -599,19 +599,19 @@ NCZ.DISTRICT_NIGHT_DENSITY = {
   _default:       0.0,
 };
 // ── Per-subdistrict SIGN-DENSITY profile (Night Phase A) ─────────────────────
-// The night look was uniform — Kabuki, City Center and Santo Domingo rendered the
+// The night look was uniform: Kabuki, City Center and Santo Domingo rendered the
 // same neon. This MULTIPLIER scales the per-building sign GATES (SIGN_SPECKLE/
-// BUILDING/PODIUM_FRACTION) so each district carries more or fewer signed buildings
-// — true density, not a brightness dim. 0 ⇒ no neon at all (kills the industrial-
+// BUILDING/PODIUM_FRACTION) so each district carries more or fewer signed buildings:
+// true density, not a brightness dim. 0 ⇒ no neon at all (kills the industrial-
 // zones-shouldn't-glow bug for Northside / spaceport / Badlands).
 //
 // VALUES are the LLM-VERIFIED bands from the local-LLM tagger (127 in-game shots →
 // per-subdistrict `_feel.md`; see wiki/concepts/local-llm-offload.md +
-// night-city-district-model.md). **1.0 = the LOUDEST district (Kabuki)** — i.e. the
+// night-city-district-model.md). **1.0 = the LOUDEST district (Kabuki)**: i.e. the
 // tuned baseline signage params ARE the loudest look, everything scales DOWN from
 // there. Bands: loudest 1.0 · high 0.8 · low 0.3 · suppress 0.0. `sign_density` is
 // the STRONG (trusted) signal; the big correction vs the old eyeball model is that
-// corpo/commercial is DENSE (high 0.8), not "medium" — only industrial/rural/
+// corpo/commercial is DENSE (high 0.8), not "medium"; only industrial/rural/
 // spaceport are suppressed.
 //
 // Keyed by subId; falls back to the districtId key (district-level tags like dogtown
@@ -620,22 +620,22 @@ NCZ.DISTRICT_NIGHT_DENSITY = {
 // so one flat map serves both. Looked up per BUILDING at load (polygon-based subId of
 // its centroid) → baked into a per-instance buffer. URL ?nosignprof bakes a flat 1.0.
 NCZ.SIGN_DENSITY_PROFILE = {
-  // ── Loudest (1.0) — neon IS the district ──
+  // ── Loudest (1.0): neon IS the district ──
   kabuki:             1.0,   // gaudy magenta/red, vertical strips, lanterns
-  little_china:       1.0,   // cooler — blue/cyan/white/magenta
+  little_china:       1.0,   // cooler: blue/cyan/white/magenta
   japan_town:         1.0,   // big video billboards (cyan/orange/red/blue)
-  // ── High (0.8) — dense commercial / corpo (the corrected band) ──
+  // ── High (0.8): dense commercial / corpo (the corrected band) ──
   corpo_plaza:        0.8,   // corpo, cleaner geometric (cyan/blue/white)
   downtown:           0.8,
   charter_hill:       0.8,   // denser than first thought
   vista_del_rey:      0.8,   // heywood commercial
   glen:               0.8,   // heywood
-  coastview:          0.8,   // pacifica — warmer + more lit than the "ruin" guess
-  rancho_coronado:    0.8,   // Santo Domingo — the AD-TOWERS (big billboards), NOT bare
-  // ── Low (0.3) — industrial/calmer with a little neon ──
+  coastview:          0.8,   // pacifica: warmer + more lit than the "ruin" guess
+  rancho_coronado:    0.8,   // Santo Domingo: the AD-TOWERS (big billboards), NOT bare
+  // ── Low (0.3): industrial/calmer with a little neon ──
   arroyo:             0.3,   // industrial (red/amber/orange)
   wellspring:         0.3,   // calmer (blue/orange/amber)
-  // ── Suppress (0.0) — industrial / rural / spaceport: no commercial neon ──
+  // ── Suppress (0.0): industrial / rural / spaceport (no commercial neon) ──
   northside:          0.0,   // INDUSTRIAL docks, dark
   north_oak:          0.0,   // quiet residential hills
   laguna_bend:        0.0, red_peaks: 0.0, rocky_ridge: 0.0, sierra_sonora: 0.0,
@@ -643,7 +643,7 @@ NCZ.SIGN_DENSITY_PROFILE = {
   biotechnica_flats:  0.0, north_sunrise_oil_field: 0.0, socal_border_crossing: 0.0,
   // ── District-level fallbacks (null subId, or unlisted subId → parent band) ──
   dogtown:            0.8,   // decayed-dense PL (green/hot-pink/cyan); high band
-  ncx_morro_rock:     0.0,   // spaceport apron — bare
+  ncx_morro_rock:     0.0,   // spaceport apron: bare
   badlands:           0.0,   // rural
   city_center:        0.8,   // corpo
   watson:             0.8,   // unlisted: arasaka_waterfront (corpo waterfront)
@@ -658,15 +658,15 @@ NCZ.SIGN_DENSITY_PROFILE = {
 //
 // It is FETCHED, not code-generated into this file, on purpose. A generator writing
 // into the file we hand-tune would make "measured vs tuned" a DIFF instead of a
-// SWITCH — and the two must be able to disagree in public. SIGN_DENSITY_PROFILE
+// SWITCH, and the two must be able to disagree in public. SIGN_DENSITY_PROFILE
 // above (LLM-verified over 127 shots) and the measured sign ordinal in the profile
 // are two measurements of DIFFERENT THINGS; where they disagree that is a finding,
 // not a merge conflict.
 NCZ.NIGHT_PROFILE_URL = "data/night-profile.json";
-// The per-box window bake — one byte per building INSTANCE: the real glass area the game
+// The per-box window bake, one byte per building INSTANCE: the real glass area the game
 // places on that box, over the box's facade area.
 //
-// ONE PER ASSET SET, and that is not an optimisation — it is a correctness requirement.
+// ONE PER ASSET SET, and that is not an optimisation; it is a correctness requirement.
 // The vanilla and Fixed clouds are different geometry (271,022 vs 263,258 boxes; the Fixed
 // set is a rebuild, not a nudge), and this data is indexed by instance. Cross-applying them
 // yields a city that is wrong in a way that still looks like a city.
@@ -677,13 +677,13 @@ NCZ.WINDOW_BOXES_URL = (set) => `data/window-boxes-${set === 'fixed' ? 'fixed' :
 NCZ.WINDOW_BOXES_BIN_URL = (set) => `data/window-boxes-${set === 'fixed' ? 'fixed' : 'vanilla'}.bin`;
 
 // ── ROUTE A: the game's REAL facade panels (?winmodel=panels) ───────────────
-// 129,299 glass-bearing meshes at their exact world transforms — no box cloud, so no
+// 129,299 glass-bearing meshes at their exact world transforms: no box cloud, so no
 // facade-area denominator to get wrong. Generated by `node scripts/window_panels.js --bake`.
 // Asset-set independent: these are the GAME's panels, not our decoded boxes.
 NCZ.WINDOW_PANELS_URL = "data/window-panels.json";
 NCZ.WINDOW_PANELS_BIN_URL = "data/window-panels.bin";
 
-// The game's own window module, in METRES — measured from the material's roomWidth /
+// The game's own window module, in METRES, measured from the material's roomWidth /
 // roomHeight (3 x 4 m), NOT the same thing as WINDOW_CELL_W/H (24 x 18 CET), which is a
 // map-zoom legibility knob for painting windows across a whole building. On a real panel the
 // grid must tile at the real room size or a 1.3 m kit piece draws nothing at all.
@@ -692,69 +692,69 @@ NCZ.WINDOW_ROOM_H = 4.0;
 NCZ.NIGHT_PROFILE = null;   // filled by ThreeScene at load; null ⇒ every lookup falls back
 
 // Which glass-share column the renderer believes. URL: ?glasssrc=
-//   'panel' — glass AREA / facade AREA over kit PANELS only. THE TRUSTED ONE: it is
+//   'panel':  glass AREA / facade AREA over kit PANELS only. THE TRUSTED ONE: it is
 //             the only column where "this mesh is glass" is true of the whole mesh.
-//   'area'  — the same without excluding bespoke part-glass megameshes, whose entire
+//   'area':   the same without excluding bespoke part-glass megameshes, whose entire
 //             facade lands in one bucket. Kept for A/B; it craters Corpo Plaza.
-//   'count' — the original instance-count share. Kept for A/B; it made Charter Hill
+//   'count':  the original instance-count share. Kept for A/B; it made Charter Hill
 //             the glassiest district in the city (35.6%), which the footage denies.
 NCZ.GLASS_SHARE_SOURCE = "panel";
 
-// HAND-TUNED glass-share overrides, per subId — the PEER of SIGN_DENSITY_PROFILE,
+// HAND-TUNED glass-share overrides, per subId: the PEER of SIGN_DENSITY_PROFILE,
 // not its replacement. EMPTY BY DESIGN: every entry added here is a claim that the
 // maintainer's footage beats the sector data, and it must carry a comment saying why.
-// The measurement has a known blind spot — bespoke part-glass megameshes cannot be
-// apportioned (see `bulkArchShare` in the profile; Corpo Plaza is 24% unapportionable)
-// — so this map is where that blind spot gets corrected BY HAND, visibly, and not by
+// The measurement has a known blind spot: bespoke part-glass megameshes cannot be
+// apportioned (see `bulkArchShare` in the profile; Corpo Plaza is 24% unapportionable),
+// so this map is where that blind spot gets corrected BY HAND, visibly, and not by
 // quietly bending the measurement until it agrees with intuition.
 NCZ.GLASS_SHARE_OVERRIDE = {
   // little_china: 0.20,   // e.g. "footage shows near-full glass frontage; measured 0.067"
 };
 // Buildings tagged to no polygon (ocean / unzoned): no glass ⇒ dark.
 NCZ.GLASS_SHARE_DEFAULT = 0.0;
-// Global multiplier on every glass share — the one look knob on the window model,
+// Global multiplier on every glass share: the one look knob on the window model,
 // for pulling the whole city up or down without touching the measured ratios BETWEEN
 // districts. URL: ?glassgain=
 NCZ.GLASS_SHARE_GAIN = 1.0;
 
 // Fraction of the windows INSIDE glass that are lit at night. MEASURED, not chosen:
 // window_parallax_interior.mt's `AmountTurnOffAtNight`, area-weighted across every
-// placed window material — mean 0.4464, so lit = 1 - 0.4464.
+// placed window material: mean 0.4464, so lit = 1 - 0.4464.
 //
 // READ THE NAME: it is the fraction that go DARK, not the fraction that stay lit. At
 // the modal 0.5 the two readings coincide exactly, which is why the ambiguity went
-// unnoticed. The outliers disambiguate it — a value of 0 means "none turn off" (a
+// unnoticed. The outliers disambiguate it: a value of 0 means "none turn off" (a
 // lobby lit all night), which is sensible; under the other reading it would mean a
 // window material that is NEVER lit, which is not a thing.
 //
 // 0.5 covers 97% of placed glass area (0.2 and 0 make up the rest), so the handover's
-// "identical for every archetype" is not LITERALLY true — but by area the outliers are a
+// "identical for every archetype" is not LITERALLY true, but by area the outliers are a
 // rounding error and one global constant is defensible. If the look is ever wrong, THIS
 // is where a per-archetype term genuinely belongs. It is not a knob. URL: ?litglass=
 NCZ.WINDOW_LIT_IN_GLASS = 0.5126;
 
 // The game's window ASPECT RATIO (width ÷ height). MEASURED: the dominant glass module is
-// 3 m wide × 4 m tall — exactly the room (roomWidth 3 on 91% of placed glass area,
+// 3 m wide × 4 m tall: exactly the room (roomWidth 3 on 91% of placed glass area,
 // roomHeight 4 on 99%). A room-sized pane of glass, PORTRAIT, not a letterbox.
 //
 // An earlier reading of this said 2.14 (a wide 3.0 × 1.4 m ribbon) and it was upside
 // down: it came from the era when object size was inferred from `worldNode.Bounds`, a
-// field populated on 1.9% of nodes. Same trap as everything else that broke that day —
+// field populated on 1.9% of nodes. Same trap as everything else that broke that day:
 // see wiki/learnings/node-bounds-is-a-2-percent-sample. URL: ?winaspect=
 NCZ.WINDOW_PANE_ASPECT = 0.75;   // 3 ÷ 4
 
 // Which window model the shader compiles. URL: ?winmodel=glass|legacy
-//   'glass'  — the measured model. Cell = a facade grid; the PANE inside each cell is
+//   'glass':  the measured model. Cell = a facade grid; the PANE inside each cell is
 //              sized by the district's glass share (area) and the game's window aspect
 //              (shape); a cell is lit at WINDOW_LIT_IN_GLASS, at random. Default.
-//   'legacy' — the pre-rebuild look: fixed 0.55 x 0.55 panes, a flat 0.20 lit fraction
+//   'legacy', the pre-rebuild look: fixed 0.55 x 0.55 panes, a flat 0.20 lit fraction
 //              everywhere, WINDOW_COHERENCE/COLUMN_COHERENCE. Kept ONLY so the two can
 //              be A/B'd on the same camera; delete it once the new model is signed off.
 // The branch is read in JS, so the unused model emits no shader nodes and costs nothing.
 NCZ.WINDOW_MODEL = "glass";
 // `panels` = Route A: windows drawn on the game's REAL facade panels at their exact world
 // transforms, with the box cloud's own window pass switched off. No facade-area denominator.
-// `none` — NO PROCEDURAL WINDOWS AT ALL. Buildings render dark and the ?windebug cloud is the
+// `none`: NO PROCEDURAL WINDOWS AT ALL. Buildings render dark and the ?windebug cloud is the
 // ONLY thing emitting. This is an AUDIT mode, and it exists because the procedural windows were
 // actively lying to us: they paint white light across every building that clears the height gate,
 // so "does this tower have real window data?" and "did the old shader decide to light it?" become
@@ -798,7 +798,7 @@ NCZ.signDensityFor = function (subId, districtId) {
 //
 //   1. The game lights 50% of the windows IN A WINDOW PANEL.
 //      (base\materials\window_parallax_interior.mt → `AmountTurnOffAtNight` = 0.5.
-//       Identical for every archetype — Entropism apartment/office/industrial,
+//       Identical for every archetype: Entropism apartment/office/industrial,
 //       Militarism office, Neokitsch apartment. CDPR does NOT vary it by district.)
 //
 //   2. But a window panel is only PART OF A FACADE. Buildings are kit-bashed from
@@ -813,14 +813,14 @@ NCZ.signDensityFor = function (subId, districtId) {
 //
 //      lit_cells  =  window_panel_share  ×  0.5
 //
-// Kabuki — the densest district in the city — therefore lands at ~0.19, not 0.50.
+// Kabuki (the densest district in the city) therefore lands at ~0.19, not 0.50.
 // 0.50 was the count of lit windows *within the glass*, applied as though the entire
 // building were glass. It lit the city like a lantern.
 //
 // 0.20 below is the Kabuki CEILING used as a global stand-in. It is too high for most
 // of the city and flat wrong for Northside (which should be 0.00). The per-subdistrict
 // values come from scripts/wkit/scan_signage.wscript (window vs wall panels per sector,
-// binned into subdistrict polygons) — that is the real fix, and it is also where the
+// binned into subdistrict polygons); that is the real fix, and it is also where the
 // district variation genuinely lives.
 //
 // History: these were 0.020 / 0.006, twenty-five times darker still. That was
@@ -832,28 +832,28 @@ NCZ.signDensityFor = function (subId, districtId) {
 // ── DEPRECATED. Legacy path only (?winmodel=legacy). ─────────────────────────
 // Superseded by the measured model: the district's GLASS SHARE (per-subdistrict, from
 // data/night-profile.json) x WINDOW_LIT_IN_GLASS (0.5536, from the game's own material).
-// The comment above got the STRUCTURE right — two numbers multiply — and both numbers
+// The comment above got the STRUCTURE right (two numbers multiply) and both numbers
 // wrong. It also guessed the wrong shape for the second one: `AmountTurnOffAtNight` is
 // the fraction that go DARK, so lit = 1 - it, not it.
 //
 // The measured per-subdistrict shares (glass AREA / facade AREA, over kit panels):
 //   rancho_coronado 26.6%   charter_hill 17.4%   corpo_plaza 10.7%
 //   downtown        19.2%   japan_town   14.7%   kabuki        6.5%   northside 0.7%
-// So 0.20 was not "the Kabuki ceiling" — it was roughly TRIPLE Kabuki's real share, and
+// So 0.20 was not "the Kabuki ceiling": it was roughly TRIPLE Kabuki's real share, and
 // ~30x Northside's. Nothing about it was right except that it was a single number, which
 // was the actual bug.
 NCZ.WINDOW_LIT_FRACTION_TOWER = 0.20;
 NCZ.WINDOW_LIT_FRACTION_BLOCK = 0.20;
 // Floor/column COHERENCE (0..1). 0 = each window cell lights independently (pure
-// per-cell hash — reads as scattered noise). 1 = lit windows cluster into lit
+// per-cell hash; reads as scattered noise). 1 = lit windows cluster into lit
 // FLOORS and COLUMNS (a per-row × per-column occupancy scales the local lit
 // fraction), so the facade reads as a real window grid lighting by floor. The
 // total average lit fraction is preserved at either end; only the spatial
 // arrangement changes. URL: ?night&winco=
 NCZ.WINDOW_COHERENCE = 0.0;
 // Floor-vs-column balance WITHIN the coherence term. The lit-window gate clusters
-// by FLOOR (cell.y = world height — identical on all four faces, so a lit floor
-// WRAPS around the whole building) and by COLUMN (cell.x = wall-tangent axis —
+// by FLOOR (cell.y = world height; identical on all four faces, so a lit floor
+// WRAPS around the whole building) and by COLUMN (cell.x = wall-tangent axis;
 // different per face). 0 = floor-only ⇒ continuous horizontal ribbons that light
 // every side equally (the reference look + fixes "only one side gets windows").
 // 1 = the old floor×column PRODUCT ⇒ isolated dots at row/column intersections,
@@ -876,7 +876,7 @@ NCZ.WINDOW_SHELL_GATE = -1.0;
 // neighbour boxes; per fragment, the shader probes FACE_EPS in front of the wall
 // and darkens windows AND all signage layers where that probe sits INSIDE one of
 // those neighbours (exact OBB containment via per-box inverse matrices, so the
-// verdict is correct per fragment — a slab poking out past its interpenetrating
+// verdict is correct per fragment: a slab poking out past its interpenetrating
 // siblings lights exactly where it pokes). Errs LIT by design: a missed 5th+
 // occluder leaves a fragment lit BEHIND geometry, which the depth buffer hides.
 // 1.0 = full gate, 0 = OFF (compile-time no-op, restores the pre-mask look).
@@ -886,33 +886,33 @@ NCZ.FACE_MASK_STRENGTH = 1.0;
 // abutting AND overlapping neighbours count as occluders. Must stay below any
 // plausible box thickness or thin neighbours falsely bury walls. URL: ?faceeps=
 NCZ.FACE_EPS = 0.35;
-// Window light palette (sRGB hex) — interior light TEMPERATURES, not neon. Index 0
+// Window light palette (sRGB hex): interior light TEMPERATURES, not neon. Index 0
 // is the default warm-white "lamp" most windows use; the rest are a mix of warm
 // and cool whites picked per-window by hash (WINDOW_TINT_FRACTION), so the city's
 // windows read like real mixed lighting. Saturated colour belongs to signage, not
 // windows.
 NCZ.WINDOW_COLORS = ["#ffe8c8", "#fff3e2", "#fbf7ff", "#e8f0ff", "#d2e2ff", "#ffeccf"];
 
-// ── Night Stage 2 — signage ─────────────────────────────────────────────────
-// The neon character. Big, sparse, saturated emissive panels on tall facades —
+// ── Night Stage 2: signage ──────────────────────────────────────────────────
+// The neon character. Big, sparse, saturated emissive panels on tall facades:
 // the opposite of windows (small/dense/dim/warm). Same world-space facade
 // technique, but COARSE cells + a per-building "has a sign" gate so signage
 // clumps onto a fraction of buildings rather than tiling every face. Reuses the
 // archetype + district gate (archMask), so it only lands on real tall buildings
 // and respects per-district density. Night-only for now (billboards-on-by-day is
 // a later add). Brighter than windows → the main bloom source. Tune with ?night.
-NCZ.SIGN_BUILDING_FRACTION = 0.10; // fraction of eligible buildings that carry a BIG ROOF sign (selective — the skyline billboards). URL: ?night&signbf=
-// Fraction of eligible buildings that carry the STREET speckle layer — decoupled
+NCZ.SIGN_BUILDING_FRACTION = 0.10; // fraction of eligible buildings that carry a BIG ROOF sign (selective: the skyline billboards). URL: ?night&signbf=
+// Fraction of eligible buildings that carry the STREET speckle layer, decoupled
 // from the big-sign gate so neon can scatter across the WHOLE city while big signs
 // stay selective. Default == SIGN_BUILDING_FRACTION (gates identical ⇒ original
 // look); raise toward 1 for city-wide speckle. URL: ?night&signspeckle=
 NCZ.SIGN_SPECKLE_FRACTION = 0.10;
-// Fraction of PODIUM buildings (malls, shop bases — normally unlit) that carry the
+// Fraction of PODIUM buildings (malls, shop bases; normally unlit) that carry the
 // street speckle, so ground-level neon spills onto the occasional mall front. The
 // street layer is otherwise on lit towers/blocks EQUALLY (no tower bias). URL:
 // ?night&signpod=
 NCZ.SIGN_PODIUM_FRACTION = 0.0;
-// Sign SHAPE varies per panel — width and height hash-picked independently from
+// Sign SHAPE varies per panel: width and height hash-picked independently from
 // these (broad) ranges give square / long / tall rectangles; a per-sign shape hash
 // also yields circles and triangles (see the shader). Cell-fraction.
 NCZ.SIGN_PANE_W_MIN = 0.12;        // narrowest
@@ -923,14 +923,14 @@ NCZ.SIGN_PANE_H_MAX = 0.92;        // tallest
 // remainder splits evenly between circles and triangles. Higher = cleaner, more
 // sign-like, less "confetti". URL: ?night&signrect=
 NCZ.SIGN_RECT_BIAS  = 0.50;
-// A neon sign GLOWS onto the surrounding wall — a soft halo beyond the panel body
+// A neon sign GLOWS onto the surrounding wall: a soft halo beyond the panel body
 // (this spill is what reads as "a light on the facade", not a window cut into it).
 // Cell-fraction width of the falloff outside the panel. Bloom amplifies it.
 NCZ.SIGN_GLOW_WIDTH   = 0.16;
-NCZ.SIGN_INTENSITY    = 7.0;       // emissive brightness at full night (bright — the main bloom source)
-// HEIGHT-STRATIFIED signage — two layers blended by height fraction:
-//   STREET (low): FINE grid, SMALL signs, DENSE — fades out going up.
-//   ROOF  (high): COARSE grid, BIG signs, VERY SPARSE — fades in going up.
+NCZ.SIGN_INTENSITY    = 7.0;       // emissive brightness at full night (bright: the main bloom source)
+// HEIGHT-STRATIFIED signage: two layers blended by height fraction:
+//   STREET (low): FINE grid, SMALL signs, DENSE; fades out going up.
+//   ROOF  (high): COARSE grid, BIG signs, VERY SPARSE; fades in going up.
 // The mid-building reads as their blend (medium size, low density). Each layer
 // keeps the shape variety + glow. Grid = CET cell size; density = fraction of
 // cells with a sign; size = panel-size multiplier.
@@ -944,7 +944,7 @@ NCZ.SIGN_ROOF_DENSITY   = 0.05;
 // blends in/out.
 NCZ.SIGN_STREET_FADE_LO = 0.25; NCZ.SIGN_STREET_FADE_HI = 0.65; // street fades OUT across this band
 NCZ.SIGN_ROOF_RISE_LO   = 0.45; NCZ.SIGN_ROOF_RISE_HI   = 0.90; // roof fades IN across this band
-// Saturated neon palette (sRGB hex) — hash-picked per panel (uniform pick, so the
+// Saturated neon palette (sRGB hex): hash-picked per panel (uniform pick, so the
 // distribution is WEIGHTED BY REPETITION). This is where the city's colour comes
 // from (windows stay warm-white-dominant). Reference-leaning CP2077 mix: heavy on
 // hot-pink / cyan / red / amber / white (the iconic neon hues), lighter on
@@ -963,7 +963,7 @@ NCZ.SIGN_COLORS = [
 ];
 // ── Big billboard ── ONE large single-colour neon panel per selected tall building
 // (gated by SIGN_BUILDING_FRACTION), placed on the upper facade. Unlike the tiled
-// roof layer, this is a single coherent sign per building — the iconic "huge sign at
+// roof layer, this is a single coherent sign per building: the iconic "huge sign at
 // the top". Seed-varied between a tall vertical strip and a wide banner. URL keys:
 // bbcv / bbwmin / bbwmax / bbhmin / bbhmax / bbglow / bbint.
 NCZ.SIGN_BB_CENTER_V      = 0.80;  // panel centre as height-fraction (upper facade)
@@ -977,14 +977,14 @@ NCZ.SIGN_BB_H_MAX         = 0.95;  // (tall ⇒ strip)
 NCZ.SIGN_BB_GLOW          = 0.04;  // soft falloff width for the bloom halo
 NCZ.SIGN_BB_INTENSITY_MUL = 1.3;   // billboard brightness × SIGN_INTENSITY (the brightest element)
 // Hard WORLD-size cap (CET) on a billboard half-extent. Stops an over-merged
-// mega-block (facade 1000+ CET) from spawning a giant single-colour panel — the
+// mega-block (facade 1000+ CET) from spawning a giant single-colour panel: the
 // "giant billboard" artefact. Normal towers sit well under this. URL: ?night&bbmax=
 NCZ.SIGN_BB_MAX_HALF      = 55;
 
-// ── Night lighting (Stage 1 — moonlight foundation) ─────────────────────────
+// ── Night lighting (Stage 1: moonlight foundation) ──────────────────────────
 // Day-night runs on TWO permanent directional lights that crossfade by
 // nightFactor (smoothstep on SUN elevation; see NCZ.nightFactorForSunElevation):
-// a warm SUN that casts shadows (its shadow strength fades out as it sets — see
+// a warm SUN that casts shadows (its shadow strength fades out as it sets; see
 // SUN_SHADOW_FADE_* below) and a cool MOON that casts NONE. Moonlight shadows are
 // physically imperceptible, and dropping them removes the night/dusk "shadow box"
 // cut-out entirely (no caster ⇒ nothing to clip against the coverage cap). Crisp
@@ -996,23 +996,23 @@ NCZ.MOON_COLOR_RGB         = [0.62, 0.74, 1.00]; // cool moonlight (linear)
 NCZ.MOON_INTENSITY         = 0.50;               // key intensity at full night & full phase, moon at zenith (vs SUN_INTENSITY 3.0)
 NCZ.MOON_PHASE             = 0.85;               // illuminated fraction 0=new→1=full; tunable (real getMoonIllumination ignored so we never land on a dark new moon). Scales moonlight; disc-phase terminator is a follow-up.
 NCZ.AMBIENT_SKY_RGB_NIGHT  = [0.12, 0.16, 0.28]; // dark blue from above at night
-NCZ.AMBIENT_GROUND_RGB_NIGHT = [0.17, 0.18, 0.22]; // cool near-neutral fill from below — was a warm orange "light-pollution" bounce, but at the high moonless ambient it read sun-warm; deliberate neon/city underglow belongs in the theme-driven Stage 2, not the baseline
-NCZ.AMBIENT_INTENSITY_NIGHT = 0.50;              // night ambient when the MOON IS UP — kept low so directional moonlight dominates
-NCZ.AMBIENT_INTENSITY_NIGHT_MOONLESS = 0.85;     // night ambient when the moon is BELOW the horizon — skyglow/starlight fill so a moonless night stays legible (scaled in by 1−moonAlt; never washes out moonlit nights)
+NCZ.AMBIENT_GROUND_RGB_NIGHT = [0.17, 0.18, 0.22]; // cool near-neutral fill from below. A warm orange "light-pollution" bounce read sun-warm at the high moonless ambient; deliberate neon/city underglow belongs in the theme-driven Stage 2, not the baseline
+NCZ.AMBIENT_INTENSITY_NIGHT = 0.50;              // night ambient when the MOON IS UP; kept low so directional moonlight dominates
+NCZ.AMBIENT_INTENSITY_NIGHT_MOONLESS = 0.85;     // night ambient when the moon is BELOW the horizon: skyglow/starlight fill so a moonless night stays legible (scaled in by 1−moonAlt; never washes out moonlit nights)
 
 // ── Stage-2 city glow (night light-pollution fill) ──────────────────────────
-// A SECOND hemisphere light layered on the moonlight baseline above — the city
+// A SECOND hemisphere light layered on the moonlight baseline above: the city
 // lighting itself. WARM up-glow from below (streets/neon bouncing onto lower
 // facades) + a fainter cool tint from above, so buildings lift out of pure-black
 // silhouette. Driven by nightFactor² (zero by day). This is the "ambient
 // lighting" seen in the night reference shots; the baseline ambient deliberately
-// omits it. Linear RGB. Tune live with ?night. (Global for now — it lifts the
+// omits it. Linear RGB. Tune live with ?night. (Global for now; it lifts the
 // whole map's surfaces, not just the city; localising needs the region data.)
 NCZ.CITY_GLOW_GROUND_RGB = [1.0, 0.62, 0.42];    // warm amber up-glow from street level (the dominant tint)
 NCZ.CITY_GLOW_SKY_RGB    = [0.40, 0.30, 0.52];   // faint cool-purple from above (upper-atmosphere skyglow)
 NCZ.CITY_GLOW_INTENSITY  = 0.25;                 // night-peak fill intensity
-NCZ.CITY_GLOW_DAY_FACTOR = 0.25;  // fraction of the glow kept in full DAYLIGHT — a city always has some lights on. Glow intensity = INTENSITY · lerp(DAY_FACTOR, 1, nightFactor), so it's present but dim by day and brightest at night (dimmer as the day brightens). 0 = night-only.
-NCZ.KEY_LIGHT_MIN_DIR_Y    = 0.10;               // floor on the SUN direction's Y (~5.7°) — shadow-camera safety so its lookAt can't degenerate near/below the horizon. Kept at 0.10: a lower floor lets a low sun graze further, lengthening dawn/dusk shadows until they overrun the SHADOW_MAX_DISTANCE coverage cap and cut out. Less critical now that SUN_SHADOW_FADE_* fades low-sun shadows out, but still the degeneracy guard.
+NCZ.CITY_GLOW_DAY_FACTOR = 0.25;  // fraction of the glow kept in full DAYLIGHT: a city always has some lights on. Glow intensity = INTENSITY · lerp(DAY_FACTOR, 1, nightFactor), so it's present but dim by day and brightest at night (dimmer as the day brightens). 0 = night-only.
+NCZ.KEY_LIGHT_MIN_DIR_Y    = 0.10;               // floor on the SUN direction's Y (~5.7°): shadow-camera safety so its lookAt can't degenerate near/below the horizon. Kept at 0.10: a lower floor lets a low sun graze further, lengthening dawn/dusk shadows until they overrun the SHADOW_MAX_DISTANCE coverage cap and cut out. Less critical now that SUN_SHADOW_FADE_* fades low-sun shadows out, but still the degeneracy guard.
 // Sun-shadow strength fades with the sun's real elevation (deg): full at/above
 // FULL, zero at/below OFF. Fades shadows out through dusk and kills them at night
 // (sun below horizon) so there's no caster to clip against the coverage cap.
@@ -1020,7 +1020,7 @@ NCZ.SUN_SHADOW_FADE_OFF_DEG  =  3;               // sun elevation at/below which
 NCZ.SUN_SHADOW_FADE_FULL_DEG = 12;               // sun elevation at/above which cast shadows are at full strength
 // nightFactor ramp, in SUN-elevation degrees: 0 (full day) at/above DAY, 1 (full
 // night) at/below NIGHT. Deliberately WIDE (golden hour → past astronomical
-// twilight) so the night look — glow, windows, bloom, ambient — eases in across
+// twilight) so the night look (glow, windows, bloom, ambient) eases in across
 // ~3h of dusk as a smooth S-curve, rather than snapping on in the ~1h civil-
 // twilight window (which read as a switch, not a cycle). Smoothstep between them.
 NCZ.NIGHT_FACTOR_DAY_DEG   =  15;                // sun elevation at/above which nightFactor = 0 (lights fully off)
@@ -1029,24 +1029,24 @@ NCZ.NIGHT_FACTOR_NIGHT_DEG = -15;               // sun elevation at/below which 
 // ── City lights: window + sign emissive, decoupled from the sun ──────────────
 // The game never gates its window light on the time of day. Every lit window is a
 // MATERIAL (window_parallax_interior.mt) whose parallax interior is ALWAYS there;
-// the night parameter is called `AmountTurnOffAtNight` — night is when half of them
+// the night parameter is called `AmountTurnOffAtNight`: night is when half of them
 // turn OFF, not when they turn on. The sun-driven ramp above is OUR invention: it is
 // what makes the lights READ, not what makes them exist.
 //
 // So the lights get their own control, independent of the sun:
-//   'auto' — the nightFactor ramp above (dusk fades them in). The old behaviour.
-//   'on'   — lit at every hour, floored at LIGHTS_DAY_FLOOR so noon doesn't blow out.
-//   'off'  — dark. Windows, signage and city glow all go.
-// Drives _buildingNightFactor (windows + signage emissive) and the city glow ONLY —
+//   'auto': the nightFactor ramp above (dusk fades them in). The old behaviour.
+//   'on':   lit at every hour, floored at LIGHTS_DAY_FLOOR so noon doesn't blow out.
+//   'off':  dark. Windows, signage and city glow all go.
+// Drives _buildingNightFactor (windows + signage emissive) and the city glow ONLY;
 // sun, moon, ambient, bloom and shadows stay on the real sun, because those ARE the
 // time of day. URL: ?lights=auto|on|off
 NCZ.LIGHTS_MODE = "auto";
 // Emissive floor in full daylight when LIGHTS_MODE is 'on'. This is an honest LOOK
-// CHOICE for our schematic map — the one invented number in the whole lighting model,
+// CHOICE for our schematic map: the one invented number in the whole lighting model,
 // and it is invented on purpose. It is NOT derived from the game: nothing in the
 // material data says how bright a lit window should read against a sunlit facade,
 // because the game answers that with a full HDR pipeline we do not have. Do not file
-// it alongside the measured constants (WINDOW_LIT_IN_GLASS, the glass shares) — those
+// it alongside the measured constants (WINDOW_LIT_IN_GLASS, the glass shares); those
 // are claims about Night City; this is a claim about legibility.
 // 0 = identical to 'auto'. 1 = full night-strength emissive at noon (blown out).
 NCZ.LIGHTS_DAY_FLOOR = 0.3;
@@ -1055,10 +1055,10 @@ NCZ.LIGHTS_DAY_FLOOR = 0.3;
 NCZ.lightsFactor = function (nightFactor) {
   if (NCZ.LIGHTS_MODE === "off") return 0;
   if (NCZ.LIGHTS_MODE === "on") return Math.max(nightFactor, NCZ.LIGHTS_DAY_FLOOR);
-  return nightFactor;                       // 'auto' — the sun decides
+  return nightFactor;                       // 'auto': the sun decides
 };
 NCZ.LIGHTS_MODES = ["auto", "on", "off"];
-NCZ.MOON_SPHERE_RADIUS     = 360;                // visible moon disc — ~0.6× the sun disc (SUN_SPHERE_RADIUS 600); rule-of-cool, not to true scale
+NCZ.MOON_SPHERE_RADIUS     = 360;                // visible moon disc: ~0.6× the sun disc (SUN_SPHERE_RADIUS 600); rule-of-cool, not to true scale
 NCZ.MOON_SPHERE_COLOR      = 0xdfe8ff;           // cool-white disc (sRGB hex for MeshBasicNodeMaterial)
 
 // Building instance decode: DDS _data.dds (DXGI_FORMAT_R16G16B16A16_UNORM, DX10 header)
@@ -1082,7 +1082,7 @@ NCZ.DDS_ALPHA_THRESH  = 655;
 // finalised set can be committed. Loaded at building-load time and applied to
 // segmentation/classification (merge / forceClass / exclude / forceLit ops).
 NCZ.ZONES_KEY         = 'ncz-building-zones';
-// ?archdebug classification palette — the SINGLE source of truth for both the
+// ?archdebug classification palette: the SINGLE source of truth for both the
 // shader (discrete class colour) and the index.html legend (swatch + hover
 // definition), so they line up exactly. rgb is linear 0..1 (matches the shader
 // vec3); the legend converts to hex. Order = legend display order.
@@ -1184,7 +1184,7 @@ NCZ.PIN_3D_SCALE_TARGET_PX          = 100; // ideal scale-bar width in pixels; t
 
 // ── Archetype-tuning param overrides (URL, debug only) ───────────────────────
 // Lets the tuner (scripts/tune_archetypes.js) preview any candidate param set
-// live WITHOUT editing the constants above — pair with ?archdebug, e.g.
+// live WITHOUT editing the constants above; pair with ?archdebug, e.g.
 //   ?archdebug&gap=-1&vlo=0.5&vhi=1.8&fbig=220&minf=8&maxe=4
 // Runs synchronously here, before three-scene.js (a deferred module) reads any
 // of these at material-build / loadBuildings time. Complete no-op unless at
@@ -1235,7 +1235,7 @@ NCZ.PIN_3D_SCALE_TARGET_PX          = 100; // ideal scale-bar width in pixels; t
     signspeckle: "SIGN_SPECKLE_FRACTION",
     signpod:   "SIGN_PODIUM_FRACTION",
     signrect:  "SIGN_RECT_BIAS",
-    stcell:    "SIGN_STREET_CELL_W",   // street grid (also sets H below in three-scene? no — set both)
+    stcell:    "SIGN_STREET_CELL_W",   // street grid (sets W only; H is its own key below, set both)
     stcellh:   "SIGN_STREET_CELL_H",
     stsize:    "SIGN_STREET_SIZE",
     stdens:    "SIGN_STREET_DENSITY",
@@ -1263,7 +1263,7 @@ NCZ.PIN_3D_SCALE_TARGET_PX          = 100; // ideal scale-bar width in pixels; t
     litglass:  "WINDOW_LIT_IN_GLASS",
     winaspect: "WINDOW_PANE_ASPECT",
   };
-  // Params whose value is an ENUM, not a number — MAP above parseFloats everything,
+  // Params whose value is an ENUM, not a number; MAP above parseFloats everything,
   // so a string-valued constant needs its own pass or it lands as NaN.
   const STR_MAP = {
     lights:   { name: "LIGHTS_MODE", allow: NCZ.LIGHTS_MODES },

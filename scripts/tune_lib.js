@@ -8,7 +8,7 @@
  *   - scripts/tune_archetypes.js   (param sweep + scoring)
  *   - scripts/tune_analyze.js      (cluster-size + district-span analysis)
  *
- * If you change clustering / classify in three-scene.js, re-run the tools — the
+ * If you change clustering / classify in three-scene.js, re-run the tools; the
  * lifted pieces auto-update; only classifyBuilding() is a hand-mirror (kept in
  * sync by comment reference to three-scene.js:2480-2517).
  */
@@ -56,7 +56,7 @@ for (const m of CONSTS.matchAll(/NCZ\.(\w+)\s*=\s*(-?\d+(?:\.\d+)?)\s*;/g)) {
 }
 
 // The live height-discontinuity segmenter, lifted verbatim. It references
-// NCZ.BUILDING_SEG_* — resolved from this module's NCZ (built just above), so it
+// NCZ.BUILDING_SEG_*, resolved from this module's NCZ (built just above), so it
 // must be eval'd here, after NCZ exists. This is now the canonical grouping used
 // by both the renderer and the harness.
 const segSrc = sliceBalanced(SCENE, 'function segmentBuildings', '{', '}');
@@ -86,10 +86,10 @@ function decodeDistrict(meta) {
 
   // TWO descriptions of the same box, and they are NOT interchangeable:
   //
-  //   bh*  the world AABB      — axis-aligned, and for a yawed box it is a DIFFERENT, BIGGER box.
+  //   bh*  the world AABB:     axis-aligned, and for a yawed box it is a DIFFERENT, BIGGER box.
   //                              Median 1.96x the true volume; 3.39x on the City Center slab below.
   //                              Correct for a broad-phase (culling, spatial hash). Nothing else.
-  //   bt*  the TRUE half-extents + bq* the quaternion — the box the RENDERER actually draws.
+  //   bt*  the TRUE half-extents + bq* the quaternion: the box the RENDERER actually draws.
   //
   // The rotation used to be decoded here, used to build the matrix, and then thrown away. Only
   // 26.6% of the city's boxes are within 5 deg of an axis; the median box is yawed 26.3 deg. So
@@ -102,7 +102,7 @@ function decodeDistrict(meta) {
   // That single collapse is why the game's windows would not land (48.7% of them matched no wall
   // at all), and why a yawed slab classifies as a chunky block. USE bt*/bq* FOR ANYTHING THAT
   // CARES WHAT SHAPE OR WHICH WAY. Use bh* only when a conservative bound is genuinely what you
-  // want. See wiki/learnings/the-aabb-is-a-different-box.
+  // want.
   const bcx = [], bcy = [], bcz = [], bhx = [], bhy = [], bhz = [];
   const btx = [], bty = [], btz = [];                       // TRUE half-extents (THREE space)
   const bqx = [], bqy = [], bqz = [], bqw = [];             // orientation (THREE space)
@@ -149,7 +149,7 @@ function decodeDistrict(meta) {
     name: meta.name,
     count: bcx.length,
     bcx: Float32Array.from(bcx), bcy: Float32Array.from(bcy), bcz: Float32Array.from(bcz),
-    // the AABB — a bigger, different box. Broad-phase only.
+    // the AABB: a bigger, different box. Broad-phase only.
     bhx: Float32Array.from(bhx), bhy: Float32Array.from(bhy), bhz: Float32Array.from(bhz),
     // the box we actually draw.
     btx: Float32Array.from(btx), bty: Float32Array.from(bty), btz: Float32Array.from(btz),
@@ -158,7 +158,7 @@ function decodeDistrict(meta) {
   };
 }
 
-// ── classify — numeric mirror of TSL chain (three-scene.js:2480-2517) ────────
+// ── classify: numeric mirror of TSL chain (three-scene.js:2480-2517) ─────────
 function smoothstep(e0, e1, x) {
   let t = (x - e0) / (e1 - e0);
   t = t < 0 ? 0 : t > 1 ? 1 : t;

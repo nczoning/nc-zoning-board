@@ -117,7 +117,7 @@ NCZ.exposureForSunElevation = function (elevationRad) {
 /**
  * Night blend factor [0..1] for a given SUN elevation: 0 = full day, 1 = full
  * night. Smoothstep ramp between NCZ.NIGHT_FACTOR_DAY_DEG (→0) and
- * NCZ.NIGHT_FACTOR_NIGHT_DEG (→1) — roughly civil twilight. The single source of
+ * NCZ.NIGHT_FACTOR_NIGHT_DEG (→1), roughly civil twilight. The single source of
  * truth for "how night is it"; drives the sun→moon key-light morph, the ambient
  * day→night lerp, and (later stages) emissive neon ramps. Keyed on elevation
  * (not clock time) so the slider and the flyover share it, exactly like

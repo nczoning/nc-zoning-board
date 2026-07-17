@@ -17,7 +17,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   });
 
-  // ?archdebug — reveal the archetype-classification legend (parked left of the
+  // ?archdebug: reveal the archetype-classification legend (parked left of the
   // overlays box). Rows are built from NCZ.ARCHDEBUG_COLORS (the SAME source the
   // shader uses) so swatch colours match the render exactly; each row's title is
   // its hover definition.
@@ -33,7 +33,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (legend) { legend.classList.remove("hidden"); legend.setAttribute("aria-hidden", "false"); }
   }
 
-  // ?segdebug — STRUCTURE (segmentation) visualiser: the shader colours each box by
+  // ?segdebug, the STRUCTURE (segmentation) visualiser: the shader colours each box by
   // its segmented building id (three-scene.js), so adjacent buildings differ and you
   // can see which boxes form one building (the road/height/split grouping). Here we
   // just add a caption; colours are arbitrary per-building hashes so there's no legend.
@@ -638,7 +638,7 @@ async function initMap() {
   // A reproducible reference frame: same URL always yields the identical
   // lighting state. Debug/calibration only; not linked from the UI.
   const GAMELIGHT = new URLSearchParams(window.location.search).has('gamelight');
-  // ?night — start at the most moonlit hour so the night lighting / moon arc are
+  // ?night: start at the most moonlit hour so the night lighting / moon arc are
   // immediately visible for calibration (overlays off). Just sets the slider's
   // initial value; the slider stays fully scrubbable.
   const NIGHT = new URLSearchParams(window.location.search).has('night');
@@ -789,7 +789,7 @@ async function initMap() {
     // The moon on its own real lunar arc (same anchor + date), so scrubbing past
     // sunset shows a real moon rise/set, not a recoloured sun. Phase brightness
     // is a tunable constant in the scene (NCZ.MOON_PHASE); here we only supply
-    // the real position. Below-horizon altitudes are fine — the scene gates the
+    // the real position. Below-horizon altitudes are fine: the scene gates the
     // moon key light + disc on altitude.
     const moon = SunCalc.getMoonPosition(date, SUN_LAT, SUN_LNG);
     NCZ.ThreeScene.setMoonPosition?.(moon.azimuth, moon.altitude);
@@ -812,7 +812,7 @@ async function initMap() {
     sunSlider.min = 0;
     sunSlider.max = 1439;
 
-    // ?night — jump to the most moonlit hour: the dark-sky minute (sun well below
+    // ?night: jump to the most moonlit hour, the dark-sky minute (sun well below
     // the horizon) where the real moon is highest, so the moon is always visibly
     // up regardless of the year's lunar geometry. Falls back to ~22:00 PDT.
     function bestNightMinutes() {
@@ -1084,7 +1084,7 @@ async function initMap() {
     });
   });
 
-  // City lights — three-state, so it's a select, not a checkbox. Not a layer either
+  // City lights: three-state, so it's a select, not a checkbox. Not a layer either
   // (the lights are a shader uniform, not a scene group), so it goes straight to
   // setLightsMode rather than through setLayerVisibility.
   const lightsSelect = document.getElementById("overlay-lights");
@@ -1123,7 +1123,7 @@ async function initMap() {
       if (vis !== null && cb.checked !== vis) cb.checked = vis;
     });
 
-    // Lights select — mirrors console setLightsMode() calls, same as the checkboxes.
+    // Lights select: mirrors console setLightsMode() calls, same as the checkboxes.
     const mode = NCZ.ThreeScene.getLightsMode?.();
     if (lightsSelect && mode && lightsSelect.value !== mode) lightsSelect.value = mode;
 

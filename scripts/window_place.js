@@ -4,8 +4,8 @@
  * ─────────────────────────────────────────────────────────────────────────
  * WHERE ARE THE WINDOWS, IN METRES?
  *
- * The night model was statistical because instanced nodes had no position. They always
- * did — see [[instanced-transforms-were-always-readable]]. `ncz_instances.csv` now carries
+ * The night model was statistical because instanced nodes were believed to have no
+ * position. They always did. `ncz_instances.csv` now carries
  * one row per PLACED COPY: exact CET XYZ, a quaternion, and a scale. Joined to each mesh's
  * local bounding box (`ncz_assets.csv`) and its building (`ncz_prefabs.csv`), every window
  * pane in Night City is a measured object.
@@ -18,17 +18,17 @@
  * VALIDATE BEFORE MEASURING. Exact positions make two load-bearing assumptions falsifiable
  * for the first time, so this script tests them BEFORE it reports a single aggregate:
  *
- *   1. COVERAGE — what fraction of glass has a real position now? (Was 11.3%.) An aggregate
+ *   1. COVERAGE: what fraction of glass has a real position now? (Was 11.3%.) An aggregate
  *      without its denominator's coverage is not a measurement, it is a mood.
- *   2. COMPACTNESS — a prefab is claimed to be A BUILDING. Then its parts must be within a
+ *   2. COMPACTNESS: a prefab is claimed to be A BUILDING. Then its parts must be within a
  *      building's diameter of each other. If a prefab's panes sprawl 400 m, its ref is
  *      mis-attributed and per-building anything is nonsense. (Suspect: ~492 panes hang off
  *      prefabs named `building_exhaust_vent_large_b`.)
  *
  * Only then:
  *   3. Per-building glass share, AREA-weighted (the 25% median was by instance COUNT).
- *   4. The vertical profile — where on a facade does glass actually sit?
- *   5. Facade orientation — wall / raked / roof, from the real quaternion.
+ *   4. The vertical profile: where on a facade does glass actually sit?
+ *   5. Facade orientation: wall / raked / roof, from the real quaternion.
  *
  * Reports. Decides nothing. Writes no model.
  */
@@ -106,13 +106,13 @@ const panes = [];    // every glass pane: { pf, z, area, roof }
 let glassPlaced = 0, glassNoPos = 0, glassNoBox = 0, wallPlaced = 0;
 let rows = 0, fromInst = 0, fromNodes = 0;
 
-// The placed box: the mesh's LOCAL dims × this copy's scale. Exact — a copy is the same
+// The placed box: the mesh's LOCAL dims × this copy's scale. Exact, because a copy is the same
 // mesh at the same scale, no inference, no sampling.
 // The PANEL AREA is the product of the two LARGEST dims: a window pane is a thin slab and
 // its face is what you see. Its NORMAL is the thinnest local axis, rotated into the world.
 function part(a, pf, x, y, z, q, sx, sy, sz) {
   const A = asset[a];
-  if (!A) return;                       // not architecture — decoration, props, proxies
+  if (!A) return;                       // not architecture: decoration, props, proxies
   if (!A.dims) { if (A.glass) glassNoBox++; return; }
 
   const d = [A.dims[0] * (sx || 1), A.dims[1] * (sy || 1), A.dims[2] * (sz || 1)];
@@ -161,7 +161,7 @@ async function stream(file, onRow) {
     process.exit(1);
   }
 
-  // 1. INSTANCED COPIES — one row per copy, each with its own transform.
+  // 1. INSTANCED COPIES: one row per copy, each with its own transform.
   await stream('ncz_instances.csv', (f, C) => {
     rows++; fromInst++;
     part(f[C.asset], f[C.prefab] || '(none)',
@@ -170,7 +170,7 @@ async function stream(file, onRow) {
       +f[C.sx], +f[C.sy], +f[C.sz]);
   });
 
-  // 2. THE NODES THAT WERE NEVER INSTANCED — inst == 1, position on the node itself.
+  // 2. THE NODES THAT WERE NEVER INSTANCED: inst == 1, position on the node itself.
   //    Skipping these would drop 17,849 glass panes (11% of the city's glass).
   await stream('ncz_nodes.csv', (f, C) => {
     const inst = Math.max(1, +f[C.inst] || 1);
@@ -200,7 +200,7 @@ async function stream(file, onRow) {
     process.exit(2);
   }
 
-  // ── 2. COMPACTNESS — is a "building" actually building-sized? ─────────────
+  // ── 2. COMPACTNESS: is a "building" actually building-sized? ──────────────
   const ids = Object.keys(B).filter((k) => k !== '(none)' && B[k].gN >= 4);
   const diag = ids.map((k) => ({ k, d: Math.hypot(B[k].x1 - B[k].x0, B[k].y1 - B[k].y0) }))
     .sort((a, b) => a.d - b.d);
@@ -228,7 +228,7 @@ async function stream(file, onRow) {
 
   // ── 4. THE VERTICAL PROFILE ──────────────────────────────────────────────
   // Where on a facade does glass sit? Height above the building's own base, so a 200 m
-  // tower and a 6 m shack are comparable. Weighted by AREA — a big pane is more window
+  // tower and a 6 m shack are comparable. Weighted by AREA: a big pane is more window
   // than a small one, and the shader cares about area, not about pane count.
   console.log('\n=== 4. VERTICAL PROFILE — where on the facade is the glass?\n');
   const BANDS = 10;
@@ -237,7 +237,7 @@ async function stream(file, onRow) {
   const hts = [];
   for (const p of panes) {
     // A pane with NO prefab has no building to be measured against. Its parts all pile into
-    // one `(none)` bucket whose bounding box is THE WHOLE CITY — so "height above its base"
+    // one `(none)` bucket whose bounding box is THE WHOLE CITY, so "height above its base"
     // comes out as up to 1,042 m, which is not a fact about windows, it is a fact about a
     // bucket. Excluded, and COUNTED, rather than silently averaged in.
     if (p.pf === '(none)') { noPf++; continue; }
@@ -269,7 +269,7 @@ async function stream(file, onRow) {
   console.log('  Peaked ⇒ glass CLUSTERS at a height — which is what the frames show.');
 
   // Absolute height too: a shopfront band would show up here and not above. Same population
-  // as the profile above — no `(none)` bucket, no 1 km "buildings".
+  // as the profile above: no `(none)` bucket, no 1 km "buildings".
   const zs = hts.sort((a, b) => a - b);
   console.log(`\n  height above own base, metres: p10 ${pct(zs, 0.1).toFixed(1)}  median ${pct(zs, 0.5).toFixed(1)}  p90 ${pct(zs, 0.9).toFixed(1)}  max ${zs[zs.length - 1].toFixed(0)}`);
 

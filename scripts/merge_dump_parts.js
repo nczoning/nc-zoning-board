@@ -7,13 +7,13 @@
  *
  * WHY PARTS AT ALL. The wscript used to hold every row in memory and join at the end. At
  * 7,159 level-0 sectors that was a 274 MB nodes file; reading all 16,208 sectors (every
- * streaming level — where the megabuildings actually live) roughly doubles it and adds a
+ * streaming level, where the megabuildings actually live) roughly doubles it and adds a
  * ~2.2M-row placements table. WolvenKit ran out of memory and lost a 20-minute run. It now
  * flushes every 2,000 sectors and drops the rows, so memory stays flat.
  *
  * THIS SCRIPT IS ALSO THE INTEGRITY CHECK. A crash mid-run leaves a PARTIAL set of parts,
  * and a partial set concatenates into a perfectly well-formed CSV that is quietly missing a
- * third of Night City — which is precisely the failure mode this whole extractor keeps
+ * third of Night City, which is precisely the failure mode this whole extractor keeps
  * having. So: the parts must be CONSECUTIVE from 0, every part must carry the same header,
  * and the totals are printed. A gap is a hard error, not a warning.
  */

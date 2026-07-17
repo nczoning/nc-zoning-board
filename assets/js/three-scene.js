@@ -23,7 +23,7 @@ import {
   dFdx, dFdy,
   // Building edge highlight
   cameraPosition,
-  // Bloom post-process — the scene render pass node
+  // Bloom post-process: the scene render pass node
   pass,
   // Lit-window facades (Night Stage 2)
   vec3, floor, fract, step,
@@ -42,7 +42,7 @@ import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import Stats from 'three/addons/libs/stats.module.js';
-// Bloom — the TSL bloom node (threshold highpass + Gaussian mip pyramid). Ports
+// Bloom: the TSL bloom node (threshold highpass + Gaussian mip pyramid). Ports
 // the in-game 3D map's BloomAreaSettings glow; at night it makes the lit-window
 // facades read as glowing lights instead of flat dots. See the post-processing
 // setup in init() and the BLOOM_* constants for the decoded values.
@@ -73,13 +73,13 @@ const ThreeScene = (() => {
   let renderer, camera, scene, controls;
   // Bloom post-processing chain (set up in init()): the scene renders through
   // `renderPipeline` instead of straight to the canvas. `scenePass` is the
-  // scene render-to-texture node — its `.camera` is reassigned per frame so the
+  // scene render-to-texture node; its `.camera` is reassigned per frame so the
   // schema camera and the showcase fly camera both bloom (PassNode reads
   // `.camera` fresh each render). `_bloomPass` is kept so updateDayNightLighting
   // can drive bloom strength by nightFactor (a low daytime baseline easing up to
   // the night peak).
   let renderPipeline = null, scenePass = null, _bloomPass = null, _sceneScaleUniform = null;
-  let _hazePass = null;   // second wide bloom — night atmospheric light-pollution haze
+  let _hazePass = null;   // second wide bloom: night atmospheric light-pollution haze
   let initialized = false;
   // True only when the renderer ended up on a real WebGPU backend. The webgpu
   // build reports renderer.isWebGPURenderer === true even on its WebGL2
@@ -90,12 +90,12 @@ const ThreeScene = (() => {
   let loadingFillEl  = null;
   let loadStepsTotal = 0;
   let loadStepsDone  = 0;
-  let _dirLight      = null; // the SUN (DirectionalLight + single fitted shadow camera) — the only shadow caster
-  let _moonLight     = null; // the MOON (DirectionalLight, castShadow:false) — cool night fill, no shadows
+  let _dirLight      = null; // the SUN (DirectionalLight + single fitted shadow camera); the only shadow caster
+  let _moonLight     = null; // the MOON (DirectionalLight, castShadow:false); cool night fill, no shadows
   let _hemiLight     = null; // sky/ground fill (replaces a flat AmbientLight)
   let _sunDir        = SUN_DIR.clone(); // unit, ground→sun; updated by updateDayNightLighting, consumed by updateShadowCamera
   let _moonDir       = new THREE.Vector3(); // unit, ground→moon; scratch for the moon light direction
-  let _sunShadowFade = 1;    // 0..1 shadow strength by sun elevation — fades shadows out as the sun sets (night/dusk ⇒ no caster ⇒ no shadow box)
+  let _sunShadowFade = 1;    // 0..1 shadow strength by sun elevation; fades shadows out as the sun sets (night/dusk ⇒ no caster ⇒ no shadow box)
   let _shadowScratchV = new THREE.Vector3();     // reused by updateShadowCamera so it doesn't allocate per camera move
   // Light-space basis + up vector for the shadow texel-snap (see updateShadowCamera).
   // _SHADOW_UP matches Three's default OrthographicCamera up, so the basis we build
@@ -315,7 +315,7 @@ const ThreeScene = (() => {
   let buildingMaterials  = [];    // parallel material array (Lambert node materials) for theme updates
   let landmarkMat        = null;  // shared MeshLambertMaterial for all landmark GLBs
 
-  // District night-lighting mask — a CET-space window-density map rasterized from
+  // District night-lighting mask: a CET-space window-density map rasterised from
   // the district polygons (data/subdistricts.json). Each texel = the 0..1 window
   // density for that region; the building shader samples it by world position so
   // per-district coverage keys off the TRUE polygon boundary, not the .dds cloud
@@ -533,7 +533,7 @@ const ThreeScene = (() => {
     // shared terrain material); terrain and cliffs are 1.
     const shaded = mix(materialColor, uGrid, terrainGridFactor());
     mat.colorNode = brightness === 1 ? shaded : shaded.mul(brightness);
-    // City glow — the same per-fragment hemisphere fill the buildings use, scaled
+    // City glow: the same per-fragment hemisphere fill the buildings use, scaled
     // by district density so the ground glows per district (dark in ocean /
     // Badlands). Replaces the old global HemisphereLight on the terrain too.
     mat.emissiveNode = cityGlowEmissive(
@@ -890,10 +890,10 @@ const ThreeScene = (() => {
     scene.add(_dirLight);
     scene.add(_dirLight.target);
 
-    // Moon light — a SECOND permanent directional light (cool), no shadows. The
+    // Moon light: a SECOND permanent directional light (cool), no shadows. The
     // sun above is the only shadow caster; the moon just adds soft cool fill at
     // night (intensity driven in updateDayNightLighting). castShadow:false is set
-    // once and never toggled — safe under WebGPURenderer. Direction comes from the
+    // once and never toggled; safe under WebGPURenderer. Direction comes from the
     // real lunar arc; target sits at the world centre so only direction matters.
     _moonLight = new THREE.DirectionalLight(0xffffff, 0);
     _moonLight.color.setRGB(...NCZ.MOON_COLOR_RGB, THREE.LinearSRGBColorSpace);
@@ -915,7 +915,7 @@ const ThreeScene = (() => {
     // NOTE: the Stage-2 city glow used to be a second HemisphereLight here, but a
     // global light can't be masked per district. It's now a per-fragment shader
     // term (cityGlowEmissive) in the building + terrain materials, scaled by the
-    // district mask — so the glow falls off by district exactly like the windows.
+    // district mask, so the glow falls off by district exactly like the windows.
     // Sun position is applied by app.js via the slider once terrain has loaded.
 
     // Visible sun sphere: always present, traces the real solar arc (map AND
@@ -924,24 +924,24 @@ const ThreeScene = (() => {
     // Radius NCZ.SUN_SPHERE_RADIUS units at NCZ.SUN_SPHERE_DIST distance ≈ 1.7° apparent diameter (≈3× real sun).
     _sunSphere = new THREE.Mesh(
       new THREE.SphereGeometry(NCZ.SUN_SPHERE_RADIUS, 16, 16),
-      new THREE.MeshBasicNodeMaterial({ color: 0xffcc44 })  // opaque — depth-tested so terrain at the horizon occludes it (the disc sets behind ridgelines)
+      new THREE.MeshBasicNodeMaterial({ color: 0xffcc44 })  // opaque: depth-tested so terrain at the horizon occludes it (the disc sets behind ridgelines)
     );
     _sunSphere.name = 'sun-sphere';
     _sunSphere.visible = false;
     scene.add(_sunSphere);
 
-    // Visible moon disc — always present, traces the real lunar arc (incl. daytime,
+    // Visible moon disc: always present, traces the real lunar arc (incl. daytime,
     // same path as the sun disc). Flat cool-white sphere reads as a full moon at
     // the default ~full phase; a phase terminator is a follow-up.
     _moonSphere = new THREE.Mesh(
       new THREE.SphereGeometry(NCZ.MOON_SPHERE_RADIUS, 16, 16),
-      new THREE.MeshBasicNodeMaterial({ color: NCZ.MOON_SPHERE_COLOR })  // opaque — depth-tested so terrain at the horizon occludes it (the disc sets behind ridgelines)
+      new THREE.MeshBasicNodeMaterial({ color: NCZ.MOON_SPHERE_COLOR })  // opaque: depth-tested so terrain at the horizon occludes it (the disc sets behind ridgelines)
     );
     _moonSphere.name = 'moon-sphere';
     _moonSphere.visible = false;
     scene.add(_moonSphere);
 
-    // ── Bloom — the in-game map's BloomAreaSettings glow, used here for night ──
+    // ── Bloom: the in-game map's BloomAreaSettings glow, used here for night ──
     // At night the lit-window facades + neon are bright sources against the dark
     // city; bloom is what makes them read as glowing lights rather than flat
     // painted dots. Bloom is an HDR effect, so it runs on the *linear* scene
@@ -954,7 +954,7 @@ const ThreeScene = (() => {
     //   RenderPipeline.outputColorTransform (default on) → applies the
     //     registered CP2077 ACES tonemap + grade + LUT + sRGB at the output.
     //
-    // stencilBuffer:true on the scene pass RT — the SeeThrough roads (Pacifica
+    // stencilBuffer:true on the scene pass RT: the SeeThrough roads (Pacifica
     // tunnel) stencil-test *inside* the scene render; the pass's offscreen RT
     // must carry a stencil attachment or that test silently fails. Forcing the
     // depth texture to DepthStencilFormat gives depth32float-stencil8, matching
@@ -963,25 +963,25 @@ const ThreeScene = (() => {
     //
     // Bloom STRENGTH is driven by nightFactor in updateDayNightLighting: a low
     // daytime baseline (BLOOM_DAY_STRENGTH) easing up (nf²) to the night peak
-    // (BLOOM_STRENGTH). It runs all day on a curve — that consistency is why the
+    // (BLOOM_STRENGTH). It runs all day on a curve; that consistency is why the
     // district outlines can stay in this scene and bloom with everything else,
     // rather than needing a separate un-bloomed pass.
     renderPipeline = new THREE.RenderPipeline(renderer);
     scenePass = pass(scene, camera, { depthBuffer: true, stencilBuffer: true });
     scenePass.renderTarget.depthTexture.format = THREE.DepthStencilFormat;
     const scenePassColor = scenePass.getTextureNode();
-    // Bloom is global — the envparam bloom is not theme-specific. The decoded
+    // Bloom is global: the envparam bloom is not theme-specific. The decoded
     // luminanceThreshold range maps onto the node's smoothstep highpass:
     // threshold = min, smoothWidth = max − min (see BLOOM_* in constants.js).
     _bloomPass = bloom(scenePassColor, 0, NCZ.BLOOM_RADIUS, NCZ.BLOOM_THRESHOLD);
     _bloomPass.smoothWidth.value = NCZ.BLOOM_SMOOTH_WIDTH;
 
-    // Atmospheric haze — a SECOND, wide, low-threshold bloom on the same scene.
+    // Atmospheric haze: a SECOND, wide, low-threshold bloom on the same scene.
     // Where the tight bloom (above) gives lights a crisp halo, this spreads the
     // lit windows/signage into a broad soft glow: the night light-pollution haze
     // in the reference shots. Separate node so the crisp glint and the wide haze
     // tune independently. Night-only (strength driven by nightFactor² in
-    // updateDayNightLighting) — daytime has no light pollution. Max radius for
+    // updateDayNightLighting); daytime has no light pollution. Max radius for
     // the widest mip spread; low threshold so the haze comes from the actual
     // lights, not the dark terrain.
     _hazePass = bloom(scenePassColor, 0, NCZ.HAZE_RADIUS, NCZ.HAZE_THRESHOLD);
@@ -990,7 +990,7 @@ const ThreeScene = (() => {
     // Composite in linear space: dim the base scene to sceneColorScale, then add
     // the tight bloom + the wide haze. Dim and both glow strengths are driven by
     // nightFactor in updateDayNightLighting. District outlines live in the main
-    // scene and bloom along with everything else — bloom runs all day (on a
+    // scene and bloom along with everything else; bloom runs all day (on a
     // curve) so there's no day/night inconsistency to exclude them for. The
     // RenderPipeline tonemaps the result at its output.
     _sceneScaleUniform = uniform(1);
@@ -1158,7 +1158,7 @@ const ThreeScene = (() => {
     // interacts, so paint the bar once at startup using the initial camera state.
     updateScaleBar();
 
-    // ?zonetool — the in-3D building-zone drawing tool (dev only). Lazy-loaded so
+    // ?zonetool: the in-3D building-zone drawing tool (dev only). Lazy-loaded so
     // the module only downloads when the flag is present. It gets the scene refs +
     // groundPointAt (screen→CET raycast) and draws with WebGPU-safe node materials.
     if (new URLSearchParams(location.search).has('zonetool')) {
@@ -1167,23 +1167,23 @@ const ThreeScene = (() => {
         .catch((e) => console.error('[NCZ] zone-tool failed to load', e));
     }
 
-    // ?colldebug — the GAME's own building decomposition, drawn over the scene.
+    // ?colldebug: the GAME's own building decomposition, drawn over the scene.
     // See loadColliderDebug().
     if (new URLSearchParams(location.search).has('colldebug')) loadColliderDebug();
-    // ?windebug — the game's real windows, coloured by whether we can land them on a face.
+    // ?windebug: the game's real windows, coloured by whether we can land them on a face.
     // .catch() is not optional: an un-awaited async loader that throws produces an unhandled
     // rejection and NO console error, which looks exactly like "the flag did nothing".
     if (new URLSearchParams(location.search).has('windebug')) {
       loadWindowDebug().catch((e) => console.error('[NCZ] windebug failed to load', e));
     }
 
-    // ?shapemark — SHAPE-DETECTION verification view (companion to ?facedebug /
+    // ?shapemark: SHAPE-DETECTION verification view (companion to ?facedebug /
     // ?archdebug): labelled beacon pillars at the shape-detector candidates so
     // detections can be verified against the live scene / in game. Colours:
     // red = sphere, cyan = cylinder, amber = ring, magenta = round-ish.
     // The list below is the PROTOTYPE detector's output (headless scan,
-    // 2026-07-09; ground-truth verdicts in _lighting_demo/shape_candidates.txt)
-    // — when the production detector lands it should feed this view live.
+    // 2026-07-09; ground-truth verdicts in _lighting_demo/shape_candidates.txt).
+    // When the production detector lands it should feed this view live.
     // CET coords → world x = cetX, z = -cetY.
     if (new URLSearchParams(location.search).has('shapemark')) {
       const MARKS = [
@@ -1215,7 +1215,7 @@ const ThreeScene = (() => {
         m.position.set(cetX, 350, -cetY);
         m.renderOrder = 3;
         scene.add(m);
-        // ID tag at the pillar top — CSS2DObject rides ThreeMarkers' CSS2D pass
+        // ID tag at the pillar top: CSS2DObject rides ThreeMarkers' CSS2D pass
         // (it traverses the whole scene), inline-styled so this stays throwaway.
         const el = document.createElement('div');
         el.textContent = id;
@@ -2014,7 +2014,7 @@ const ThreeScene = (() => {
 
   // Per-fragment city glow: the warm-from-below / cool-from-above hemisphere fill
   // (the ex-HemisphereLight), now a shader term so it can be scaled by the
-  // district density — regional, exactly like the windows. Tinted by surface
+  // district density: regional, exactly like the windows. Tinted by surface
   // albedo so it reads like a light, not flat emissive. cetX/cetY locate the
   // sample in the mask (buildings pass the instance centre, terrain its world pos).
   function cityGlowEmissive(worldNormalNode, cetXNode, cetYNode, albedoNode) {
@@ -2119,7 +2119,7 @@ const ThreeScene = (() => {
       _districtAlways = alwaysGroup;
       layers.districts = parent;
       // District outlines go in the dedicated overlay scene (not the main scene)
-      // so the bloom pass never sees them — they composite back un-bloomed (see
+      // so the bloom pass never sees them; they composite back un-bloomed (see
       // the bloom setup in init()). Visibility toggling still works via the
       // group's .visible flag; hover raycasting works regardless of scene.
       scene.add(parent);
@@ -2219,7 +2219,7 @@ const ThreeScene = (() => {
     }
   }
 
-  // Cluster building boxes into "buildings". The .dds has no grouping — a building
+  // Cluster building boxes into "buildings". The .dds has no grouping: a building
   // is many adjacent boxes (thin slabs etc.). Union boxes whose world AABBs are
   // within `gap` (CET) via a spatial-hash grid + union-find, then return a packed
   // vec4 per box = (buildingHeightHalf, footMaxHalf, footMinHalf, clusterId) so the
@@ -2286,7 +2286,7 @@ const ThreeScene = (() => {
   // ── Road-coverage grid for segmentation (built once, lazily) ────────────────
   // The building footprint has no street gaps, so the height segmenter over-merges
   // flat same-height areas into mega-blobs. The road network (3dmap_roads.glb)
-  // supplies the street grid — rasterised here into a global BOOLEAN coverage grid
+  // supplies the street grid, rasterised here into a global BOOLEAN coverage grid
   // (the thickness gate in segmentBuildings means road ELEVATION isn't needed).
   // World transform mirrors the rendered roads (rotation.y = π): worldX = -rawX,
   // worldZ = -rawZ. See wiki learnings/roads-as-segmentation-barriers.
@@ -2354,24 +2354,24 @@ const ThreeScene = (() => {
     return _roadGridPromise;
   }
 
-  // Building segmentation by HEIGHT DISCONTINUITY — the live replacement for the
+  // Building segmentation by HEIGHT DISCONTINUITY: the live replacement for the
   // percolating clusterBuildingBoxes (above). Same output contract: per-instance
   // vec4 attr (heightHalf, footMaxHalf, footMinHalf, buildingId) + a building count.
   // Inputs are the per-box world centre (cx = X, cy = up, cz = Z) and AABB
   // half-extents. `roadGrid` (optional) carves the street grid out of the footprint
   // so buildings separate by city block. Rationale + tuning live in
   // scripts/tune_segment.js / scripts/tune_seg_roads.js / scripts/tune_lib.js (the
-  // headless harness lifts the algorithm from THIS function — keep them in sync).
-  // `ori` — the boxes AS DRAWN: { tx,ty,tz } true half-extents + { qx,qy,qz,qw } orientation.
+  // headless harness lifts the algorithm from THIS function; keep them in sync).
+  // `ori` is the boxes AS DRAWN: { tx,ty,tz } true half-extents + { qx,qy,qz,qw } orientation.
   // OPTIONAL, and everything degrades to the old AABB behaviour without it (older callers in
   // scripts/tune_*.js still pass 9 args).
   //
   // WHY IT MATTERS. hx/hy/hz are the world AABB, which for a yawed box is a DIFFERENT, BIGGER
-  // box — median 1.96x the volume. Only 26.6% of the city's boxes are within 5 deg of an axis.
+  // box (median 1.96x the volume). Only 26.6% of the city's boxes are within 5 deg of an axis.
   // A real City Center slab is 12.1 x 60.7 m yawed 33 deg; its AABB is 57.5 x 43.3 m. Feeding
   // that to the segmenter does two things, both bad:
   //
-  //   1. It RASTERISES a 57 x 43 footprint where the building is 12 x 61 — stamping cells the
+  //   1. It RASTERISES a 57 x 43 footprint where the building is 12 x 61, stamping cells the
   //      building does not occupy, bridging the gap to its neighbours. That is the megablob.
   //   2. It CLASSIFIES a 5.0-elongation SLAB as a 1.3-elongation BLOCK.
   //
@@ -2385,7 +2385,7 @@ const ThreeScene = (() => {
     const yawOf = (i) => {
       if (!ori) return 0;
       const x = ori.qx[i], y = ori.qy[i], z = ori.qz[i], w = ori.qw[i];
-      // rotate (1,0,0) by q, then take atan2(z, x) — THREE is Y-up, so XZ is the ground plane
+      // rotate (1,0,0) by q, then take atan2(z, x); THREE is Y-up, so XZ is the ground plane
       const ax = 1 - 2 * (y * y + z * z);
       const az = 2 * (x * z - w * y);
       return Math.atan2(az, ax);
@@ -2415,7 +2415,7 @@ const ThreeScene = (() => {
     const floorG = new Float32Array(cols * rows).fill(Infinity); // min box bottom per cell (for road thickness gate)
     const occ = new Uint8Array(cols * rows);
     for (let i = 0; i < count; i++) {
-      // The AABB span is still the SEARCH range (it is a correct bound) — but only the cells
+      // The AABB span is still the SEARCH range (it is a correct bound), but only the cells
       // whose centre is inside the box's TRUE rotated footprint get stamped. Without that gate a
       // yawed slab paints its whole bounding rectangle, occupying ground it does not stand on and
       // percolating into the building across the street.
@@ -2432,7 +2432,7 @@ const ThreeScene = (() => {
     }
 
     // ROAD barrier: a road-covered cell that is STRUCTURALLY THIN (roof-floor <
-    // clearance — a surface street / podium deck, not a real building) blocks
+    // clearance: a surface street / podium deck, not a real building) blocks
     // region-grow, so buildings can't merge across a street → separation by CITY
     // BLOCK. Thick buildings (over tunnels / under elevated highways) are NOT thin,
     // so they're kept whole. See wiki learnings/roads-as-segmentation-barriers.
@@ -2451,7 +2451,7 @@ const ThreeScene = (() => {
     // 2a. footprint connected-components (pure connectivity, height ignored). An
     //     isolated structure is its own component; the percolated downtown is one
     //     giant component. ccBig[component] flags the components big enough to need
-    //     height-splitting — everything else is kept WHOLE so a single structure
+    //     height-splitting; everything else is kept WHOLE so a single structure
     //     with a varied roof (e.g. Kujira) isn't cut into pieces.
     const KEEP_WHOLE = NCZ.BUILDING_SEG_KEEP_WHOLE;
     const ccLabel = new Int32Array(cols * rows).fill(-1);
@@ -2493,7 +2493,7 @@ const ThreeScene = (() => {
         let size = 0;
         while (stack.length) {
           const k = stack.pop(); size++;
-          if (barrier[k]) continue; // road-barrier cells are singleton dead-ends — don't bridge a street
+          if (barrier[k]) continue; // road-barrier cells are singleton dead-ends; don't bridge a street
           const r = (k / cols) | 0, c = k % cols, h = roof[k];
           for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
             if (!dr && !dc) continue;
@@ -2538,7 +2538,7 @@ const ThreeScene = (() => {
     const { label, sizes } = growRegions(DH, (cc) => ccBig[cc]);
     absorbSmall(label, sizes);
 
-    // 3.25 PART labelling — the SAME region-grow with the KEEP_WHOLE reprieve
+    // 3.25 PART labelling: the SAME region-grow with the KEEP_WHOLE reprieve
     //      removed, so the roof-cliff gate fires on isolated structures too (an
     //      isolated tower separates from the podium it rises from; a mast from its
     //      apron). No podium merge. Intersected with the FINAL building label in
@@ -2595,7 +2595,7 @@ const ThreeScene = (() => {
     }
 
     // 4b. ZONE MERGE override: every box whose centroid falls inside a merge zone's
-    //     footprint (CET) and height range is reassigned to ONE building per zone —
+    //     footprint (CET) and height range is reassigned to ONE building per zone,
     //     so a single structure the auto-segmenter split (a ship, a flat complex)
     //     becomes one coherent unit. Sentinel labels (negative) can't collide with
     //     region ids; the dense remap below folds them into normal building ids.
@@ -2614,11 +2614,11 @@ const ThreeScene = (() => {
 
     // 4b.5 SPLIT oversized regions. Flat, same-roof-height areas (Watson core, the
     //     spaceport apron, agri farms) have NO street gaps in the box data, so the
-    //     height segmenter percolates them into one mega-building spanning 1000+ CET
-    //     — which then mis-classifies AND grabs one giant single-colour billboard.
+    //     height segmenter percolates them into one mega-building spanning 1000+ CET,
+    //     which then mis-classifies AND grabs one giant single-colour billboard.
     //     Chop any region whose footprint SPAN exceeds BUILDING_SPLIT_MIN_SPAN into
     //     BUILDING_SPLIT_CELL world-grid chunks. Pure spatial chop (a flat plateau
-    //     carries no geometric split signal — see the percolation learning); the
+    //     carries no geometric split signal; see the percolation learning); the
     //     span gate spares tall megabuildings (compact footprint, many boxes) and
     //     normal buildings. Merge-zone sentinels (negative labels, hand-corrected)
     //     are left intact. URL: ?splitcell= / ?splitmin= (0 disables).
@@ -2654,12 +2654,12 @@ const ThreeScene = (() => {
     //
     // THE FOOTPRINT MUST BE MEASURED IN THE BUILDING'S OWN FRAME. A world-axis box drawn round a
     // yawed building squares it up: a 12 x 61 m slab measures 57 x 43, so its elongation reads
-    // 1.3 (a chunky BLOCK) instead of 5.0 (a thin SLAB) — and elongation is exactly what
+    // 1.3 (a chunky BLOCK) instead of 5.0 (a thin SLAB), and elongation is exactly what
     // classifyBuilding keys on. Every archetype call on a yawed building was made on a footprint
     // the building does not have.
     //
     // So: give each building ONE yaw (area-weighted, folded mod 90 deg because a rectangle is
-    // 90-deg symmetric — averaged as 4*theta on the circle so 89 deg and 1 deg agree instead of
+    // 90-deg symmetric; averaged as 4*theta on the circle so 89 deg and 1 deg agree instead of
     // cancelling), then measure min/max in that frame. Height is unaffected: yaw is about the
     // vertical axis, so world Y is already right.
     const aggMin = new Map(); // label → {minY, maxY, ...OBB accumulators}
@@ -2667,7 +2667,7 @@ const ThreeScene = (() => {
       const dir = new Map();                       // label → [sum w*cos4t, sum w*sin4t]
       for (let i = 0; i < count; i++) {
         const lab = boxLabel[i];
-        const w = ori.tx[i] * ori.tz[i] || 1e-3;   // weight by footprint area — big boxes decide
+        const w = ori.tx[i] * ori.tz[i] || 1e-3;   // weight by footprint area: big boxes decide
         let d = dir.get(lab);
         if (!d) { d = [0, 0]; dir.set(lab, d); }
         d[0] += w * Math.cos(4 * yaw[i]);
@@ -2712,16 +2712,16 @@ const ThreeScene = (() => {
     }
     const denseId = new Map(); let nextId = 0;
     const attr = new Float32Array(count * 4);
-    const baseY = new Float32Array(count);     // building base elevation (world Y) per box — for the sign height rule
-    const center = new Float32Array(count * 2); // building horizontal centre (world X, Z) — for the billboard placement
+    const baseY = new Float32Array(count);     // building base elevation (world Y) per box, for the sign height rule
+    const center = new Float32Array(count * 2); // building horizontal centre (world X, Z), for the billboard placement
     for (let i = 0; i < count; i++) {
       const lab = boxLabel[i];
       let id = denseId.get(lab); if (id === undefined) { id = nextId++; denseId.set(lab, id); }
       const a = aggMin.get(lab);
       const fx = (a.maxX - a.minX) * 0.5, fz = (a.maxZ - a.minZ) * 0.5;
       attr[i*4+0] = (a.maxY - a.minY) * 0.5;   // building height half-extent
-      attr[i*4+1] = Math.max(fx, fz);          // footprint max half — in the BUILDING's frame
-      attr[i*4+2] = Math.min(fx, fz);          // footprint min half — so elongation is REAL
+      attr[i*4+1] = Math.max(fx, fz);          // footprint max half, in the BUILDING's frame
+      attr[i*4+2] = Math.min(fx, fz);          // footprint min half, so elongation is REAL
       attr[i*4+3] = id;                        // building id (window/sign hash seed)
       baseY[i]    = a.minY;                     // building base Y (yaw is about the vertical axis)
       // The footprint above is measured in the building's own frame; the CENTRE is consumed in
@@ -2737,7 +2737,7 @@ const ThreeScene = (() => {
       }
     }
 
-    // 4c.5 PART ids — the INTERSECTION of the part region (3.25) and the FINAL
+    // 4c.5 PART ids: the INTERSECTION of the part region (3.25) and the FINAL
     //      building label (post zone-merge, post oversize-split). Intersecting
     //      matters: without it a merge zone or a spatial chop could leave one part
     //      spanning two buildings, and the part is meant to be the finer unit.
@@ -2758,23 +2758,23 @@ const ThreeScene = (() => {
   // Gates windows/signs to the OUTSIDE of buildings. The box soup draws a
   // building as many INTERPENETRATING slabs, so any per-face verdict is wrong:
   // a face is typically visible only where it pokes out past its siblings
-  // (diagnosed at santo_domingo world(228,1826) — every "wall" is a composite
+  // (diagnosed at santo_domingo world(228,1826): every "wall" is a composite
   // of overlapping mega-slabs). The v2 rule is evaluated per FRAGMENT in the
   // shader instead: "is the point FACE_EPS in front of me inside one of my
-  // box's biggest overlapping neighbours?" — exact laterally and vertically.
+  // box's biggest overlapping neighbours?"; exact laterally and vertically.
   // This precompute supplies the two buffers that makes that cheap:
-  //   idx — per box, the indices of its K=4 largest-overlap neighbours
+  //   idx: per box, the indices of its K=4 largest-overlap neighbours
   //         (ranked by AABB intersection volume with the box grown by
-  //         FACE_EPS; self-index pads empty slots — a probe pushed off a
+  //         FACE_EPS; self-index pads empty slots, since a probe pushed off a
   //         face can never be inside its own box, so self is a no-op).
-  //   inv — per box, its affine INVERSE matrix (world → unit-cube local),
+  //   inv: per box, its affine INVERSE matrix (world → unit-cube local),
   //         so the shader tests exact OBB containment, tilted boxes included.
   // Bias is deliberate: missing a 5th+ occluder only ever errs LIT, and a
   // falsely lit fragment sits BEHIND the geometry that should have occluded
   // it, so the depth buffer hides it. (The old per-face scalar erred DARK,
-  // which painted visible walls red — unfixable at render time.)
+  // which painted visible walls red, unfixable at render time.)
   // Greebles can't false-bury walls: a small box never wins the volume rank.
-  // scripts/tune_faces.js lifts THIS function verbatim — keep them in sync.
+  // scripts/tune_faces.js lifts THIS function verbatim; keep them in sync.
   function computeFaceOccluders(matrixData, cx, cy, cz, hx, hy, hz, count) {
     const EPS = NCZ.FACE_EPS, K = 4;
     const idx = new Float32Array(count * 4);   // occluder indices (float-packed, < 2^24 exact)
@@ -2892,9 +2892,9 @@ const ThreeScene = (() => {
   // ThreeScene.getBuildingMeta().
   let _buildingMeta = [];
 
-  // The MEASURED night profile (data/night-profile.json — generated by
+  // The MEASURED night profile (data/night-profile.json, generated by
   // scripts/night_analyse.js from 2.49M placed nodes). Keyed by the SAME subIds as
-  // data/subdistricts.json, because the analyser derives its row ids from that file —
+  // data/subdistricts.json, because the analyser derives its row ids from that file,
   // so this joins with zero remapping. Read via NCZ.glassShareFor().
   //
   // Failing to load is not fatal: glassShareFor falls back to GLASS_SHARE_DEFAULT (0),
@@ -2902,13 +2902,13 @@ const ThreeScene = (() => {
   // shader bug and cost an afternoon.
   // THE PER-BOX WINDOW BAKE (data/window-boxes.bin + .json).
   //
-  // One byte per building INSTANCE, in the same order the district's _data.dds decodes —
+  // One byte per building INSTANCE, in the same order the district's _data.dds decodes,
   // so bake[i] belongs to instance i with no remapping, exactly as align_boxes.js relies
   // on. The byte is glass area / facade area, quantised against manifest.shareMax.
   //
   // Generated by: node scripts/window_boxes.js --margin 6 --assign near --bake
   //
-  // Failing to load is NOT fatal — the scene falls back to the per-subdistrict profile and
+  // Failing to load is NOT fatal: the scene falls back to the per-subdistrict profile and
   // says so. What must never happen is loading a bake whose indices no longer match the
   // geometry: that would light buildings at random and look like a shader bug for a week.
   // The per-district instance count is checked at the point of use.
@@ -2931,7 +2931,7 @@ const ThreeScene = (() => {
       const total = man.districts.reduce((a, d) => a + d.count, 0);
       if (total !== bytes.length) throw new Error(`manifest says ${total} boxes, binary has ${bytes.length}`);
       // The bake must be FOR the cloud we are about to decode. Loading the fixed bake while
-      // rendering vanilla is the failure the per-district count guard catches downstream —
+      // rendering vanilla is the failure the per-district count guard catches downstream;
       // catch it here too, where we can name it.
       if (man.set !== cloud) throw new Error(`bake is for the '${man.set}' cloud but the scene is rendering '${cloud}' (assetSet=${assetSet})`);
       const counts = new Map(man.districts.map((d) => [d.name, d.count]));
@@ -2955,17 +2955,17 @@ const ThreeScene = (() => {
     }
   }
 
-  // ── ROUTE A — WINDOWS ON THE GAME'S OWN FACADE PANELS ──────────────────────
+  // ── ROUTE A: WINDOWS ON THE GAME'S OWN FACADE PANELS ──────────────────────
   //
   // Every model before this painted windows onto OUR box cloud, then argued about the
   // denominator: glass area over WHAT facade area? The box cloud has ~96M m2 of surface
   // where the real city has ~1M m2 of glass, because interpenetrating slabs stack surface
-  // inside surface. Worse, the overcount scales with how finely a building is diced — so
+  // inside surface. Worse, the overcount scales with how finely a building is diced; so
   // Corpo Plaza, 1,374 slabs for one tower, came out DARKEST while being the most glazed
   // place in Night City. That is not a tuning problem, it is a category error.
   //
   // So stop using the boxes as the canvas. `data/window-panels.bin` holds 129,299 REAL
-  // facade panels — the game's own glass-bearing meshes, each with the exact world
+  // facade panels: the game's own glass-bearing meshes, each with the exact world
   // transform we recovered from the sector transform pools. Draw a quad on each and tile
   // the window grid across it at the game's own room size. No box, no denominator, no
   // classification, no glass share.
@@ -2974,12 +2974,12 @@ const ThreeScene = (() => {
   //
   //   node scripts/window_panels.js --bake
   //
-  // KNOWN LIMIT — this is precisely what the test is for. A mesh counts as glass-bearing
+  // KNOWN LIMIT: this is precisely what the test is for. A mesh counts as glass-bearing
   // if `window_parallax_interior` is in its material library; on a multilayer facade the
   // glass is a MASKED LAYER, so some of the panel is really wall and we light all of it.
   // If placement reads right but the panels look too solid, that mask is the next thing to
-  // decode (Route B) — and only then is it worth the cost.
-  // Shared by the box-cloud window pass and the panel pass — one hash, so a building lit by
+  // decode (Route B), and only then is it worth the cost.
+  // Shared by the box-cloud window pass and the panel pass: one hash, so a building lit by
   // either model draws from the same distribution and the A/B compares models, not noise.
   const hash21 = (p) => p.dot(vec2(127.1, 311.7)).sin().mul(43758.5453).fract();
 
@@ -3005,13 +3005,13 @@ const ThreeScene = (() => {
 
     // THE TWO KNOBS THIS TEST TURNS ON.
     //
-    // Our boxes only APPROXIMATE the buildings — the alignment test puts them a few metres
-    // out — so a real facade panel can sit slightly INSIDE the box that represents its
+    // Our boxes only APPROXIMATE the buildings (the alignment test puts them a few metres
+    // out), so a real facade panel can sit slightly INSIDE the box that represents its
     // building, get depth-culled, and vanish. That is Route A's one predicted failure mode,
     // and these two flags are what tell it apart from "the panels aren't there at all":
     //
     //   ?panelnodepth   draw panels through everything. If the windows APPEAR, they were
-    //                   present and buried — a geometry-offset problem, which is fixable.
+    //                   present and buried: a geometry-offset problem, which is fixable.
     //                   If they still do not, the panels are genuinely missing there.
     //   ?panelpush=<m>  shove each panel out along its own normal by <m> metres, to lift it
     //                   clear of the box it is sunk in.
@@ -3019,7 +3019,7 @@ const ThreeScene = (() => {
     const noDepth = qs.has('panelnodepth');
     const push = parseFloat(qs.get('panelpush') || '0') || 0;
 
-    // A unit quad per panel. PlaneGeometry(1,1) is +X right, +Y up, +Z normal — which is the
+    // A unit quad per panel. PlaneGeometry(1,1) is +X right, +Y up, +Z normal, which is the
     // frame window_panels.js baked the quaternion against.
     const geo = new THREE.PlaneGeometry(1, 1);
     const mat = new THREE.MeshBasicNodeMaterial({
@@ -3048,7 +3048,7 @@ const ThreeScene = (() => {
       dummy.quaternion.set(f[o + 3], f[o + 4], f[o + 5], f[o + 6]);
       dummy.position.set(f[o], f[o + 1], f[o + 2]);
       if (push) {
-        // Out along the panel's OWN normal (+Z of its frame), not along a world axis —
+        // Out along the panel's OWN normal (+Z of its frame), not along a world axis;
         // a facade faces whichever way its building faces.
         _q.copy(dummy.quaternion);
         _n.set(0, 0, 1).applyQuaternion(_q).multiplyScalar(push);
@@ -3068,13 +3068,13 @@ const ThreeScene = (() => {
 
     // ── the window grid, ON THE PANEL ────────────────────────────────────────
     //
-    // NOT WINDOW_CELL_W/H. Those are 24 x 18 CET — a LEGIBILITY knob, chosen so a window
+    // NOT WINDOW_CELL_W/H. Those are 24 x 18 CET: a LEGIBILITY knob, chosen so a window
     // blob is visible at map zoom when painted across a whole building. A real facade panel
     // has a median area of 1.7 m2 (~1.3 m across); against a 24 m cell it is 5% of one cell,
     // the pane test fails, and NOTHING DRAWS. The panels are already window-sized.
     //
-    // So tile against the game's own room — WINDOW_ROOM_W/H, the 3 x 4 m module that 51% of
-    // the city's glass area is built from — and round to at least ONE cell. A panel smaller
+    // So tile against the game's own room (WINDOW_ROOM_W/H, the 3 x 4 m module that 51% of
+    // the city's glass area is built from) and round to at least ONE cell. A panel smaller
     // than a room is not a fraction of a window; it IS a window, which is exactly what those
     // small kit pieces are.
     const size = sizeBuf.element(instanceIndex);
@@ -3168,7 +3168,7 @@ const ThreeScene = (() => {
   // Build per-building records for one district cloud and append to _buildingMeta.
   // Returns a Map(buildingId → sign-density multiplier) so the caller can bake a
   // per-instance buffer (the district tag is already resolved here from the
-  // centroid — no second polygon pass needed). See NCZ.signDensityFor.
+  // centroid; no second polygon pass needed). See NCZ.signDensityFor.
   function buildDistrictMeta(cloudName, attr, bcx, bcy, bcz, count, polys) {
     const agg = new Map(); // buildingId → accumulator
     for (let i = 0; i < count; i++) {
@@ -3197,12 +3197,12 @@ const ThreeScene = (() => {
       });
     }
     // A building whose centroid lands in NO polygon gets GLASS_SHARE_DEFAULT (0) and goes
-    // dark. That is correct for the ocean, and a bug for anything else — so say the number
+    // dark. That is correct for the ocean, and a bug for anything else, so say the number
     // out loud rather than letting a silently-unlit district look like a shader problem.
     // NO LONGER A WARNING. A building whose centroid misses every district polygon used to
     // get glass 0 and go dark, because glass was looked up BY DISTRICT. Windows are now
     // measured per box from the game's own placed glass, so a building's district is
-    // irrelevant to whether it has windows — Pacifica's 59 and Dogtown's 3 untagged
+    // irrelevant to whether it has windows: Pacifica's 59 and Dogtown's 3 untagged
     // buildings light up exactly like any other. The tag is still used for the info panel.
     if (untagged) console.log(`[NCZ] ${cloudName}: ${untagged} buildings outside every district polygon (informational — windows are per-box, not per-district)`);
     return { signDensityById, glassShareById };
@@ -3223,7 +3223,7 @@ const ThreeScene = (() => {
     return [];
   }
 
-  // ── ?colldebug — the game's coarse collision boxes for the 3D map ───────────
+  // ── ?colldebug: the game's coarse collision boxes for the 3D map ───────────
   // Draws the 10,166 `physicsColliderBox` shapes from 3dmap_coll_buildings{,2,3}
   // (the meshes 3dmap_view.ent references) as translucent hash-coloured boxes
   // over the scene. Same encoding as a _data.dds instance (position + quaternion
@@ -3263,7 +3263,7 @@ const ThreeScene = (() => {
 
     const mat = new THREE.MeshBasicNodeMaterial({
       transparent: true,
-      depthWrite: false,        // a translucent cage over the city — never occlude it
+      depthWrite: false,        // a translucent cage over the city; never occlude it
       side: THREE.DoubleSide,   // seen from inside when the camera is in a collider
       wireframe: wire,
     });
@@ -3293,10 +3293,10 @@ const ThreeScene = (() => {
     requestRender();
   }
 
-  // ── ?windebug — every one of the game's 1.7M windows, coloured by WHY it landed ────────────
+  // ── ?windebug: every one of the game's 1.7M windows, coloured by WHY it landed ────────────
   //
   // 28% of the game's windows do not reach one of our box faces, and the bake writes them off as
-  // "interior glass — courtyards, light wells". THAT IS AN ASSUMPTION AND IT IS UNTESTED. Our
+  // "interior glass: courtyards, light wells". THAT IS AN ASSUMPTION AND IT IS UNTESTED. Our
   // boxes are a coarse `.dds` decode, not a tracing of the buildings, so a window we reject for
   // being "too deep inside the box" might be sitting on a REAL FACADE our box cloud simply does
   // not cover. Those two cases are indistinguishable in a percentage and obvious on a map:
@@ -3327,9 +3327,9 @@ const ThreeScene = (() => {
     const why = new Uint8Array(buf, n * 12, n);
     const mode = q.get('windebug') || '';
     const showAll = mode === 'all' || mode === 'xray';
-    // ?windebug=xray — draw THROUGH the buildings.
+    // ?windebug=xray: draw THROUGH the buildings.
     //
-    // With depth on, turning the buildings on makes the cloud disappear — because the real
+    // With depth on, turning the buildings on makes the cloud disappear, because the real
     // windows are INSIDE our boxes (2.12 m at the median). That is the honest picture and the
     // default. But it means you cannot compare the real windows against the PROCEDURAL ones the
     // shader paints on the box surface, because you can only ever see one of them at a time.
@@ -3391,13 +3391,13 @@ const ThreeScene = (() => {
       // Zone ops. `merge` affects SEGMENTATION; forceClass/exclude/forceLit become a per-instance
       // override buffer the shader reads (below); `debug` does NOTHING and is meant to.
       //
-      // A `debug` zone is an ANNOTATION — a shape drawn to point at something on the map, for a
+      // A `debug` zone is an ANNOTATION: a shape drawn to point at something on the map, for a
       // human or for Claude, with no effect on the scene. It is inert twice over: it is not a
       // merge zone, so the segmenter never sees it; and OP_CODE has no entry for it, so the
       // override loop below skips it (`if (!code) continue`).
       //
       // Do not "tidy" this by giving debug an OP_CODE. The whole point is that marking something
-      // on the map must not change it — a merge zone drawn to HIGHLIGHT a suspected megablob went
+      // on the map must not change it; a merge zone drawn to HIGHLIGHT a suspected megablob went
       // and fused those boxes into one building, and the resulting screenshot showed the probe
       // rather than the bug.
       const _zones = await loadBuildingZones();
@@ -3405,12 +3405,12 @@ const ThreeScene = (() => {
       const _overrideZones = _zones.filter((z) => z.op !== 'merge' && z.op !== 'debug');
       const _debugZones = _zones.filter((z) => z.op === 'debug');
       const CLASS_IDX = { tower: 0, block: 1, podium: 2, short: 3, thin: 4, elongated: 5 };
-      const OP_CODE = { exclude: 1, forceLit: 2, forceClass: 3 };   // no `debug` — inert on purpose
+      const OP_CODE = { exclude: 1, forceLit: 2, forceClass: 3 };   // no `debug`; inert on purpose
       if (_zones.length) {
         console.log(`[NCZ] building zones: ${_zones.length} (${_mergeZones.length} merge, ${_overrideZones.length} override, ${_debugZones.length} debug/inert)`);
       }
 
-      // Per-building metadata table — district polygons loaded once; the table is
+      // Per-building metadata table: district polygons loaded once; the table is
       // rebuilt per (re)load, one record per building, tagged by centroid.
       _buildingMeta = [];
       // Both must land BEFORE buildDistrictMeta: it resolves each building's subId from
@@ -3465,7 +3465,7 @@ const ThreeScene = (() => {
         const matrixData   = new Float32Array(maxInstances * 16);
         // Per-box world centre + AABB half-extents, for the building clustering below.
         const bcx = new Float32Array(maxInstances), bcy = new Float32Array(maxInstances), bcz = new Float32Array(maxInstances);
-        // The world AABB. A conservative BOUND — correct for a broad-phase (spatial hash, culling)
+        // The world AABB. A conservative BOUND: correct for a broad-phase (spatial hash, culling)
         // and WRONG for anything that asks what shape a building is or which way a wall faces.
         const bhx = new Float32Array(maxInstances), bhy = new Float32Array(maxInstances), bhz = new Float32Array(maxInstances);
         // The box AS DRAWN. Only 26.6% of boxes are within 5 deg of an axis; the median is yawed
@@ -3519,7 +3519,7 @@ const ThreeScene = (() => {
             const e = dummy.matrix.elements;
             matrixData.set(e, validCount * 16);
             // World centre (translation) + world-AABB half-extents (0.5 × abs-row
-            // sums of the 3×3 linear part — the unit cube's [-0.5,0.5] mapped out).
+            // sums of the 3×3 linear part: the unit cube's [-0.5,0.5] mapped out).
             bcx[validCount] = e[12]; bcy[validCount] = e[13]; bcz[validCount] = e[14];
             bhx[validCount] = 0.5 * (Math.abs(e[0]) + Math.abs(e[4]) + Math.abs(e[8]));
             bhy[validCount] = 0.5 * (Math.abs(e[1]) + Math.abs(e[5]) + Math.abs(e[9]));
@@ -3545,8 +3545,8 @@ const ThreeScene = (() => {
         // rectangle (a 12 x 61 m slab paints 57 x 43 m), bridging streets and merging buildings;
         // and it classifies that same slab as a chunky block. Both fall out with the real shape.
         //
-        // ?aabbboxes restores the old behaviour, so the A/B can be run THROUGH THE REAL PIPELINE
-        // — with the road grid and the zones present. Comparing them in a harness that omits the
+        // ?aabbboxes restores the old behaviour, so the A/B can be run THROUGH THE REAL PIPELINE,
+        // with the road grid and the zones present. Comparing them in a harness that omits the
         // road barrier measures a configuration that does not ship, and the road barrier is the
         // thing that stops buildings merging across streets: santo_domingo segments to 520
         // buildings with it and 285 without. An A/B is only worth the baseline it uses.
@@ -3558,7 +3558,7 @@ const ThreeScene = (() => {
         buildingAttrBuffer.value.set(buildingAttrData.subarray(0, validCount * 4));
         console.log(`[NCZ] ${meta.name}: ${validCount} boxes → ${clusterCount} buildings → ${partCount} parts`);
 
-        // Per-instance PART id — built ONLY for ?partdebug. The night material sits
+        // Per-instance PART id, built ONLY for ?partdebug. The night material sits
         // at 7 of WebGPU's 8 storage buffers per stage (see the pack-vec4 learning);
         // ?partdebug early-returns before the night nodes are built, so its material
         // binds far fewer and this extra buffer is free. Do NOT hoist it out of the
@@ -3584,7 +3584,7 @@ const ThreeScene = (() => {
         // Per-building centre/base/sign-density, PACKED into one vec4 buffer
         // (centreX, centreZ, baseY, signDensity). One buffer instead of three:
         // WebGPU's default per-stage storage-buffer limit is 8 and the night
-        // material binds 7 with this packing — do NOT split these back out.
+        // material binds 7 with this packing; do NOT split these back out.
         const cbsData = new Float32Array(validCount * 4);
         for (let i = 0; i < validCount; i++) {
           cbsData[i * 4] = buildingCenterData[i * 2];         // centre world X
@@ -3611,7 +3611,7 @@ const ThreeScene = (() => {
         //   x = op code   y = op param   z = glass share   w = spare
         //
         // WIDENED from vec2 to vec4, and that is deliberately NOT a new buffer. WebGPU's
-        // 8-per-stage storage limit counts BINDINGS, not components — the night material
+        // 8-per-stage storage limit counts BINDINGS, not components; the night material
         // still binds 7. Adding an `instancedArray` for glass share instead would have
         // been the 8th and blacked out the scene. If you need another per-instance
         // channel, `.w` is free; do not reach for a new buffer.
@@ -3619,22 +3619,22 @@ const ThreeScene = (() => {
         // The glass share must NOT come from the district mask texture: that is blurred by
         // DISTRICT_MASK_FEATHER_CET (1250 CET ≈ 106 px of 1024) and subdistricts are only
         // ~40-120 px across, so Kabuki's 6.5% would average with Little China's 6.7% and
-        // the ocean's 0%. Baked per building, it is exact — buildDistrictMeta already
+        // the ocean's 0%. Baked per building, it is exact; buildDistrictMeta already
         // resolves each building's subId by point-in-polygon on its centroid.
         const _glassOff = new URLSearchParams(location.search).has('noglassprof');
         const overrideData = new Float32Array(validCount * 4);
 
-        // WHERE THE GLASS SHARE COMES FROM — and this is the whole night-window rebuild.
+        // WHERE THE GLASS SHARE COMES FROM, and this is the whole night-window rebuild.
         //
         // PER-BOX (default). data/window-boxes.bin holds one byte per INSTANCE: the real
         // glass area the game places on that box, over the box's own facade area. It is a
-        // measurement, not a model — every one of Night City's 157,436 window panes has an
+        // measurement, not a model: every one of Night City's 157,436 window panes has an
         // exact position (the transform pools were always readable), and 97.4% of them land
         // on a box we render.
         //
         // What it buys, beyond accuracy: 84.7% of our boxes have NO glass anywhere near
         // them, and they now go dark on their own. A highway pylon, an oil tank, a silo, a
-        // rooftop AC unit — none of them are lit, and NOBODY HAD TO CLASSIFY THEM. The
+        // rooftop AC unit: none of them are lit, and NOBODY HAD TO CLASSIFY THEM. The
         // shape heuristics and zone overrides were all standing in for a fact the game
         // already knew and we were not reading.
         //
@@ -3648,7 +3648,7 @@ const ThreeScene = (() => {
         // gone. A model that silently reverts to a WORSE model when its data is missing is
         // the most expensive kind of bug: the city still renders, still looks like a city,
         // and nobody notices for a week that it is lit by the thing we replaced. That is
-        // exactly what happened with the vanilla asset set — the fixed-set bake did not
+        // exactly what happened with the vanilla asset set: the fixed-set bake did not
         // match, the guard refused it, and the scene quietly fell back to per-district
         // lighting while reporting success.
         //
@@ -3799,10 +3799,10 @@ const ThreeScene = (() => {
         group.add(mesh);
         buildingMeshes.push(mesh);
 
-        // ── ?boxdebug — SHOW THE BOXES ──────────────────────────────────────
+        // ── ?boxdebug: SHOW THE BOXES ──────────────────────────────────────
         // The `.dds` cloud is the game's MAP artwork, not its world: a coarse box wrapped around
         // each building, authored to be looked at top-down on a menu screen. The real facades sit
-        // INSIDE those boxes — 2.12 m at the median, 9.71 m at p90 — which is why the real windows
+        // INSIDE those boxes (2.12 m at the median, 9.71 m at p90), which is why the real windows
         // (?windebug) vanish the moment the buildings are drawn: the box occludes the very
         // geometry it stands for.
         //
@@ -3824,7 +3824,7 @@ const ThreeScene = (() => {
           const dq = new URLSearchParams(location.search);
           const dbgMat = new THREE.MeshBasicNodeMaterial({
             transparent: true,
-            depthWrite: false,             // a cage over the city — never occlude what it contains
+            depthWrite: false,             // a cage over the city; never occlude what it contains
             side: THREE.DoubleSide,        // seen from inside, because we WILL be inside one
             wireframe: dq.has('boxwire'),
           });
@@ -3981,8 +3981,8 @@ const ThreeScene = (() => {
     // building's lighting where the shape heuristic is wrong.
     const bOverride = buildingOverrideBuffer.element(realIndex);
     const bCBS = buildingCBSBuffer.element(realIndex); // packed: centreX, centreZ, baseY, signDensity
-    const bCenter = bCBS.xy; // building horizontal centre (world X, Z) — billboard placement
-    const bBaseY = bCBS.z;   // building base elevation (world Y) — sign height rule
+    const bCenter = bCBS.xy; // building horizontal centre (world X, Z): billboard placement
+    const bBaseY = bCBS.z;   // building base elevation (world Y): sign height rule
     const bSignDensity = bCBS.w; // per-subdistrict sign-density multiplier (Night Phase A)
     const bFaceOcc = faceOccIdxBuffer.element(realIndex); // 4 largest-overlap neighbour indices (self = no-op)
     mat.positionNode = instMatrix.mul(vec4(positionLocal, 1)).xyz;
@@ -4061,13 +4061,13 @@ const ThreeScene = (() => {
     const edgeGlowEmissive = uEdgeColor.mul(edge).mul(uEdgeGlow);
 
     // ── Night Stage 2: procedural lit windows ──────────────────────────────
-    // The city lights up at night WITHOUT recolouring the buildings — this is
+    // The city lights up at night WITHOUT recolouring the buildings: this is
     // pure emissive added on top of the untouched albedo (colorNode above). A
     // world-space window grid on the vertical facades, each cell hash-lit on/off,
     // warm-white-dominant with scattered neon accents. Bloom (the RenderPipeline)
     // gives the lit cells their halo so they read as lights, not flat dots.
     // Everything is × _buildingNightFactor, so at day (nf==0) emissive is exactly
-    // the edge-glow term above — daytime is unchanged.
+    // the edge-glow term above; daytime is unchanged.
     _buildingNightFactor ||= uniform(0);
     _windowColorUniforms ||= NCZ.WINDOW_COLORS.map(h => uniform(new THREE.Color(h)));
 
@@ -4075,7 +4075,7 @@ const ThreeScene = (() => {
     const wN = worldNormal.normalize();
     // Vertical facades only: 1 on walls, fading to 0 on near-horizontal roofs/floors.
     const onWall = float(1).sub(smoothstep(float(0.35), float(0.6), wN.y.abs()));
-    // EXTERIOR-FACE gate (per fragment — see computeFaceOccluders). Probe the
+    // EXTERIOR-FACE gate (per fragment; see computeFaceOccluders). Probe the
     // point FACE_EPS in front of this fragment; if it sits INSIDE one of the
     // box's 4 largest-overlap neighbours, the fragment's wall area is covered
     // by that neighbour's surface → windows/signs stay dark there. Exact OBB
@@ -4094,7 +4094,7 @@ const ThreeScene = (() => {
       }
       faceGate = mix(float(1.0), gate, float(NCZ.FACE_MASK_STRENGTH));
     }
-    // Height gate — uses the BUILDING's height (cluster aggregate, bAttr.x), so a
+    // Height gate: uses the BUILDING's height (cluster aggregate, bAttr.x), so a
     // short slab that's part of a tall building still passes. Soft-gated.
     const instUpLen = bAttr.x;
     const tallEnough = smoothstep(
@@ -4103,7 +4103,7 @@ const ThreeScene = (() => {
       instUpLen,
     );
     // ── Archetype classification (which BUILDINGS get lit, how densely) ───────
-    // Dims are the clustered BUILDING's (bAttr), not the individual box — so a thin
+    // Dims are the clustered BUILDING's (bAttr), not the individual box, so a thin
     // slab inherits its building's height/footprint instead of being culled as a
     // thin pole. The discriminators still separate real buildings from genuine
     // infrastructure (which clusters to thin/elongated/low aggregates):
@@ -4117,11 +4117,11 @@ const ThreeScene = (() => {
     const towerness = smoothstep(
       float(NCZ.ARCH_VERTICALITY_LO), float(NCZ.ARCH_VERTICALITY_HI), verticality,
     );
-    // (B) Narrow-side floor — kills poles, bridge pillars, wind turbines, thin walls.
+    // (B) Narrow-side floor: kills poles, bridge pillars, wind turbines, thin walls.
     const solidNarrow = smoothstep(
       float(NCZ.ARCH_MIN_FOOTPRINT * 0.6), float(NCZ.ARCH_MIN_FOOTPRINT), minFoot,
     );
-    // (B) Elongation cap — kills long walls, bridge decks, container rows, pipes.
+    // (B) Elongation cap: kills long walls, bridge decks, container rows, pipes.
     const elongation = footprint.div(minFoot.add(float(0.5)));
     const blocky = float(1).sub(smoothstep(
       float(NCZ.ARCH_MAX_ELONGATION), float(NCZ.ARCH_MAX_ELONGATION * 1.5), elongation,
@@ -4131,7 +4131,7 @@ const ThreeScene = (() => {
     const broad = smoothstep(
       float(NCZ.ARCH_FOOTPRINT_BIG), float(NCZ.ARCH_FOOTPRINT_BIG * 2), footprint,
     );
-    // Height veto: a genuinely TALL mass is never podium, however broad — only LOW
+    // Height veto: a genuinely TALL mass is never podium, however broad; only LOW
     // broad squat masses (malls, parking, sheds, oil tanks) stay industrial. Uses
     // the BUILDING height (instUpLen = bAttr.x). Without this, big-footprint
     // skyscrapers read as dark podium ("too much yellow").
@@ -4139,8 +4139,8 @@ const ThreeScene = (() => {
       float(NCZ.ARCH_PODIUM_HEIGHT_LO), float(NCZ.ARCH_PODIUM_HEIGHT_HI), instUpLen,
     ));
     const industrial = broad.mul(towerness.oneMinus()).mul(podiumLow);  // big & squat & LOW
-    // (A) World-region suppression — zero windows inside any CET rect in
-    // NCZ.WINDOW_SUPPRESS_ZONES (ocean, oil fields, etc. — and parts of regions
+    // (A) World-region suppression: zero windows inside any CET rect in
+    // NCZ.WINDOW_SUPPRESS_ZONES (ocean, oil fields, etc., and parts of regions
     // the shape heuristic can't tell apart). Polygon zones (drawn on the map)
     // will replace these rects. World→CET: cetX = worldX, cetY = -worldZ. Built
     // at compile time from the array (empty ⇒ no-op).
@@ -4152,15 +4152,15 @@ const ThreeScene = (() => {
                 .mul(step(float(z[1]), cetY)).mul(step(cetY, float(z[3])));
       zoneAllow = zoneAllow.mul(inside.oneMinus());
     }
-    // (A) Per-district density — sampled from the CET-space mask (0 = region dark:
+    // (A) Per-district density: sampled from the CET-space mask (0 = region dark:
     // ocean / unzoned / Badlands, 1 = full). Keyed off the TRUE polygon, immune to
     // the .dds cloud crossing borders. Drives windows AND the city glow below.
     const districtDensity = sampleDistrictDensity(cetX, cetY);
     // Final per-box enable. The lit/dark decision is DISCRETE and uses the SAME
     // thresholds ?archdebug shows, so the visualiser is truthful: a building is lit
-    // only if it classifies tower/block — NOT short/thin/elongated/podium. (The old
+    // only if it classifies tower/block: NOT short/thin/elongated/podium. (The old
     // continuous smoothstep gate let a building 60% into "podium" show fully yellow
-    // yet still get 40% lighting — confusing. Now per-building dims make the gate
+    // yet still get 40% lighting, which was confusing. Now per-building dims make the gate
     // uniform per building anyway, so discrete = building-level on/off, no within-
     // building hard edge.) Region density + overrides stay continuous.
     const shortSel  = step(tallEnough, float(0.5));      // 1 ⇒ short  (matches archdebug)
@@ -4172,13 +4172,13 @@ const ThreeScene = (() => {
     // The region term now enters WINDOWS and SIGNS by different routes, so the mask forks.
     //
     // districtDensity is a 1250-CET-blurred mask, and multiplying it into the window path
-    // DIMS the emissive — which is the wrong physics for a glass-share model. A district
+    // DIMS the emissive, which is the wrong physics for a glass-share model. A district
     // with less glass does not have dimmer windows; it has SMALLER ones, and fewer square
     // metres of them. Region reaches the windows through the measured glass share instead
-    // (bOverride.z, baked per building, crisp). SIGNAGE keeps the mask exactly as it was —
-    // its density genuinely is a regional dimmer — so this fork leaves signage bit-identical.
-    const archMaskGeo  = isLit.mul(zoneAllow);                  // WINDOWS — no density term
-    const archMaskSign = archMaskGeo.mul(districtDensity);      // SIGNAGE — unchanged
+    // (bOverride.z, baked per building, crisp). SIGNAGE keeps the mask exactly as it was
+    // (its density genuinely is a regional dimmer), so this fork leaves signage bit-identical.
+    const archMaskGeo  = isLit.mul(zoneAllow);                  // WINDOWS: no density term
+    const archMaskSign = archMaskGeo.mul(districtDensity);      // SIGNAGE: unchanged
     // ── Zone override (bOverride.x = code, .y = param) ───────────────────────
     // code 1 exclude → dark; 2 forceLit → lit (param = density); 3 forceClass →
     // param is a class index (0 tower, 1 block = LIT; 2..5 = dark). Overrides beat
@@ -4198,13 +4198,13 @@ const ThreeScene = (() => {
     const archMask = applyOverrides(archMaskSign);  // signage + billboards (name kept: many read sites)
     const towernessF = mix(towerness, fcTowerness, isForceClass);
     const densityMul = mix(float(1), oParam, isForceLit); // forceLit density scales emissive
-    // Towers a touch brighter than blocks (override-aware towerness). SIGNAGE only —
+    // Towers a touch brighter than blocks (override-aware towerness). SIGNAGE only:
     // a skyline billboard bias is its own justification. The measured window model drops
     // it: a tower's windows are not brighter, it just has more glass, and glassShare
     // already carries that. Legacy re-applies it to windows (see winIntensityMul).
     const archIntensity = mix(float(1), float(NCZ.ARCH_TOWER_BOOST), towernessF);
     // Facade frame INDEPENDENT of box orientation. The old code picked world X or Z
-    // as the horizontal axis by dominant normal — correct only for axis-aligned
+    // as the horizontal axis by dominant normal, correct only for axis-aligned
     // boxes; a rotated/diagonal box got skewed, mis-aligned windows. Instead define
     // the facade frame from a fixed WORLD-UP: vertical = world Y; horizontal = along
     // the wall (perpendicular to the face normal AND up). So every wall, however the
@@ -4219,10 +4219,10 @@ const ThreeScene = (() => {
     const cell   = vec2(floor(cellH), floor(cellV));
     const inH    = fract(cellH);
     const inV    = fract(cellV);
-    // Per-building seed (cluster id) — slabs of one building share it, so their
+    // Per-building seed (cluster id): slabs of one building share it, so their
     // windows/signs read as one coherent building rather than per-box noise.
     const bSeed = vec2(bAttr.w, bAttr.w.mul(1.37).add(11.3));
-    // Per-cell randomness — unique per building AND cell.
+    // Per-cell randomness: unique per building AND cell.
     const seed = cell.add(bSeed);
     const cellRnd = hash21(seed);                           // per-window on/off draw
 
@@ -4232,7 +4232,7 @@ const ThreeScene = (() => {
     let pane, lit;
 
     if (NCZ.WINDOW_MODEL === 'none') {
-      // AUDIT MODE (?winmodel=none). No procedural windows at all — the building stays dark and
+      // AUDIT MODE (?winmodel=none). No procedural windows at all: the building stays dark and
       // the ?windebug cloud is the only emitter. A dark tower now means NO DATA, full stop, with
       // no fake grid painting over the answer.
       pane = float(0);
@@ -4259,7 +4259,7 @@ const ThreeScene = (() => {
       //
       // Night City's facades are a REGULAR GRID of ribbon windows, not slabs of curtain
       // wall against blank concrete. The sector dump says so: 51% of all placed glass area
-      // is one module, 3.0 m wide x 1.4 m tall, sitting in a 3 m x 4 m room — a window
+      // is one module, 3.0 m wide x 1.4 m tall, sitting in a 3 m x 4 m room: a window
       // spanning its room's full width and about a third of its height. What varies from
       // district to district is not WHERE the glass is, it is HOW BIG the windows are.
       //
@@ -4272,11 +4272,11 @@ const ThreeScene = (() => {
       // black. That is the district signal, and it was the thing a single global
       // WINDOW_LIT_FRACTION could not express no matter how it was tuned.
       //
-      // NOTE the cell size does NOT appear in the average — paneArea is a FRACTION of the
+      // NOTE the cell size does NOT appear in the average: paneArea is a FRACTION of the
       // cell, so brightness is identical at any WINDOW_CELL_W/H. The cell only decides how
       // big each window blob reads at map zoom. It is a legibility knob, not a measurement.
 
-      // Per-building measured glass share (baked into bOverride.z — NOT the district mask,
+      // Per-building measured glass share (baked into bOverride.z, NOT the district mask,
       // which is blurred by 1250 CET and would smear neighbouring subdistricts together).
       // A forceLit zone raises the glass instead of brightening a dim window: same knob,
       // right physics.
@@ -4289,7 +4289,7 @@ const ThreeScene = (() => {
       //   paneW·paneH = glassShare                  ← the area we must hit exactly
       // Solving:  paneH = sqrt(glassShare · cellW / (A · cellH)),  paneW = glassShare/paneH.
       // Keeping the aspect is what stops a low-glass district's windows from shrinking into
-      // square dots — they stay WINDOW-shaped (wide, thin slots) and just get smaller.
+      // square dots; they stay WINDOW-shaped (wide, thin slots) and just get smaller.
       const kH = NCZ.WINDOW_CELL_W / (NCZ.WINDOW_PANE_ASPECT * NCZ.WINDOW_CELL_H);
       const paneH = glassShare.mul(float(kH)).sqrt().clamp(float(0), float(0.95));
       const paneW = glassShare.div(paneH.max(float(0.0001))).clamp(float(0), float(0.95));
@@ -4310,7 +4310,7 @@ const ThreeScene = (() => {
     const hTint = hash21(seed.add(vec2(53.7, 91.3)));       // default vs alt temperature
     const hHue  = hash21(seed.add(vec2(17.3, 68.9)));       // which alt temperature
     // Colour: default warm white (index 0) for most; a hash-bucketed warm/cool
-    // white (1..5) for WINDOW_TINT_FRACTION — a mix of light temperatures, no neon.
+    // white (1..5) for WINDOW_TINT_FRACTION: a mix of light temperatures, no neon.
     let tint = _windowColorUniforms[1];
     tint = mix(tint, _windowColorUniforms[2], step(float(0.2), hHue));
     tint = mix(tint, _windowColorUniforms[3], step(float(0.4), hHue));
@@ -4318,14 +4318,14 @@ const ThreeScene = (() => {
     tint = mix(tint, _windowColorUniforms[5], step(float(0.8), hHue));
     const isTint   = step(float(1 - NCZ.WINDOW_TINT_FRACTION), hTint);
     const winColor = mix(_windowColorUniforms[0], tint, isTint);
-    // OUTER-SHELL gate — kill windows on interior/back faces of the box-soup, so the
+    // OUTER-SHELL gate: kill windows on interior/back faces of the box-soup, so the
     // grid only paints the building's outward-facing shell (see WINDOW_SHELL_GATE).
     // Compile-time OFF when the threshold ≤ −0.99 (no gate node emitted).
     let shellGate = float(1.0);
     if (NCZ.WINDOW_SHELL_GATE > -0.99) {
       // Depth of this fragment OUT ALONG ITS OWN NORMAL from the building centre,
       // normalised by the building's NARROW half-extent (footMin = bAttr.z). An
-      // exterior wall — long OR short — sits at depth ≈ its extent (d̂ ≳ 1); interior
+      // exterior wall (long OR short) sits at depth ≈ its extent (d̂ ≳ 1); interior
       // boxes sit shallow (d̂ < 1); back-facing interior walls are negative. This is
       // orientation-correct: it keeps ALL outer walls including the short-end walls
       // of elongated buildings. (The earlier radial-vs-normal dot blanked short ends
@@ -4342,17 +4342,17 @@ const ThreeScene = (() => {
     //
     // NOT night-only any more: _buildingNightFactor is driven by NCZ.LIGHTS_MODE, which
     // defaults to the old sun ramp but can hold the lights on at any hour. The game never
-    // gated its window light on the clock — the material's parallax interior is always
+    // gated its window light on the clock: the material's parallax interior is always
     // there, and `AmountTurnOffAtNight` is what turns HALF of it OFF after dark.
     //
     // Gone from this line vs the legacy model, both deliberately:
-    //   archIntensity (ARCH_TOWER_BOOST) — in the measured model a tower's windows are not
+    //   archIntensity (ARCH_TOWER_BOOST): in the measured model a tower's windows are not
     //     BRIGHTER, it simply has more glass, and glassShare already says so.
-    //   densityMul — a forceLit zone now raises the GLASS instead of brightening a dim
+    //   densityMul: a forceLit zone now raises the GLASS instead of brightening a dim
     //     window (see glassShare above). Same knob, right physics. Both still apply to
     //     signage, where a regional brightness dimmer is the correct model.
     // ?winmodel=panels draws the windows on the game's REAL facade panels (buildWindowPanels),
-    // so the box cloud must not also paint its own — or the city is lit twice, by two models,
+    // so the box cloud must not also paint its own, or the city is lit twice, by two models,
     // and the comparison means nothing.
     const winIntensityMul = NCZ.WINDOW_MODEL === 'legacy'
       ? archIntensity.mul(densityMul)   // legacy keeps both, so the A/B is honest
@@ -4382,10 +4382,10 @@ const ThreeScene = (() => {
     };
     // Two DECOUPLED per-building gates from ONE hash, so the two registers don't
     // have to co-occur (the old single gate clumped BOTH speckle and big signs onto
-    // the same ~10% of buildings — "certain buildings hit all over"):
-    //   hasSpeckle (street layer) — present on SIGN_SPECKLE_FRACTION of buildings.
+    // the same ~10% of buildings, "certain buildings hit all over"):
+    //   hasSpeckle (street layer): present on SIGN_SPECKLE_FRACTION of buildings.
     //     Raise it toward 1 for a sparse neon scatter across the WHOLE city.
-    //   hasBigSign (roof layer) — SELECTIVE (SIGN_BUILDING_FRACTION), so the huge
+    //   hasBigSign (roof layer): SELECTIVE (SIGN_BUILDING_FRACTION), so the huge
     //     top billboards land on only a few skyline buildings.
     // Shared hash ⇒ big-sign buildings are a subset of speckle buildings, and when
     // both fractions are equal the gates are identical (the original behaviour).
@@ -4411,7 +4411,7 @@ const ThreeScene = (() => {
       const hW = pW.mul(0.5), hH = pH.mul(0.5);
       const cx = iH.sub(0.5), cy = iV.sub(0.5);
       const ax = cx.abs(), ay = cy.abs();
-      // SHAPE — rectangle / circle / triangle, hash-picked; each a soft glow field.
+      // SHAPE: rectangle / circle / triangle, hash-picked; each a soft glow field.
       const rectD = vec2(ax.sub(hW).max(0.0), ay.sub(hH).max(0.0)).length();
       const rC    = hW.min(hH);
       const circD = vec2(cx, cy).length().sub(rC).max(0.0);
@@ -4439,7 +4439,7 @@ const ThreeScene = (() => {
     const roofW   = smoothstep(float(NCZ.SIGN_ROOF_RISE_LO), float(NCZ.SIGN_ROOF_RISE_HI), signHF);
     // Per-layer gating so the two registers live on different building sets:
     //   STREET speckle = ground-level neon, on lit towers/blocks EQUALLY (no tower
-    //     bias — street signs are everywhere at street level) PLUS occasional podium
+    //     bias: street signs are everywhere at street level) PLUS occasional podium
     //     (mall / shop fronts). Region-gated like the windows.
     //   ROOF big signs = tower-biased skyline billboards, lit tower/block only.
     const hasPodiumSign = step(float(1).sub(float(NCZ.SIGN_PODIUM_FRACTION).mul(bSignDensity)), hash21(bSeed.add(vec2(31.7, 5.9))));
@@ -4455,9 +4455,9 @@ const ThreeScene = (() => {
       .mul(float(NCZ.SIGN_INTENSITY))
       .mul(modulation);
 
-    // ── ?segdebug — STRUCTURE (segmentation) visualiser ─────────────────────
+    // ── ?segdebug: STRUCTURE (segmentation) visualiser ──────────────────────
     // Colours each box by its SEGMENTED BUILDING id (bAttr.w) with a hash colour,
-    // so ADJACENT BUILDINGS render different colours — you can directly see which
+    // so ADJACENT BUILDINGS render different colours: you can directly see which
     // boxes the segmenter grouped into one building (the same read as the headless
     // lab PNGs). Class is irrelevant here; this shows the GROUPING / road-block
     // separation. Self-lit, visible day or night. Compile-time early-return.
@@ -4470,7 +4470,7 @@ const ThreeScene = (() => {
       return mat;
     }
 
-    // ── ?partdebug — PART (sub-building strata) visualiser ──────────────────
+    // ── ?partdebug: PART (sub-building strata) visualiser ───────────────────
     // The twin of ?segdebug, one level finer. Colours each box by its PART id, so
     // a tower and the podium it rises from render as two colours INSIDE one
     // building, and a mast separates from its apron. Read them together:
@@ -4478,7 +4478,7 @@ const ThreeScene = (() => {
     //   ?partdebug = the strata inside it (the labels the podium merge unions)
     // If a structure that should light as a whole is fragmented here, raise
     // ?partdh=; if a tower stays fused to its podium, lower it. Self-lit, day or
-    // night. Compile-time early-return — zero cost when the flag is absent.
+    // night. Compile-time early-return: zero cost when the flag is absent.
     if (partIdBuffer && new URLSearchParams(location.search).has('partdebug')) {
       const pid = partIdBuffer.element(realIndex);
       const hsh = (a, b) => pid.mul(a).add(b).sin().mul(43758.5453).fract();
@@ -4488,15 +4488,15 @@ const ThreeScene = (() => {
       return mat;
     }
 
-    // ── ?archdebug — classification visualiser ──────────────────────────────
+    // ── ?archdebug: classification visualiser ───────────────────────────────
     // Colours each box by how the archetype heuristic reads it. The .dds carries
-    // NO type — only position/rotation/scale — so class is inferred purely from
+    // NO type (only position/rotation/scale), so class is inferred purely from
     // box proportions. Legend: grey = too short · red = too thin (pole/pillar/
     // turbine) · orange = too elongated (wall/bridge deck/containers) · yellow =
     // podium/industrial · green = tower · blue = block. Dimmed where district
     // density is low (region gate). Self-lit, so visible day or night.
     if (new URLSearchParams(location.search).has('archdebug')) {
-      // DISCRETE class colour — every box renders exactly ONE legend colour (the
+      // DISCRETE class colour: every box renders exactly ONE legend colour (the
       // binary `step` selectors mean no continuous blend, so no in-between
       // teal/purple). Precedence (highest wins, applied last): short > thin >
       // elongated > podium > tower > block. Colours must match the index.html
@@ -4521,12 +4521,12 @@ const ThreeScene = (() => {
       return mat;
     }
 
-    // ── ?glassdebug — the MEASURED glass share, as baked ─────────────────────
+    // ── ?glassdebug: the MEASURED glass share, as baked ──────────────────────
     // Verifies the DATA PATH, not the look: every building in one subdistrict must be a
     // single flat colour, and the colours must rank as data/night-profile.json does. A
     // building that disagrees with its neighbours has been tagged to the wrong polygon;
     // a whole district reading black means the profile did not load or its subId does not
-    // join. Both are silent failures under the real shader — they just look "a bit dark".
+    // join. Both are silent failures under the real shader: they just look "a bit dark".
     //
     // Blue → green → yellow → red over 0..30% glass (the city's real range is 0.7%–26.6%).
     if (new URLSearchParams(location.search).has('glassdebug')) {
@@ -4539,7 +4539,7 @@ const ThreeScene = (() => {
       return mat;
     }
 
-    // ── ?facedebug — exterior-face mask visualiser ───────────────────────────
+    // ── ?facedebug: exterior-face mask visualiser ────────────────────────────
     // Renders the per-fragment occlusion gate exactly as the emissive sees it:
     // green = wall area the mask lets light, red = wall area whose in-front
     // probe sits inside a neighbouring box (covered by that neighbour's
@@ -4556,7 +4556,7 @@ const ThreeScene = (() => {
 
     // ── Per-building BIG billboard ── ONE large neon panel per hasBigSign building,
     // in the upper facade band, a SINGLE colour. Placed from the building's world
-    // centre (bCenter) so it's one coherent panel on the facade — not the tiled roof
+    // centre (bCenter) so it's one coherent panel on the facade, not the tiled roof
     // grid (which structurally can't make a single big sign). Seed-varied between a
     // tall vertical strip and a wide banner. Tower-biased + lit-gated like the roof.
     const bbSeed   = bSeed.add(vec2(13.3, 47.1));
@@ -4568,7 +4568,7 @@ const ThreeScene = (() => {
     // Half-extents start as fractions of the FACADE half-width (footprint) so the
     // aspect ratio is consistent in WORLD units regardless of building height. The
     // resulting WORLD size is then CAPPED at SIGN_BB_MAX_HALF (CET) so an over-merged
-    // mega-block (footprint 1000+) can't spawn a 900 CET single-colour monster — the
+    // mega-block (footprint 1000+) can't spawn a 900 CET single-colour monster: the
     // root cause of the "giant billboard" artefacts. Normal towers are well under the
     // cap, so they're unaffected.
     const fp       = footprint.max(float(1));
@@ -4582,7 +4582,7 @@ const ThreeScene = (() => {
     const bbField = float(1).sub(smoothstep(float(0.0), float(NCZ.SIGN_BB_GLOW), vec2(bbDH, bbDV).length()));
     const bbHue = hash21(bbSeed.add(vec2(91.7, 22.3)));               // ONE colour per building
     const bbCol = pickSignColor(bbHue);
-    // Billboards land on ANY lit building (towers AND block megabuildings — both
+    // Billboards land on ANY lit building (towers AND block megabuildings; both
     // carry huge rooftop signs in-game), selective via hasBigSign. No tower bias.
     const billboardEmissive = bbCol.mul(bbField)
       .mul(hasBigSign).mul(onWall).mul(faceGate).mul(archMask)
@@ -4591,7 +4591,7 @@ const ThreeScene = (() => {
       .mul(float(NCZ.SIGN_INTENSITY)).mul(float(NCZ.SIGN_BB_INTENSITY_MUL))
       .mul(modulation);
 
-    // City glow — the warm-below/cool-above fill, now per-fragment and scaled by
+    // City glow: the warm-below/cool-above fill, now per-fragment and scaled by
     // the same district density as the windows (regional, not global). Replaces
     // the old global HemisphereLight on buildings.
     const buildingGlow = cityGlowEmissive(wN, cetX, cetY, materialColor);
@@ -4599,7 +4599,7 @@ const ThreeScene = (() => {
     // ── SIGNAGE IS OUT OF THE ENGINE ──────────────────────────────────────────
     //
     // Signage and billboards are NOT composed any more. They are being rebuilt on the same
-    // placement data the windows now use — ncz_signs.csv has 7.3 MB of real sign nodes, and
+    // placement data the windows now use: ncz_signs.csv has 7.3 MB of real sign nodes, and
     // every instanced copy of them has an exact transform (the transform pools were always
     // readable). A procedural neon scatter, gated by a per-subdistrict density multiplier
     // that was itself hand-tuned AGAINST a measurement it disagreed with (Little China
@@ -4612,7 +4612,7 @@ const ThreeScene = (() => {
     //
     // The ~230 lines that BUILD signageEmissive / billboardEmissive above are now
     // unreferenced, as are SIGN_COLORS, the SIGN_* constants, signDensityFor(), the
-    // signDensityById map, and the `.w` lane of buildingCBSBuffer (which is therefore FREE —
+    // signDensityById map, and the `.w` lane of buildingCBSBuffer (which is therefore FREE:
     // see the storage-buffer budget note in CLAUDE.md; it is the only slack we have). They
     // are dead but interleaved with the ?segdebug / ?partdebug early-returns, so they come
     // out as their own mechanical commit rather than as a risky cut inside this one.
@@ -5468,7 +5468,7 @@ const ThreeScene = (() => {
         renderer.compute(c.cull);
       }
     }
-    // Same bloom RenderPipeline as the schema loop — point the scene pass at the
+    // Same bloom RenderPipeline as the schema loop: point the scene pass at the
     // showcase fly camera.
     scenePass.camera = cam;
     renderPipeline.render();
@@ -5684,14 +5684,15 @@ const ThreeScene = (() => {
     _sunAz = azimuthRad;
     _sunEl = altitudeRad;
     if (!_dirLight || !_hemiLight) return;
-    // Move the visible sun sphere (showcase-only). Unclamped elevation so it
+    // Move the visible sun sphere (always present; updateDayNightLighting keeps
+    // it shown). Unclamped elevation so it
     // sets at the horizon naturally. Centred on Night City so it hangs over the map.
     if (_sunSphere) positionSkyBody(_sunSphere, azimuthRad, altitudeRad, NCZ.SUN_SPHERE_DIST);
     updateDayNightLighting();
     requestRender();
   }
 
-  // Night moon — its own real arc (SunCalc.getMoonPosition, driven from app.js).
+  // Night moon: its own real arc (SunCalc.getMoonPosition, driven from app.js).
   // Same azimuth/elevation convention as setSunPosition.
   function setMoonPosition(azimuthRad, altitudeRad) {
     _moonAz = azimuthRad;
@@ -5720,14 +5721,14 @@ const ThreeScene = (() => {
   }
 
   // Day-night lighting. TWO permanent directional lights, each driven by its own
-  // real body — no morphing, no slerp, just a crossfade:
-  //   • SUN  — warm, casts shadows. castShadow stays ON permanently (never toggled
+  // real body: no morphing, no slerp, just a crossfade:
+  //   • SUN:  warm, casts shadows. castShadow stays ON permanently (never toggled
   //     ⇒ no WebGPU depth-texture teardown crash); its shadow STRENGTH fades out
   //     with elevation (_sunShadowFade). Intensity fades to 0 by nightFactor.
-  //   • MOON — cool, casts NO shadows; intensity by its own altitude × phase × nf.
+  //   • MOON: cool, casts NO shadows; intensity by its own altitude × phase × nf.
   // Net: night is soft moonlight + ambient with NO cast shadows. That's both
   // physically right (moonlight shadows are imperceptible) and removes the shadow-
-  // box artifact at night/dusk — a low/absent caster has nothing to clip against
+  // box artifact at night/dusk: a low/absent caster has nothing to clip against
   // the SHADOW_MAX_DISTANCE coverage cap. At nightFactor==0 (sun up) this is
   // byte-identical to the original daytime lighting (sun = SUN_INTENSITY, moon 0).
   // Called whenever the sun OR moon moves.
@@ -5735,7 +5736,7 @@ const ThreeScene = (() => {
     if (!_dirLight || !_moonLight || !_hemiLight) return;
     const nf = _nightFactor = NCZ.nightFactorForSunElevation(_sunEl);
     // The CITY LIGHTS run on their own clock. `nf` is the time of day and still drives
-    // sun, moon, ambient, bloom and shadows — those ARE the time of day. `lf` drives the
+    // sun, moon, ambient, bloom and shadows; those ARE the time of day. `lf` drives the
     // window/sign emissive and the city glow, which in the game are simply always on
     // (see NCZ.LIGHTS_MODE). At LIGHTS_MODE 'auto' the two are identical, so this is a
     // no-op until someone touches the control.
@@ -5750,7 +5751,7 @@ const ThreeScene = (() => {
     _dirLight.intensity = NCZ.SUN_INTENSITY * (1 - nf);
 
     // Shadow strength fades with the sun's real elevation: full when high, gone by
-    // the time it nears the horizon — so dusk softens shadows out and night (sun
+    // the time it nears the horizon, so dusk softens shadows out and night (sun
     // below horizon) has none. No caster ⇒ no shadow-box cut-out.
     _sunShadowFade = smooth(NCZ.SUN_SHADOW_FADE_OFF_DEG, NCZ.SUN_SHADOW_FADE_FULL_DEG, _sunEl * 180 / Math.PI);
     applyShadowIntensity();
@@ -5777,14 +5778,14 @@ const ThreeScene = (() => {
       THREE.LinearSRGBColorSpace,
     );
     // Night ambient intensity: base when the moon is up (let moonlight dominate),
-    // boosted toward the moonless level as the moon sets — so a moonless deep
+    // boosted toward the moonless level as the moon sets, so a moonless deep
     // night stays legible without washing out the moonlit hours (both are nf==1).
     const nightAmbient = lerp(NCZ.AMBIENT_INTENSITY_NIGHT_MOONLESS, NCZ.AMBIENT_INTENSITY_NIGHT, moonUp);
     _hemiLight.intensity = lerp(NCZ.AMBIENT_INTENSITY, nightAmbient, nf);
     // Stage-2 city glow (per-fragment shader term, district-masked). Daytime floor
     // ramping to full at night: dim by day, dimmer as the day brightens (nf→0),
     // brightest at night; never fully off. Drives the shared shader uniform.
-    // Glow is light POLLUTION — it is the city's own lights bouncing off the air, so it
+    // Glow is light POLLUTION: it is the city's own lights bouncing off the air, so it
     // follows the lights, not the sun. 'off' kills it outright: the DAY_FACTOR floor is
     // "a city always has some lights on", which is exactly the claim 'off' denies.
     if (_glowIntensityU) _glowIntensityU.value = NCZ.LIGHTS_MODE === "off" ? 0
@@ -5792,7 +5793,7 @@ const ThreeScene = (() => {
 
     // Sky discs trace their full real arcs (positionSkyBody already uses the true
     // unclamped elevation, so they descend below the horizon as the body sets).
-    // No visibility gate or opacity fade — celestial bodies don't blink out; they
+    // No visibility gate or opacity fade: celestial bodies don't blink out; they
     // follow a continuous path. Below the horizon the disc is simply below the
     // ground plane and naturally out of a top-down view.
     if (_sunSphere)  _sunSphere.visible  = true;
@@ -5806,11 +5807,11 @@ const ThreeScene = (() => {
     const bloomNight = nf * nf; // ease-in night ramp (gentle by day, strong at night)
     if (_bloomPass)         _bloomPass.strength.value =
       NCZ.BLOOM_DAY_STRENGTH + (NCZ.BLOOM_STRENGTH - NCZ.BLOOM_DAY_STRENGTH) * bloomNight;
-    // Haze is a night-only light-pollution effect — no daytime baseline.
+    // Haze is a night-only light-pollution effect; no daytime baseline.
     if (_hazePass)          _hazePass.strength.value = bloomNight * NCZ.HAZE_STRENGTH;
     if (_sceneScaleUniform) _sceneScaleUniform.value  = 1 - nf * (1 - NCZ.SCENE_COLOR_SCALE);
     // Drive the building lit-window + signage emissive (created lazily in
-    // buildBuildingMaterial). On the LIGHTS clock, not the sun's — see `lf` above.
+    // buildBuildingMaterial). On the LIGHTS clock, not the sun's; see `lf` above.
     if (_buildingNightFactor) _buildingNightFactor.value = lf;
 
     // Re-render the shadow depth map only when the sun actually casts (fade > 0);
@@ -6025,7 +6026,7 @@ const ThreeScene = (() => {
 
   // City lights (window + signage emissive, and the glow they throw into the air):
   // 'auto' = the sun-driven dusk ramp · 'on' = lit at every hour · 'off' = dark.
-  // Not a layer — the lights are a uniform, not a scene group — so this follows
+  // Not a layer (the lights are a uniform, not a scene group), so this follows
   // setShadowsEnabled's shape rather than going through setLayerVisibility.
   function setLightsMode(mode) {
     if (!NCZ.LIGHTS_MODES.includes(mode)) return;

@@ -16,7 +16,7 @@
  * so the error survives averaging. Measure what is measurable; ask the model
  * only for meaning. See wiki/learnings/local-vlm-measures-nothing-pixels-do.
  *
- * HUE EXTRACTION IS SATURATION-LED, NOT BRIGHTNESS-LED — this is the subtle bit.
+ * HUE EXTRACTION IS SATURATION-LED, NOT BRIGHTNESS-LED: this is the subtle bit.
  * The obvious approach (take the BRIGHT pixels, they're the lights) measures the
  * wrong thing: bloom blows out the core of every sign to WHITE, so the brightest
  * pixels are the LEAST saturated. Raising the brightness threshold on real
@@ -43,7 +43,7 @@ const MODEL = process.env.OLLAMA_MODEL || 'qwen3.5:9b';
 
 // THE ARCHIVE IS THE SOURCE OF TRUTH FOR CULLING.
 // Full-size frames are archived to E:\Cyberpunk Cityscapes, and that is where you
-// actually browse them — so that is where map/menu frames get deleted. If a working
+// actually browse them, so that is where map/menu frames get deleted. If a working
 // frame has no counterpart in the archive, it was culled: skip it.
 //
 // This is not a nicety. The first street run silently included 10 world-map frames
@@ -59,7 +59,7 @@ const V_HUE   = 0.40;   // hue extraction: modest brightness floor …
 const S_HUE   = 0.65;   // … and a HIGH saturation gate (defeats bloom + haze)
 
 // ROAD CROP (street pass only). At street level the road surface fills the lower
-// frame, and the saturated pixels there are STREETLIGHT POOLS on wet tarmac —
+// frame, and the saturated pixels there are STREETLIGHT POOLS on wet tarmac:
 // large, bright, and warm. Measured on Kabuki they swamped everything:
 //
 //   street, whole frame : orange 39  red 37  teal 13  cyan  7    <- streetlights
@@ -69,7 +69,7 @@ const S_HUE   = 0.65;   // … and a HIGH saturation gate (defeats bloom + haze)
 //
 // Cropping the road makes the street pass CONVERGE on the roof pass, and both then
 // match the human-verified reference (magenta/cyan/red). Streetlights and tarmac
-// are furniture the 3D map does not render — we render buildings — so excluding
+// are furniture the 3D map does not render (we render buildings), so excluding
 // them is not a fudge, it is measuring the thing we actually reproduce.
 //
 // A local-contrast gate was tried first and made it WORSE (orange 55): the warm
@@ -87,7 +87,7 @@ const MOODS = ['dark', 'foggy', 'rainy', 'gaudy', 'neon-dense', 'clean', 'corpo'
 // The id comes from the FILENAME stem (`japantown_roof` → `japantown`), not the
 // folder name. Folders are human-facing and drift: "Araska Waterfront" is a typo,
 // and "Spaceport" is really `ncx_morro_rock`. Filenames were written to the capture
-// list, so they're closer to canonical — but not perfectly, hence the aliases.
+// list, so they're closer to canonical, but not perfectly, hence the aliases.
 //
 // Anything that doesn't resolve to a real id in data/subdistricts.json is a LOUD
 // error, never a silent skip: an unjoined profile is worse than no profile, because
@@ -151,7 +151,7 @@ async function measureFrame(file, topFrac = 1) {
 }
 
 // ── Model pass ───────────────────────────────────────────────────────────────
-// ONE QUESTION PER CALL. This is not stylistic — a multi-field schema actively
+// ONE QUESTION PER CALL. This is not stylistic: a multi-field schema actively
 // corrupts the answers. Measured on 14 Kabuki rooftop frames (same model, same
 // images, temperature 0), asking for 6 fields at once vs 2:
 //
@@ -173,7 +173,7 @@ const SYSTEM = 'You answer one factual question about a Cyberpunk 2077 night scr
 
 // Fail LOUDLY if the model isn't reachable or isn't there. The first version of
 // this swallowed both into `semantic: null` and produced a clean-looking profile
-// with the whole model pass silently missing — the failure mode to avoid.
+// with the whole model pass silently missing: the failure mode to avoid.
 async function preflight() {
   let tags;
   try {
@@ -200,7 +200,7 @@ async function askOne(img, key, question, schemaProp) {
       stream: false,
       think: false,          // REQUIRED: Qwen defaults to a reasoning preamble that fights the grammar
       // Ollama takes the schema HERE, on the native endpoint. Its /v1 endpoint does
-      // NOT accept OpenAI's response_format:json_schema — do not "modernise" this.
+      // NOT accept OpenAI's response_format:json_schema; do not "modernise" this.
       format: { type: 'object', required: [key], properties: { [key]: schemaProp } },
       keep_alive: '10m',
       options: { temperature: 0 },
@@ -299,7 +299,7 @@ function findFrameDirs(dir, out = []) {
 
     const rec = { label, subId, passes: {} };
     for (const [pass, list] of Object.entries(passes)) {
-      // Crop the road out of street frames — see STREET_TOP_FRAC.
+      // Crop the road out of street frames (see STREET_TOP_FRAC).
       const topFrac = pass === 'street' ? STREET_TOP_FRAC : 1;
       const agg = { total: 0, lit: 0, white: 0, warm: 0, cool: 0, coloured: 0, hue: new Array(BINS).fill(0) };
       for (const f of list) {
@@ -360,10 +360,10 @@ function findFrameDirs(dir, out = []) {
   // SIGN_DENSITY_PROFILE model).
   //
   // WHICH PASS OWNS COLOUR: the ROOF pass. An earlier guess said the street pass
-  // ("you see the signs directly") — the data killed it. What the 3D map RENDERS is
+  // ("you see the signs directly"); the data killed it. What the 3D map RENDERS is
   // buildings: facade windows and roof/facade signage, seen from above and afar. The
   // roof pass samples exactly that. The street pass samples streetlights, tarmac and
-  // eye-level shop fronts, most of which we don't model — hence the road crop, after
+  // eye-level shop fronts, most of which we don't model; hence the road crop, after
   // which the two passes converge.
   //
   // The street pass still earns its keep: it feeds the STREET-LEVEL signage layer

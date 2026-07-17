@@ -8,14 +8,14 @@
  * ───────────────
  * Frames showing the world map, menus, loading screens or render glitches are
  * culled BY EYE from the full-size archive on E: (that's where they're browsed).
- * The cull must survive a re-extract — a world-map frame is a full-frame wall of
+ * The cull must survive a re-extract: a world-map frame is a full-frame wall of
  * the exact cyan and red we measure, so letting one back in is not a small error.
  *
- * HOW IT FINDS THE CULL — and the bug that shaped this
+ * HOW IT FINDS THE CULL, and the bug that shaped this
  * ───────────────────────────────────────────────────
  * The first version diffed frames/ against the archive: "in frames/ but not in the
  * archive ⇒ culled". That only sees frames deleted from ONE store. Frames deleted
- * from BOTH (an earlier cull, or one already propagated) are invisible to it — and
+ * from BOTH (an earlier cull, or one already propagated) are invisible to it, and
  * a --force re-extract duly resurrected eight world-map frames into Kabuki's roof
  * pass, silently.
  *
@@ -25,14 +25,14 @@
  * what ffmpeg hands us at re-extraction time.
  *
  * TAIL CULLS. A frame culled from the very END of a clip leaves no gap, just a
- * shorter tail — invisible to gap detection. (This is not hypothetical: Araska
+ * shorter tail, invisible to gap detection. (This is not hypothetical: Araska
  * Waterfront's 5 culls were all at the end of street2.) So N is taken as
  *
  *     N = max(highest index present, floor(clip duration x FPS))
  *
  * with the duration read from the video by ffprobe. Taking the max is deliberate:
  * ffmpeg's fps filter sometimes emits one frame more than floor(dur x fps), so
- * trusting ffprobe alone would clip a real frame. Over-estimating N is harmless —
+ * trusting ffprobe alone would clip a real frame. Over-estimating N is harmless:
  * an index that never existed simply never matches anything.
  *
  * Usage
@@ -59,11 +59,11 @@ const APPLY = args.includes('--apply');
 const posix = (p) => p.split(path.sep).join('/');
 const idxOf = (f) => Number(f.match(/_(\d+)\.(jpg|webp)$/)[1]);
 const stemOf = (f) => f.split('__t')[0];
-// The filename ffmpeg's output is renamed to — deterministic from the index.
+// The filename ffmpeg's output is renamed to: deterministic from the index.
 const nameFor = (stem, idx) =>
   `${stem}__t${String(Math.round((idx - 1) / FPS)).padStart(4, '0')}_${String(idx).padStart(5, '0')}`;
 
-// How many frames the clip SHOULD yield at FPS — from the video, not from what
+// How many frames the clip SHOULD yield at FPS: from the video, not from what
 // happens to be on disk. 0 if the source video is missing (nothing to infer).
 function expectedFrames(subDir, stem) {
   for (const ext of ['mp4', 'mkv', 'mov', 'avi']) {
@@ -129,7 +129,7 @@ for (const fdir of findFrameDirs(ROOT)) {
   for (const f of aFiles) (byStem[stemOf(f)] ||= { frames: new Set(), arch: new Set() }).arch.add(idxOf(f));
 
   for (const [stem, s] of Object.entries(byStem)) {
-    // N = max(highest index in either store, floor(clip duration x FPS)) — the
+    // N = max(highest index in either store, floor(clip duration x FPS)); the
     // ffprobe term is what catches TAIL culls (see the header).
     const prior = man.culled?.[sub]?.[stem] || [];
     let maxIdx = Math.max(0, ...s.frames, ...s.arch, ...prior);
@@ -144,7 +144,7 @@ for (const fdir of findFrameDirs(ROOT)) {
     for (let i = 1; i <= maxIdx; i++) {
       if (!s.frames.has(i) || !s.arch.has(i)) gaps.push(i);   // missing from EITHER store ⇒ culled
     }
-    // Union with what's already recorded — never lose an entry.
+    // Union with what's already recorded; never lose an entry.
     const merged = [...new Set([...prior, ...gaps])].sort((a, b) => a - b);
     if (merged.length) ((culled[sub] ||= {})[stem] = merged);
     totalPresent += s.frames.size;

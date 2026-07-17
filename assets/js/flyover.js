@@ -232,7 +232,7 @@ const Flyover = (() => {
     NCZ.ThreeScene.setSunPosition(pos.azimuth, pos.altitude);
     // Drive the moon on its real arc too, so the twilight ends of the showcase
     // (sunrise/sunset, where nightFactor is high) get the moon in the sky and the
-    // night lighting blend — matching the interactive map. Night lighting itself
+    // night lighting blend, matching the interactive map. Night lighting itself
     // is automatic via nightFactor inside setSunPosition.
     const moon = SunCalc.getMoonPosition(when, MORRO_BAY.lat, MORRO_BAY.lng);
     NCZ.ThreeScene.setMoonPosition?.(moon.azimuth, moon.altitude);
@@ -580,7 +580,7 @@ const Flyover = (() => {
     NCZ.ThreeScene.setShadowsEnabled?.(true);    // always on during showcase
     // Sun/moon discs are auto-shown by elevation (updateKeyLight); the flyover
     // runs sunrise→sunset, so it opens and closes in twilight/night lighting
-    // with the moon up at the dusk end — no manual disc toggle needed.
+    // with the moon up at the dusk end; no manual disc toggle needed.
     FLYOVER_EVENTS[0]();
     if (_runOpts.revealLayers) scheduleLayerReveal();
     // Create fade overlay, show title card, then fade the scene in from black

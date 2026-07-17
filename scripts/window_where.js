@@ -4,7 +4,7 @@
  * ─────────────────────────────────────────────────────────────────────────
  * WHERE ARE THE WINDOWS? (XYZ)
  *
- * The night model's real problem is not "how much of a district is glass" — it is
+ * The night model's real problem is not "how much of a district is glass"; it is
  * "which of THIS building's parts carry the window material, and WHERE do they sit on it".
  * The reference frames settle it: Night City's facades are mostly solid, with windows
  * CLUSTERED into specific kit parts. No per-district scalar, spread uniformly over every
@@ -13,7 +13,7 @@
  * So: sweep every field in the dump that could carry positional signal about windows.
  *
  *   1. Do glass nodes have EXACT positions? (non-instanced ⇒ real XYZ + quaternion)
- *   2. The sector tag is X_Y_Z — three coords. night_analyse reads only X and Y.
+ *   2. The sector tag is X_Y_Z: three coords. night_analyse reads only X and Y.
  *      If the third is a VERTICAL index, then even INSTANCED nodes (which carry no
  *      position at all) have a coarse Z, and we have been throwing it away.
  *   3. Prefabs group parts into one object. ncz_prefabs.csv has 135,854 refs and NOTHING

@@ -12,10 +12,10 @@ classifies them, lights them at night, and lets you correct the result by hand.
 ## The problem
 
 Each district's `_data.dds` is a **transform-only** instance cloud: every texel
-decodes to one box's position / rotation / scale — **no type, no grouping**. A
+decodes to one box's position / rotation / scale: **no type, no grouping**. A
 real building is many adjacent boxes (slabs, setbacks, a tower on a podium). To
 light the city believably at night we need to know *which boxes form one
-building* and *what kind of building it is* — both inferred purely from geometry.
+building* and *what kind of building it is*, both inferred purely from geometry.
 
 ## Pipeline
 
@@ -33,10 +33,10 @@ _data.dds ──decode──► per-box transforms ──segment──► buildi
 ```
 
 Everything is built at **load time** in `loadBuildings()` (assets/js/three-scene.js).
-There is no intermediate JSON — the decode + segmentation are CPU JS, the
+There is no intermediate JSON: the decode + segmentation are CPU JS, the
 classification + lighting are TSL on the GPU.
 
-## 1. Segmentation — `segmentBuildings()`
+## 1. Segmentation: `segmentBuildings()`
 
 Groups the box cloud into buildings. Replaced an earlier percolating union-find
 (`clusterBuildingBoxes`, kept only as the tuning-harness baseline). The method is
@@ -52,7 +52,7 @@ Groups the box cloud into buildings. Replaced an earlier percolating union-find
    their roofs are within `BUILDING_SEG_DH`, 18 CET). A roof cliff ≥ DH is a
    building boundary.
 4. **Connectivity gate** (`BUILDING_SEG_KEEP_WHOLE`, 1200 cells): a footprint
-   component at/below this size is kept **whole** — height-splitting only fires on
+   component at/below this size is kept **whole**: height-splitting only fires on
    the percolated downtown megablob, so an isolated structure with a varied roof
    (e.g. Kujira, a ship with a tall superstructure + low deck) stays one building.
 5. **Absorb** sub-`BUILDING_SEG_MIN_CELLS` (3) regions into the neighbour they
@@ -65,12 +65,12 @@ footMinHalf, buildingId). The shader classifies + seeds windows/signs from these
 so every box inherits its building's class.
 
 **Why this method** (see the percolation learning): downtown boxes physically
-abut their neighbours — there are *no street gaps in the box data* (footprint CC
+abut their neighbours; there are *no street gaps in the box data* (footprint CC
 stays ~1 component even at a 4 CET cell), so connectivity alone over-merges. But
 the **height field cleanly resolves individual buildings** as roof plateaus
 separated by cliffs, and it's morphology-agnostic (flat / round / horizontal /
 vertical all segment). The `.dds` carries no latent grouping to exploit (verified:
-boxes are packed in spatially-incoherent order, no separators) — segmentation
+boxes are packed in spatially-incoherent order, no separators); segmentation
 *must* be geometric.
 
 | Constant | Default | Meaning |
@@ -80,7 +80,7 @@ boxes are packed in spatially-incoherent order, no separators) — segmentation
 | `BUILDING_SEG_MIN_CELLS` | 3 | regions smaller than this are absorbed |
 | `BUILDING_SEG_KEEP_WHOLE` | 1200 | footprint components ≤ this (cells) are never height-split |
 
-## 1.5 Parts — sub-building strata (`?partdebug`)
+## 1.5 Parts: sub-building strata (`?partdebug`)
 
 A **building** is the unit a person names ("that tower"). A **part** is the unit
 that emits light coherently: a tower, the podium it rises from, a mast, a fuel
@@ -108,12 +108,12 @@ Two differences from the building pass:
    spatial chop can never leave one part straddling two buildings.
 
 `BUILDING_PART_DH` (default 18, `?partdh=`) is the part-level roof cliff. The
-podium merge stays **on** — it is still correct at the building level.
+podium merge stays **on**; it is still correct at the building level.
 
 **What parts do and do not resolve.** Parts separate *vertical* strata: a tower
 from its podium, a mast from its apron, the power-plant structures from their
 deck. They cannot separate *laterally adjacent, equal-height* objects, because the
-roof-cliff signal is flat across them — the three spaceport fuel spheres (S4) stay
+roof-cliff signal is flat across them: the three spaceport fuel spheres (S4) stay
 one part. Shape detection therefore still needs tight sub-clusters below the part
 level. Parts are necessary, not sufficient.
 
@@ -121,11 +121,11 @@ level. Parts are necessary, not sufficient.
 Compile-time early-return, and the part-id storage buffer is allocated only when
 the flag is present, so the night material's 7-of-8 binding budget is untouched.
 
-## 2. Classification — archetypes
+## 2. Classification: archetypes
 
 Each building is sorted into one of six archetypes from its aggregate dims. The
 canonical logic is TSL in `buildBuildingMaterial`; an exact CPU mirror
-(`classifyDimsCPU`) feeds the metadata table — **keep the two in sync.**
+(`classifyDimsCPU`) feeds the metadata table: **keep the two in sync.**
 
 | Class | Colour | Meaning | Lit? |
 | --- | --- | --- | --- |
@@ -143,7 +143,7 @@ short > thin > elongated > podium > tower/block:
 - **narrow-side floor** `ARCH_MIN_FOOTPRINT` → *thin*
 - **elongation cap** `ARCH_MAX_ELONGATION` → *elongated*
 - **podium**: broad (`ARCH_FOOTPRINT_BIG`) AND squat (`ARCH_VERTICALITY_*`)
-  AND **low** — the **height veto** `ARCH_PODIUM_HEIGHT_LO/HI` means a genuinely
+  AND **low**: the **height veto** `ARCH_PODIUM_HEIGHT_LO/HI` means a genuinely
   tall mass is never podium however broad (fixes "too much yellow": big-footprint
   skyscrapers were misreading as dark podium).
 - **tower vs block**: verticality `ARCH_VERTICALITY_LO/HI` (height ÷ footprint).
@@ -159,13 +159,13 @@ short > thin > elongated > podium > tower/block:
 
 ### `?archdebug`
 
-Colours every box by its **discrete** class (one solid legend colour — no
+Colours every box by its **discrete** class (one solid legend colour; no
 continuous blend, so no in-between teal/purple). The palette is the single source
 `NCZ.ARCHDEBUG_COLORS`, which drives **both** the shader and the on-screen legend
 (parked left of the overlays box, with hover definitions), so they match exactly.
-Compile-time early-return — zero cost when the flag is absent.
+Compile-time early-return: zero cost when the flag is absent.
 
-## 3. Zone overrides — correcting the heuristic by hand
+## 3. Zone overrides: correcting the heuristic by hand
 
 Geometry alone can't disambiguate every structure (a thin tower ≡ a wall; a ship ≡
 a podium). **Zones** are hand-drawn CET volumes (footprint polygon + height range)
@@ -182,13 +182,13 @@ that override the result. Four ops:
 three become a per-instance **`buildingOverrideBuffer`** (`vec2` = op code, param)
 built at load by a centroid point-in-polygon test; the shader mixes the geometric
 `archMask`/`towerness` toward the forced value. Overrides **beat the region-density
-mask** — a forced building lights anywhere.
+mask**: a forced building lights anywhere.
 
-### The drawing tool — `?zonetool`
+### The drawing tool: `?zonetool`
 
 In-3D editor (assets/js/zone-tool.js), lazy-loaded only on the flag. WebGPU-safe by
 construction: `MeshBasicNodeMaterial` handles + `Line2NodeMaterial` edges, and
-**no `TransformControls`** — manipulations are constrained (footprint on the ground
+**no `TransformControls`**: manipulations are constrained (footprint on the ground
 plane via `groundPointAt`, extrude on the vertical axis via a camera-facing plane),
 so a couple of raycasts replace the gizmo.
 
@@ -219,7 +219,7 @@ Zone JSON shape:
 
 ## 4. Per-building metadata table
 
-Built at load (in-memory, **not persisted** — a pure projection of geometry +
+Built at load (in-memory, **not persisted**: a pure projection of geometry +
 polygons, regenerated every load). One record per building:
 
 ```js
@@ -228,7 +228,7 @@ polygons, regenerated every load). One record per building:
 ```
 
 The **district tag** is the smallest subdistrict polygon
-(`data/subdistricts.json`) containing the building's **centroid** — a *building-level*
+(`data/subdistricts.json`) containing the building's **centroid**: a *building-level*
 decision, so a structure straddling a boundary isn't split, and a `.dds` cloud that
 spans districts tags correctly (the `city_center` cloud → mostly city_center, some
 heywood/westbrook). Read via `NCZ.ThreeScene.getBuildingMeta()`. This is the
@@ -259,12 +259,12 @@ archetype / segmentation constants live (no rebuild). See
 
 ## Key files
 
-- `assets/js/three-scene.js` — `segmentBuildings`, `buildBuildingMaterial`
+- `assets/js/three-scene.js`: `segmentBuildings`, `buildBuildingMaterial`
   (classification + lighting + overrides), `buildDistrictMeta`, `getBuildingMeta`,
   `loadBuildingZones`.
-- `assets/js/zone-tool.js` — the `?zonetool` drawing tool.
-- `assets/js/constants.js` — `ARCH_*`, `BUILDING_SEG_*`, `WINDOW_*`,
+- `assets/js/zone-tool.js`: the `?zonetool` drawing tool.
+- `assets/js/constants.js`: `ARCH_*`, `BUILDING_SEG_*`, `WINDOW_*`,
   `ARCHDEBUG_COLORS`, `ZONES_KEY`, the URL override hook.
-- `data/building-zones.json` — committed zone baseline.
-- `data/subdistricts.json` — district polygons (CET) for tagging.
-- `scripts/tune_*.js` — the headless tuning harness.
+- `data/building-zones.json`: committed zone baseline.
+- `data/subdistricts.json`: district polygons (CET) for tagging.
+- `scripts/tune_*.js`: the headless tuning harness.

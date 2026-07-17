@@ -2,7 +2,7 @@
 /**
  * scripts/window_faces.js
  * ─────────────────────────────────────────────────────────────────────────
- * PUT THE GAME'S REAL WINDOWS ON OUR BUILDING FACES — and decide how to encode them.
+ * PUT THE GAME'S REAL WINDOWS ON OUR BUILDING FACES, and decide how to encode them.
  *
  * The shader does not place a single window. It stamps a procedural 24 x 18 m grid across every
  * wall and lets a hash decide which cells glow (three-scene.js, `cellRnd`). Each drawn "window"
@@ -10,10 +10,10 @@
  *
  * Meanwhile the game hands us 1,706,847 window rectangles, each with an exact CET position.
  *
- * HOW THEY GET DRAWN. Not as quads — that is a closed dead end (`?winmodel=panels`,
+ * HOW THEY GET DRAWN. Not as quads: that is a closed dead end (`?winmodel=panels`,
  * `?panelpush=`): our `.dds` boxes are a coarse decode, real facades sit INSIDE them, and window
  * quads get depth-culled. Instead we PAINT the real layout onto the box face in the fragment
- * shader — same pass, same geometry, no depth test, no new triangles. The box's inverse matrix is
+ * shader: same pass, same geometry, no depth test, no new triangles. The box's inverse matrix is
  * already on the GPU (`faceInvBuffer`), so a fragment can find itself in the building's frame.
  *
  * THIS SCRIPT ANSWERS THE ONE QUESTION THAT DECIDES THE ENCODING:
@@ -24,7 +24,7 @@
  *                                            loop over every window on its face.
  *
  * A is exact ONLY if the facades really are lattices. Night City's kit-built walls suggest they
- * are; the kits are literally repeated modules. But an earlier probe said 54% — and that probe ran
+ * are; the kits are literally repeated modules. But an earlier probe said 54%, and that probe ran
  * against the AABB faces, which point the wrong way and sit metres out, so its answer was
  * meaningless. MEASURE IT ON THE FACES WE ACTUALLY HAVE.
  *
@@ -79,7 +79,7 @@ const qRot = (q, v) => {
 };
 const qConj = (q) => [-q[0], -q[1], -q[2], q[3]];
 
-// ── the boxes we actually render — ORIENTED, in CET ─────────────────────────
+// ── the boxes we actually render: ORIENTED, in CET ──────────────────────────
 const B = [];   // { c, h (true half-extents), q, dist }
 for (const meta of DISTRICT_META) {
   const m = SET === 'vanilla' ? { ...meta, dataDdsFixed: null } : meta;
@@ -111,14 +111,14 @@ for (let b = 0; b < B.length; b++) {
 
 const APP = {};
 for (const r of readCsv('ncz_appearances.csv')) APP[r.id] = r.appearance;
-// BUILDING, not ARCH. `architecture` is not in a proxy's path, and glass_lib exports BOTH regexes
-// — ARCH (architecture|megabuilding) and BUILDING (…|proxy) — with a comment on BUILDING saying to
+// BUILDING, not ARCH. `architecture` is not in a proxy's path, and glass_lib exports BOTH regexes,
+// ARCH (architecture|megabuilding) and BUILDING (…|proxy), with a comment on BUILDING saying to
 // use it. This file used ARCH.
 //
 // It cost the entire proxy export. 2,274 proxy meshes carrying 519,226 real window rects went into
 // window-geom.json, and EVERY ONE of them was dropped here: no entry in `asset`, so `place()`
 // returns on its first line and the placement contributes nothing. The bake came out at 885,291
-// windows — barely different from the 902,155 it had BEFORE the proxies existed — and that
+// windows (barely different from the 902,155 it had BEFORE the proxies existed), and that
 // "nothing much moved" is what a total loss looks like when the filter is silent.
 //
 // Arasaka Waterfront would still have had NINE towers.
@@ -127,11 +127,11 @@ for (const a of readCsv('ncz_assets.csv')) {
   if (!a.path || !BUILDING.test(a.path)) continue;
   assetPath[a.id] = a.path;
   assetFoot[a.id] = Math.max(+a.bbx1 - +a.bbx0, +a.bby1 - +a.bby0) || 0;
-  assetTop[a.id] = (+a.bbz1) || 0;      // local top of the mesh bbox — the dedup's missing axis
+  assetTop[a.id] = (+a.bbz1) || 0;      // local top of the mesh bbox: the dedup's missing axis
   const g = GEOM[a.path.toLowerCase()];
   if (g) asset[a.id] = g;
 }
-// EMISSIVE chunks, not glass chunks. 43% of this city's glass area never lights up — doors,
+// EMISSIVE chunks, not glass chunks. 43% of this city's glass area never lights up: doors,
 // balustrades, shopfronts, the Corpo Plaza roundabout canopy. The material states which is which
 // (`EmissiveEV`); window_geom.js records it per (appearance, chunk). --allglass to compare.
 const ALL_GLASS = process.argv.includes('--allglass');
@@ -146,20 +146,20 @@ const glazed = (g, id) => {
 // ── land every real window on a box FACE ────────────────────────────────────
 // A box face is named by its outward normal IN THE BOX'S OWN FRAME: axis 0/1/2, sign +/-.
 // faceIdx = axis*2 + (sign>0 ? 0 : 1). In that frame the box is axis-aligned, so this is the
-// simple test it always looked like — asked of the RIGHT wall.
+// simple test it always looked like, asked of the RIGHT wall.
 const faces = new Map();          // "box:face" -> [{u, v, w, h}]  (face-local metres)
 let W = 0, landed = 0, noBox = 0, failNormal = 0, failExtent = 0, failDepth = 0;
 const depths = [];
 
 // ── THE DEBUG CLOUD ─────────────────────────────────────────────────────────
 // Every window, with WHY it did or did not land. 28% of the game's windows do not reach a face,
-// and they are currently written off as "interior glass — courtyards, light wells". THAT IS AN
+// and they are currently written off as "interior glass: courtyards, light wells". THAT IS AN
 // ASSUMPTION, and an untested one: our boxes are a coarse `.dds` decode, not a tracing of the
 // buildings, so a window we call "too deep" might be sitting on a real facade our box cloud
 // simply MISSED.
 //
 // Those two cases look identical in a number and completely different on a map. So emit the
-// positions and let the eye decide — a red cloud floating inside a building is interior glass; a
+// positions and let the eye decide: a red cloud floating inside a building is interior glass; a
 // red cloud hanging in the air on a flat wall face is a hole in the box cloud, and it is evidence
 // for what a better box cloud would have to cover.
 const REASON = { LANDED: 0, DEEP: 1, OFFSIDE: 2, NOBOX: 3, NONORMAL: 4 };
@@ -228,7 +228,7 @@ function place(assetId, px, py, pz, q, sx, sy, sz, appId) {
       landed++;
       emit(REASON.LANDED);
       // PROJECT onto that face: the window's (u, v) in face-local metres, measured from the
-      // face's lower-left corner. The depth is DISCARDED — that is the whole point of painting
+      // face's lower-left corner. The depth is DISCARDED: that is the whole point of painting
       // rather than drawing. A window 3 m behind the facade still belongs on this wall.
       const bb = B[bestB];
       const inv = qConj(bb.q);
@@ -288,18 +288,18 @@ function lattice(vals, tol) {
   // ── PASS 1: WHERE IS THERE A REAL BUILDING? ────────────────────────────────
   // Admitting proxies (above) is only half the job, and the other half is the half that BITES.
   // MOST BUILDINGS SHIP WITH BOTH a detailed version and a proxy, and the sector data contains
-  // BOTH — `v38_005` is placed as 2,136 instanced meshes AND 72 proxy meshes. Counting them both
+  // BOTH: `v38_005` is placed as 2,136 instanced meshes AND 72 proxy meshes. Counting them both
   // gives every glazed building in Night City its windows TWICE: a 2x overcount wearing the
   // costume of a fix.
   //
-  // So use a proxy ONLY where no detailed geometry covers it, and decide that SPATIALLY — a
+  // So use a proxy ONLY where no detailed geometry covers it, and decide that SPATIALLY: a
   // per-building proxy shares its prefab with the detail, but an AGGREGATE proxy (`*_mproxy`, one
   // mesh per block) does not, so a prefab test keeps it and drops it on top of a dozen real
   // buildings. window_boxes.js has done this since the proxies landed; this file never did.
   const detailGrid = makeDetailGrid();
   const seen = (f, C) => {
     const id = f[C.asset];
-    if (!asset[id]) return;                       // not glazed — says nothing about coverage
+    if (!asset[id]) return;                       // not glazed; says nothing about coverage
     if (PROXY.test(assetPath[id] || '')) return;  // a proxy cannot vouch for itself
     // ...and HOW HIGH it reaches. A podium vetoing a tower is the bug this axis exists to stop.
     detailGrid.add(+f[C.x], +f[C.y], +f[C.z] + (assetTop[id] || 0) * (+f[C.sz] || 1));
@@ -390,7 +390,7 @@ function lattice(vals, tol) {
   //
   // But a fragment cannot loop over its face's windows: p99 is 222 of them and the worst face has
   // 3,254. So bucket them into TILES on the face. At the measured 2.33 x 4.00 m pitch an 8 m tile
-  // holds ~6 windows, and a fragment loops over its own tile only — bounded, and independent of
+  // holds ~6 windows, and a fragment loops over its own tile only: bounded, and independent of
   // how big the building is.
   //
   // CSR, three levels, because the address space is sparse: 263,780 boxes x 6 faces = 1.6M
@@ -404,8 +404,7 @@ function lattice(vals, tol) {
   //
   // NOTE the data goes in a TEXTURE, not a storage buffer: the night material already sits at
   // 7/8 storage buffers per fragment stage, and exceeding the cap fails pipeline creation for the
-  // heaviest material only — the scene goes black while lighter debug views still work.
-  // See wiki/learnings/webgpu-storage-buffer-limit-pack-vec4.
+  // heaviest material only: the scene goes black while lighter debug views still work.
   const TILE = 8;                                   // metres
   const Q = 64;                                     // quantisation: 1/64 m
   const EMPTY = 0xffffffff;
@@ -432,15 +431,15 @@ function lattice(vals, tol) {
       const tu = Math.max(1, Math.min(255, Math.ceil(uSize / TILE)));
       const tv = Math.max(1, Math.min(255, Math.ceil(vSize / TILE)));
 
-      // bucket by tile. A window straddling a tile edge goes in EVERY tile it touches — a
+      // bucket by tile. A window straddling a tile edge goes in EVERY tile it touches: a
       // fragment only ever reads one tile, so a window missing from a tile it overlaps would be
       // a hole in the middle of a pane.
       // CLAMP BOTH ENDS into the tile grid. A window may legitimately sit just OFF the edge of
-      // its face — the join allows a margin — which puts its tile span at e.g. [0, -1]. Clamping
+      // its face (the join allows a margin), which puts its tile span at e.g. [0, -1]. Clamping
       // only the low end leaves lo > hi, the loop never runs, and the window is silently DROPPED.
       // That lost 183,063 windows, and the only reason it was caught is that the duplicate
       // counter (rects emitted minus windows landed) went NEGATIVE. Straddle duplicates cannot be
-      // negative — an impossible number, printed next to the total, doing its job again.
+      // negative: an impossible number, printed next to the total, doing its job again.
       const clamp = (x, hi) => (x < 0 ? 0 : x > hi ? hi : x);
       const buckets = Array.from({ length: tu * tv }, () => []);
       for (const r of list) {

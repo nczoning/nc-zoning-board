@@ -167,7 +167,7 @@
     margin-bottom: 2px;
 }
 
-/* ?archdebug archetype legend — same panel styling as #overlay-controls, parked
+/* ?archdebug archetype legend: same panel styling as #overlay-controls, parked
    immediately to its left (clears the overlays box width + a small gap). */
 #archdebug-legend {
     position: absolute;
@@ -234,7 +234,7 @@
 }
 
 /* Three-state control in the Overlays box (city lights). The only <select> on the
-   map, so it gets its own reset — the UA default is a grey system widget that reads
+   map, so it gets its own reset: the UA default is a grey system widget that reads
    as a foreign object against the cyan-on-navy panel. */
 .overlay-select {
     appearance: none;
@@ -246,7 +246,7 @@
     color: var(--secondary);
     cursor: pointer;
 
-    /* The dropdown list is painted by the OS, not by us — it ignores the transparent
+    /* The dropdown list is painted by the OS, not by us; it ignores the transparent
        background above, so the options need a solid one of their own or they render
        light-on-light under a dark browser theme. */
     & option {

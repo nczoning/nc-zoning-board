@@ -10,19 +10,19 @@
  * `base\entities\cameras\3dmap\3dmap_coll_buildings{,2,3}.mesh`. Their RENDER
  * buffers are 6-vertex stubs; the payload is
  * `parameters[0].physicsData.bodies[0].collisionShapes`, an array of
- * `physicsColliderBox` — position + quaternion + halfExtents, i.e. the SAME
+ * `physicsColliderBox`: position + quaternion + halfExtents, i.e. the SAME
  * encoding as a `_data.dds` instance, ~26× coarser.
  *
  * They are a coarse COLLISION SURFACE, not an object partition. No decompiled
  * script references `3dmap` at all, and they sit beside 3dmap_cursor.ent and
- * 3dmap_coll_roads — almost certainly what the custom-waypoint cursor lands on.
+ * 3dmap_coll_roads, almost certainly what the custom-waypoint cursor lands on.
  * They overlap heavily (43% of render boxes sit in 2+ colliders). Useful because
  * they are structure-scale, not because they carry identity.
  *
- * IMPORTANT — which files
+ * IMPORTANT: which files
  * ──────────────────────
  * ONLY the three listed in `3dmap_view.ent`. A fourth file, `3dmap_coll_santo`
- * (3,092 shapes), exists on disk but is NOT referenced by the entity — it is an
+ * (3,092 shapes), exists on disk but is NOT referenced by the entity; it is an
  * orphan/superseded asset that spatially overlaps the others. Including it adds
  * 0.2% coverage and a lot of confusion. Don't.
  *

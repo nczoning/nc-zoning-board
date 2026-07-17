@@ -106,7 +106,7 @@ function readCsv(file) {
 // Ground-resting categories, split by how tightly they lock to the natural terrain.
 // ROADS are the trap: Night City's network is heavily ELEVATED (freeways, overpasses, Pacifica
 // stilts), so a road mesh is often 10-50 m above the ground and is NOT a terrain sample. The
-// terrain-edge kit (riverbank, retaining wall) is the honest one — it is literally the lip of the
+// terrain-edge kit (riverbank, retaining wall) is the honest one: it is literally the lip of the
 // terrain. Report each separately; if they disagree, the roads were the contamination.
 const CATS = [
   ['riverbank', /riverbank/i],
