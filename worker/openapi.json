@@ -3,7 +3,7 @@
   "info": {
     "title": "NC Zoning Data API",
     "version": "0.1.0",
-    "description": "Read-only API serving the NC Zoning Board mod registry (Cyberpunk 2077 location mods) to in-game mods and the website. Every response is wrapped in a versioned envelope. Coordinates are raw CET world values [X, Y, Z] — usable in-game with no transform. The JSON stays DTO-mappable for the in-game RedData parser: no arrays-of-arrays, property names are case-sensitive. See https://github.com/spuddeh/nc-zoning-board for the project.",
+    "description": "Read-only API serving the NC Zoning Board mod registry (Cyberpunk 2077 location mods) to in-game mods and the website. Every response is wrapped in a versioned envelope. Coordinates are raw CET world values [X, Y, Z], usable in-game with no transform. The JSON stays DTO-mappable for the in-game RedData parser: no arrays-of-arrays, property names are case-sensitive. See https://github.com/spuddeh/nc-zoning-board for the project.",
     "contact": { "name": "NC Zoning Board", "url": "https://nczoning.net" }
   },
   "servers": [
@@ -218,7 +218,7 @@
       "Point": { "type": ["object", "null"], "properties": { "x": { "type": "number" }, "y": { "type": "number" } } },
       "Meta": {
         "type": "object",
-        "description": "Operational health flags only. Aggregate counts were removed — consumers derive their own from the location records.",
+        "description": "Operational health flags only; the API serves no aggregate counts. Derive any counts you need from the location records.",
         "properties": {
           "discovery_stale": { "type": "boolean", "description": "True if the last Nexus refresh failed and the dataset is being served from last-known-good." },
           "skipped": { "type": "array", "items": { "type": "object", "properties": { "nexus_id": { "type": "string" }, "name": { "type": "string" } } }, "description": "Mods tagged NCZoning whose metadata block did not parse." }
