@@ -63,7 +63,7 @@ const CELL = process.argv.includes('--cell')
 // The sectors are VANILLA game data. The 'fixed' asset set is malgalad's 3D World Map
 // Fixed, and it is a REBUILD, not an alignment nudge: median box displacement runs
 // 122-2,786 CET by district and Watson has 5,185 boxes in vanilla that are absent in
-// fixed (see wiki/learnings/fixed-asset-set-is-a-repack). Comparing vanilla sectors to
+// fixed. Comparing vanilla sectors to
 // the fixed cloud therefore measures malgalad's reconstruction, NOT the game's own
 // correspondence.
 //

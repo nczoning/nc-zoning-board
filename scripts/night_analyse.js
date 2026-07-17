@@ -479,8 +479,7 @@ async function main() {
     //
     //   1. Instanced nodes are NOT position-less. Their transforms were always in the
     //      sector's shared pool, behind a handle nobody dereferenced. Every copy has an
-    //      exact XYZ; see ncz_instances.csv and
-    //      [[instanced-transforms-were-always-readable]].
+    //      exact XYZ; see ncz_instances.csv.
     //
     //   2. "A sector is a 64 m cell" is only true of STREAMING LEVEL 0. The trailing digit
     //      of `exterior_X_Y_Z_L` is the level, and it sets the CELL SIZE: level 0 holds

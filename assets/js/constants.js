@@ -538,8 +538,8 @@ NCZ.BUILDING_SPLIT_MIN_SPAN = 900;  // region footprint span (CET) above which t
 // podium deck, not a real building) so region-grow can't merge buildings across a
 // street → buildings separate by CITY BLOCK. Thickness-gated, so a building OVER a
 // tunnel / UNDER an elevated highway is kept whole. Validated headless: largest-
-// building share santo_domingo 65→5%, watson 71→21%, pacifica 68→20%. See wiki
-// learnings/roads-as-segmentation-barriers. URL: ?roadcarve=0 / ?roadclear= .
+// building share santo_domingo 65→5%, watson 71→21%, pacifica 68→20%.
+// URL: ?roadcarve=0 / ?roadclear= .
 NCZ.BUILDING_ROAD_CARVE     = 1;    // 0 = disable road-barrier segmentation
 NCZ.BUILDING_ROAD_CLEARANCE = 40;   // CET roof-floor; below = thin street-level (carve), above = building (keep)
 NCZ.BUILDING_ROAD_DILATE    = 1;    // widen road coverage by N grid cells (roads are thin)
@@ -739,8 +739,8 @@ NCZ.WINDOW_LIT_IN_GLASS = 0.5126;
 //
 // An earlier reading of this said 2.14 (a wide 3.0 × 1.4 m ribbon) and it was upside
 // down: it came from the era when object size was inferred from `worldNode.Bounds`, a
-// field populated on 1.9% of nodes. Same trap as everything else that broke that day:
-// see wiki/learnings/node-bounds-is-a-2-percent-sample. URL: ?winaspect=
+// field populated on 1.9% of nodes, so anything inferred from it was a 2% sample.
+// URL: ?winaspect=
 NCZ.WINDOW_PANE_ASPECT = 0.75;   // 3 ÷ 4
 
 // Which window model the shader compiles. URL: ?winmodel=glass|legacy

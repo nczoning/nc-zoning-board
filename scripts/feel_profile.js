@@ -14,7 +14,7 @@
  * model asked for `sign_density` on a Kabuki shot returned 1 (truth: 4) and
  * named the colours blue+red (truth: magenta/cyan/red). It is confidently wrong,
  * so the error survives averaging. Measure what is measurable; ask the model
- * only for meaning. See wiki/learnings/local-vlm-measures-nothing-pixels-do.
+ * only for meaning.
  *
  * HUE EXTRACTION IS SATURATION-LED, NOT BRIGHTNESS-LED: this is the subtle bit.
  * The obvious approach (take the BRIGHT pixels, they're the lights) measures the

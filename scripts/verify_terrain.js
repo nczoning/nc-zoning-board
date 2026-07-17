@@ -8,7 +8,7 @@
 //
 // Coordinates: the terrain GLB is in THREE space, and CET (x,y,z) -> THREE (x, z, -y). So to
 // sample terrain under a CET point (cx, cy) I look up THREE (cx, -cy); the surface Y there is the
-// CET z of the ground. (learnings/box-frame-is-cet-shader-frame-is-three, coordinate-system-3d)
+// CET z of the ground.
 'use strict';
 const fs = require('fs');
 const path = require('path');

@@ -958,8 +958,7 @@ const ThreeScene = (() => {
     // tunnel) stencil-test *inside* the scene render; the pass's offscreen RT
     // must carry a stencil attachment or that test silently fails. Forcing the
     // depth texture to DepthStencilFormat gives depth32float-stencil8, matching
-    // the main framebuffer's reverse-Z + stencil format. See CLAUDE.md
-    // "Stencil buffer rendering".
+    // the main framebuffer's reverse-Z + stencil format.
     //
     // Bloom STRENGTH is driven by nightFactor in updateDayNightLighting: a low
     // daytime baseline (BLOOM_DAY_STRENGTH) easing up (nf²) to the night peak
@@ -2289,7 +2288,7 @@ const ThreeScene = (() => {
   // supplies the street grid, rasterised here into a global BOOLEAN coverage grid
   // (the thickness gate in segmentBuildings means road ELEVATION isn't needed).
   // World transform mirrors the rendered roads (rotation.y = π): worldX = -rawX,
-  // worldZ = -rawZ. See wiki learnings/roads-as-segmentation-barriers.
+  // worldZ = -rawZ.
   let _roadGridPromise = null;
   function ensureRoadGrid() {
     if (_roadGridPromise) return _roadGridPromise;
@@ -2435,7 +2434,7 @@ const ThreeScene = (() => {
     // clearance: a surface street / podium deck, not a real building) blocks
     // region-grow, so buildings can't merge across a street → separation by CITY
     // BLOCK. Thick buildings (over tunnels / under elevated highways) are NOT thin,
-    // so they're kept whole. See wiki learnings/roads-as-segmentation-barriers.
+    // so they're kept whole.
     const barrier = new Uint8Array(cols * rows);
     if (roadGrid) {
       const RC = NCZ.BUILDING_ROAD_CLEARANCE, rg = roadGrid;
@@ -3236,7 +3235,7 @@ const ThreeScene = (() => {
   // their job is almost certainly a cheap solid surface for the custom-waypoint
   // cursor to land on. Do NOT treat one collider as one building.
   //
-  // Measured (see wiki learnings/game-3dmap-collision-boxes):
+  // Measured against the render cloud:
   //   • They OVERLAP. Only 42% of render-box centres sit in exactly one collider,
   //     43% in two or more. A coarse covering, not a partition.
   //   • EP1 has none: Dogtown 37% / Spaceport 21% of boxes covered, vs 90–99%
@@ -4612,8 +4611,8 @@ const ThreeScene = (() => {
     //
     // The ~230 lines that BUILD signageEmissive / billboardEmissive above are now
     // unreferenced, as are SIGN_COLORS, the SIGN_* constants, signDensityFor(), the
-    // signDensityById map, and the `.w` lane of buildingCBSBuffer (which is therefore FREE:
-    // see the storage-buffer budget note in CLAUDE.md; it is the only slack we have). They
+    // signDensityById map, and the `.w` lane of buildingCBSBuffer (which is therefore FREE;
+    // with the fragment stage at 7 of WebGPU's 8 storage buffers, that lane is the only slack we have). They
     // are dead but interleaved with the ?segdebug / ?partdebug early-returns, so they come
     // out as their own mechanical commit rather than as a risky cut inside this one.
     mat.emissiveNode = edgeGlowEmissive.add(windowEmissive).add(buildingGlow);
