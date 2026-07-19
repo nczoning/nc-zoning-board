@@ -59,8 +59,10 @@ const NEXUS_PAGE = {
   },
 };
 
-// fetch stub keyed by URL substring; nexus POST returns the page.
-function fakeFetch({ failNexus = false, failMods = false, discordSink } = {}) {
+// fetch stub keyed by URL substring; nexus POST returns the page. `archiveCalls`
+// (optional) records each archive subrequest so tests can assert on budgeting
+// and cache reuse; `failArchives` makes the modFiles call fail.
+function fakeFetch({ failNexus = false, failMods = false, discordSink, archiveCalls, failArchives = false } = {}) {
   return async (url, init) => {
     if (url.includes('/mods.json')) {
       return failMods ? { ok: false, status: 500 } : { ok: true, json: async () => MODS };
@@ -68,6 +70,26 @@ function fakeFetch({ failNexus = false, failMods = false, discordSink } = {}) {
     if (url.includes('/tags.json')) return { ok: true, json: async () => TAGS };
     if (url.includes('/excluded_mods.json')) return { ok: true, json: async () => EXCLUDED };
     if (url.includes('/subdistricts.json')) return { ok: true, json: async () => SUBDISTRICTS };
+    // Archive-name endpoints (installed-mod detection). Checked before the
+    // generic api.nexusmods.com branch: "api-router.nexusmods.com" and
+    // "file-metadata.nexusmods.com" are distinct hosts.
+    if (url.includes('api-router.nexusmods.com')) {
+      archiveCalls?.push('router');
+      if (failArchives) return { ok: false, status: 503 };
+      const modId = JSON.parse(init.body).variables.modId;
+      return { ok: true, json: async () => ({ data: { modFiles: [{ uri: `mod-${modId}.7z` }] } }) };
+    }
+    if (url.includes('file-metadata.nexusmods.com')) {
+      archiveCalls?.push('file');
+      const modId = url.match(/nexus-files-s3-meta\/3333\/(\d+)\//)[1];
+      return { ok: true, json: async () => ({ children: [{ name: 'archive', type: 'directory', children: [
+        { name: 'pc', type: 'directory', children: [
+          { name: 'mod', type: 'directory', children: [
+            { name: `mod_${modId}.archive`, type: 'file', path: `archive/pc/mod/mod_${modId}.archive` },
+          ] },
+        ] },
+      ] }] }) };
+    }
     if (url.includes('api.nexusmods.com')) {
       if (failNexus) return { ok: false, status: 503 };
       // Two POST shapes hit the same endpoint: the tagged-mods query and the
@@ -159,6 +181,84 @@ test('recovery after a stale cycle rewrites and clears the stale flag', async ()
   assert.equal(r.changed, true); // stale flag forces a rewrite even if hash matches
   assert.equal(r.recovered, true);
   assert.equal((await env.DATASET.get(KEYS.meta, 'json')).discovery_stale, false);
+});
+
+// ── Archive names (installed-mod detection) ─────────────────────────────────
+
+test('archive names are fetched and attached to every record', async () => {
+  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const archiveCalls = [];
+  await runRefresh(env, fakeFetch({ archiveCalls }));
+  const full = await env.DATASET.get(KEYS.full, 'json');
+  assert.deepEqual(full.m1.archives, ['mod_12345.archive']); // manual mod
+  const auto = Object.values(full).find((r) => r.id === 'nexus-888');
+  assert.deepEqual(auto.archives, ['mod_888.archive']); // auto-discovered mod
+  // One modFiles call per numeric-nexus_id mod (both here).
+  assert.equal(archiveCalls.filter((c) => c === 'router').length, 2);
+});
+
+test('archive cache is reused when updatedAt is unchanged (no refetch)', async () => {
+  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  await runRefresh(env, fakeFetch()); // fills the cache
+  const archiveCalls = [];
+  await runRefresh(env, fakeFetch({ archiveCalls }));
+  assert.equal(archiveCalls.length, 0); // nothing stale → zero archive subrequests
+});
+
+test('archive fetch failure degrades to [] and never marks the dataset stale', async () => {
+  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const r = await runRefresh(env, fakeFetch({ failArchives: true }));
+  assert.equal(r.stale, false); // archives are supplementary, not load-bearing
+  assert.equal(r.changed, true);
+  const full = await env.DATASET.get(KEYS.full, 'json');
+  assert.deepEqual(full.m1.archives, []); // failed → empty, and not cached
+  assert.equal((await env.DATASET.get(KEYS.meta, 'json')).discovery_stale, false);
+});
+
+test('archive refresh is budgeted per run and cold-fills over multiple runs', async () => {
+  // 20 manual mods, all numeric nexus_ids, cold cache → all stale at once.
+  const many = Array.from({ length: 20 }, (_, i) => ({
+    id: `m${i}`, name: `Mod ${String(i).padStart(2, '0')}`, authors: ['A'],
+    coordinates: [250, 250, 10], nexus_id: String(1000 + i), description: 'x',
+    category: 'other', tags: [],
+  }));
+  const impl = (archiveCalls) => async (url, init) => {
+    if (url.includes('/mods.json')) return { ok: true, json: async () => many };
+    if (url.includes('/tags.json')) return { ok: true, json: async () => TAGS };
+    if (url.includes('/excluded_mods.json')) return { ok: true, json: async () => ({}) };
+    if (url.includes('/subdistricts.json')) return { ok: true, json: async () => SUBDISTRICTS };
+    if (url.includes('api-router.nexusmods.com')) {
+      archiveCalls.push('router');
+      return { ok: true, json: async () => ({ data: { modFiles: [{ uri: 'a.7z' }] } }) };
+    }
+    if (url.includes('file-metadata.nexusmods.com')) {
+      archiveCalls.push('file');
+      return { ok: true, json: async () => ({ children: [] }) };
+    }
+    if (url.includes('api.nexusmods.com')) {
+      if (JSON.parse(init.body).query.includes('modsByUid')) {
+        return { ok: true, json: async () => ({ data: { modsByUid: { nodes: [] } } }) };
+      }
+      return { ok: true, json: async () => ({ data: { mods: { nodes: [], totalCount: 0 } } }) };
+    }
+    throw new Error(`unexpected fetch: ${url}`);
+  };
+
+  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const run1 = [];
+  await runRefresh(env, impl(run1));
+  const refreshed1 = run1.filter((c) => c === 'router').length;
+  assert.ok(refreshed1 < 20, `run 1 refreshed ${refreshed1}: must be budgeted, not all 20`);
+
+  const run2 = [];
+  await runRefresh(env, impl(run2));
+  const refreshed2 = run2.filter((c) => c === 'router').length;
+  // Cold-fill completes: the two runs together cover exactly the 20 mods once.
+  assert.equal(refreshed1 + refreshed2, 20);
+
+  const run3 = [];
+  await runRefresh(env, impl(run3));
+  assert.equal(run3.length, 0, 'once filled, steady state fetches nothing');
 });
 
 test('recovery posts a recovery alert exactly once (edge, not every cycle)', async () => {

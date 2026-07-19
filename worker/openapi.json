@@ -189,7 +189,8 @@
             "credits": { "type": "string" },
             "thumbnail_url": { "type": ["string", "null"], "description": "Nexus thumbnail image URL, or null (unknown / WIP / Dummy)." },
             "picture_url": { "type": ["string", "null"], "description": "Nexus full-size image URL, or null." },
-            "updated_at": { "type": ["string", "null"], "format": "date-time", "description": "Nexus last-updated timestamp, or null." }
+            "updated_at": { "type": ["string", "null"], "format": "date-time", "description": "Nexus last-updated timestamp, or null." },
+            "archives": { "type": "array", "items": { "type": "string" }, "description": "The .archive filenames this mod ships, unioned across every downloadable file (main + optional). Match against the player's archive/pc/mod/ folder to detect installed location mods. Empty when unknown (WIP/Dummy, no Nexus files, or not yet fetched by the cron).", "example": ["Atari AIO.archive"] }
           } }
         ]
       },
