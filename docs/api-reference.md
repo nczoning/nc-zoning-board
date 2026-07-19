@@ -102,9 +102,11 @@ A location record:
 - `credits` appears only when set; `thumbnail_url` / `picture_url` / `updated_at`
   are `null` when unknown (e.g. WIP/Dummy entries with no Nexus page, which are
   also never `recently_updated`).
-- `archives` is the list of `.archive` filenames the mod ships. **Match these
-  against the player's `archive/pc/mod/` folder to detect which location mods are
-  installed.** Names are the bare filename (`Atari AIO.archive`), not a path, so
+- `archives` is the list of the mod's detectable install files — `.archive` load
+  files and `.xl` (ArchiveXL) files (the latter is the only fingerprint a
+  removal-only mod has). Both live in `archive/pc/mod/`. **Match these against the
+  player's `archive/pc/mod/` folder to detect which location mods are installed.**
+  Names are the bare filename (`Atari AIO.archive`), not a path, so
   a case-sensitive set-membership test against the folder listing is all a
   consumer needs. It's always present — `[]` means "not determinable / not yet
   fetched", never "ships no archives" (freshly added mods fill in over a few

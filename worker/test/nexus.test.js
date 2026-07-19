@@ -151,14 +151,14 @@ function archiveFetch({ modFiles = [], trees = {}, manifests = {}, routerOk = tr
       );
       const m = manifests[uri];
       if (m instanceof Error) throw m;
-      if (m && m.ok === false) return { ok: false, status: 404, json: async () => ({}) };
+      if (m && m.ok === false) return { ok: false, status: m.status ?? 404, json: async () => ({}) };
       return { ok: true, json: async () => m ?? [] };
     }
     if (url.includes('file-metadata.nexusmods.com')) {
       const uri = decodeURIComponent(url.match(/\/[^/]+\/([^/]+)\.json$/)[1]);
       const t = trees[uri];
       if (t instanceof Error) throw t;
-      if (t && t.ok === false) return { ok: false, status: 404, json: async () => ({}) };
+      if (t && t.ok === false) return { ok: false, status: t.status ?? 404, json: async () => ({}) };
       return { ok: true, json: async () => t ?? { children: [] } };
     }
     throw new Error(`unexpected fetch: ${url}`);
@@ -187,7 +187,7 @@ test('archives: fetches UUID-path files from the file-manifests host (flat manif
     manifests: { 'ab/cd/ef/uuid-1': manifest('New.archive', 'thing.xl') },
   });
   const res = await fetchModArchiveNames(impl, 1);
-  assert.deepEqual(res.archives, ['New.archive']); // basename; .xl ignored
+  assert.deepEqual(res.archives, ['New.archive', 'thing.xl']); // basenames; .xl included
   assert.equal(res.ok, true);
 });
 
@@ -255,12 +255,21 @@ test('archives: caps contents fetches per mod so one mod cannot exhaust the budg
   assert.ok(res.archives.length <= 6);
 });
 
-test('archives: ignores non-.archive files (e.g. .xl, readme)', async () => {
+test('archives: collects .archive AND .xl (ArchiveXL), ignores .json/readme', async () => {
   const impl = archiveFetch({
     modFiles: [{ uri: 'M.7z', category: 'MAIN' }],
-    trees: { 'M.7z': tree('thing.archive', 'thing.xl', 'readme.txt') },
+    trees: { 'M.7z': tree('thing.archive', 'thing.xl', 'appearance.json', 'readme.txt') },
   });
-  assert.deepEqual((await fetchModArchiveNames(impl, 1)).archives, ['thing.archive']);
+  // .xl lands in archive/pc/mod and is readable in-game; .json (CET/AMM) is not.
+  assert.deepEqual((await fetchModArchiveNames(impl, 1)).archives, ['thing.archive', 'thing.xl']);
+});
+
+test('archives: a removal-only mod (ships only .xl) is still detected', async () => {
+  const impl = archiveFetch({
+    modFiles: [{ uri: 'Removal.7z', category: 'MAIN' }],
+    trees: { 'Removal.7z': tree('h10_apartment_removal.xl') },
+  });
+  assert.deepEqual((await fetchModArchiveNames(impl, 1)).archives, ['h10_apartment_removal.xl']);
 });
 
 test('archives: modFiles failure → ok:false, no archives, only the one subrequest', async () => {
@@ -268,14 +277,35 @@ test('archives: modFiles failure → ok:false, no archives, only the one subrequ
   assert.deepEqual(res, { archives: [], ok: false, subrequests: 1 });
 });
 
-test('archives: a file-contents failure marks ok:false but keeps what it found', async () => {
+test('archives: a 404 file has no preview but does NOT poison the mod (ok stays true)', async () => {
+  // The starvation bug: a good MAIN + a preview-less (404) sibling must still
+  // cache the MAIN's archives, or the mod retries forever and blocks the queue.
   const impl = archiveFetch({
-    modFiles: [{ uri: 'Good.7z', category: 'MAIN' }, { uri: 'Bad.7z', category: 'MAIN' }],
-    trees: { 'Good.7z': tree('good.archive'), 'Bad.7z': { ok: false } },
+    modFiles: [{ uri: 'Good.7z', category: 'MAIN' }, { uri: 'NoPreview.7z', category: 'OPTIONAL' }],
+    trees: { 'Good.7z': tree('good.archive'), 'NoPreview.7z': { ok: false, status: 404 } },
   });
   const res = await fetchModArchiveNames(impl, 1);
   assert.deepEqual(res.archives, ['good.archive']);
-  assert.equal(res.ok, false); // partial: caller must not cache this as final
+  assert.equal(res.ok, true); // 404 is definitive, not a retry-worthy failure
+});
+
+test('archives: a transient (5xx) file failure marks ok:false so it retries', async () => {
+  const impl = archiveFetch({
+    modFiles: [{ uri: 'Good.7z', category: 'MAIN' }, { uri: 'Flaky.7z', category: 'MAIN' }],
+    trees: { 'Good.7z': tree('good.archive'), 'Flaky.7z': { ok: false, status: 503 } },
+  });
+  const res = await fetchModArchiveNames(impl, 1);
+  assert.deepEqual(res.archives, ['good.archive']);
+  assert.equal(res.ok, false); // transient: caller must not cache this as final
+});
+
+test('archives: a mod whose only file 404s caches as [] with ok:true (no starvation)', async () => {
+  const impl = archiveFetch({
+    modFiles: [{ uri: 'Gone.7z', category: 'MAIN' }],
+    trees: { 'Gone.7z': { ok: false, status: 404 } },
+  });
+  const res = await fetchModArchiveNames(impl, 1);
+  assert.deepEqual(res, { archives: [], ok: true, subrequests: 2 }); // determined empty, leaves the queue
 });
 
 test('archives: a thrown fetch degrades to ok:false, never throws', async () => {

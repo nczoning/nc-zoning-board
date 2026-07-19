@@ -209,10 +209,23 @@ const MOD_FILES_QUERY = `query ModFiles($modId: ID!, $gameId: ID!) {
 }`;
 
 /**
- * Recursively collect `.archive` file names from a file-contents preview tree.
- * Nodes look like { name, type: 'directory'|'file', children: [...] }; the root
- * is { children: [...] }. Tolerant of shape drift: it only cares about `name`,
- * `type`, and `children`, walking whatever nesting Nexus returns.
+ * Detectable install-folder files: `.archive` load files AND `.xl` (ArchiveXL)
+ * files. Both land in archive/pc/mod/ and are readable by an in-game mod, so
+ * both fingerprint an install. `.xl` matters for removal-only mods (e.g. an
+ * ArchiveXL "removal" that ships only `foo_removal.xl`, no `.archive`). CET/AMM
+ * `.json` files are NOT detectable (sandboxed CET folder) and are never matched.
+ */
+function isDetectableInstallFile(name) {
+  if (typeof name !== 'string') return false;
+  const lower = name.toLowerCase();
+  return lower.endsWith('.archive') || lower.endsWith('.xl');
+}
+
+/**
+ * Recursively collect detectable install file names from a file-contents preview
+ * tree. Nodes look like { name, type: 'directory'|'file', children: [...] }; the
+ * root is { children: [...] }. Tolerant of shape drift: it only cares about
+ * `name`, `type`, and `children`, walking whatever nesting Nexus returns.
  */
 function collectArchiveNames(node, out) {
   if (!node || typeof node !== 'object') return;
@@ -220,22 +233,22 @@ function collectArchiveNames(node, out) {
     for (const child of node) collectArchiveNames(child, out);
     return;
   }
-  if (node.type === 'file' && typeof node.name === 'string' && node.name.toLowerCase().endsWith('.archive')) {
+  if (node.type === 'file' && isDetectableInstallFile(node.name)) {
     out.add(node.name);
   }
   if (Array.isArray(node.children)) collectArchiveNames(node.children, out);
 }
 
 /**
- * Collect `.archive` file names from a new-scheme manifest: a FLAT array of
- * { file_path, file_size, file_hashes }, where file_path is the full in-archive
- * path (`archive/pc/mod/Foo.archive`). We take the basename of each `.archive`.
+ * Collect detectable install file names from a new-scheme manifest: a FLAT array
+ * of { file_path, file_size, file_hashes }, where file_path is the full
+ * in-archive path (`archive/pc/mod/Foo.archive`). We take each match's basename.
  */
 function collectArchiveNamesFromManifest(entries, out) {
   if (!Array.isArray(entries)) return;
   for (const entry of entries) {
     const p = entry?.file_path;
-    if (typeof p === 'string' && p.toLowerCase().endsWith('.archive')) {
+    if (typeof p === 'string' && isDetectableInstallFile(p)) {
       out.add(p.split(/[\\/]/).pop());
     }
   }
@@ -280,9 +293,10 @@ export async function fetchModFileUris(fetchImpl, modId) {
  * Fetch one downloadable file's contents preview and return its `.archive` file
  * names. Routes by `uri` shape to the right host/parser: a UUID storage path
  * (contains `/`) → file-manifests host (flat file_path array); a friendly
- * filename → file-metadata host (nested children tree). Returns { names, ok };
- * ok is false on any failure (see fetchModFileUris for why the caller needs the
- * distinction).
+ * filename → file-metadata host (nested children tree). Not every file has a
+ * published preview (many 404, on either host), so `ok` is true for a 200 OR a
+ * 404 (both are definitive: "here are the names" / "this file has none") and
+ * false only for a transient error (429/5xx/network) worth retrying.
  *
  * @param {typeof fetch} fetchImpl injectable for tests
  * @param {string|number} modId numeric Nexus mod id
@@ -296,14 +310,22 @@ export async function fetchArchiveNamesForFile(fetchImpl, modId, uri) {
       ? `${FILE_MANIFEST_BASE}/${uri}.json`
       : `${FILE_METADATA_BASE}/${NEXUS_GAME_ID}/${modId}/${encodeURIComponent(uri)}.json`;
     const res = await fetchImpl(url, { headers: { 'User-Agent': ARCHIVE_UA } });
-    if (!res.ok) return { names: [], ok: false };
+    if (!res.ok) {
+      // 404 is a DEFINITIVE answer — this file has no published preview — not a
+      // transient error. It must contribute no archives WITHOUT poisoning the
+      // mod's ok: otherwise a mod with a good MAIN and a preview-less OPTIONAL
+      // never caches, sits at the front of the newest-first queue, and starves
+      // every mod behind it (observed: cron stuck at "refreshed 0/9"). Only
+      // 429/5xx/network stay ok:false so they retry.
+      return { names: [], ok: res.status === 404 };
+    }
     const json = await res.json();
     const names = new Set();
     if (isUuidPath) collectArchiveNamesFromManifest(json, names);
     else collectArchiveNames(json, names);
     return { names: [...names], ok: true };
   } catch {
-    return { names: [], ok: false };
+    return { names: [], ok: false }; // network/parse error: transient, retry
   }
 }
 
