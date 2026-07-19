@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Each `/v1` location record now carries an `archives` array — the `.archive` filenames the mod ships — so an in-game mod can detect which location mods a player has installed. ([#841](https://github.com/spuddeh/nc-zoning-board/issues/841))
+- Each `/v1` location record now carries an `archives` array — the `.archive` and `.xl` filenames the mod installs to `archive/pc/mod/` (so removal-only mods are detectable too) — letting an in-game mod detect which location mods a player has installed. ([#841](https://github.com/spuddeh/nc-zoning-board/issues/841))
 
 ## [1.4.1] - 2026-07-19
 
