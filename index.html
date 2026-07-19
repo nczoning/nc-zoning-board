@@ -298,6 +298,17 @@
                 <div class="leaflet-control-scale-line"></div>
             </div>
         </div>
+        <!-- Loud "map data unavailable" state: shown by app.js when the /v1 API
+             load fails. Covers both views; auto-retries with a manual retry. -->
+        <div id="map-unavailable" class="map-unavailable hidden" role="alert" aria-live="assertive">
+            <div class="map-unavailable__panel">
+                <div class="map-unavailable__title">Map data temporarily unavailable</div>
+                <p class="map-unavailable__body">The location registry couldn't be reached. This is usually a brief outage — the map will reconnect automatically.</p>
+                <div class="map-unavailable__status">Retrying…</div>
+                <button type="button" class="map-unavailable__retry">Retry now</button>
+                <div class="map-unavailable__detail"></div>
+            </div>
+        </div>
     </main>
 
     <!-- Leaflet JS -->
