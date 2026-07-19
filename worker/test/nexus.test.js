@@ -151,14 +151,14 @@ function archiveFetch({ modFiles = [], trees = {}, manifests = {}, routerOk = tr
       );
       const m = manifests[uri];
       if (m instanceof Error) throw m;
-      if (m && m.ok === false) return { ok: false, status: 404, json: async () => ({}) };
+      if (m && m.ok === false) return { ok: false, status: m.status ?? 404, json: async () => ({}) };
       return { ok: true, json: async () => m ?? [] };
     }
     if (url.includes('file-metadata.nexusmods.com')) {
       const uri = decodeURIComponent(url.match(/\/[^/]+\/([^/]+)\.json$/)[1]);
       const t = trees[uri];
       if (t instanceof Error) throw t;
-      if (t && t.ok === false) return { ok: false, status: 404, json: async () => ({}) };
+      if (t && t.ok === false) return { ok: false, status: t.status ?? 404, json: async () => ({}) };
       return { ok: true, json: async () => t ?? { children: [] } };
     }
     throw new Error(`unexpected fetch: ${url}`);
@@ -268,14 +268,35 @@ test('archives: modFiles failure → ok:false, no archives, only the one subrequ
   assert.deepEqual(res, { archives: [], ok: false, subrequests: 1 });
 });
 
-test('archives: a file-contents failure marks ok:false but keeps what it found', async () => {
+test('archives: a 404 file has no preview but does NOT poison the mod (ok stays true)', async () => {
+  // The starvation bug: a good MAIN + a preview-less (404) sibling must still
+  // cache the MAIN's archives, or the mod retries forever and blocks the queue.
   const impl = archiveFetch({
-    modFiles: [{ uri: 'Good.7z', category: 'MAIN' }, { uri: 'Bad.7z', category: 'MAIN' }],
-    trees: { 'Good.7z': tree('good.archive'), 'Bad.7z': { ok: false } },
+    modFiles: [{ uri: 'Good.7z', category: 'MAIN' }, { uri: 'NoPreview.7z', category: 'OPTIONAL' }],
+    trees: { 'Good.7z': tree('good.archive'), 'NoPreview.7z': { ok: false, status: 404 } },
   });
   const res = await fetchModArchiveNames(impl, 1);
   assert.deepEqual(res.archives, ['good.archive']);
-  assert.equal(res.ok, false); // partial: caller must not cache this as final
+  assert.equal(res.ok, true); // 404 is definitive, not a retry-worthy failure
+});
+
+test('archives: a transient (5xx) file failure marks ok:false so it retries', async () => {
+  const impl = archiveFetch({
+    modFiles: [{ uri: 'Good.7z', category: 'MAIN' }, { uri: 'Flaky.7z', category: 'MAIN' }],
+    trees: { 'Good.7z': tree('good.archive'), 'Flaky.7z': { ok: false, status: 503 } },
+  });
+  const res = await fetchModArchiveNames(impl, 1);
+  assert.deepEqual(res.archives, ['good.archive']);
+  assert.equal(res.ok, false); // transient: caller must not cache this as final
+});
+
+test('archives: a mod whose only file 404s caches as [] with ok:true (no starvation)', async () => {
+  const impl = archiveFetch({
+    modFiles: [{ uri: 'Gone.7z', category: 'MAIN' }],
+    trees: { 'Gone.7z': { ok: false, status: 404 } },
+  });
+  const res = await fetchModArchiveNames(impl, 1);
+  assert.deepEqual(res, { archives: [], ok: true, subrequests: 2 }); // determined empty, leaves the queue
 });
 
 test('archives: a thrown fetch degrades to ok:false, never throws', async () => {
