@@ -44,7 +44,7 @@ ThreeScene.init()           ─► NCZ.ThreeMarkers.attach(scene, camera, contai
                                   │  (rAF-debounced). Builds pins immediately if data already
                                   │  arrived (data path A below).
 
-NCZ.fetchModData() resolves ─► NCZ.ThreeMarkers.setMods(mods, nexusThumbs, tagsDict)
+NCZ.fetchLocationsFromApi() resolves ─► NCZ.ThreeMarkers.setMods(mods, nexusThumbs, tagsDict)
                                   │  Caches data in _modsState. If pinsLayer exists (attach
                                   │  has run), buildPins(). Otherwise data sits idle until
                                   │  attach is called (data path B below).

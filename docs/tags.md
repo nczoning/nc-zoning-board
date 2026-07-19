@@ -33,8 +33,8 @@ Synthetic tags are applied automatically by the map system. They are **not** in 
 
 | Tag | Applied by | Description |
 | --- | --- | --- |
-| `nczoning` | Auto-discovery (`fetchNexusTaggedMods`) | Applied to every mod sourced automatically from Nexus Mods. Appears as a filter tag and as a badge on the popup and sidebar entry. |
-| `updated` | `app.js` filter setup | A virtual filter that surfaces any recently updated mod, matched via `isRecentlyUpdated()`, which reads the API's server-computed `recently_updated` bool (or, on the API-down fallback, computes from `updatedAt` vs the recency window). Not a stored tag. |
+| `nczoning` | Auto-discovery (server-side, `worker/src/nexus.js`) | Applied to every mod sourced automatically from Nexus Mods. Appears as a filter tag and as a badge on the popup and sidebar entry. |
+| `updated` | `app.js` filter setup | A virtual filter that surfaces any recently updated mod, matched via `isRecentlyUpdated()`, which reads the API's server-computed `recently_updated` bool (or, for an older API deploy that omits the bool, computes from `updatedAt` vs the recency window). Not a stored tag. |
 
 ---
 
