@@ -178,20 +178,39 @@ query ModFiles($modId: ID!, $gameId: ID!) {
 - Returns a flat array of files (main + optional). We take every file's `uri`
   (e.g. `Atari Canyon AIO-27618-1-0-1771273179.7z`).
 
-**Hop 2 — file contents.** For each `uri`, fetch the S3-backed "Preview file
+**Hop 2 — file contents.** For each file, fetch the S3-backed "Preview file
 contents" tree:
 
 ```text
-https://file-metadata.nexusmods.com/file/nexus-files-s3-meta/{gameId}/{modId}/{encodeURIComponent(uri)}.json
+https://file-metadata.nexusmods.com/file/nexus-files-s3-meta/{gameId}/{modId}/{uri}.json
 ```
 
 The response is a recursive tree of `{ name, type: "directory"|"file", children }`
 nodes (root is `{ children: [...] }`). We walk it and collect every `type:"file"`
-whose `name` ends in `.archive`, unioned across all of the mod's files, deduped
+whose `name` ends in `.archive`, unioned across the mod's fetched files, deduped
 and sorted. `.xl` (ArchiveXL) and other files are ignored.
 
+**Which files we fetch (a measured coverage limit):** the `uri` comes in two
+forms. Older files carry the **friendly filename**
+(`Atari Canyon AIO-27618-1-0-1771273179.7z`) and **have** a contents preview.
+Newer files carry a **UUID storage path** (`uri` contains `/`, e.g.
+`b9/e3/70/b9e37068-…`) and **have no preview** at the file-metadata path — it
+404s regardless of slash-encoding (`scanned`/`scannedV2` are `VERIFIED` in both
+cases, so they don't predict it). So the fetch:
+
+- **skips UUID-path files entirely** (no wasted subrequest, no false failure);
+- **prefers current categories** (`MAIN`/`OPTIONAL`/`UPDATE`), falling back to an
+  older friendly file (`ARCHIVED`/`OLD_VERSION`) only when a mod has no current
+  previewable file;
+- caps contents fetches per mod (`ARCHIVE_FILES_PER_MOD`) so one mod with many
+  optional variants can't exhaust the run's subrequest budget.
+
+Measured against the live population, **~94% of mods still yield ≥1 `.archive`**;
+the rest (only UUID files, no friendly copy) resolve to `[]`.
+
 **Output field:** `archives: string[]` on each `LocationFull` record (bare
-filenames, not paths). Always present; `[]` when unknown.
+filenames, not paths). Always present; `[]` means "not determinable" (all-UUID
+files, or not yet fetched), never "ships no archives".
 
 **Caching & cadence (the load-bearing part):** archive names are near-static —
 they only change on a re-upload, which bumps the mod's `updatedAt`. So the cron

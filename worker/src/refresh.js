@@ -115,6 +115,7 @@ async function refreshArchives(fetchImpl, full, cache) {
 
   let changed = false;
   let refreshed = 0;
+  let okCount = 0;
   let subrequests = 0;
   for (const r of stale) {
     if (refreshed >= ARCHIVE_MOD_BUDGET || subrequests >= ARCHIVE_SUBREQUEST_BUDGET) break;
@@ -122,8 +123,16 @@ async function refreshArchives(fetchImpl, full, cache) {
     refreshed += 1;
     subrequests += res.subrequests;
     if (!res.ok) continue; // transient failure: leave stale, retry next run
+    okCount += 1;
     cache[r.nexus_id] = { updatedAt: r.updated_at ?? null, archives: res.archives };
     changed = true;
+  }
+  if (refreshed > 0) {
+    // Ops visibility for the cold-fill / re-upload catch-up (cf. the thumbnail
+    // warnings). Silent in steady state, when nothing is stale.
+    console.log(
+      `archives: refreshed ${okCount}/${refreshed} mods (${stale.length} stale, ${subrequests} subrequests), cache=${Object.keys(cache).length}`,
+    );
   }
 
   // Evict entries for mods no longer in the dataset (deleted/hidden on Nexus) so
