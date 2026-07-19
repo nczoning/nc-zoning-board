@@ -338,26 +338,17 @@ export async function fetchModArchiveNames(fetchImpl, modId) {
   let ok = filesRes.ok;
   let subrequests = 1; // the modFiles call itself
 
+  // Prefer the mod's current files; fall back to all files (older ARCHIVED/
+  // OLD_VERSION) only when it has no current-category file.
   const current = filesRes.files.filter((f) => CURRENT_FILE_CATEGORIES.has(f.category));
-  const older = filesRes.files.filter((f) => !CURRENT_FILE_CATEGORIES.has(f.category));
+  const chosen = (current.length ? current : filesRes.files).slice(0, ARCHIVE_FILES_PER_MOD);
 
-  // Prefer current files (keeps names fresh, bounds cost). Only if they yield NO
-  // archives do we dip into older files (ARCHIVED/OLD_VERSION): some mods keep
-  // their .archive only in a superseded upload, or their current file has no
-  // published preview (404). Best-effort — an old name is better than none for
-  // installed-mod detection. The union stays capped across both phases.
   const all = new Set();
-  let budget = ARCHIVE_FILES_PER_MOD;
-  for (const group of [current, older]) {
-    if (all.size > 0) break; // current already produced names — skip older
-    for (const f of group) {
-      if (budget <= 0) break;
-      const r = await fetchArchiveNamesForFile(fetchImpl, modId, f.uri);
-      subrequests += 1;
-      budget -= 1;
-      if (!r.ok) ok = false;
-      for (const name of r.names) all.add(name);
-    }
+  for (const f of chosen) {
+    const r = await fetchArchiveNamesForFile(fetchImpl, modId, f.uri);
+    subrequests += 1;
+    if (!r.ok) ok = false;
+    for (const name of r.names) all.add(name);
   }
   return { archives: [...all].sort(), ok, subrequests };
 }
