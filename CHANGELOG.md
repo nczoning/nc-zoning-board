@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-07-19
+
 ### Changed
 
 - The website now loads exclusively from the `/v1` Data API — the legacy client-side Nexus merge and its fallback are removed, so the browser makes no Nexus calls at all.
