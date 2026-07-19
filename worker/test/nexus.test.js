@@ -187,7 +187,7 @@ test('archives: fetches UUID-path files from the file-manifests host (flat manif
     manifests: { 'ab/cd/ef/uuid-1': manifest('New.archive', 'thing.xl') },
   });
   const res = await fetchModArchiveNames(impl, 1);
-  assert.deepEqual(res.archives, ['New.archive']); // basename; .xl ignored
+  assert.deepEqual(res.archives, ['New.archive', 'thing.xl']); // basenames; .xl included
   assert.equal(res.ok, true);
 });
 
@@ -255,12 +255,21 @@ test('archives: caps contents fetches per mod so one mod cannot exhaust the budg
   assert.ok(res.archives.length <= 6);
 });
 
-test('archives: ignores non-.archive files (e.g. .xl, readme)', async () => {
+test('archives: collects .archive AND .xl (ArchiveXL), ignores .json/readme', async () => {
   const impl = archiveFetch({
     modFiles: [{ uri: 'M.7z', category: 'MAIN' }],
-    trees: { 'M.7z': tree('thing.archive', 'thing.xl', 'readme.txt') },
+    trees: { 'M.7z': tree('thing.archive', 'thing.xl', 'appearance.json', 'readme.txt') },
   });
-  assert.deepEqual((await fetchModArchiveNames(impl, 1)).archives, ['thing.archive']);
+  // .xl lands in archive/pc/mod and is readable in-game; .json (CET/AMM) is not.
+  assert.deepEqual((await fetchModArchiveNames(impl, 1)).archives, ['thing.archive', 'thing.xl']);
+});
+
+test('archives: a removal-only mod (ships only .xl) is still detected', async () => {
+  const impl = archiveFetch({
+    modFiles: [{ uri: 'Removal.7z', category: 'MAIN' }],
+    trees: { 'Removal.7z': tree('h10_apartment_removal.xl') },
+  });
+  assert.deepEqual((await fetchModArchiveNames(impl, 1)).archives, ['h10_apartment_removal.xl']);
 });
 
 test('archives: modFiles failure → ok:false, no archives, only the one subrequest', async () => {

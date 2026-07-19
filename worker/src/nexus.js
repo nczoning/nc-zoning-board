@@ -209,10 +209,23 @@ const MOD_FILES_QUERY = `query ModFiles($modId: ID!, $gameId: ID!) {
 }`;
 
 /**
- * Recursively collect `.archive` file names from a file-contents preview tree.
- * Nodes look like { name, type: 'directory'|'file', children: [...] }; the root
- * is { children: [...] }. Tolerant of shape drift: it only cares about `name`,
- * `type`, and `children`, walking whatever nesting Nexus returns.
+ * Detectable install-folder files: `.archive` load files AND `.xl` (ArchiveXL)
+ * files. Both land in archive/pc/mod/ and are readable by an in-game mod, so
+ * both fingerprint an install. `.xl` matters for removal-only mods (e.g. an
+ * ArchiveXL "removal" that ships only `foo_removal.xl`, no `.archive`). CET/AMM
+ * `.json` files are NOT detectable (sandboxed CET folder) and are never matched.
+ */
+function isDetectableInstallFile(name) {
+  if (typeof name !== 'string') return false;
+  const lower = name.toLowerCase();
+  return lower.endsWith('.archive') || lower.endsWith('.xl');
+}
+
+/**
+ * Recursively collect detectable install file names from a file-contents preview
+ * tree. Nodes look like { name, type: 'directory'|'file', children: [...] }; the
+ * root is { children: [...] }. Tolerant of shape drift: it only cares about
+ * `name`, `type`, and `children`, walking whatever nesting Nexus returns.
  */
 function collectArchiveNames(node, out) {
   if (!node || typeof node !== 'object') return;
@@ -220,22 +233,22 @@ function collectArchiveNames(node, out) {
     for (const child of node) collectArchiveNames(child, out);
     return;
   }
-  if (node.type === 'file' && typeof node.name === 'string' && node.name.toLowerCase().endsWith('.archive')) {
+  if (node.type === 'file' && isDetectableInstallFile(node.name)) {
     out.add(node.name);
   }
   if (Array.isArray(node.children)) collectArchiveNames(node.children, out);
 }
 
 /**
- * Collect `.archive` file names from a new-scheme manifest: a FLAT array of
- * { file_path, file_size, file_hashes }, where file_path is the full in-archive
- * path (`archive/pc/mod/Foo.archive`). We take the basename of each `.archive`.
+ * Collect detectable install file names from a new-scheme manifest: a FLAT array
+ * of { file_path, file_size, file_hashes }, where file_path is the full
+ * in-archive path (`archive/pc/mod/Foo.archive`). We take each match's basename.
  */
 function collectArchiveNamesFromManifest(entries, out) {
   if (!Array.isArray(entries)) return;
   for (const entry of entries) {
     const p = entry?.file_path;
-    if (typeof p === 'string' && p.toLowerCase().endsWith('.archive')) {
+    if (typeof p === 'string' && isDetectableInstallFile(p)) {
       out.add(p.split(/[\\/]/).pop());
     }
   }

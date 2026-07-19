@@ -204,8 +204,12 @@ the file's `uri`:
   `archive/pc/mod/Foo.archive` → `Foo.archive`).
 
 (The friendly `uri` does *not* work on the manifest host and vice-versa — each
-scheme is served by exactly one host.) Names are unioned across the mod's fetched
-files, deduped and sorted; `.xl` (ArchiveXL) and other files are ignored.
+scheme is served by exactly one host.) We collect both **`.archive`** load files
+and **`.xl`** (ArchiveXL) files — both install to `archive/pc/mod/` and are
+readable by an in-game mod, and `.xl` is the only fingerprint a removal-only mod
+has. CET/AMM `.json` files are NOT collected (they live in CET's sandboxed
+folder, unreadable by other mods). Names are unioned across the mod's fetched
+files, deduped and sorted.
 
 **Which files we fetch:** both schemes are fetchable, so we **prefer current
 categories** (`MAIN`/`OPTIONAL`/`UPDATE`), falling back to older files
