@@ -8,6 +8,11 @@
  * - dataset:v1:meta      { schema, generated_at, dataset_version,
  *                          discovery_stale, skipped }; a failed cycle also
  *                          writes last_error and last_error_at
+ * - dataset:v1:archives  { [nexus_id]: { updatedAt, archives: [name, ...] } }:
+ *                        a persistent cache, NOT part of the served envelope.
+ *                        The cron refetches a mod's archive names only when its
+ *                        updatedAt moves (a re-upload), so this survives across
+ *                        runs; see refresh.js for the budgeted fill.
  *
  * dataset_version is a content hash: the cron writes only when it changes,
  * and it doubles as the ETag for the read path.
@@ -18,6 +23,7 @@ export const KEYS = {
   districts: 'dataset:v1:districts',
   tags: 'dataset:v1:tags',
   meta: 'dataset:v1:meta',
+  archives: 'dataset:v1:archives',
 };
 
 /** SHA-256 hex of a string, via Web Crypto (Workers + Node 24). */
@@ -50,4 +56,17 @@ export async function writeDataset(env, { full, districts, tags, meta }) {
 /** Update only the meta record (last-known-good touch on a failed refresh). */
 export async function writeMeta(env, meta) {
   await env.DATASET.put(KEYS.meta, JSON.stringify(meta));
+}
+
+/**
+ * Read the archive-name cache ({ [nexus_id]: { updatedAt, archives } }), or {}
+ * before the first fill. This is a cross-run cache, not a served payload.
+ */
+export async function readArchives(env) {
+  return (await env.DATASET.get(KEYS.archives, 'json')) || {};
+}
+
+/** Persist the archive-name cache. The caller writes only when it changed. */
+export async function writeArchives(env, cache) {
+  await env.DATASET.put(KEYS.archives, JSON.stringify(cache));
 }
