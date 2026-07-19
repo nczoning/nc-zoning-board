@@ -1,8 +1,8 @@
 # NC Zoning Data API (worker/)
 
 Cloudflare Worker serving the mod registry at `api.nczoning.net/v1/*` for
-in-game consumers (and, later, the website itself). Architecture and phase
-plan: [docs/data-api-plan.md](../docs/data-api-plan.md).
+in-game consumers and the website itself. Routes, envelope and contract:
+[docs/api-reference.md](../docs/api-reference.md).
 
 Deploys independently of the Pages site, but mirrors its main/dev split with
 two environments:
