@@ -130,13 +130,29 @@ const tree = (...names) => ({
   ] }],
 });
 
-// Routes api-router (modFiles) and file-metadata (contents) by host. `trees`
-// maps a file uri → its contents tree, or { ok:false }/Error to simulate failure.
-function archiveFetch({ modFiles = [], trees = {}, routerOk = true } = {}) {
+// A new-scheme manifest: the flat file_path array the file-manifests host
+// returns (confirmed live). One entry per file, name under archive/pc/mod/.
+const manifest = (...names) => names.map((n) => ({
+  file_path: `archive/pc/mod/${n}`, file_size: 1, file_hashes: {},
+}));
+
+// Routes the three hosts by URL. `trees` maps a friendly uri → its file-metadata
+// tree; `manifests` maps a UUID uri → its file-manifests array. Either value can
+// be { ok:false }/Error to simulate failure.
+function archiveFetch({ modFiles = [], trees = {}, manifests = {}, routerOk = true } = {}) {
   return async (url, init) => {
     if (url.includes('api-router.nexusmods.com')) {
       if (!routerOk) return { ok: false, status: 503, json: async () => ({}) };
       return { ok: true, json: async () => ({ data: { modFiles } }) };
+    }
+    if (url.includes('file-manifests.nexusmods.com')) {
+      const uri = decodeURIComponent(
+        url.replace('https://file-manifests.nexusmods.com/', '').replace(/\.json$/, ''),
+      );
+      const m = manifests[uri];
+      if (m instanceof Error) throw m;
+      if (m && m.ok === false) return { ok: false, status: 404, json: async () => ({}) };
+      return { ok: true, json: async () => m ?? [] };
     }
     if (url.includes('file-metadata.nexusmods.com')) {
       const uri = decodeURIComponent(url.match(/\/[^/]+\/([^/]+)\.json$/)[1]);
@@ -163,27 +179,55 @@ test('archives: unions .archive names across current files, deduped + sorted', a
   assert.equal(res.subrequests, 3); // 1 modFiles + 2 files
 });
 
-test('archives: skips UUID-path files (no preview) — fetches only friendly uris', async () => {
-  // Real Nexus data: newer files carry a UUID storage uri (slashes) with no
-  // contents preview; only friendly-name uris are previewable.
-  const metaHits = [];
-  const impl = async (url, init) => {
+test('archives: fetches UUID-path files from the file-manifests host (flat manifest)', async () => {
+  // New-scheme files (uri is a UUID storage path) have a flat manifest at the
+  // file-manifests host — we take the .archive basename from file_path.
+  const impl = archiveFetch({
+    modFiles: [{ uri: 'ab/cd/ef/uuid-1', category: 'MAIN' }],
+    manifests: { 'ab/cd/ef/uuid-1': manifest('New.archive', 'thing.xl') },
+  });
+  const res = await fetchModArchiveNames(impl, 1);
+  assert.deepEqual(res.archives, ['New.archive']); // basename; .xl ignored
+  assert.equal(res.ok, true);
+});
+
+test('archives: unions across both hosts (friendly tree + UUID manifest)', async () => {
+  const impl = archiveFetch({
+    modFiles: [
+      { uri: 'Main-1.7z', category: 'MAIN' },
+      { uri: 'x/y/z/uuid-opt', category: 'OPTIONAL' },
+    ],
+    trees: { 'Main-1.7z': tree('a.archive') },
+    manifests: { 'x/y/z/uuid-opt': manifest('b.archive') },
+  });
+  assert.deepEqual((await fetchModArchiveNames(impl, 1)).archives, ['a.archive', 'b.archive']);
+});
+
+test('archives: routes uri by shape (UUID→file-manifests, friendly→file-metadata)', async () => {
+  const urls = [];
+  const impl = async (url) => {
     if (url.includes('api-router')) {
       return { ok: true, json: async () => ({ data: { modFiles: [
         { uri: 'Friendly-1.7z', category: 'MAIN' },
-        { uri: 'b9/e3/70/b9e37068-uuid', category: 'MAIN' },
+        { uri: 'aa/bb/cc/uuid', category: 'OPTIONAL' },
       ] } }) };
     }
-    metaHits.push(url);
-    return { ok: true, json: async () => tree('good.archive') };
+    urls.push(url);
+    if (url.includes('file-manifests')) return { ok: true, json: async () => manifest('u.archive') };
+    return { ok: true, json: async () => tree('f.archive') };
   };
-  const res = await fetchModArchiveNames(impl, 1);
-  assert.deepEqual(res.archives, ['good.archive']);
-  assert.equal(res.subrequests, 2); // modFiles + the one friendly file only
-  assert.ok(!metaHits.some((u) => u.includes('uuid')), 'UUID file never requested');
+  await fetchModArchiveNames(impl, 27618);
+  assert.ok(
+    urls.includes('https://file-manifests.nexusmods.com/aa/bb/cc/uuid.json'),
+    'UUID uri → file-manifests host, path un-encoded',
+  );
+  assert.ok(
+    urls.includes('https://file-metadata.nexusmods.com/file/nexus-files-s3-meta/3333/27618/Friendly-1.7z.json'),
+    'friendly uri → file-metadata host',
+  );
 });
 
-test('archives: prefers current-category files over archived when both are friendly', async () => {
+test('archives: prefers current-category files over older versions', async () => {
   const impl = archiveFetch({
     modFiles: [
       { uri: 'Current-1-0.7z', category: 'MAIN' },
@@ -195,13 +239,10 @@ test('archives: prefers current-category files over archived when both are frien
   assert.deepEqual((await fetchModArchiveNames(impl, 1)).archives, ['current.archive']);
 });
 
-test('archives: falls back to an older friendly file when no current file is previewable', async () => {
+test('archives: falls back to older files when no current-category file exists', async () => {
   const impl = archiveFetch({
-    modFiles: [
-      { uri: 'aa/bb/cc/uuid-current', category: 'MAIN' }, // current but UUID → not previewable
-      { uri: 'Old-1-0.zip', category: 'OLD_VERSION' }, // only friendly file left
-    ],
-    trees: { 'Old-1-0.zip': tree('legacy.archive') },
+    modFiles: [{ uri: 'gg/hh/ii/uuid-old', category: 'OLD_VERSION' }],
+    manifests: { 'gg/hh/ii/uuid-old': manifest('legacy.archive') },
   });
   assert.deepEqual((await fetchModArchiveNames(impl, 1)).archives, ['legacy.archive']);
 });
