@@ -2,7 +2,7 @@
  * NC Zoning Data API: read-only Worker serving the mod registry to
  * Cyberpunk 2077 mods (and, later, the website itself).
  *
- * Contract rules (frozen, see docs/data-api-plan.md):
+ * Contract rules (frozen, see docs/api-reference.md):
  * - Every response uses the envelope
  *   { schema, generated_at, dataset_version, data }.
  * - JSON stays DTO-mappable for the in-game RedData consumer:
