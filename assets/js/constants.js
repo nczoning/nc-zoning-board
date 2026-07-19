@@ -76,13 +76,9 @@ NCZ.CATEGORY_STYLES = {
   },
 };
 
-// Nexus Mods API
-NCZ.NEXUS_GAME_ID = 3333; // Cyberpunk 2077
-NCZ.NEXUS_GQL_ENDPOINT = "https://api.nexusmods.com/v2/graphql";
-NCZ.NEXUS_BATCH_SIZE = 50;
-
-// Data API (B7): the site consumes the server-built /v1 dataset instead of
-// running the Nexus auto-discovery merge client-side. Base URL is chosen by
+// Data API (v1): the site's sole data source is the server-built /v1 dataset.
+// The Nexus auto-discovery merge that once ran client-side now lives entirely in
+// the API (worker/); the browser makes no Nexus calls. Base URL is chosen by
 // hostname so environments line up with the API's: prod → prod API; everything
 // else (dev.nczoning.net, *.pages.dev previews, localhost) → staging API.
 NCZ.API_BASE =
@@ -94,12 +90,9 @@ NCZ.API_BASE =
 // TTL-based cacheGet/cacheSet.
 NCZ.API_LOCATIONS_CACHE_KEY = "nc_api_locations_full";
 
-// Data paths
-NCZ.DATA_MODS_PATH = "mods.json";
+// Data paths. tags.json stays a local static fetch (same-origin) alongside the
+// /v1 dataset — the tag registry the sidebar and BBCode generator render from.
 NCZ.DATA_TAGS_PATH = "data/tags.json";
-// nexus_ids tagged "NCZoning" on Nexus but intentionally kept off the map
-// (mistaken/minor tags). Honoured by auto-discovery and the health monitor.
-NCZ.DATA_EXCLUDED_PATH = "data/excluded_mods.json";
 
 // 3D scene GLB source folder. The committed runtime path is "assets/glb-meshopt"
 // (gltfpack-compressed via EXT_meshopt_compression, decoded by MeshoptDecoder).
@@ -145,17 +138,12 @@ NCZ.CET_UNITS_PER_METER = 1;
 // LocalStorage cache keys & TTLs
 NCZ.THEME_PREFERENCE_KEY = "nc_theme_id";
 NCZ.SHOWCASE_OPTIONS_KEY = "nc_showcase_options";
-// Fallback recency window (days). The API owns this rule: it computes each
-// mod's `recently_updated` bool and publishes the window as
-// `recently_updated_days` on the response envelope, which the app adopts into
-// NCZ.recentlyUpdatedDays. This constant is only used when the API is
-// unavailable (client-side fallback path) or omits the field.
+// Default recency window (days). The API owns this rule: it computes each mod's
+// `recently_updated` bool and publishes the window as `recently_updated_days` on
+// the response envelope, which the app adopts into NCZ.recentlyUpdatedDays. This
+// constant is only the safety default for an older API deploy that omits the field.
 NCZ.RECENTLY_UPDATED_DAYS = 7;
 NCZ.UPDATED_LABEL = "RECENTLY UPDATED";
-NCZ.THUMB_CACHE_KEY = "nc_nexus_thumbs";
-NCZ.THUMB_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
-NCZ.AUTODISCOVERY_CACHE_KEY = "nc_nexus_autodiscovery";
-NCZ.AUTODISCOVERY_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 // Three.js Object3D.layers: bitmask channels that cameras opt into via Camera.layers.
 // Layer 0 (default) carries the static scene (terrain, water, buildings, roads, metro,

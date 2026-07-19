@@ -1812,36 +1812,23 @@ async function initMap() {
 
   // 3. Fetch and Setup Data
   try {
-    // B7: primary data path is the server-built Data API (/v1). It already does
+    // The server-built Data API (/v1) is the site's sole data source: it does
     // the manual + Nexus auto-discovery merge, district enrichment and thumbnail
     // resolution server-side, so the browser makes no Nexus calls here. tags.json
     // stays a local static fetch (same-origin, not the Nexus fragility this
-    // replaces). If the API is unavailable we fall back to the legacy
-    // client-side merge, so the map never regresses during the transition.
-    let mods, nexusThumbs, tagsDict;
-    try {
-      const [apiResult, localTags] = await Promise.all([
-        NCZ.fetchLocationsFromApi(),
-        fetch(NCZ.DATA_TAGS_PATH).then((r) => r.json()),
-      ]);
-      mods = apiResult.mods;
-      nexusThumbs = apiResult.nexusThumbs;
-      tagsDict = localTags;
-      // The API owns the recency window (it computes each mod's recently_updated
-      // bool against it). Adopt it so the tooltip text matches; fall back to the
-      // local constant if an older API omits it.
-      NCZ.recentlyUpdatedDays = apiResult.recentlyUpdatedDays ?? NCZ.RECENTLY_UPDATED_DAYS;
-      console.log(`Data source: /v1 API — ${mods.length} mods`);
-    } catch (apiErr) {
-      console.warn("Data API unavailable — falling back to client-side merge:", apiErr);
-      const fb = await NCZ.fetchModDataClientSide();
-      mods = fb.mods;
-      nexusThumbs = fb.nexusThumbs;
-      tagsDict = fb.tagsDict;
-      // No API envelope on the fallback path; compute recency with the constant.
-      NCZ.recentlyUpdatedDays = NCZ.RECENTLY_UPDATED_DAYS;
-      console.log(`Data source: client-side fallback — ${mods.length} mods`);
-    }
+    // replaces). There is no client-side fallback — if the API is down the outer
+    // catch shows a loud "map data unavailable" state, keeping the site a real
+    // canary for the API (whose in-game consumer has no fallback either).
+    const [apiResult, tagsDict] = await Promise.all([
+      NCZ.fetchLocationsFromApi(),
+      fetch(NCZ.DATA_TAGS_PATH).then((r) => r.json()),
+    ]);
+    const { mods, nexusThumbs } = apiResult;
+    // The API owns the recency window (it computes each mod's recently_updated
+    // bool against it). Adopt it so the tooltip text matches; fall back to the
+    // local constant if an older API omits it.
+    NCZ.recentlyUpdatedDays = apiResult.recentlyUpdatedDays ?? NCZ.RECENTLY_UPDATED_DAYS;
+    console.log(`Data source: /v1 API — ${mods.length} mods`);
 
     modCountEl.textContent = `(${mods.length})`;
 
@@ -2425,8 +2412,63 @@ async function initMap() {
       }
     }
   } catch (error) {
-    console.error("Error loading mod data:", error);
+    // No fallback path: the /v1 API is the only data source (see step 3). Rather
+    // than leave a silent blank map (which would mask an API outage the in-game
+    // consumer can't survive), surface a loud, auto-retrying error state.
+    console.error("Error loading map data:", error);
+    showMapDataUnavailable(error);
   }
+}
+
+// Loud "map data unavailable" state, shown when the /v1 API load fails. Reveals
+// the static #map-unavailable overlay (covers both the 2D and 3D views), then
+// polls the API on a backoff. A successful poll means the outage cleared, so we
+// reload for a clean init rather than trying to resume a half-built page. Idempotent:
+// re-entry (e.g. a second failure) just leaves the existing retry loop running.
+let mapUnavailableActive = false;
+function showMapDataUnavailable(error) {
+  const overlay = document.getElementById("map-unavailable");
+  if (!overlay) return;
+  const detailEl = overlay.querySelector(".map-unavailable__detail");
+  if (detailEl && error) detailEl.textContent = String(error.message || error);
+  overlay.classList.remove("hidden");
+
+  if (mapUnavailableActive) return; // retry loop already running
+  mapUnavailableActive = true;
+
+  const statusEl = overlay.querySelector(".map-unavailable__status");
+  const retryBtn = overlay.querySelector(".map-unavailable__retry");
+  let attempt = 0;
+  let timer = null;
+
+  // Backoff: 10s, 20s, 40s, capped at 60s — frequent enough to recover promptly,
+  // slow enough not to hammer a down API from every open tab.
+  const nextDelay = () => Math.min(10000 * 2 ** attempt, 60000);
+
+  async function attemptReload() {
+    if (statusEl) statusEl.textContent = "Checking…";
+    try {
+      await NCZ.fetchLocationsFromApi();
+      if (statusEl) statusEl.textContent = "Reconnected — reloading…";
+      location.reload();
+    } catch (err) {
+      attempt++;
+      const secs = Math.round(nextDelay() / 1000);
+      if (statusEl) statusEl.textContent = `Still unavailable — retrying in ${secs}s`;
+      console.warn("Map data still unavailable; will retry:", err);
+      timer = setTimeout(attemptReload, nextDelay());
+    }
+  }
+
+  if (retryBtn) {
+    retryBtn.addEventListener("click", () => {
+      clearTimeout(timer);
+      attempt = 0;
+      attemptReload();
+    });
+  }
+
+  timer = setTimeout(attemptReload, nextDelay());
 }
 
 // --- Image Gallery Modal Logic ---

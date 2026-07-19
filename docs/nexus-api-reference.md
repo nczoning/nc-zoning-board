@@ -12,7 +12,7 @@ This document covers the Nexus Mods GraphQL API implementation used by NC Zoning
 
 **Status:** ⚠️ **Technically Unsupported**
 
-The V2 API is not officially supported by Nexus Mods. Per direct conversation with Nexus Mods staff (Pickysaurus), they intend to eventually migrate back to REST. Since B7 the auto-discovery + thumbnail fetches run **server-side** in [`worker/src/nexus.js`](../worker/src/nexus.js) (the Data API cron); the copy in [`services.js`](../assets/js/services.js) is now only the client-side fallback. Monitor [Nexus announcements](https://www.nexusmods.com) for any V2 retirement notices.
+The V2 API is not officially supported by Nexus Mods. Per direct conversation with Nexus Mods staff (Pickysaurus), they intend to eventually migrate back to REST. The auto-discovery + thumbnail fetches run **entirely server-side** in [`worker/src/nexus.js`](../worker/src/nexus.js) (the Data API cron); the client-side copy that once lived in `services.js` has been removed, so the browser makes **no Nexus calls at all** — it consumes the server-built `/v1` dataset. The queries below are what the worker sends. Monitor [Nexus announcements](https://www.nexusmods.com) for any V2 retirement notices.
 
 **Rate Limits:** No rate limits are publicly documented for V2 GraphQL, and none have been encountered in practice. For scale: the REST API's documented limits are **20,000 requests/day + 500 requests/hour**. Our 5-minute cron makes ~8 Nexus requests/run → ~96/hour (~2,300/day), comfortably under either figure.
 
@@ -76,12 +76,9 @@ The Nexus API silently truncates `modsByUid` responses for large batches:
   - `Thumbnails: chunk dropped X/Y UIDs (...); retrying`: first attempt dropped some UIDs; will be retried automatically.
   - `Thumbnails: N UIDs still missing after retry (...); likely deleted or hidden on Nexus`: both attempts failed for these UIDs. Persistent appearance of the same UIDs across reloads indicates a stale `nexus_id` in `data/locations/*.json` (mod hidden or deleted).
 
-**Caching:**
-- Cache key: `nc_nexus_thumbs`
-- TTL: 24 hours
-- Strategy: Incremental. Checks which IDs are cached, fetches only missing ones, merges result with existing cache before re-saving
+**Caching:** Handled server-side by the Data API cron (the browser no longer caches Nexus responses); see [Caching Strategy](#caching-strategy) below.
 
-**Implementation:** [`fetchNexusThumbnails()` in services.js](../assets/js/services.js)
+**Implementation:** [`fetchNexusThumbnails()` in worker/src/nexus.js](../worker/src/nexus.js)
 
 ---
 
@@ -140,23 +137,20 @@ The Nexus API does not document pagination for the `mods` query, but it supports
   - `page` is absent from response
   - Network or parse error
 
-**Caching:**
-- Cache key: `nc_nexus_autodiscovery`
-- TTL: 10 minutes
-- Strategy: Full result set cached; re-filtered against current manual entries on every cache hit to suppress duplicates without waiting for expiry
+**Caching:** Handled server-side by the Data API cron (the browser no longer caches Nexus responses); see [Caching Strategy](#caching-strategy) below.
 
 **Post-Fetch Processing:**
 1. For mods whose `modId` already exists in manual `mods.json`: collect `pictureUrl`, `thumbnailUrl`, and `updatedAt` into a `meta` map keyed by `nexusId`, then skip (manual entry wins for all other data)
-2. Parse `node.description` for `[NCZoning]` metadata block (see [`parseNcZoningBlock()`](../assets/js/utils.js) in utils.js)
+2. Parse `node.description` for `[NCZoning]` metadata block (see [`parseNcZoningBlock()`](../worker/src/parse.js) in worker/src/parse.js)
 3. If block missing or invalid, skip the mod with a log message
 4. Construct authors array: Nexus uploader name + any additional authors from the block
 5. Truncate `summary` to 500 characters for the popup description
 6. Prepend `"nczoning"` tag automatically (identifies auto-discovered mods in the UI)
 7. Store `updatedAt` as `_updatedAt` on the mod object; if within `NCZ.RECENTLY_UPDATED_DAYS` days, an `UPDATED` badge is shown in the popup, sidebar, and cluster flyout
 
-The function returns `{ mods, meta }` where `meta` contains image/timestamp data for manually registered mods that are also NCZoning-tagged. In `app.js`, `meta` is merged into `nexusThumbs` so those manual mods receive their thumbnails and `_updatedAt` without a separate `modsByUid` call. Mods covered by `meta` are excluded from the `modsByUid` batch.
+The function returns `{ mods, meta }` where `meta` contains image/timestamp data for manually registered mods that are also NCZoning-tagged. In the worker's merge step ([`worker/src/merge.js`](../worker/src/merge.js)), `meta` is folded into each manual mod's thumbnail/`updated_at` fields without a separate `modsByUid` call. Mods covered by `meta` are excluded from the `modsByUid` batch.
 
-**Implementation:** [`fetchNexusTaggedMods()` in services.js](../assets/js/services.js)
+**Implementation:** [`fetchNexusTaggedMods()` in worker/src/nexus.js](../worker/src/nexus.js)
 
 ---
 
@@ -178,21 +172,10 @@ This limitation has been **confirmed directly with Nexus Mods staff (Pickysaurus
 
 ## Caching Strategy
 
-Both API calls use browser `localStorage` for caching via `cacheGet()`/`cacheSet()` helpers in [`utils.js`](../assets/js/utils.js).
+These Nexus calls now run only inside the Data API cron (`worker/`), not the browser — the old client-side `localStorage` caches (`nc_nexus_thumbs`, `nc_nexus_autodiscovery`) are gone. Freshness for the site is driven by the Data API instead:
 
-| Cache Key | TTL | What's Stored | Merge Strategy |
-|---|---|---|---|
-| `nc_nexus_thumbs` | 24 hours | Map of `nexus_id → { pictureUrl, thumbnailUrl }` | Incremental, only missing IDs fetched |
-| `nc_nexus_autodiscovery` | 10 minutes | `{ mods: [...], meta: { nexusId → { pictureUrl, thumbnailUrl, updatedAt } } }` | Full replacement, re-filtered on read; backwards-compatible with old array format |
-
-### Cache Envelope
-
-Both caches use a `{ ts, data }` envelope:
-```javascript
-{ ts: <timestamp-ms>, data: <cached-value> }
-```
-
-On read, `Date.now() - ts > ttl` determines expiry.
+- **Server side:** the cron re-runs auto-discovery + thumbnail fetches on its schedule and bakes the result into the `/v1` dataset. Nexus responses are not persisted between runs.
+- **Browser side:** the site fetches `/v1/locations?full=1` once per load and revalidates with `If-None-Match`/`304` against a single `localStorage` entry (`nc_api_locations_full`). See `fetchLocationsFromApi()` in [`services.js`](../assets/js/services.js).
 
 ---
 
@@ -225,6 +208,5 @@ On read, `Date.now() - ts > ttl` determines expiry.
 
 - **Nexus GraphQL API Docs:** https://graphql.nexusmods.com/
 - **Auto-Discovery Workflow:** See [`docs/nczoning-auto-discovery.md`](./nczoning-auto-discovery.md) for how mod authors tag mods and provide metadata
-- **Services Implementation:** [`assets/js/services.js`](../assets/js/services.js)
-- **Constants & Config:** [`assets/js/constants.js`](../assets/js/constants.js)
-- **Utility Functions:** [`assets/js/utils.js`](../assets/js/utils.js)
+- **Nexus fetch implementation (server-side):** [`worker/src/nexus.js`](../worker/src/nexus.js), merge in [`worker/src/merge.js`](../worker/src/merge.js), block parser in [`worker/src/parse.js`](../worker/src/parse.js)
+- **Site data loader:** `fetchLocationsFromApi()` in [`assets/js/services.js`](../assets/js/services.js)

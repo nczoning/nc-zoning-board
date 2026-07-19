@@ -659,9 +659,9 @@ const ThreeScene = (() => {
       reversedDepthBuffer: true,
       requiredLimits,
     };
-    // TEMP: verification only, remove before dev→main. ?forcewebgl forces
-    // the WebGL2 backend so the WebGPU-unavailable → 2D-Leaflet fallback can
-    // be exercised on any browser (no about:config / exotic browser needed).
+    // Permanent test gate: ?forcewebgl forces the WebGL2 backend so the
+    // WebGPU-unavailable → 2D-Leaflet fallback can be exercised on any
+    // browser (no about:config / exotic browser needed).
     if (new URLSearchParams(window.location.search).has('forcewebgl')) {
       _rendererInitParams.forceWebGL = true;
       console.warn('[NCZ] ?forcewebgl — forcing WebGL2 backend (test gate).');

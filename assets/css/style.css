@@ -388,6 +388,86 @@
     transition: width 200ms ease;
 }
 
+/* "Map data unavailable" state: full-cover backdrop over #map-container, shown by
+   app.js when the /v1 API load fails. Sits above the map + scene controls but
+   below the modals; blocks interaction so the failure reads as loud, not subtle. */
+.map-unavailable {
+    position: absolute;
+    inset: 0;
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-lg);
+    background: var(--surface-panel-90);
+
+    &.hidden {
+        display: none;
+    }
+}
+
+.map-unavailable__panel {
+    max-width: 420px;
+    padding: var(--space-lg);
+    background: var(--surface-panel);
+    border: 1px solid var(--secondary-20);
+    border-top: 2px solid var(--tertiary);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+    text-align: center;
+}
+
+.map-unavailable__title {
+    color: var(--tertiary);
+    font-family: var(--font-heading);
+    font-size: var(--text-lg);
+    letter-spacing: 0.08em;
+}
+
+.map-unavailable__body {
+    color: var(--white-78);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    margin: 0;
+}
+
+.map-unavailable__status {
+    color: var(--secondary);
+    font-family: var(--font-heading);
+    font-size: var(--text-xs);
+    letter-spacing: 0.05em;
+}
+
+.map-unavailable__retry {
+    align-self: center;
+    background: transparent;
+    border: var(--ui-border-thin) solid var(--secondary-30);
+    color: var(--secondary);
+    font-family: var(--font-heading);
+    font-size: var(--text-xs);
+    padding: var(--space-2xs) var(--space-md);
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: var(--transition-fast);
+
+    &:hover {
+        background: var(--secondary);
+        color: var(--primary);
+        border-color: var(--secondary);
+    }
+}
+
+/* Raw error message for diagnosis — quiet, monospace, so it doesn't compete with
+   the headline but is there when someone opens the tab to debug an outage. */
+.map-unavailable__detail {
+    color: var(--gray);
+    font-family: var(--font-mono, monospace);
+    font-size: var(--text-2xs, 0.6875rem);
+    word-break: break-word;
+    opacity: 0.8;
+}
+
 
 /* Showcase fullscreen: applied directly to #map-3d, no ancestor cascade needed */
 #map-3d.showcase-fullscreen {

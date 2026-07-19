@@ -25,11 +25,6 @@ NCZ.cacheSet = function (key, data) {
   catch { /* quota exceeded; silently skip */ }
 };
 
-// Convert gameId + modId → Nexus UID (composite BigInt key)
-NCZ.toNexusUid = function (modId) {
-  return ((BigInt(NCZ.NEXUS_GAME_ID) << BigInt(32)) + BigInt(modId)).toString();
-};
-
 // Forward: CET (x, y) → Leaflet [lat, lng]
 // Derived from the Realistic Map 8k mod terrain quad UV mapping.
 // See docs/coordinate-system.md for the full derivation.
@@ -192,96 +187,11 @@ NCZ.pickDirectionAndPosition = function (anchorPoint, size, mapSize, config) {
   return { direction, left, top, arrowX, arrowY };
 };
 
-/**
- * Parse the NCZoning: metadata block from a Nexus mod description.
- * Returns a parsed object, or null if no valid block is present.
- *
- * Resilient to however the author actually pasted the block:
- *  - lost [code] wrapper or stray styling ([spoiler]/[size]/[font]/
- *    [color], often per-line) from a copy-paste round-trip
- *  - the sentinel glued to the end of a sentence (e.g. `...Making!
- *    [code]NCZoning:`; stripping [code] fuses it onto the prose)
- *  - a false-positive "NCZoning:" mention earlier in the description
- *
- * Strategy: strip all BBCode, then treat `NCZoning:` as a token that
- * can appear anywhere (not a whole line). Every occurrence is tried as
- * a candidate; the first one whose following lines yield valid coords +
- * category wins, so the coords/category validation (not the sentinel's
- * position) is what disambiguates the real block from prose.
- */
-NCZ.parseNcZoningBlock = function (description, validTagNames) {
-  if (!description) return null;
-
-  // Normalise HTML line breaks, then strip every BBCode [tag]/[/tag].
-  // This subsumes the old [spoiler] unwrap and the [code] requirement:
-  // both become tag noise that disappears, leaving plain key=value text.
-  const text = description
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/\[\/?[a-z][^\]]*\]/gi, "");
-
-  const RECOGNIZED = new Set(["coords", "category", "tags", "yaw", "credits", "authors"]);
-  const validCategories = ["location-overhaul", "new-location", "other"];
-
-  // Turn a collected key=value map into the public parsed object, or
-  // null if required fields are missing/invalid (also the signal to try
-  // the next NCZoning: candidate).
-  const finalize = (data) => {
-    if (!data.coords) return null;
-    // coords: two or three comma-separated numbers [X, Y] or [X, Y, Z].
-    // Reject < 2 (missing Y/both), > 3 (extra fields), or NaN (bad parse).
-    const coordParts = data.coords.split(",").map((s) => parseFloat(s.trim()));
-    if (coordParts.length < 2 || coordParts.length > 3 || coordParts.some(isNaN)) return null;
-    if (!data.category || !validCategories.includes(data.category)) return null;
-
-    return {
-      coordinates: coordParts,
-      category: data.category,
-      // tags: filter to known tags only; unknown tags silently dropped
-      tags: data.tags
-        ? data.tags.split(",").map((t) => t.trim()).filter((t) => validTagNames.has(t))
-        : [],
-      credits: data.credits || null,
-      // additional authors beyond the Nexus uploader
-      additionalAuthors: data.authors
-        ? data.authors.split(",").map((a) => a.trim()).filter(Boolean)
-        : [],
-      yaw: data.yaw && !isNaN(parseFloat(data.yaw)) ? parseFloat(data.yaw) : null,
-    };
-  };
-
-  // `NCZoning:` is a token, not a line; authors paste it inline after
-  // prose. [ \t]* (not \s*) tolerates `NCZoning :` without swallowing the
-  // newline that separates it from the first field.
-  const sentinel = /NCZoning[ \t]*:/gi;
-  let m;
-  while ((m = sentinel.exec(text)) !== null) {
-    const data = {};
-    // Read the lines that follow this candidate. Blank lines (left behind
-    // by stripped per-line tags) are skipped; the first non-blank line
-    // that isn't a recognized key=value ends the block, so neither the
-    // glued-on prose before the sentinel nor description text after the
-    // fields is mis-parsed.
-    for (const raw of text.slice(m.index + m[0].length).split("\n")) {
-      const line = raw.trim();
-      if (!line) continue;
-      const eqIdx = line.indexOf("=");
-      const key = eqIdx === -1 ? "" : line.slice(0, eqIdx).trim().toLowerCase();
-      if (!RECOGNIZED.has(key)) break;
-      const value = line.slice(eqIdx + 1).trim();
-      if (value && !(key in data)) data[key] = value;
-    }
-    const parsed = finalize(data);
-    if (parsed) return parsed;
-    // Not a valid block (false-positive mention); try the next occurrence.
-  }
-  return null;
-};
-
 // Returns true when a mod was updated on Nexus within the recent window.
 // The API computes this server-side (so the clockless in-game consumer can read
 // it too) and ships it as `recently_updated` on every record; trust that when
-// present. Only the client-side fallback path (API down, no bool) computes it
-// from the raw timestamp, using the effective window.
+// present. The timestamp fallback below only runs for an older API deploy that
+// omits the bool, computing it from the raw `_updatedAt` and effective window.
 NCZ.isRecentlyUpdated = function (mod) {
   if (typeof mod.recently_updated === "boolean") return mod.recently_updated;
   if (!mod._updatedAt) return false;
