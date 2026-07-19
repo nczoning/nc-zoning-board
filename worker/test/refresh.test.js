@@ -77,7 +77,7 @@ function fakeFetch({ failNexus = false, failMods = false, discordSink, archiveCa
       archiveCalls?.push('router');
       if (failArchives) return { ok: false, status: 503 };
       const modId = JSON.parse(init.body).variables.modId;
-      return { ok: true, json: async () => ({ data: { modFiles: [{ uri: `mod-${modId}.7z` }] } }) };
+      return { ok: true, json: async () => ({ data: { modFiles: [{ uri: `mod-${modId}.7z`, category: 'MAIN' }] } }) };
     }
     if (url.includes('file-metadata.nexusmods.com')) {
       archiveCalls?.push('file');
@@ -229,7 +229,7 @@ test('archive refresh is budgeted per run and cold-fills over multiple runs', as
     if (url.includes('/subdistricts.json')) return { ok: true, json: async () => SUBDISTRICTS };
     if (url.includes('api-router.nexusmods.com')) {
       archiveCalls.push('router');
-      return { ok: true, json: async () => ({ data: { modFiles: [{ uri: 'a.7z' }] } }) };
+      return { ok: true, json: async () => ({ data: { modFiles: [{ uri: 'a.7z', category: 'MAIN' }] } }) };
     }
     if (url.includes('file-metadata.nexusmods.com')) {
       archiveCalls.push('file');

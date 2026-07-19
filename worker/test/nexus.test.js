@@ -149,9 +149,9 @@ function archiveFetch({ modFiles = [], trees = {}, routerOk = true } = {}) {
   };
 }
 
-test('archives: unions .archive names across files, deduped + sorted', async () => {
+test('archives: unions .archive names across current files, deduped + sorted', async () => {
   const impl = archiveFetch({
-    modFiles: [{ uri: 'Main-1.7z' }, { uri: 'Optional-2.7z' }],
+    modFiles: [{ uri: 'Main-1.7z', category: 'MAIN' }, { uri: 'Optional-2.7z', category: 'OPTIONAL' }],
     trees: {
       'Main-1.7z': tree('b.archive', 'a.archive', 'shared.archive'),
       'Optional-2.7z': tree('shared.archive', 'c.archive'),
@@ -163,9 +163,60 @@ test('archives: unions .archive names across files, deduped + sorted', async () 
   assert.equal(res.subrequests, 3); // 1 modFiles + 2 files
 });
 
+test('archives: skips UUID-path files (no preview) — fetches only friendly uris', async () => {
+  // Real Nexus data: newer files carry a UUID storage uri (slashes) with no
+  // contents preview; only friendly-name uris are previewable.
+  const metaHits = [];
+  const impl = async (url, init) => {
+    if (url.includes('api-router')) {
+      return { ok: true, json: async () => ({ data: { modFiles: [
+        { uri: 'Friendly-1.7z', category: 'MAIN' },
+        { uri: 'b9/e3/70/b9e37068-uuid', category: 'MAIN' },
+      ] } }) };
+    }
+    metaHits.push(url);
+    return { ok: true, json: async () => tree('good.archive') };
+  };
+  const res = await fetchModArchiveNames(impl, 1);
+  assert.deepEqual(res.archives, ['good.archive']);
+  assert.equal(res.subrequests, 2); // modFiles + the one friendly file only
+  assert.ok(!metaHits.some((u) => u.includes('uuid')), 'UUID file never requested');
+});
+
+test('archives: prefers current-category files over archived when both are friendly', async () => {
+  const impl = archiveFetch({
+    modFiles: [
+      { uri: 'Current-1-0.7z', category: 'MAIN' },
+      { uri: 'Old-0-9.zip', category: 'OLD_VERSION' },
+    ],
+    trees: { 'Current-1-0.7z': tree('current.archive'), 'Old-0-9.zip': tree('old.archive') },
+  });
+  // OLD_VERSION is not fetched when a current-category file is available.
+  assert.deepEqual((await fetchModArchiveNames(impl, 1)).archives, ['current.archive']);
+});
+
+test('archives: falls back to an older friendly file when no current file is previewable', async () => {
+  const impl = archiveFetch({
+    modFiles: [
+      { uri: 'aa/bb/cc/uuid-current', category: 'MAIN' }, // current but UUID → not previewable
+      { uri: 'Old-1-0.zip', category: 'OLD_VERSION' }, // only friendly file left
+    ],
+    trees: { 'Old-1-0.zip': tree('legacy.archive') },
+  });
+  assert.deepEqual((await fetchModArchiveNames(impl, 1)).archives, ['legacy.archive']);
+});
+
+test('archives: caps contents fetches per mod so one mod cannot exhaust the budget', async () => {
+  const many = Array.from({ length: 12 }, (_, i) => ({ uri: `Opt-${i}.7z`, category: 'OPTIONAL' }));
+  const trees = Object.fromEntries(many.map((f, i) => [f.uri, tree(`a${i}.archive`)]));
+  const res = await fetchModArchiveNames(archiveFetch({ modFiles: many, trees }), 1);
+  assert.ok(res.subrequests <= 7, `subrequests ${res.subrequests} must be capped (1 + <=6)`);
+  assert.ok(res.archives.length <= 6);
+});
+
 test('archives: ignores non-.archive files (e.g. .xl, readme)', async () => {
   const impl = archiveFetch({
-    modFiles: [{ uri: 'M.7z' }],
+    modFiles: [{ uri: 'M.7z', category: 'MAIN' }],
     trees: { 'M.7z': tree('thing.archive', 'thing.xl', 'readme.txt') },
   });
   assert.deepEqual((await fetchModArchiveNames(impl, 1)).archives, ['thing.archive']);
@@ -178,7 +229,7 @@ test('archives: modFiles failure → ok:false, no archives, only the one subrequ
 
 test('archives: a file-contents failure marks ok:false but keeps what it found', async () => {
   const impl = archiveFetch({
-    modFiles: [{ uri: 'Good.7z' }, { uri: 'Bad.7z' }],
+    modFiles: [{ uri: 'Good.7z', category: 'MAIN' }, { uri: 'Bad.7z', category: 'MAIN' }],
     trees: { 'Good.7z': tree('good.archive'), 'Bad.7z': { ok: false } },
   });
   const res = await fetchModArchiveNames(impl, 1);
@@ -199,7 +250,7 @@ test('archives: sends modId/gameId as ID strings and builds the file-metadata UR
   const impl = async (url, init) => {
     if (url.includes('api-router')) {
       sentVars = JSON.parse(init.body).variables;
-      return { ok: true, json: async () => ({ data: { modFiles: [{ uri: 'A B-1.7z' }] } }) };
+      return { ok: true, json: async () => ({ data: { modFiles: [{ uri: 'A B-1.7z', category: 'MAIN' }] } }) };
     }
     metaUrl = url;
     return { ok: true, json: async () => tree('x.archive') };

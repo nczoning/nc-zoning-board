@@ -102,13 +102,13 @@ A location record:
 - `credits` appears only when set; `thumbnail_url` / `picture_url` / `updated_at`
   are `null` when unknown (e.g. WIP/Dummy entries with no Nexus page, which are
   also never `recently_updated`).
-- `archives` is the list of `.archive` filenames the mod ships, unioned across
-  every downloadable file (main + optional variants). **Match these against the
-  player's `archive/pc/mod/` folder to detect which location mods are
-  installed.** It's always present — `[]` when unknown (WIP/Dummy, no Nexus
-  files, or not yet fetched by the cron; see the note below). Names are the bare
-  filename (`Atari AIO.archive`), not a path, so a case-sensitive set membership
-  test against the folder listing is all a consumer needs.
+- `archives` is the list of `.archive` filenames the mod ships. **Match these
+  against the player's `archive/pc/mod/` folder to detect which location mods are
+  installed.** Names are the bare filename (`Atari AIO.archive`), not a path, so
+  a case-sensitive set-membership test against the folder listing is all a
+  consumer needs. It's always present — `[]` means "not determinable", never
+  "ships no archives" (see the note below: some mods' files have no public
+  contents preview, and freshly added mods fill in over a few cron ticks).
 
 ## Caching
 
@@ -188,7 +188,9 @@ re-downloading unchanged data.
   names are (re)fetched only when its Nexus `updated_at` changes, and a fresh
   dataset back-fills them a batch per cron tick rather than all at once. A newly
   added mod can therefore show `archives: []` for a short window before its names
-  land — treat an empty list as "unknown yet", not "ships no archives".
+  land. A minority of mods (~6%) stay `[]` permanently because none of their
+  files expose a public contents preview on Nexus. Either way, treat `[]` as
+  "unknown", never "ships no archives".
 - `recently_updated` rides the content hash: because it depends on the clock,
   a location crossing the `recently_updated_days` boundary changes
   `dataset_version` (and the `ETag`) even when nothing on Nexus changed, so a
