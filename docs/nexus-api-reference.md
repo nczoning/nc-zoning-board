@@ -178,39 +178,52 @@ query ModFiles($modId: ID!, $gameId: ID!) {
 - Returns a flat array of files (main + optional). We take every file's `uri`
   (e.g. `Atari Canyon AIO-27618-1-0-1771273179.7z`).
 
-**Hop 2 — file contents.** For each file, fetch the S3-backed "Preview file
-contents" tree:
+**Hop 2 — file contents.** Each file's contents live at **one of two hosts**,
+because Nexus changed its storage scheme around mid-2026. Route by the shape of
+the file's `uri`:
 
-```text
-https://file-metadata.nexusmods.com/file/nexus-files-s3-meta/{gameId}/{modId}/{uri}.json
-```
+- **Old scheme — `uri` is the friendly filename** (`Atari Canyon AIO-27618-…-.7z`):
 
-The response is a recursive tree of `{ name, type: "directory"|"file", children }`
-nodes (root is `{ children: [...] }`). We walk it and collect every `type:"file"`
-whose `name` ends in `.archive`, unioned across the mod's fetched files, deduped
-and sorted. `.xl` (ArchiveXL) and other files are ignored.
+  ```text
+  https://file-metadata.nexusmods.com/file/nexus-files-s3-meta/{gameId}/{modId}/{uri}.json
+  ```
 
-**Which files we fetch (a measured coverage limit):** the `uri` comes in two
-forms. Older files carry the **friendly filename**
-(`Atari Canyon AIO-27618-1-0-1771273179.7z`) and **have** a contents preview.
-Newer files carry a **UUID storage path** (`uri` contains `/`, e.g.
-`b9/e3/70/b9e37068-…`) and **have no preview** at the file-metadata path — it
-404s regardless of slash-encoding (`scanned`/`scannedV2` are `VERIFIED` in both
-cases, so they don't predict it). So the fetch:
+  A recursive **tree** of `{ name, type: "directory"|"file", children }` (root is
+  `{ children: [...] }`). Walk it; collect every `type:"file"` whose `name` ends
+  in `.archive`.
 
-- **skips UUID-path files entirely** (no wasted subrequest, no false failure);
-- **prefers current categories** (`MAIN`/`OPTIONAL`/`UPDATE`), falling back to an
-  older friendly file (`ARCHIVED`/`OLD_VERSION`) only when a mod has no current
-  previewable file;
-- caps contents fetches per mod (`ARCHIVE_FILES_PER_MOD`) so one mod with many
-  optional variants can't exhaust the run's subrequest budget.
+- **New scheme — `uri` is a UUID storage path** (contains `/`, e.g.
+  `b9/e3/70/b9e37068-…`):
 
-Measured against the live population, **~94% of mods still yield ≥1 `.archive`**;
-the rest (only UUID files, no friendly copy) resolve to `[]`.
+  ```text
+  https://file-manifests.nexusmods.com/{uri}.json
+  ```
+
+  A **flat array** of `{ file_path, file_size, file_hashes }`. Take the basename
+  of each `file_path` ending in `.archive` (e.g.
+  `archive/pc/mod/Foo.archive` → `Foo.archive`).
+
+(The friendly `uri` does *not* work on the manifest host and vice-versa — each
+scheme is served by exactly one host.) Names are unioned across the mod's fetched
+files, deduped and sorted; `.xl` (ArchiveXL) and other files are ignored.
+
+**Which files we fetch:** both schemes are fetchable, so we **prefer current
+categories** (`MAIN`/`OPTIONAL`/`UPDATE`), falling back to older files
+(`ARCHIVED`/`OLD_VERSION`) only when a mod has no current file, and cap contents
+fetches per mod (`ARCHIVE_FILES_PER_MOD`) so one mod with many optional variants
+can't exhaust the run's subrequest budget. Coverage is **near-total**; the
+residual `[]` are loose-file mods with no `.archive`, WIP/Dummy entries (no Nexus
+page), or not-yet-filled records.
+
+> **History:** the first cut fetched *all* files via the file-metadata host and
+> got `[]` for every mod, because new-scheme (UUID) files 404 there. A second cut
+> skipped UUID files (~94% coverage). The `file-manifests` host — which serves the
+> new scheme — closed the gap to near-total. See
+> [[NC-Zoning-Board/wiki/learnings/nexus-file-contents-two-hosts-by-scheme]].
 
 **Output field:** `archives: string[]` on each `LocationFull` record (bare
-filenames, not paths). Always present; `[]` means "not determinable" (all-UUID
-files, or not yet fetched), never "ships no archives".
+filenames, not paths). Always present; `[]` means "not determinable / not yet
+fetched", never "ships no archives".
 
 **Caching & cadence (the load-bearing part):** archive names are near-static —
 they only change on a re-upload, which bumps the mod's `updatedAt`. So the cron
