@@ -247,6 +247,36 @@ test('archives: falls back to older files when no current-category file exists',
   assert.deepEqual((await fetchModArchiveNames(impl, 1)).archives, ['legacy.archive']);
 });
 
+test('archives: falls back to older files when the CURRENT file yields no archives', async () => {
+  // Real case (Shaitan/Santo Domingo): a current file with no readable preview,
+  // the .archive living only in ARCHIVED/OLD_VERSION uploads.
+  const impl = archiveFetch({
+    modFiles: [
+      { uri: 'Current.7z', category: 'MAIN' }, // 404 — no preview / no archive
+      { uri: 'Old-1.zip', category: 'OLD_VERSION' }, // holds the archive
+    ],
+    trees: { 'Current.7z': { ok: false, status: 404 }, 'Old-1.zip': tree('legacy.archive') },
+  });
+  const res = await fetchModArchiveNames(impl, 1);
+  assert.deepEqual(res.archives, ['legacy.archive']);
+  assert.equal(res.ok, true);
+});
+
+test('archives: does NOT fetch older files when a current file already has archives', async () => {
+  let fetchedOld = false;
+  const impl = async (url) => {
+    if (url.includes('api-router')) {
+      return { ok: true, json: async () => ({ data: { modFiles: [
+        { uri: 'Cur.7z', category: 'MAIN' }, { uri: 'Old.zip', category: 'OLD_VERSION' },
+      ] } }) };
+    }
+    if (url.includes('Old.zip')) { fetchedOld = true; return { ok: true, json: async () => tree('old.archive') }; }
+    return { ok: true, json: async () => tree('cur.archive') };
+  };
+  assert.deepEqual((await fetchModArchiveNames(impl, 1)).archives, ['cur.archive']);
+  assert.equal(fetchedOld, false, 'older upload must not be fetched when current has archives');
+});
+
 test('archives: caps contents fetches per mod so one mod cannot exhaust the budget', async () => {
   const many = Array.from({ length: 12 }, (_, i) => ({ uri: `Opt-${i}.7z`, category: 'OPTIONAL' }));
   const trees = Object.fromEntries(many.map((f, i) => [f.uri, tree(`a${i}.archive`)]));
