@@ -189,7 +189,8 @@
             "credits": { "type": "string" },
             "thumbnail_url": { "type": ["string", "null"], "description": "Nexus thumbnail image URL, or null (unknown / WIP / Dummy)." },
             "picture_url": { "type": ["string", "null"], "description": "Nexus full-size image URL, or null." },
-            "updated_at": { "type": ["string", "null"], "format": "date-time", "description": "Nexus last-updated timestamp, or null." }
+            "updated_at": { "type": ["string", "null"], "format": "date-time", "description": "Nexus last-updated timestamp, or null." },
+            "archives": { "type": "array", "items": { "type": "string" }, "description": "The mod's detectable install files: .archive load files AND .xl (ArchiveXL) files, both of which land in archive/pc/mod/ and are readable by an in-game mod (.xl is the only fingerprint a removal-only mod has). Bare filenames, not paths. Match against the player's archive/pc/mod/ folder to detect installed location mods. Excludes CET/AMM .json files (they load into CET's sandboxed folder and are not readable by other mods). Empty when not determinable (an AMM-only mod, a WIP/Dummy entry with no Nexus page, a mod whose Nexus file preview is unavailable, or not yet fetched by the cron) — never 'ships nothing'.", "example": ["Atari Canyon AIO.archive", "atari_aio.xl"] }
           } }
         ]
       },

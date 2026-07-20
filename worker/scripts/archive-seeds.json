@@ -1,0 +1,9 @@
+{
+  "_note": "Manual archive/xl seeds for mods whose Nexus 'Preview file contents' is bugged (404 / 'Content could not be loaded at this time'), so the cron cannot read them. Read from an installed copy of each mod. Injected ONCE per environment into the KV archive cache by seed-archives.mjs; NOT read by the Worker at runtime. Entries self-heal automatically when the mod re-uploads (its updatedAt changes, so the cron refetches — by then the file is usually on the new UUID path and readable). Only numeric keys are applied.",
+  "24887": ["Project-CDSM.archive", "project_cdsm_final_v1.xl", "Dedka Removal Preset.xl"],
+  "22696": ["Akira_Bodyguard.archive", "Akira_Bodyguard.archive.xl", "Mr_Blue_Eyes.archive", "Mr_Blue_Eyes.archive.xl", "Mr_Blue_Eyes.xl", "Mr_Blue_Eyes_Props.xl"],
+  "24131": ["santodomingo_overlooksafehouse.archive", "santodomingo_overlooksafehouse.xl"],
+  "21794": ["Shaitan_Black_Market.archive", "Shaitan_Black_Market.archive.xl", "Shaitan_Black_Market.xl", "Shaitan_Black_Market_Compatibility.xl", "Shaitan_Black_Market_Props.xl", "Shaitan_Black_Market_Flying_Koi_Fish.archive", "Shaitan_Black_Market_Flying_Koi_Fish.xl"],
+  "21288": ["77_glen_oasis.archive", "77_glen_oasis.xl", "77_glen_oasis_removals.xl"],
+  "28598": ["Beach_house_pacifica_shore.archive", "Beach_house_pacifica_shore.xl"]
+}

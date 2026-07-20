@@ -13,12 +13,23 @@
  * unit-testable with a fake KV + fake fetch.
  */
 
-import { fetchTaggedModNodes, fetchModsByUidThumbs } from './nexus.js';
+import { fetchTaggedModNodes, fetchModsByUidThumbs, fetchModArchiveNames } from './nexus.js';
 import { buildDataset } from './merge.js';
 import { districtsPayload } from './districts.js';
-import { KEYS, contentHash, readMeta, writeDataset, writeMeta } from './store.js';
+import {
+  KEYS, contentHash, readMeta, writeDataset, writeMeta, readArchives, writeArchives,
+} from './store.js';
 
 const SCHEMA_VERSION = 1;
+
+// Per-run limits on archive-name fetching. Archives are near-static (a mod's
+// .archive filenames only change on a re-upload, which bumps its updatedAt), so
+// steady state fetches nothing. These budgets cap the cold-start fill and any
+// re-upload burst so archive work can never breach the Worker's 50-subrequest
+// cap alongside the existing discovery + thumbnail calls. A cold cache fills
+// over ~ceil(mods / ARCHIVE_MOD_BUDGET) cron ticks.
+const ARCHIVE_MOD_BUDGET = 15; // max mods refreshed per run
+const ARCHIVE_SUBREQUEST_BUDGET = 25; // max archive subrequests per run
 
 /** Fetch a JSON file from the site origin; throws on non-200. */
 async function fetchJson(fetchImpl, origin, path) {
@@ -82,6 +93,83 @@ async function alertDiscordRecovered(env, fetchImpl) {
 }
 
 /**
+ * Refresh the archive-name cache in place, budgeted. Mutates `cache`
+ * ({ [nexus_id]: { updatedAt, archives } }) and returns { changed } so the
+ * caller knows whether to persist it.
+ *
+ * A mod is refetched only when it's absent from the cache or its updatedAt moved
+ * (the exact re-upload signal for its archive contents). Newest-updated mods are
+ * refreshed first so a re-upload beats cold-fill for the budget. A transient
+ * failure (ok:false) is left uncached so the next run retries, rather than
+ * caching an empty/partial listing as final.
+ */
+async function refreshArchives(fetchImpl, full, cache) {
+  const records = Object.values(full).filter((r) => /^\d+$/.test(r.nexus_id));
+
+  const stale = records
+    .filter((r) => {
+      const c = cache[r.nexus_id];
+      return !c || c.updatedAt !== (r.updated_at ?? null);
+    })
+    .sort((a, b) => String(b.updated_at ?? '').localeCompare(String(a.updated_at ?? '')));
+
+  let changed = false;
+  let refreshed = 0;
+  let okCount = 0;
+  let subrequests = 0;
+  for (const r of stale) {
+    if (refreshed >= ARCHIVE_MOD_BUDGET || subrequests >= ARCHIVE_SUBREQUEST_BUDGET) break;
+    const res = await fetchModArchiveNames(fetchImpl, r.nexus_id);
+    refreshed += 1;
+    subrequests += res.subrequests;
+    if (!res.ok) continue; // transient failure: leave stale, retry next run
+    okCount += 1;
+    cache[r.nexus_id] = { updatedAt: r.updated_at ?? null, archives: res.archives };
+    changed = true;
+  }
+  if (refreshed > 0) {
+    // Ops visibility for the cold-fill / re-upload catch-up (cf. the thumbnail
+    // warnings). Silent in steady state, when nothing is stale.
+    console.log(
+      `archives: refreshed ${okCount}/${refreshed} mods (${stale.length} stale, ${subrequests} subrequests), cache=${Object.keys(cache).length}`,
+    );
+  }
+
+  // Evict entries for mods no longer in the dataset (deleted/hidden on Nexus) so
+  // the cache can't grow without bound. No fetching, just set membership.
+  const live = new Set(records.map((r) => r.nexus_id));
+  for (const id of Object.keys(cache)) {
+    if (!live.has(id)) {
+      delete cache[id];
+      changed = true;
+    }
+  }
+
+  return { changed };
+}
+
+/**
+ * Attach an `archives` string array to every full record (always present, `[]`
+ * when unknown or not yet filled), refreshing the KV-backed cache first. Wrapped
+ * so archive work can NEVER fail the refresh: on any error every record still
+ * gets at least `[]`. Mutates `full` in place; run it before the content hash so
+ * archive changes propagate to the ETag.
+ */
+async function attachArchives(env, fetchImpl, full) {
+  let cache = {};
+  try {
+    cache = await readArchives(env);
+    const { changed } = await refreshArchives(fetchImpl, full, cache);
+    if (changed) await writeArchives(env, cache);
+  } catch (err) {
+    console.warn('archive refresh failed (non-fatal):', String(err).slice(0, 200));
+  }
+  for (const rec of Object.values(full)) {
+    rec.archives = cache[rec.nexus_id]?.archives ?? [];
+  }
+}
+
+/**
  * Run one refresh cycle.
  * @param {object} env  Worker env (DATASET KV binding, SITE_ORIGIN?, DISCORD_WEBHOOK_URL?)
  * @param {typeof fetch} fetchImpl  injectable
@@ -115,6 +203,11 @@ export async function runRefresh(env, fetchImpl = fetch) {
       nowMs: Date.parse(generatedAt),
     });
     const districtsOut = districtsPayload(districts);
+
+    // Enrich every record with its shipped .archive file names (installed-mod
+    // detection). Budgeted + updatedAt-gated, and non-fatal by construction, so
+    // it slots in before the hash without touching the failure posture below.
+    await attachArchives(env, fetchImpl, full);
 
     // Hash the content that actually varies (not generated_at). Tags are
     // included so a tags.json edit propagates through the ETag. `full` carries

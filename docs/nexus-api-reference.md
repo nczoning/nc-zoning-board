@@ -154,6 +154,103 @@ The function returns `{ mods, meta }` where `meta` contains image/timestamp data
 
 ---
 
+### 3. `modFiles` + file-contents: Archive-name Fetch (installed-mod detection)
+
+**Purpose:** Collect the `.archive` filenames each mod ships, published on every
+location record as `archives` so an in-game consumer can match them against the
+player's `archive/pc/mod/` folder and detect which location mods are installed.
+
+Two hops per mod, both **unauthenticated**, on **different hosts** from the V2
+endpoint above:
+
+**Hop 1 — `modFiles` (list a mod's downloadable files).** Endpoint:
+`https://api-router.nexusmods.com/graphql` (the newer public router; the
+`api.nexusmods.com/v2` endpoint does not expose `modFiles`).
+
+```graphql
+query ModFiles($modId: ID!, $gameId: ID!) {
+  modFiles(modId: $modId, gameId: $gameId) { uri }
+}
+```
+
+- **`modId` and `gameId` are `ID!`, not `Int!`** — pass them as strings
+  (`"27618"`, `"3333"`). Passing ints returns a `variableMismatch` error.
+- Returns a flat array of files (main + optional). We take every file's `uri`
+  (e.g. `Atari Canyon AIO-27618-1-0-1771273179.7z`).
+
+**Hop 2 — file contents.** Each file's contents live at **one of two hosts**,
+because Nexus changed its storage scheme around mid-2026. Route by the shape of
+the file's `uri`:
+
+- **Old scheme — `uri` is the friendly filename** (`Atari Canyon AIO-27618-…-.7z`):
+
+  ```text
+  https://file-metadata.nexusmods.com/file/nexus-files-s3-meta/{gameId}/{modId}/{uri}.json
+  ```
+
+  A recursive **tree** of `{ name, type: "directory"|"file", children }` (root is
+  `{ children: [...] }`). Walk it; collect every `type:"file"` whose `name` ends
+  in `.archive`.
+
+- **New scheme — `uri` is a UUID storage path** (contains `/`, e.g.
+  `b9/e3/70/b9e37068-…`):
+
+  ```text
+  https://file-manifests.nexusmods.com/{uri}.json
+  ```
+
+  A **flat array** of `{ file_path, file_size, file_hashes }`. Take the basename
+  of each `file_path` ending in `.archive` (e.g.
+  `archive/pc/mod/Foo.archive` → `Foo.archive`).
+
+(The friendly `uri` does *not* work on the manifest host and vice-versa — each
+scheme is served by exactly one host.) We collect both **`.archive`** load files
+and **`.xl`** (ArchiveXL) files — both install to `archive/pc/mod/` and are
+readable by an in-game mod, and `.xl` is the only fingerprint a removal-only mod
+has. CET/AMM `.json` files are NOT collected (they live in CET's sandboxed
+folder, unreadable by other mods). Names are unioned across the mod's fetched
+files, deduped and sorted.
+
+**Which files we fetch:** both schemes are fetchable, so we **prefer current
+categories** (`MAIN`/`OPTIONAL`/`UPDATE`), falling back to older files
+(`ARCHIVED`/`OLD_VERSION`) only when a mod has no current file, and cap contents
+fetches per mod (`ARCHIVE_FILES_PER_MOD`) so one mod with many optional variants
+can't exhaust the run's subrequest budget. Coverage is **near-total**; the
+residual `[]` are loose-file mods with no `.archive`, WIP/Dummy entries (no Nexus
+page), or not-yet-filled records.
+
+> **History:** the first cut fetched *all* files via the file-metadata host and
+> got `[]` for every mod, because new-scheme (UUID) files 404 there. A second cut
+> skipped UUID files (~94% coverage). The `file-manifests` host — which serves the
+> new scheme — closed the gap to near-total. See
+> [[NC-Zoning-Board/wiki/learnings/nexus-file-contents-two-hosts-by-scheme]].
+
+**Output field:** `archives: string[]` on each `LocationFull` record (bare
+filenames, not paths). Always present; `[]` means "not determinable / not yet
+fetched", never "ships no archives".
+
+**Caching & cadence (the load-bearing part):** archive names are near-static —
+they only change on a re-upload, which bumps the mod's `updatedAt`. So the cron
+caches them in KV (`dataset:v1:archives`, keyed by `nexus_id`) and refetches a
+mod **only when its `updatedAt` moves**. Steady state makes **zero** archive
+requests. A cold cache (or a fresh dataset) is filled **incrementally**, capped
+per cron run (`ARCHIVE_MOD_BUDGET` mods / `ARCHIVE_SUBREQUEST_BUDGET`
+subrequests in [`worker/src/refresh.js`](../worker/src/refresh.js)) so archive
+work can never breach the Worker's 50-subrequest-per-invocation limit alongside
+discovery + thumbnails.
+
+**Error handling:** entirely **non-throwing / non-fatal**. `modFiles` returns
+`{ ok:false }` on failure and a partial file-contents read marks the whole mod
+`ok:false`; either way the cron leaves that mod's cached archives untouched and
+retries next run — it **never** marks the dataset `discovery_stale` (unlike the
+tagged-discovery query, whose failure is fatal). Archives are supplementary.
+
+**Implementation:** `fetchModArchiveNames()` (+ `fetchModFileUris`,
+`fetchArchiveNamesForFile`) in [`worker/src/nexus.js`](../worker/src/nexus.js);
+budgeted refresh in [`worker/src/refresh.js`](../worker/src/refresh.js).
+
+---
+
 ## Image Availability Limitation ⚠️
 
 **Only the featured/header image is available via the public API, for now.**
