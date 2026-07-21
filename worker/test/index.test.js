@@ -18,7 +18,7 @@ function fakeKV(entries = {}) {
 
 const META = {
   schema: 1, generated_at: '2026-07-04T00:00:00.000Z', dataset_version: 'abc123',
-  skipped: [], discovery_stale: false,
+  skipped: [], discovery_stale: false, last_refresh_at: '2026-07-04T00:05:00.000Z',
 };
 // The single representation: full records keyed by id (what /v1/locations serves
 // the values of, and /v1/locations/{id} reads directly). Each carries the
@@ -42,13 +42,27 @@ function seededEnv() {
 
 const GET = (path, headers) => new Request(`https://api.nczoning.net${path}`, { headers });
 
-test('GET /v1/health returns ok + version, no ETag', async () => {
+test('GET /v1/health returns ok + version + cron heartbeat, uncached, no ETag', async () => {
   const res = await worker.fetch(GET('/v1/health'), seededEnv());
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('ETag'), null);
+  assert.equal(res.headers.get('Cache-Control'), 'no-store'); // probe always reads origin
   const body = await res.json();
   assert.equal(body.data.status, 'ok');
   assert.equal(body.data.version, '0.1.0');
+  assert.equal(body.data.last_refresh_at, META.last_refresh_at); // liveness heartbeat (#849)
+  assert.equal(typeof body.data.refresh_age_seconds, 'number');
+  assert.ok(body.data.refresh_age_seconds >= 0);
+});
+
+test('GET /v1/health before the first cron: alive, heartbeat null (not 503)', async () => {
+  const env = { API_VERSION: '0.1.0', DATASET: fakeKV() };
+  const res = await worker.fetch(GET('/v1/health'), env);
+  assert.equal(res.status, 200); // the Worker itself is up, even with empty KV
+  const body = await res.json();
+  assert.equal(body.data.status, 'ok');
+  assert.equal(body.data.last_refresh_at, null);    // cron hasn't run yet
+  assert.equal(body.data.refresh_age_seconds, null);
 });
 
 test('GET /v1/locations returns the full records with recently_updated + envelope window', async () => {
