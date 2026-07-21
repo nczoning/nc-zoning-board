@@ -10,6 +10,11 @@ on:
   push:
     branches: [main, dev]
     paths: ['worker/**', '.github/workflows/deploy-api.yml']
+  # Manual / automated redeploy. The monitor-api-health self-heal dispatches
+  # this (per ref) to revive a wedged refresh cron — a redeploy re-registers the
+  # Cron Trigger (see #849). Env is chosen by the ref, exactly as for push:
+  # dispatch on main → production, on dev → staging.
+  workflow_dispatch:
 
 concurrency:
   group: deploy-api-${{ github.ref }}

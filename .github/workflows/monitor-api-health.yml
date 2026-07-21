@@ -12,7 +12,11 @@ on:
 
 permissions:
   contents: read
-  actions: read   # read this workflow's own run history to detect the recovery edge
+  # write (implies read): read this workflow's own history for the recovery edge,
+  # read deploy-api.yml history for the self-heal budget, and dispatch it to
+  # redeploy a wedged cron (#849 Phase 2). workflow_dispatch fires even from
+  # GITHUB_TOKEN, so no PAT is needed.
+  actions: write
 
 # A slow/queued run shouldn't stack; keep only the latest.
 concurrency:
@@ -49,13 +53,19 @@ jobs:
             echo "prev_outage=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Probe /v1 and alert on outage
+      - name: Probe /v1, alert, and self-heal a wedged cron
         env:
           # Dedicated map-alerts channel, kept separate from submissions.
           NCZ_ALERTS_DISCORD_WEBHOOK_URL: ${{ secrets.NCZ_ALERTS_DISCORD_WEBHOOK_URL }}
           # Was the API down last run? A clean run after a down one is the
           # recovery edge → the script posts a green all-clear exactly once.
           API_HEALTH_PREV_OUTAGE: ${{ steps.prev.outputs.prev_outage }}
+          # Self-heal: on a wedged cron, dispatch deploy-api.yml (per env) to
+          # revive it, budget-guarded (#849 Phase 2). GH_TOKEN authorises the
+          # dispatch + the budget read; GITHUB_REPOSITORY/GITHUB_API_URL are set
+          # by Actions automatically.
+          API_HEALTH_SELF_HEAL: 'true'
+          GH_TOKEN: ${{ github.token }}
           # Both matter: prod (api.nczoning.net) is what in-game mods hit;
           # staging (api-dev) is what the dev site consumes during the B7 bake,
           # where an outage would otherwise be hidden by the client fallback.
