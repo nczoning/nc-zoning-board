@@ -169,4 +169,4 @@ submission lifecycle:
 **Alerts** (`NCZ_ALERTS_DISCORD_WEBHOOK_URL`) covers operational health on a separate channel:
 
 - **`monitor-auto-discovery.yml`**: Daily scan; alerts when a NCZoning-tagged mod fails to parse and isn't covered by a manual entry.
-- **`monitor-api-health.yml`**: Every 15 min; alerts when the Data API (`/v1`) isn't serving. The Worker's own refresh-failure alert (`worker/src/refresh.js`) posts here too (Cloudflare Worker secret, set separately via `wrangler secret put`).
+- **`monitor-api-health.yml`**: Every 15 min; alerts when the Data API (`/v1`) isn't serving **or** its refresh cron has wedged (a frozen `/v1/health.last_refresh_at` heartbeat > 20 min old — the API can serve stale data silently, see #849). On a wedged cron it also **self-heals**: it dispatches `deploy-api.yml` to redeploy the affected Worker (re-registers the Cron Trigger), capped at 2 redeploys/env/hour before escalating for a human. The Worker's own refresh-failure alert (`worker/src/refresh.js`) posts here too (Cloudflare Worker secret, set separately via `wrangler secret put`).
