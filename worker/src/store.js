@@ -6,8 +6,12 @@
  * - dataset:v1:districts /v1/districts payload
  * - dataset:v1:tags      tag dictionary ({ tagId: description })
  * - dataset:v1:meta      { schema, generated_at, dataset_version,
- *                          discovery_stale, skipped }; a failed cycle also
- *                          writes last_error and last_error_at
+ *                          discovery_stale, skipped, last_refresh_at }; a failed
+ *                          cycle also writes last_error and last_error_at.
+ *                          last_refresh_at is the cron liveness heartbeat,
+ *                          stamped every completed cycle (unlike generated_at,
+ *                          which only moves on content change); /v1/health serves
+ *                          it so a wedged cron can be detected (issue #849).
  * - dataset:v1:archives  { [nexus_id]: { updatedAt, archives: [name, ...] } }:
  *                        a persistent cache, NOT part of the served envelope.
  *                        The cron refetches a mod's archive names only when its

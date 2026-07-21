@@ -132,14 +132,44 @@ test('manual-mod images are backfilled into full via modsByUid', async () => {
   assert.equal(full.m1.updated_at, '2026-07-08');
 });
 
-test('unchanged content on the second run skips the write (changed=false)', async () => {
+test('unchanged content on the second run skips the content write (changed=false)', async () => {
   const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
   await runRefresh(env, fakeFetch());
   const before = (await env.DATASET.get(KEYS.meta, 'json')).generated_at;
   const r2 = await runRefresh(env, fakeFetch());
   assert.equal(r2.changed, false);
-  // generated_at unchanged because we didn't rewrite.
+  // generated_at (content time) is preserved — the dataset wasn't rewritten. Only
+  // the last_refresh_at heartbeat moves on an unchanged cycle (see next test).
   assert.equal((await env.DATASET.get(KEYS.meta, 'json')).generated_at, before);
+});
+
+test('every completed cycle advances the last_refresh_at heartbeat (even when unchanged)', async () => {
+  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  await runRefresh(env, fakeFetch());
+  const m1 = await env.DATASET.get(KEYS.meta, 'json');
+  assert.ok(m1.last_refresh_at, 'first run stamps a heartbeat');
+
+  // Pin the heartbeat to a sentinel, then run an UNCHANGED cycle: the content
+  // hash matches, so nothing is rewritten EXCEPT the heartbeat, which must
+  // advance — proving the cron ran. generated_at (content time) must NOT move.
+  // This is the #849 liveness signal: a running-but-idle cron still proves life.
+  await env.DATASET.put(KEYS.meta, JSON.stringify({ ...m1, last_refresh_at: '2000-01-01T00:00:00.000Z' }));
+  const r2 = await runRefresh(env, fakeFetch());
+  assert.equal(r2.changed, false);
+  const m2 = await env.DATASET.get(KEYS.meta, 'json');
+  assert.notEqual(m2.last_refresh_at, '2000-01-01T00:00:00.000Z'); // heartbeat advanced
+  assert.equal(m2.generated_at, m1.generated_at);                  // content time frozen
+});
+
+test('a failed refresh still advances the heartbeat (cron ran; Nexus did not answer)', async () => {
+  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  await runRefresh(env, fakeFetch()); // seed good
+  const seeded = await env.DATASET.get(KEYS.meta, 'json');
+  await env.DATASET.put(KEYS.meta, JSON.stringify({ ...seeded, last_refresh_at: '2000-01-01T00:00:00.000Z' }));
+  await runRefresh(env, fakeFetch({ failNexus: true }));
+  const meta = await env.DATASET.get(KEYS.meta, 'json');
+  assert.equal(meta.discovery_stale, true);                          // data is stale…
+  assert.notEqual(meta.last_refresh_at, '2000-01-01T00:00:00.000Z'); // …but the cron is alive
 });
 
 test('Nexus failure keeps last-known-good and flags stale + alerts Discord', async () => {

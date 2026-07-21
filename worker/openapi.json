@@ -13,8 +13,8 @@
   "paths": {
     "/v1/health": {
       "get": {
-        "summary": "Liveness + deployed version",
-        "description": "Uncached. Does not touch the dataset.",
+        "summary": "Liveness + deployed version + cron heartbeat",
+        "description": "Uncached (no-store). Reads only the small meta record for the cron heartbeat. status is \"ok\" whenever the Worker answers; last_refresh_at is the moment the 5-minute refresh cron last RAN (stamped every cycle, unlike the content-driven generated_at on the envelope), and refresh_age_seconds is its server-computed age. Both are null before the first cron tick. A heartbeat that stops advancing means the cron has wedged and the API is silently serving stale data.",
         "responses": {
           "200": {
             "description": "OK",
@@ -22,7 +22,9 @@
               "allOf": [{ "$ref": "#/components/schemas/Envelope" }, { "type": "object", "properties": {
                 "data": { "type": "object", "properties": {
                   "status": { "type": "string", "const": "ok" },
-                  "version": { "type": "string", "example": "0.1.0" }
+                  "version": { "type": "string", "example": "0.1.0" },
+                  "last_refresh_at": { "type": ["string", "null"], "format": "date-time", "description": "When the refresh cron last ran (heartbeat), or null before the first tick." },
+                  "refresh_age_seconds": { "type": ["integer", "null"], "description": "Server-computed age of last_refresh_at in seconds, or null before the first tick. A clock-free freshness read for the in-game consumer." }
                 } } } }]
             } } }
           }
