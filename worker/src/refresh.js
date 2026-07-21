@@ -177,6 +177,13 @@ async function attachArchives(env, fetchImpl, full) {
  */
 export async function runRefresh(env, fetchImpl = fetch) {
   const origin = env.SITE_ORIGIN || 'https://nczoning.net';
+  // This cron cycle's wall-clock instant. Serves two distinct roles: it's the
+  // content `generated_at` on a cycle that actually rewrites the dataset, AND
+  // the `last_refresh_at` liveness heartbeat stamped on EVERY completed cycle
+  // (changed, unchanged, or failed). The heartbeat is the "when did the cron
+  // last RUN" signal the freshness monitor watches — distinct from generated_at,
+  // which only advances on content change and so can legitimately be hours old.
+  // A frozen heartbeat means scheduled() has stopped executing (issue #849).
   const generatedAt = new Date().toISOString();
 
   try {
@@ -221,6 +228,11 @@ export async function runRefresh(env, fetchImpl = fetch) {
 
     const prev = await readMeta(env);
     if (prev && prev.dataset_version === version && !prev.discovery_stale) {
+      // Content unchanged, but the cron DID run: advance only the liveness
+      // heartbeat so a wedged cron is distinguishable from a healthy idle one.
+      // dataset_version/generated_at stay put, so the ETag and served envelope
+      // are untouched (no cache bust). One tiny KV write per idle tick. See #849.
+      await writeMeta(env, { ...prev, last_refresh_at: generatedAt });
       return { changed: false, version, stale: false };
     }
 
@@ -238,6 +250,7 @@ export async function runRefresh(env, fetchImpl = fetch) {
         dataset_version: version,
         skipped: meta.skipped,
         discovery_stale: false,
+        last_refresh_at: generatedAt, // liveness heartbeat (see #849)
       },
     });
     if (recovered) await alertDiscordRecovered(env, fetchImpl);
@@ -251,6 +264,9 @@ export async function runRefresh(env, fetchImpl = fetch) {
         discovery_stale: true,
         last_error: String(err).slice(0, 300),
         last_error_at: generatedAt,
+        // The cron still RAN (Nexus just didn't answer) — advance the heartbeat
+        // so this reads as "stale data" (discovery_stale), not "wedged cron".
+        last_refresh_at: generatedAt,
       });
     }
     await alertDiscord(env, fetchImpl, err);

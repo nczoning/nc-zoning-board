@@ -58,7 +58,7 @@ parser:
 
 | Route | Returns |
 | --- | --- |
-| `GET /v1/health` | `{ status, version }` (uncached) |
+| `GET /v1/health` | `{ status, version, last_refresh_at, refresh_age_seconds }` (uncached) |
 | `GET /v1/locations` | all locations (full records) as an array |
 | `GET /v1/locations?full=1` | identical to `/v1/locations` (`full=1` is a no-op alias kept for older consumers) |
 | `GET /v1/locations/{id}` | one location record, or 404 |
@@ -184,6 +184,12 @@ re-downloading unchanged data.
   rebuilds the dataset every 5 minutes and serves it from cache, so you're
   shielded from Nexus API hiccups. If a refresh fails, `meta.discovery_stale`
   is `true` and the last-known-good data is served.
+- Freshness vs. liveness: the envelope's `generated_at` is the *content* time —
+  it only moves when the dataset changes (a few times a day), so it can be hours
+  old on a perfectly healthy API. To tell whether the refresh cron is still
+  *running*, read `/v1/health.last_refresh_at` (or the server-computed
+  `refresh_age_seconds`): it advances on every cron cycle. A heartbeat that stops
+  advancing means the cron has wedged and the data is silently frozen.
 - `meta.skipped` lists mods tagged `NCZoning` whose metadata block didn't
   parse: useful if you're a mod author debugging why yours isn't appearing.
 - `archives` is near-static, so the cron fetches it lazily: a mod's archive

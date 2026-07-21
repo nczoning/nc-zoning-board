@@ -104,8 +104,32 @@ const routes = {
   'GET /openapi.json': () =>
     json(spec, { headers: { 'Cache-Control': 'public, max-age=300' } }),
 
-  'GET /v1/health': (request, env) =>
-    json(envelope({ status: 'ok', version: env.API_VERSION }, null)),
+  // Liveness + the cron heartbeat. `status` is "ok" whenever the Worker itself
+  // answers; `last_refresh_at` (the "when did the cron last RUN" stamp, written
+  // every cron cycle — see refresh.js) plus a server-computed `refresh_age_seconds`
+  // let the monitor detect a wedged-but-still-serving cron (issue #849) and give
+  // the clockless in-game consumer a freshness read too. Both are null before the
+  // first cron tick. no-store so the probe always reads origin, never an edge
+  // copy; the read is one small KV get.
+  'GET /v1/health': async (request, env) => {
+    const meta = await env.DATASET.get(KEYS.meta, 'json');
+    const lastRefreshAt = meta?.last_refresh_at ?? null;
+    const refreshAgeSeconds = lastRefreshAt
+      ? Math.max(0, Math.round((Date.now() - Date.parse(lastRefreshAt)) / 1000))
+      : null;
+    return json(
+      envelope(
+        {
+          status: 'ok',
+          version: env.API_VERSION,
+          last_refresh_at: lastRefreshAt,
+          refresh_age_seconds: refreshAgeSeconds,
+        },
+        null,
+      ),
+      { headers: { 'Cache-Control': 'no-store' } },
+    );
+  },
 
   // One representation: the full records as an array, every field the DTO
   // consumer needs, RedData-mappable. `?full=1` is accepted as a no-op alias so

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `/v1/health` now reports the refresh cron's liveness: `last_refresh_at` (stamped every cron cycle, unlike the content-driven `generated_at`) and a server-computed `refresh_age_seconds`. The health monitor alerts on the map-alerts Discord when the heartbeat stops advancing, so a wedged-but-still-serving cron no longer freezes the dataset silently. ([#849](https://github.com/spuddeh/nc-zoning-board/issues/849))
+
 ## [1.5.0] - 2026-07-20
 
 ### Added
