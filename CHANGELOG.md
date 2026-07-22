@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The API's `version` (served at `/v1/health`) is now real SemVer for the API surface — MINOR on an additive field or route, MAJOR on a break — instead of a static `0.1.0`. Backfilled to **1.3.0** for the three additive changes already shipped: `recently_updated` (1.1.0), `archives` (1.2.0), the cron heartbeat (1.3.0). It is not the in-game `ApiVersion()`, which gates only on breaking changes. ([#857](https://github.com/spuddeh/nc-zoning-board/issues/857))
-- The deploy gate now fails if `openapi.json`'s shape changes without an `API_VERSION` bump, or if the four places the version is declared disagree. ([#857](https://github.com/spuddeh/nc-zoning-board/issues/857))
+- CI now fails if `openapi.json`'s shape changes without an `API_VERSION` bump, or if the four places the version is declared disagree. The worker suite also runs on pull requests now, not only at deploy. ([#857](https://github.com/spuddeh/nc-zoning-board/issues/857))
 
 ## [1.6.0] - 2026-07-21
 
