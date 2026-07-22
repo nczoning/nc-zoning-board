@@ -81,12 +81,12 @@ npx wrangler kv key get "dataset:v1:meta" --binding DATASET --local
 | --- | --- |
 | `GET /` | interactive docs (Scalar, renders `openapi.json`) |
 | `GET /openapi.json` | the OpenAPI 3.1 spec |
-| `GET /v1/health` | `{ status, version }` (uncached) |
-| `GET /v1/locations` | slim location array |
-| `GET /v1/locations/{id}` | one full entry (adds description/credits), or 404 |
+| `GET /v1/health` | `{ status, version, last_refresh_at, refresh_age_seconds }` (uncached) |
+| `GET /v1/locations` | all locations, full records, as an array |
+| `GET /v1/locations/{id}` | one full record, or 404 |
 | `GET /v1/districts` | district/subdistrict hierarchy (flat boundaries) |
 | `GET /v1/tags` | tag dictionary |
-| `GET /v1/meta` | `{ counts, discovery_stale, skipped }` |
+| `GET /v1/meta` | `{ discovery_stale, skipped }` (no aggregate counts) |
 
 Every response uses the envelope
 `{ schema, generated_at, dataset_version, data }`. Dataset routes carry
@@ -99,6 +99,29 @@ Docs: `openapi.json` is the source of truth (drift-guarded by
 `test/openapi.test.js`: every served route must be documented and vice
 versa). The human-facing reference with redscript/CET snippets is
 [docs/api-reference.md](../docs/api-reference.md).
+
+## Versioning
+
+`API_VERSION` (served as `version` on `/v1/health`) is SemVer for the API
+*surface*: **MINOR** on an additive field or route, **MAJOR** on a break (which
+also moves `/v1` → `/v2`), **PATCH** on a behaviour fix. It is not
+`dataset_version` (a content hash), and not the in-game NCZoningCore mod's
+`ApiVersion()` integer (a breaking-change gate). Rationale and the backfilled
+history: [docs/api-reference.md#versioning](../docs/api-reference.md#versioning).
+
+It is declared in **four** places that must agree — `wrangler.jsonc` production
+*and* staging (named environments don't inherit `vars`), `openapi.json`
+`info.version`, `package.json`. Bump all four, then:
+
+```bash
+npm run version:lock     # rewrites api-version.lock.json
+```
+
+`test/api-version.test.js` fails the deploy gate when the four disagree, or when
+`openapi.json`'s machine-readable shape moved without a bump. Prose-only edits
+(`description`, `summary`, `example`) don't count as a shape change — but field
+*names* inside a `properties` map do, even when a field is called
+`description`.
 
 ## Rate limiting
 

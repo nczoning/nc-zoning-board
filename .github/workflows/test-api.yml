@@ -1,0 +1,40 @@
+name: Test Data API Worker
+
+# The PR gate for worker/**. deploy-api.yml also runs `npm test`, but only on
+# push to main/dev — that is the DEPLOY gate, and it fires after the merge has
+# already landed. This workflow runs the same suite on the PR, so a failure
+# blocks the merge instead of breaking the next deploy.
+#
+# It notably covers the API_VERSION drift guard (test/api-version.test.js, see
+# issue #857): changing openapi.json's shape without bumping the version must
+# fail review, not production.
+
+on:
+  pull_request:
+    branches: [main, dev]
+    paths: ['worker/**', '.github/workflows/test-api.yml']
+
+concurrency:
+  group: test-api-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Install
+        run: npm ci
+        working-directory: worker
+
+      - name: Test
+        run: npm test
+        working-directory: worker
