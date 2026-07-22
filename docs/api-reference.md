@@ -52,7 +52,8 @@ parser:
 - **`district` is never null**: anywhere outside every district polygon is
   Badlands (the game's own default). `subdistrict` may be null.
 - **Additive versioning:** new fields may appear within `/v1/`; breaking
-  changes would ship as `/v2/`.
+  changes would ship as `/v2/`. Which additive changes have landed is readable
+  from `/v1/health`'s `version` — see [Versioning](#versioning).
 
 ## Routes
 
@@ -111,6 +112,63 @@ A location record:
   consumer needs. It's always present — `[]` means "not determinable / not yet
   fetched", never "ships no archives" (freshly added mods fill in over a few
   cron ticks; see the note below).
+
+## Versioning
+
+Three separate numbers travel with this API. They answer different questions,
+so don't substitute one for another:
+
+| Signal | Where | Moves when |
+| --- | --- | --- |
+| `/v1` path prefix | every route | **only** on a breaking change (→ `/v2`) |
+| `version` | `GET /v1/health` | the API's *shape* changes — SemVer, see below |
+| `dataset_version` | every envelope | the *content* changes (it's a hash, and the `ETag`) |
+
+`version` is SemVer for the API surface:
+
+- **MAJOR** — a breaking change. This also moves `/v1` → `/v2`, so a consumer
+  pinned to a path prefix never silently breaks.
+- **MINOR** — an additive field or route. Safe: existing consumers are
+  unaffected, but a new field is now available.
+- **PATCH** — a behaviour or performance fix worth marking a deploy for, with
+  no change to the shape.
+
+So a consumer can read `/v1/health` once and know whether the field it wants
+exists yet, without probing for it.
+
+| `version` | Added |
+| --- | --- |
+| 1.0.0 | the initial `/v1` surface |
+| 1.1.0 | `recently_updated`, `recently_updated_days` |
+| 1.2.0 | `archives` |
+| 1.3.0 | `last_refresh_at`, `refresh_age_seconds` on `/v1/health` |
+
+**Honesty note:** the marker was a static `0.1.0` until the policy landed, so
+live deploys through the site's 1.6.0 release all reported `0.1.0` regardless of
+shape ([#857](https://github.com/spuddeh/nc-zoning-board/issues/857)). The table
+above is the reconstructed history — what each deploy *should* have served. From
+1.3.0 on, the number is real and CI enforces it.
+
+### Not to be confused with `ApiVersion()`
+
+The in-game **NCZoningCore** mod exposes its own `ApiVersion()` — an integer
+that increments **only on a breaking change**, so redscript consumers can gate
+on compatibility. This API's `version` is a *deploy and shape marker* that moves
+on additive changes too. They are unrelated numbers and will not match.
+
+### For maintainers
+
+`API_VERSION` is declared in four places that must agree — `wrangler.jsonc`
+(production **and** staging; named Wrangler environments don't inherit `vars`),
+`openapi.json` `info.version`, and `package.json`. After bumping all four:
+
+```bash
+cd worker && npm run version:lock
+```
+
+`worker/test/api-version.test.js` fails the deploy gate if the four disagree, or
+if `openapi.json`'s machine-readable shape moved without a bump. Prose-only
+edits (descriptions, summaries, examples) don't count as a shape change.
 
 ## Caching
 
