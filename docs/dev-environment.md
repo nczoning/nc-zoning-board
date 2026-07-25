@@ -17,6 +17,15 @@ Both environments deploy via Cloudflare Pages Git integration: production on
 every push to `main`, staging on every push to `dev` (separate Pages projects on
 the same repo).
 
+**Both read the same location data.** dev.nczoning.net loads from the production
+Data API (`api.nczoning.net`), exactly like the live site — so what differs
+between the two is *code*, never the mods on the map. There has never been a
+deliberate dev dataset: `dev` only ever differed from `main` by being behind on
+merged locations, and pointing the dev site at the staging API just served that
+drift as though it were data. The staging API (`api-dev.nczoning.net`) still
+exists for testing API changes, has no cron, and is opt-in per page load with
+`?api=dev` (see [`url-parameters.md`](url-parameters.md)).
+
 ---
 
 ## Branch Strategy

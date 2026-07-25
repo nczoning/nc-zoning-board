@@ -49,6 +49,12 @@
 	],
 	// Rebuild the dataset every 5 minutes (faster mod propagation after a
 	// submission). Nexus load stays well under limits; see docs/nexus-api-reference.md.
+	// Production is the ONLY environment with a cron (see env.staging below).
+	// KV writes stay cheap because the cron writes only when the content hash
+	// changes, and the liveness heartbeat on an unchanged tick is rate-limited
+	// to HEARTBEAT_MIN_INTERVAL_MS (worker/src/config.js) rather than firing on
+	// all 288 daily ticks. Keep that guard in step with MAX_REFRESH_AGE_S in
+	// scripts/monitor_api_health.js — they are one parameter pair.
 	"triggers": {
 		"crons": [
 			"*/5 * * * *"
@@ -63,7 +69,17 @@
 
 	"env": {
 		// Staging: pulls source files from the dev site, writes to a separate
-		// KV namespace, serves the dev site (B7). Isolated from production.
+		// KV namespace. Isolated from production.
+		//
+		// NO CRON, deliberately. KV's free tier is 1,000 writes/day PER ACCOUNT,
+		// shared by both Workers, and every tick writes at least the liveness
+		// heartbeat — so a 5-min staging cron cost 288 writes/day (~29% of the
+		// account budget) to keep a dataset nobody reads fresh. The dev site now
+		// reads the PRODUCTION API (assets/js/constants.js), because there has
+		// never been a deliberate dev dataset: dev only ever differed from main
+		// by being behind. Refresh staging on demand when testing API changes:
+		//   npx wrangler deploy --env staging   (a deploy runs no cron; trigger
+		//   scheduled() via `npx wrangler dev --env staging --test-scheduled`)
 		"staging": {
 			"name": "nczoning-api-staging",
 			"routes": [
@@ -83,10 +99,13 @@
 					"id": "ac85bf5c0b6f47afac35085408857d4b"
 				}
 			],
+			// MUST be an explicit empty array, not an omitted block. Wrangler
+			// treats an undefined `triggers`/`crons` as "leave the deployed Cron
+			// Triggers in place" and only an empty array as "remove them all", so
+			// deleting this key would silently keep the 5-minute staging cron
+			// running. https://developers.cloudflare.com/workers/configuration/cron-triggers/
 			"triggers": {
-				"crons": [
-					"*/5 * * * *"
-				]
+				"crons": []
 			}
 		}
 	}

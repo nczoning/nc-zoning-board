@@ -7,16 +7,25 @@ in-game consumers and the website itself. Routes, envelope and contract:
 Deploys independently of the Pages site, but mirrors its main/dev split with
 two environments:
 
-| Env | Worker | Domain | Source origin | Deployed from |
-| --- | --- | --- | --- | --- |
-| production | `nczoning-api` | api.nczoning.net | nczoning.net | `main` |
-| staging | `nczoning-api-staging` | api-dev.nczoning.net | dev.nczoning.net | `dev` |
+| Env | Worker | Domain | Source origin | Deployed from | Cron |
+| --- | --- | --- | --- | --- | --- |
+| production | `nczoning-api` | api.nczoning.net | nczoning.net | `main` | every 5 min |
+| staging | `nczoning-api-staging` | api-dev.nczoning.net | dev.nczoning.net | `dev` | **none** |
 
 CI (`.github/workflows/deploy-api.yml`) deploys production on push to `main`
 and staging on push to `dev`, path-filtered to `worker/**`. So the live site
 (main → nczoning.net → api.nczoning.net) only changes through the same
-dev→main gate that protects the site itself; dev work stays on the staging
-API.
+dev→main gate that protects the site itself.
+
+**Production serves every consumer**, including dev.nczoning.net and localhost.
+Staging exists to test *API changes* and is opt-in per page load with `?api=dev`
+(`assets/js/constants.js`). It has no cron because KV bills writes per ACCOUNT
+(1,000/day, shared by both Workers) and a 5-min staging cron spent ~29% of that
+budget keeping a dataset nobody read fresh. Refresh it by hand when testing:
+
+```bash
+npx wrangler dev --env staging --test-scheduled   # then curl /__scheduled
+```
 
 ## Local development
 
@@ -56,16 +65,26 @@ deployed env returns `503 not_ready` until its first cron tick seeds KV.
 
 ## Dataset refresh (cron)
 
-Every 15 minutes the `scheduled` handler runs `runRefresh` (`src/refresh.js`):
-fetch `mods.json` + tags + exclusions + `subdistricts.json` from
-`SITE_ORIGIN`, run the Nexus auto-discovery merge with district enrichment,
-and write to KV **only when the content hash changes**. On any source
-failure it keeps the last-known-good dataset, sets `discovery_stale` in the
-meta record, and (if configured) posts a Discord alert. It never serves an
+Every 5 minutes (production only) the `scheduled` handler runs `runRefresh`
+(`src/refresh.js`): fetch `mods.json` + tags + exclusions + `subdistricts.json`
+from `SITE_ORIGIN`, run the Nexus auto-discovery merge with district
+enrichment, and write to KV **only when the content hash changes**. On any
+source failure it keeps the last-known-good dataset, sets `discovery_stale` in
+the meta record, and (if configured) posts a Discord alert. It never serves an
 empty or partial dataset.
 
-KV keys: `dataset:v1` (slim), `dataset:v1:full`, `dataset:v1:districts`,
-`dataset:v1:tags`, `dataset:v1:meta`.
+The `last_refresh_at` liveness heartbeat (#849) is the one write that bypasses
+the hash gate, so on an *unchanged* tick it is rate-limited to
+`HEARTBEAT_MIN_INTERVAL_MS` (`src/config.js`, 15 min) — otherwise proving the
+cron is alive would cost 288 writes/day on its own. A healthy idle cron
+therefore reports a `refresh_age_seconds` of up to 15 min, which is why
+`MAX_REFRESH_AGE_S` in `scripts/monitor_api_health.js` sits at 45 min. **Those
+two constants are one parameter pair — never change one alone.**
+
+KV keys: `dataset:v1:full`, `dataset:v1:districts`, `dataset:v1:tags`,
+`dataset:v1:meta`, `dataset:v1:archives` (a cross-run cache of per-mod
+`.archive` names, not part of any served payload). There is no longer a slim
+`dataset:v1`: the slim/full fork was collapsed to one representation.
 
 ### Test the cron locally
 

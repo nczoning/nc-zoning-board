@@ -3,17 +3,22 @@ import assert from 'node:assert/strict';
 import { runRefresh } from '../src/refresh.js';
 import { KEYS } from '../src/store.js';
 
-// Minimal in-memory KV: get(key, 'json') + put(key, string).
+// Minimal in-memory KV: get(key, 'json') + put(key, string). `_putCount` exists
+// because KV writes are the scarce resource here (1,000/day per ACCOUNT), so
+// "did this tick write anything at all" is a property worth asserting directly
+// rather than inferring from values.
 function fakeKV(initial = {}) {
   const store = new Map(Object.entries(initial));
+  let puts = 0;
   return {
     async get(key, type) {
       const v = store.get(key);
       if (v === undefined) return null;
       return type === 'json' ? JSON.parse(v) : v;
     },
-    async put(key, value) { store.set(key, value); },
+    async put(key, value) { puts += 1; store.set(key, value); },
     _dump: () => Object.fromEntries(store),
+    _putCount: () => puts,
   };
 }
 
@@ -143,22 +148,59 @@ test('unchanged content on the second run skips the content write (changed=false
   assert.equal((await env.DATASET.get(KEYS.meta, 'json')).generated_at, before);
 });
 
-test('every completed cycle advances the last_refresh_at heartbeat (even when unchanged)', async () => {
+test('an unchanged cycle advances the heartbeat once the interval has elapsed', async () => {
   const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
   await runRefresh(env, fakeFetch());
   const m1 = await env.DATASET.get(KEYS.meta, 'json');
   assert.ok(m1.last_refresh_at, 'first run stamps a heartbeat');
 
-  // Pin the heartbeat to a sentinel, then run an UNCHANGED cycle: the content
-  // hash matches, so nothing is rewritten EXCEPT the heartbeat, which must
-  // advance — proving the cron ran. generated_at (content time) must NOT move.
-  // This is the #849 liveness signal: a running-but-idle cron still proves life.
+  // Pin the heartbeat far enough in the past to be due, then run an UNCHANGED
+  // cycle: the content hash matches, so nothing is rewritten EXCEPT the
+  // heartbeat, which must advance — proving the cron ran. generated_at (content
+  // time) must NOT move. This is the #849 liveness signal: a running-but-idle
+  // cron still proves life.
   await env.DATASET.put(KEYS.meta, JSON.stringify({ ...m1, last_refresh_at: '2000-01-01T00:00:00.000Z' }));
   const r2 = await runRefresh(env, fakeFetch());
   assert.equal(r2.changed, false);
+  assert.equal(r2.heartbeat, true);
   const m2 = await env.DATASET.get(KEYS.meta, 'json');
   assert.notEqual(m2.last_refresh_at, '2000-01-01T00:00:00.000Z'); // heartbeat advanced
   assert.equal(m2.generated_at, m1.generated_at);                  // content time frozen
+});
+
+test('an unchanged cycle inside the heartbeat interval writes NOTHING', async () => {
+  // The write that caused the free-tier alert: the heartbeat bypasses the
+  // content-hash gate, so writing it every tick costs 288 writes/day/env against
+  // a 1,000/day ACCOUNT cap. Rate-limiting it must make an idle tick cost zero.
+  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  await runRefresh(env, fakeFetch());          // seeds; stamps the heartbeat "now"
+  const before = await env.DATASET.get(KEYS.meta, 'json');
+  const writesAfterSeed = env.DATASET._putCount();
+
+  const r2 = await runRefresh(env, fakeFetch()); // immediately after → inside the window
+
+  assert.equal(r2.changed, false);
+  assert.equal(r2.heartbeat, false, 'heartbeat suppressed inside the interval');
+  assert.equal(env.DATASET._putCount(), writesAfterSeed, 'idle tick performed no KV write');
+  const after = await env.DATASET.get(KEYS.meta, 'json');
+  assert.equal(after.last_refresh_at, before.last_refresh_at);
+});
+
+test('a missing last_refresh_at is treated as due (no permanent suppression)', async () => {
+  // Meta written before #849 has no heartbeat field. Date.parse(undefined) is
+  // NaN, and every comparison against NaN is false — so a naive `elapsed >= X`
+  // guard would suppress the heartbeat forever and the monitor would read the
+  // Worker as wedged. It must fall through to "write it".
+  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  await runRefresh(env, fakeFetch());
+  const seeded = await env.DATASET.get(KEYS.meta, 'json');
+  delete seeded.last_refresh_at;
+  await env.DATASET.put(KEYS.meta, JSON.stringify(seeded));
+
+  const r2 = await runRefresh(env, fakeFetch());
+  assert.equal(r2.changed, false);
+  assert.equal(r2.heartbeat, true);
+  assert.ok((await env.DATASET.get(KEYS.meta, 'json')).last_refresh_at);
 });
 
 test('a failed refresh still advances the heartbeat (cron ran; Nexus did not answer)', async () => {

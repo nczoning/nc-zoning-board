@@ -24,6 +24,8 @@ The dev branch exists from **before Phase 0 started** through the eventual merge
 
 Both environments are separate Cloudflare Pages projects on the same repo (prod builds `main`, staging builds `dev`). Cloudflare runs `node scripts/build_mods.js` on every push to the project's branch and deploys the result. No GitHub Actions secrets or tokens needed. Cloudflare's GitHub integration handles authentication itself.
 
+**Location data is the same on both.** dev.nczoning.net reads the production Data API, so the two sites differ in *code*, never in the mods shown. This means a `dev` branch that is behind `main` on merged locations no longer displays a stale map — that drift was only ever visible because the dev site used to read the staging API. See [`dev-environment.md`](dev-environment.md).
+
 ## Contributing to a phase
 
 The migration is structured as discrete phases with clear goals and verification criteria. Current phase-by-phase work is tracked in the [GitHub Project](https://github.com/users/spuddeh/projects/1) under the **WebGPU Migration** stream.

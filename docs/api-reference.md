@@ -3,8 +3,12 @@
 Read-only API serving the NC Zoning Board registry (Cyberpunk 2077 location
 mods) to in-game mods and the website.
 
-- **Production:** `https://api.nczoning.net`
-- **Staging:** `https://api-dev.nczoning.net` (serves the dev site's data)
+- **Production:** `https://api.nczoning.net` — used by **every** consumer,
+  including dev.nczoning.net, preview builds and localhost.
+- **Staging:** `https://api-dev.nczoning.net` — for testing API changes only.
+  It has **no cron**, so its dataset is stale until refreshed manually, and the
+  website reads it only when given `?api=dev` (see
+  [`url-parameters.md`](url-parameters.md)).
 - **Interactive docs:** open the base URL in a browser (rendered from
   [`worker/openapi.json`](../worker/openapi.json)).
 
