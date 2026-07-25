@@ -78,13 +78,25 @@ NCZ.CATEGORY_STYLES = {
 
 // Data API (v1): the site's sole data source is the server-built /v1 dataset.
 // The Nexus auto-discovery merge that once ran client-side now lives entirely in
-// the API (worker/); the browser makes no Nexus calls. Base URL is chosen by
-// hostname so environments line up with the API's: prod → prod API; everything
-// else (dev.nczoning.net, *.pages.dev previews, localhost) → staging API.
+// the API (worker/); the browser makes no Nexus calls.
+//
+// EVERY origin reads PRODUCTION by default — dev.nczoning.net, *.pages.dev
+// previews and localhost included. The old hostname split sent them to the
+// staging API on the premise that it "reflects staging data", but there has
+// never been a deliberate dev dataset: dev differs from main only when merged
+// locations haven't been copied across, i.e. dev is BEHIND. So the split served
+// drift as if it were data, and previewing a map feature on dev meant previewing
+// it against a stale location set. Staging also has no cron now (see
+// worker/wrangler.jsonc), so its dataset is stale by design between manual
+// refreshes.
+//
+// Opt in with ?api=dev when the thing being tested is an API CHANGE rather than
+// the map. URLSearchParams inline matches app.js's idiom; constants.js loads
+// before utils.js, so no shared helper is available here.
 NCZ.API_BASE =
-  location.hostname === "nczoning.net" || location.hostname === "www.nczoning.net"
-    ? "https://api.nczoning.net"
-    : "https://api-dev.nczoning.net";
+  new URLSearchParams(location.search).get("api") === "dev"
+    ? "https://api-dev.nczoning.net"
+    : "https://api.nczoning.net";
 // { etag, data } for the full-locations list. Freshness is driven by the ETag
 // (If-None-Match → 304), not a TTL, so this is stored raw rather than via the
 // TTL-based cacheGet/cacheSet.

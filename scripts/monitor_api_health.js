@@ -2,11 +2,11 @@
 /**
  * Data API health monitor.
  *
- * Why this exists: the website consumes /v1 with a graceful fallback to the
- * client-side merge (B7), and the API's PRIMARY consumer (in-game mods) has
- * NO fallback at all. So a silent website fallback would MASK an API outage:
- * the map looks fine while the mods are broken. This is the independent alarm
- * that closes that gap. It hits the live API on a schedule and pings Discord
+ * Why this exists: /v1 is the website's SOLE data source (the client-side merge
+ * fallback was removed in 1.4.1) and the API's primary consumer, in-game mods,
+ * has no fallback either. Nothing degrades gracefully any more — an API outage
+ * is a total outage, and the only in-app symptom is an empty map. This is the
+ * independent alarm: it hits the live API on a schedule and pings Discord
  * (+ fails the workflow run, a second visible signal) when the API isn't
  * actually usable.
  *
@@ -23,9 +23,15 @@
  * FRESHNESS vs LIVENESS: envelope.generated_at is NOT a liveness signal — the
  * cron only rewrites it when the dataset CONTENT changes (a few times a day), so
  * a healthy-but-idle API legitimately has an hours-old generated_at. The signal
- * we watch is /v1/health's last_refresh_at (→ refresh_age_seconds), stamped on
- * EVERY cron cycle regardless of content. If it stops advancing, scheduled() has
- * stopped executing and the API is silently serving stale data (issue #849).
+ * we watch is /v1/health's last_refresh_at (→ refresh_age_seconds). If it stops
+ * advancing, scheduled() has stopped executing and the API is silently serving
+ * stale data (issue #849).
+ *
+ * The heartbeat is stamped on every changed or failed cycle, but at most every
+ * HEARTBEAT_MIN_INTERVAL_MS on an unchanged one — an unchanged tick has no other
+ * reason to write KV, and the free tier bills writes per account. So a HEALTHY
+ * idle cron reports an age of up to that interval by design, which is why
+ * MAX_REFRESH_AGE_S sits well above it. The two are one parameter pair.
  *
  * SELF-HEAL (#849 Phase 2): a redeploy re-registers the Cron Trigger and revives
  * a wedged cron, so on detected staleness the script dispatches deploy-api.yml on
@@ -50,9 +56,14 @@ const RETRIES = 3;        // transient blips shouldn't page anyone
 const RETRY_DELAY_MS = 4000;
 const FETCH_TIMEOUT_MS = 15000;
 // A cron heartbeat older than this means the 5-min refresh has wedged (#849).
-// 20 min = 4× the cadence: tolerates one missed tick plus stale-while-revalidate,
-// without waiting so long that in-game consumers eat a stale dataset for an hour.
-const MAX_REFRESH_AGE_S = 20 * 60;
+//
+// PAIRED CONSTANT: on an unchanged tick the Worker writes the heartbeat at most
+// every HEARTBEAT_MIN_INTERVAL_MS (worker/src/config.js, currently 15 min), so a
+// perfectly healthy idle cron reports an age of up to 15 min by design. This
+// threshold must stay comfortably above that — 45 min = 3x — or a healthy cron
+// pages the alerts channel AND trips the self-heal redeploy below. Never change
+// one of the two without the other.
+const MAX_REFRESH_AGE_S = 45 * 60;
 
 // ── Self-heal (#849 Phase 2) ────────────────────────────────────────────────
 // A redeploy re-registers the Cron Trigger and reliably revives a wedged cron,
@@ -67,6 +78,11 @@ const SELF_HEAL_WORKFLOW = "deploy-api.yml";
 // dispatching on the ref ships the CORRECT code to each env (a bare
 // `wrangler deploy` from here would push main's code to staging). Overridable via
 // API_HEALTH_SELF_HEAL_MAP (JSON) so the mapping can change without a code edit.
+// Keyed by hostname, and only ever consulted for a target that came back stale —
+// so the staging entry is inert while api-dev is off API_HEALTH_TARGETS. It is
+// kept for the case where staging is temporarily monitored again (e.g. while
+// testing a cron change); note that staging normally has NO cron, so a frozen
+// heartbeat there is expected and redeploying would not "fix" it.
 const DEFAULT_SELF_HEAL_TARGETS = {
   "api.nczoning.net": { env: "production", ref: "main" },
   "api-dev.nczoning.net": { env: "staging", ref: "dev" },
