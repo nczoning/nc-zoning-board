@@ -11,6 +11,7 @@ Query-string flags the app reads at load time. Append to the site URL, e.g.
 | `?forcewebgl` | flag | Forces the Three.js renderer to the WebGL2 backend instead of WebGPU (for comparison/debugging; the scene's compute buildings need WebGPU, so expect a degraded/2D fallback). | `three-scene.js` |
 | `?gamelight` | flag | Lighting **calibration reference** mode: pins the decoded in-game sun, freezes the time-of-day slider, and strips Districts/Pins overlays so surfaces can be matched against the in-game capture. | `app.js`, `three-scene.js` |
 | `?only=<district>` | value | Renders **only** the named `DISTRICT_META` building cloud (e.g. `?only=my_district`, `?only=ugly_building`, `?only=watson`): isolates one cloud for diagnosing placement/content. | `three-scene.js` |
+| `?api=dev` | value | Reads location data from the **staging** API (`api-dev.nczoning.net`) instead of production. Every origin — including dev.nczoning.net, preview builds and localhost — uses production by default; opt in only when testing an API change. Staging has no cron, so its dataset is stale until refreshed manually. | `constants.js` |
 
 Notes:
 

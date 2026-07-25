@@ -66,10 +66,12 @@ jobs:
           # by Actions automatically.
           API_HEALTH_SELF_HEAL: 'true'
           GH_TOKEN: ${{ github.token }}
-          # Both matter: prod (api.nczoning.net) is what in-game mods hit;
-          # staging (api-dev) is what the dev site consumes during the B7 bake,
-          # where an outage would otherwise be hidden by the client fallback.
-          # The script retries 3× before declaring an outage, so a momentary
-          # deploy blip won't page. Drop api-dev here if it ever gets noisy.
-          API_HEALTH_TARGETS: 'https://api.nczoning.net,https://api-dev.nczoning.net'
+          # Production only. api-dev was dropped when staging lost its cron: a
+          # cronless Worker's heartbeat never advances, so it would report an
+          # ever-growing refresh_age_seconds, page this channel every 15 min and
+          # trip the self-heal redeploy in a loop. Staging is refreshed on demand
+          # (see worker/wrangler.jsonc) and the dev site now reads production, so
+          # there is nothing there to monitor. The script retries 3× before
+          # declaring an outage, so a momentary deploy blip won't page.
+          API_HEALTH_TARGETS: 'https://api.nczoning.net'
         run: node scripts/monitor_api_health.js

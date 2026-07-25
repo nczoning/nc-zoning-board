@@ -16,6 +16,7 @@
 import { fetchTaggedModNodes, fetchModsByUidThumbs, fetchModArchiveNames } from './nexus.js';
 import { buildDataset } from './merge.js';
 import { districtsPayload } from './districts.js';
+import { HEARTBEAT_MIN_INTERVAL_MS } from './config.js';
 import {
   KEYS, contentHash, readMeta, writeDataset, writeMeta, readArchives, writeArchives,
 } from './store.js';
@@ -179,11 +180,16 @@ export async function runRefresh(env, fetchImpl = fetch) {
   const origin = env.SITE_ORIGIN || 'https://nczoning.net';
   // This cron cycle's wall-clock instant. Serves two distinct roles: it's the
   // content `generated_at` on a cycle that actually rewrites the dataset, AND
-  // the `last_refresh_at` liveness heartbeat stamped on EVERY completed cycle
-  // (changed, unchanged, or failed). The heartbeat is the "when did the cron
-  // last RUN" signal the freshness monitor watches — distinct from generated_at,
-  // which only advances on content change and so can legitimately be hours old.
-  // A frozen heartbeat means scheduled() has stopped executing (issue #849).
+  // the `last_refresh_at` liveness heartbeat. The heartbeat is the "when did the
+  // cron last RUN" signal the freshness monitor watches — distinct from
+  // generated_at, which only advances on content change and so can legitimately
+  // be hours old. A frozen heartbeat means scheduled() has stopped executing
+  // (issue #849).
+  //
+  // It is stamped unconditionally on a changed or failed cycle (both already
+  // write KV for other reasons, so it is free), and at most every
+  // HEARTBEAT_MIN_INTERVAL_MS on an unchanged one, where it would otherwise be
+  // the only reason to write at all.
   const generatedAt = new Date().toISOString();
 
   try {
@@ -231,9 +237,17 @@ export async function runRefresh(env, fetchImpl = fetch) {
       // Content unchanged, but the cron DID run: advance only the liveness
       // heartbeat so a wedged cron is distinguishable from a healthy idle one.
       // dataset_version/generated_at stay put, so the ETag and served envelope
-      // are untouched (no cache bust). One tiny KV write per idle tick. See #849.
-      await writeMeta(env, { ...prev, last_refresh_at: generatedAt });
-      return { changed: false, version, stale: false };
+      // are untouched (no cache bust). See #849.
+      //
+      // Rate-limited: this write bypasses the content-hash gate, so writing it
+      // every tick costs 288 KV writes/day/env against a 1,000/day ACCOUNT cap.
+      // Writing at most every HEARTBEAT_MIN_INTERVAL_MS keeps the signal (the
+      // monitor's staleness threshold is 3x this) at a third of the cost.
+      const lastRefreshMs = Date.parse(prev.last_refresh_at ?? '');
+      const heartbeatDue = !Number.isFinite(lastRefreshMs)
+        || Date.parse(generatedAt) - lastRefreshMs >= HEARTBEAT_MIN_INTERVAL_MS;
+      if (heartbeatDue) await writeMeta(env, { ...prev, last_refresh_at: generatedAt });
+      return { changed: false, version, stale: false, heartbeat: heartbeatDue };
     }
 
     // Recovery edge: last cycle failed (discovery_stale) and this one rebuilt
