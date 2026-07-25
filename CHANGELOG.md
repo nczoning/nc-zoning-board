@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-07-25
+
 ### Changed
 
 - Daily Workers KV writes cut from ~576–700 to ~100–200 (of a 1,000/day per-account free-tier cap): the staging Worker's cron is removed, and the cron liveness heartbeat is now written at most every 15 minutes on an unchanged tick instead of on all 288.
