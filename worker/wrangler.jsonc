@@ -98,7 +98,15 @@
 					"binding": "DATASET",
 					"id": "ac85bf5c0b6f47afac35085408857d4b"
 				}
-			]
+			],
+			// MUST be an explicit empty array, not an omitted block. Wrangler
+			// treats an undefined `triggers`/`crons` as "leave the deployed Cron
+			// Triggers in place" and only an empty array as "remove them all", so
+			// deleting this key would silently keep the 5-minute staging cron
+			// running. https://developers.cloudflare.com/workers/configuration/cron-triggers/
+			"triggers": {
+				"crons": []
+			}
 		}
 	}
 }
