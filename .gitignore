@@ -54,3 +54,6 @@ assets/lut-source/
 
 # Wrangler local dev state
 worker/.wrangler/
+
+# Generated D1 seed SQL: rebuild with `node worker/scripts/import-locations.mjs`
+worker/.import/

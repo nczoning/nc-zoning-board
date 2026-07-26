@@ -60,6 +60,22 @@
 			"id": "2f547f4c22ab4d5fb2cf4636e50a2559"
 		}
 	],
+	// Location registry (source of truth from Phase 2; Phase 1 imports and
+	// verifies it while mods.json is still the live source). Unlike KV, this
+	// content is NOT derived — losing it loses data, so it is never "recreate
+	// at any time". D1 Time Travel covers 30 days; the git mirror of
+	// data/locations/ is the longer backstop until Part C's nightly export.
+	//
+	// STAGING HAS ITS OWN DATABASE (see env.staging). Named environments do not
+	// inherit bindings, so `wrangler d1 migrations apply` must be run against
+	// BOTH database names, every time.
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "nczoning-data",
+			"database_id": "4365740b-76be-4a99-b985-16641e68703a"
+		}
+	],
 	// Rebuild the dataset every 5 minutes (faster mod propagation after a
 	// submission). Nexus load stays well under limits; see docs/nexus-api-reference.md.
 	// Production is the ONLY environment with a cron (see env.staging below).
@@ -111,6 +127,17 @@
 				{
 					"binding": "DATASET",
 					"id": "9fe7b7d13d6348d1913b8a01aca1fef6"
+				}
+			],
+			// Same binding name as production, different database. Declared in
+			// full because named environments inherit nothing — omitting this
+			// block does not fall back to the production database, it leaves
+			// env.DB undefined and every query throws at runtime.
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "nczoning-data-staging",
+					"database_id": "43bc0232-5f32-49c3-863d-ff3e53422827"
 				}
 			],
 			// MUST be an explicit empty array, not an omitted block. Wrangler
