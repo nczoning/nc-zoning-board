@@ -99,9 +99,15 @@ a "verified" migration ends up missing in production.
 
 ```bash
 export CLOUDFLARE_ACCOUNT_ID=b9937d8d595fad7de8d1549b22390281
-npx wrangler d1 migrations apply nczoning-data         --remote
-npx wrangler d1 migrations apply nczoning-data-staging --remote
+npx wrangler d1 migrations apply nczoning-data --remote
+npx wrangler d1 migrations apply nczoning-data-staging --env staging --remote
 ```
+
+**`--env staging` is not optional on the second line.** Wrangler resolves
+database names from the top-level config only, so without it the staging
+database does not exist as far as the command is concerned and you get
+`Couldn't find a D1 DB with the name or binding` — which is the mechanism by
+which "apply it to both" quietly becomes "applied to one".
 
 Unlike KV, this content is **not derived** — losing it loses data. D1 Time
 Travel covers 30 days; `data/locations/` in git is the longer backstop until
