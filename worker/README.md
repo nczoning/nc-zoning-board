@@ -113,6 +113,32 @@ Unlike KV, this content is **not derived** — losing it loses data. D1 Time
 Travel covers 30 days; `data/locations/` in git is the longer backstop until
 the nightly export lands.
 
+### What staging is for (and what it is not)
+
+**`nczoning-data-staging` is a write sandbox, not a preview of production.** It
+does not mirror prod, and there is deliberately **no sync job**. It exists so the
+Phase 4/5 admin operations — approve, reject, hide, dismiss — can be run once
+against throwaway data before they touch the real registry.
+
+It is empty until then, on purpose. Note that staging has **no cron** and the
+health monitor does not watch it, so nothing there refreshes or is observed;
+`?api=dev` tests API *code*, never API *data*.
+
+Seed it when you want a realistic starting point, then treat it as disposable:
+
+```bash
+# either regenerate from the repo...
+node scripts/import-locations.mjs --out .import/seed.sql
+npx wrangler d1 execute nczoning-data-staging --env staging --remote --file .import/seed.sql
+
+# ...or copy production across
+npx wrangler d1 export nczoning-data --remote --output .import/prod.sql
+npx wrangler d1 execute nczoning-data-staging --env staging --remote --file .import/prod.sql
+```
+
+Full reasoning, including why the Phase 2 soak cannot run here: the
+`staging-is-a-write-sandbox-not-a-preview` decision in the project wiki.
+
 ### One-time import + the parity gate
 
 ```bash
