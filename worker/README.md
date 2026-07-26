@@ -206,8 +206,9 @@ scripts green.
 
 ## Admin auth (Phase 3)
 
-Login only — there are no write routes yet. `/admin/` in the site repo is a stub
-that shows who you are signed in as.
+Sign-in and the collaborator gate. The write routes it gates are in
+[Admin API](#admin-api-phase-4) below; `/admin/` in the site repo is the
+dashboard that drives them.
 
 | Route | Method | Does |
 | --- | --- | --- |
@@ -290,6 +291,65 @@ npm run dev
 curl "http://127.0.0.1:8787/__scheduled"                 # trigger one refresh
 npx wrangler kv key get "dataset:v1:meta" --binding DATASET --local
 ```
+
+## Admin API (Phase 4)
+
+Every route below is gated on collaborator status, answers `no-store`, and needs
+`credentials: 'include'` from an origin in `ADMIN_ORIGINS` (`src/auth.js`).
+**`*.pages.dev` preview URLs are not on that list**, so a PR preview cannot
+exercise auth — test on `dev.nczoning.net`. These are deliberately absent from
+`openapi.json`, which documents the public read surface only.
+
+| Route | Method | Does |
+| --- | --- | --- |
+| `/admin/locations` | GET | every location, all statuses, including `admin_notes` |
+| `/admin/locations` | POST | 201; `id` is server-generated and refused from input |
+| `/admin/locations/{id}` | GET / PATCH / DELETE | PATCH is partial; DELETE keeps the full record in the audit row |
+| `/admin/tags` | GET | the registry, each row with `usage_count` |
+| `/admin/tags` | POST | 201; 409 `tag_exists` on a duplicate slug |
+| `/admin/tags/{slug}` | GET / PATCH / DELETE | see the two rules below |
+| `/admin/audit` | GET | newest first, `?limit=` capped at 500 |
+
+**Unknown payload keys are a 422, not an ignore**, and `id` is refused outright.
+A silently dropped typo looks exactly like a successful save.
+
+### 🔴 Tags live in the join, and writes must go through it
+
+`locations.tags` is still present (migration 0002 is additive so parity can be
+proven before the column drops), but `materializeFromD1` reads
+**`location_tags`**. A write that touched only the column returned `200` and
+changed nothing on the map. `syncLocationTags()` in `src/tag-registry.js` owns
+both representations and is the only thing that may write either; it batches so
+the join is never briefly empty, and it keeps the synthetic `nczoning` marker in
+the legacy column for `source='auto'` rows so the stored shape does not drift.
+
+Tag validation reads the **`tags` table**, not the KV snapshot. Reading KV was
+correct while tags came from a file in git and became wrong the moment they were
+editable: a tag created through the API would have 422'd on first use.
+
+### 🔴 Two tag rules the schema implies but does not enforce
+
+- **`slug` is the primary key**, so renaming one is an `ON UPDATE CASCADE`
+  through `location_tags` and a link-breaking event. The cascade only fires with
+  foreign keys enforced — D1 has them on, SQLite does not by default — so the
+  handler re-counts the links after a rename and returns **500 `cascade_failed`**
+  rather than reporting a success that silently orphaned every record. The
+  dashboard keeps the slug read-only behind an explicit unlock; routine
+  relabelling is what `name` is for.
+- **Deleting a tag still in use is refused** — 409 `tag_in_use`, with the count
+  and the affected records in the body. `location_tags` has no `ON DELETE` for
+  `tag_slug`, so a bare delete fails on the foreign key with an opaque error, and
+  a cascade would strip the tag from every record as a side effect of one click.
+  Detach first, then delete.
+- **`nczoning` can never be created or renamed into.** It is not a registry row;
+  it is a marker the materializer prepends to auto-sourced records. A row with
+  that slug would collide with it, and deleting that row would strip the tag from
+  every auto-discovered record at once.
+
+Tests run against **real SQLite with the real migrations**
+(`test-support/d1-sqlite.mjs`), not a SQL-shape-matching mock: the two rules
+above are claims about constraints, and a mock can only restate the belief it was
+written from.
 
 ## Routes
 

@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A second harness that runs both source paths head-to-head across a swept clock, and fails if the swept field never varied.
 - GitHub sign-in for admins at `/admin/`, gated on repository collaborator status.
 - Admin CRUD over the location registry, with an append-only audit log: every mutation records who did it, and the record before and after. Nothing on the live map reads these writes yet.
+- The admin dashboard at `/admin/`: browse and filter every location, edit the full record, and read the audit log. Saves send only the fields that actually changed.
+- Tag management in the dashboard. A tag still attached to locations cannot be deleted — the refusal lists what is using it. Renaming a tag's identifier is locked behind an explicit unlock, because it re-points existing records and breaks `?tag=` links; the display name is the safe thing to edit.
+
+### Fixed
+
+- Admin tag edits reached the legacy column but not the join the map reads, so they returned success and changed nothing. Both are now written together.
 
 ### Changed
 
