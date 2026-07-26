@@ -135,11 +135,24 @@
 				// Pre-1.0 window — see the production block above.
 				"API_VERSION": "0.3.0",
 				"SITE_ORIGIN": "https://dev.nczoning.net",
-				// See the production block. Staging can be flipped to "d1"
-				// independently to exercise the D1 path without touching prod —
-				// but note staging has no cron, so trigger a cycle by hand
-				// (`wrangler dev --env staging --test-scheduled`).
-				"DATA_SOURCE": "mods"
+				// STAGING IS THE D1 CANARY: it runs the D1 path while production
+				// stays on mods.json, so the binding, the reads and the whole
+				// refresh cycle are exercised on a deployed Worker without the
+				// live map depending on any of it.
+				//
+				// This is the one thing unit tests and the local parity scripts
+				// cannot prove — that env.DB actually resolves at runtime in a
+				// deployed environment that inherits no bindings.
+				//
+				// Staging has no cron, so trigger a cycle by hand:
+				//   npx wrangler dev --env staging --remote --test-scheduled
+				//   curl "http://127.0.0.1:8787/__scheduled"
+				// Space repeat triggers ~60s apart: KV reads are eventually
+				// consistent, so back-to-back cycles re-read the pre-write
+				// archive cache and appear to stall.
+				// Seed its database first — an empty `locations` is refused, by
+				// design, rather than materialized as an empty map.
+				"DATA_SOURCE": "d1"
 			},
 			// dashboard title: nczoning-api-dataset-staging
 			"kv_namespaces": [

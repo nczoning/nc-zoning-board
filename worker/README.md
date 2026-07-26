@@ -191,7 +191,7 @@ scripts green.
 
 ```bash
 npm run dev
-curl "http://127.0.0.1:8787/cdn-cgi/handler/scheduled"   # trigger one refresh
+curl "http://127.0.0.1:8787/__scheduled"                 # trigger one refresh
 npx wrangler kv key get "dataset:v1:meta" --binding DATASET --local
 ```
 
