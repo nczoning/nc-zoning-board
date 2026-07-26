@@ -1,6 +1,21 @@
 /**
  * fix_coords_from_project.js
  *
+ * ⚠️ HISTORICAL — THIS SCRIPT NO LONGER RUNS. Its board, user Project #3
+ * (the Z/Yaw migration), was completed and deleted on 2026-07-26. `PROJECT_OWNER`
+ * and `PROJECT_NUMBER` below therefore point at nothing, and the GraphQL query
+ * will return `user.projectV2: null` rather than an obvious error.
+ *
+ * It was deliberately NOT repointed during the 2026-07-26 move of the NC Zoning
+ * Board project to the `nczoning` org. That move concerns Project #1; this
+ * script never referenced it. Swapping the owner here would aim a finished
+ * one-off at a live board.
+ *
+ * Kept for the record of how the Z/Yaw backfill was done. To revive it for a
+ * different board, note the query below uses `user(login:)` — an ORG-owned
+ * project needs `organization(login:)` instead, which is a different root field,
+ * not a string swap.
+ *
  * Reads all "Incorrect Coords" items from the Z/Yaw migration GitHub Project,
  * overwrites X, Y (and optionally Z, Yaw) in data/locations/*.json, then marks
  * each item "Processed".
