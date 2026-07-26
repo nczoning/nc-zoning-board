@@ -81,7 +81,7 @@ Prefer a permanent, manually curated entry? See **[docs/adding-mods.md](docs/add
 | [Coordinate System](docs/coordinate-system.md) | CET ↔ Leaflet transform, calibration data |
 | [Architecture](docs/architecture.md) | File structure, data flow, tech stack |
 | [Tile Generation](docs/tile-generation.md) | Map tiling, source images, upgrading resolution |
-| [Roadmap](docs/roadmap.md) | Current status, planned features |
+| [Roadmap](https://github.com/orgs/nczoning/projects/1) | Current status and planned work — the project board is the roadmap |
 
 ## Tech Stack
 
