@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The Data API Worker deploys to the project-owned Cloudflare account, with its production and staging KV namespaces repointed to match.
+- The API surface returns to pre-1.0: `version` at `/v1/health` is now **0.3.0**, down from 1.3.0. While on `0.x`, breaking changes bump MINOR, additive changes bump PATCH, and the path stays `/v1`. `1.0.0` returns when the first in-game mod ships.
 
 ## [1.7.1] - 2026-07-25
 

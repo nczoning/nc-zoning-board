@@ -128,7 +128,24 @@ so don't substitute one for another:
 | `version` | `GET /v1/health` | the API's *shape* changes — SemVer, see below |
 | `dataset_version` | every envelope | the *content* changes (it's a hash, and the `ETag`) |
 
-`version` is SemVer for the API surface:
+`version` is SemVer for the API surface.
+
+> ⚠️ **The API is currently pre-1.0 (`0.3.0`), and the rules below are inverted
+> while it is.** The surface was rolled back from `1.3.0` because nothing
+> consuming it has shipped yet, and the upcoming admin/D1 work takes shape
+> changes rather than deferring them. On a 1.x line each of those would need
+> MAJOR plus a `/v1` → `/v2` move, standing up a parallel surface with no
+> consumers to preserve.
+>
+> **While on `0.x`:** breaking → **MINOR**, additive → **PATCH**, and **the path
+> stays `/v1` throughout** — SemVer permits breaking changes before 1.0, which is
+> what makes this resolve cleanly. Pin to a shape you have read, not to `/v1`
+> alone.
+>
+> `1.0.0` returns the day the first in-game mod ships, and the rules below resume
+> in full from there.
+
+From `1.0.0` onward:
 
 - **MAJOR** — a breaking change. This also moves `/v1` → `/v2`, so a consumer
   pinned to a path prefix never silently breaks.
@@ -140,18 +157,28 @@ so don't substitute one for another:
 So a consumer can read `/v1/health` once and know whether the field it wants
 exists yet, without probing for it.
 
-| `version` | Added |
-| --- | --- |
-| 1.0.0 | the initial `/v1` surface |
-| 1.1.0 | `recently_updated`, `recently_updated_days` |
-| 1.2.0 | `archives` |
-| 1.3.0 | `last_refresh_at`, `refresh_age_seconds` on `/v1/health` |
+The three additive changes the surface has taken, in order:
 
-**Honesty note:** the marker was a static `0.1.0` until the policy landed, so
-live deploys through the site's 1.6.0 release all reported `0.1.0` regardless of
-shape ([#857](https://github.com/spuddeh/nc-zoning-board/issues/857)). The table
-above is the reconstructed history — what each deploy *should* have served. From
-1.3.0 on, the number is real and CI enforces it.
+| Shape change | Under the 1.x numbering | Now |
+| --- | --- | --- |
+| the initial `/v1` surface | 1.0.0 | 0.0.0 |
+| `recently_updated`, `recently_updated_days` | 1.1.0 | 0.1.0 |
+| `archives` | 1.2.0 | 0.2.0 |
+| `last_refresh_at`, `refresh_age_seconds` on `/v1/health` | 1.3.0 | **0.3.0** *(current)* |
+
+The rollback is mechanical: the MINOR digit is preserved and the MAJOR drops, so
+the three changes already made survive as `0.3.0`.
+
+**Honesty note:** the marker was a static `0.1.0` until the SemVer policy landed,
+so live deploys through the site's 1.6.0 release all reported `0.1.0` regardless
+of shape ([#857](https://github.com/spuddeh/nc-zoning-board/issues/857)). The
+policy backfilled it to `1.3.0`, which shipped in 1.7.0 — and it has now been
+rolled back to `0.3.0`. The middle column above is a reconstruction (what each
+deploy *should* have served); the right-hand column is what the API serves today.
+
+⚠️ **`0.3.0` is numerically lower than the `1.3.0` recent deploys served.**
+Nothing compares this field numerically — verified before the rollback — but a
+consumer that starts doing so must not read the decrease as a downgrade.
 
 ### Not to be confused with `ApiVersion()`
 
