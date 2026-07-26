@@ -248,6 +248,28 @@ NCZ.pointInPolygon = function (point, ring) {
 
 // Builds the full popup HTML string for a mod.
 // View-agnostic: both Leaflet (marker.bindPopup) and Three.js (CSS2DObject) call this.
+/**
+ * Normalise whatever /v1/tags returned into the { slug: description } map the
+ * renderers use.
+ *
+ * TRANSITIONAL: accepts BOTH the array-of-records shape (D1-backed, current)
+ * and the legacy { slug: description } dictionary. Not defensive coding for its
+ * own sake — the site and the Worker deploy independently, and the dev site
+ * reads the PRODUCTION API by default, so during the migration a new site can
+ * legitimately be talking to an API still serving the old shape. Tolerating
+ * both means the two can ship in either order with no flag day.
+ *
+ * Delete the dictionary branch once every environment serves the array.
+ */
+NCZ.normaliseTags = function (payload) {
+  if (Array.isArray(payload)) {
+    return Object.fromEntries(
+      payload.map((t) => [t.slug, t.description ?? ""])
+    );
+  }
+  return payload && typeof payload === "object" ? payload : {};
+};
+
 NCZ.buildPopupHtml = function (mod, catStyle, nexusThumbs, tagsDict) {
   const nexus_id_lower = String(mod.nexus_id).toLowerCase();
   let nexusUrl = `https://www.nexusmods.com/cyberpunk2077/mods/${mod.nexus_id}`;

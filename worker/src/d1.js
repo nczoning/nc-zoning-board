@@ -40,6 +40,52 @@ export async function readDismissedIds(env) {
   return new Set((results ?? []).map((r) => String(r.nexus_id)));
 }
 
+/**
+ * The tag registry, in display order. This is the /v1/tags payload shape:
+ * an array of records, matching /v1/locations and the per-record philosophy,
+ * rather than the arbitrarily-keyed map it used to be (which is also awkward
+ * for the in-game RedData `FromJson`).
+ *
+ * `name` falls back to the slug when NULL, which is exactly today's rendering —
+ * the site shows the raw tag string as the badge. That fallback is what lets
+ * this ship without any visual change until labels are actually set.
+ */
+export async function readTags(env) {
+  const { results } = await env.DB.prepare(
+    'SELECT slug, name, description, sort_order FROM tags ORDER BY sort_order, slug',
+  ).all();
+  return (results ?? []).map((r) => ({
+    slug: r.slug,
+    name: r.name ?? r.slug,
+    description: r.description,
+    sort_order: r.sort_order,
+  }));
+}
+
+/**
+ * Per-location tag slugs, as a Map(location_id -> string[]).
+ *
+ * Ordered by slug, because tag order carries no meaning — it is a set rendered
+ * as badges. 286 of the 287 manual records were already alphabetical and the
+ * single outlier was normalised, so this reproduces the existing output rather
+ * than imposing a new order.
+ *
+ * `nczoning` is absent by construction (it is not a `tags` row), and is
+ * re-added by the materializer for auto-sourced records, exactly as merge.js
+ * prepends it.
+ */
+export async function readLocationTags(env) {
+  const { results } = await env.DB.prepare(
+    'SELECT location_id, tag_slug FROM location_tags ORDER BY location_id, tag_slug',
+  ).all();
+  const map = new Map();
+  for (const r of results ?? []) {
+    if (!map.has(r.location_id)) map.set(r.location_id, []);
+    map.get(r.location_id).push(r.tag_slug);
+  }
+  return map;
+}
+
 /** How long a collaborator verdict is trusted before it is re-checked. */
 export const COLLABORATOR_TTL_MS = 10 * 60 * 1000;
 

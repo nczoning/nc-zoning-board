@@ -150,7 +150,7 @@ function withArchives(record, liveRecord) {
   return { ...record, archives: liveRecord.archives };
 }
 
-function buildFromRows(rows, dismissedIds, tagsDict, districts, liveRecords, nowMs) {
+function buildFromRows(rows, dismissedIds, tagsDict, districts, liveRecords, nowMs, locationTags) {
   const { full } = materializeFromD1({
     rows,
     dismissed: dismissedIds,
@@ -158,6 +158,10 @@ function buildFromRows(rows, dismissedIds, tagsDict, districts, liveRecords, now
     nexusNodes: [], // nothing auto-publishes; images arrive via manualThumbs
     districts,
     manualThumbs: thumbsFromLive(liveRecords),
+    // The join. Without it materializeFromD1 falls back to the legacy
+    // locations.tags column, so the gate would pass while testing the path
+    // production no longer takes.
+    locationTags,
     nowMs,
   });
   const byId = new Map(liveRecords.map((r) => [r.id, r]));
@@ -195,7 +199,14 @@ async function main() {
   console.log(`live: ${liveRecords.length} records, generated_at ${envelope.generated_at}\n`);
 
   const dismissedIds = new Set(dismissedRows.map((r) => String(r.nexus_id)));
-  const candidate = buildFromRows(rows, dismissedIds, tagsDict, subdistricts.districts, liveRecords, nowMs);
+
+  const locationTags = new Map();
+  for (const r of query(db, 'SELECT location_id, tag_slug FROM location_tags ORDER BY location_id, tag_slug')) {
+    if (!locationTags.has(r.location_id)) locationTags.set(r.location_id, []);
+    locationTags.get(r.location_id).push(r.tag_slug);
+  }
+
+  const candidate = buildFromRows(rows, dismissedIds, tagsDict, subdistricts.districts, liveRecords, nowMs, locationTags);
 
   // --- ID assertion (the deep-link contract) ----------------------------
   const liveIds = new Set(liveRecords.map((r) => r.id));
@@ -248,7 +259,7 @@ async function main() {
     const mutated = rows.map((r, i) => (i === 0 ? mutate(r) : r));
     let differs;
     try {
-      const out = buildFromRows(mutated, dismissedIds, tagsDict, subdistricts.districts, liveRecords, nowMs);
+      const out = buildFromRows(mutated, dismissedIds, tagsDict, subdistricts.districts, liveRecords, nowMs, locationTags);
       differs = !compare(out, liveRecords);
     } catch {
       differs = true; // a throw is also a detection

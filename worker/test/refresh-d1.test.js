@@ -112,13 +112,28 @@ function fakeFetch({ banModsJson = false } = {}) {
   };
 }
 
-function fakeD1({ rows = ROWS, dismissed = [{ nexus_id: '777' }], count, fail = false } = {}) {
+// The tag registry and the join, mirroring migration 0002. `nczoning` is
+// absent from both, exactly as in the real schema — the materializer re-adds it
+// for auto-sourced records.
+const TAG_ROWS = [
+  { slug: 'apartment', name: null, description: 'a place', sort_order: 1 },
+  { slug: 'corpo', name: null, description: 'suits', sort_order: 2 },
+];
+const LOCATION_TAG_ROWS = [{ location_id: 'm1', tag_slug: 'apartment' }];
+
+function fakeD1({
+  rows = ROWS, dismissed = [{ nexus_id: '777' }], count, fail = false,
+  tagRows = TAG_ROWS, locationTagRows = LOCATION_TAG_ROWS,
+} = {}) {
   return {
     prepare(sql) {
       return {
         async all() {
           if (fail) throw new Error('D1 unavailable');
           if (sql.includes('dismissed_candidates')) return { results: dismissed };
+          // Checked before `FROM locations`: "FROM location_tags" contains it.
+          if (sql.includes('FROM location_tags')) return { results: locationTagRows };
+          if (sql.includes('FROM tags')) return { results: tagRows };
           return { results: rows };
         },
         async first() {
