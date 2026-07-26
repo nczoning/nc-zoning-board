@@ -171,7 +171,7 @@ the three changes already made survive as `0.3.0`.
 
 **Honesty note:** the marker was a static `0.1.0` until the SemVer policy landed,
 so live deploys through the site's 1.6.0 release all reported `0.1.0` regardless
-of shape ([#857](https://github.com/spuddeh/nc-zoning-board/issues/857)). The
+of shape ([#857](https://github.com/nczoning/nc-zoning-board/issues/857)). The
 policy backfilled it to `1.3.0`, which shipped in 1.7.0 — and it has now been
 rolled back to `0.3.0`. The middle column above is a reconstruction (what each
 deploy *should* have served); the right-hand column is what the API serves today.

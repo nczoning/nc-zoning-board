@@ -31,7 +31,7 @@ The NC Zoning Board is a side project of the Locations Hub. Visit the **#nc-zoni
 
 ```bash
 # Clone the repo
-git clone https://github.com/spuddeh/nc-zoning-board.git
+git clone https://github.com/nczoning/nc-zoning-board.git
 cd nc-zoning-board
 
 # Install dependencies (only needed for tile generation)
