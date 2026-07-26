@@ -266,7 +266,7 @@ NCZ.buildPopupHtml = function (mod, catStyle, nexusThumbs, tagsDict) {
 
   const [cX, cY, cZ] = mod.coordinates;
   const yawParam = mod.yaw != null ? `&yaw=${mod.yaw}` : "";
-  const editUrl = `https://github.com/spuddeh/nc-zoning-board/issues/new?template=modify_location.yml&location_id=${mod.id}&mod_name=${encodeURIComponent(mod.name)}&authors=${encodeURIComponent(mod.authors.join(", "))}&coord_x=${cX}&coord_y=${cY}&coord_z=${cZ ?? ""}&yaw=${mod.yaw ?? ""}${yawParam}`;
+  const editUrl = `https://github.com/nczoning/nc-zoning-board/issues/new?template=modify_location.yml&location_id=${mod.id}&mod_name=${encodeURIComponent(mod.name)}&authors=${encodeURIComponent(mod.authors.join(", "))}&coord_x=${cX}&coord_y=${cY}&coord_z=${cZ ?? ""}&yaw=${mod.yaw ?? ""}${yawParam}`;
 
   const nexusThumb = nexusThumbs[String(mod.nexus_id)];
   const thumbSrc = nexusThumb?.thumbnailUrl || null;
