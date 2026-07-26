@@ -28,7 +28,7 @@ Both environments are separate Cloudflare Pages projects on the same repo (prod 
 
 ## Contributing to a phase
 
-The migration is structured as discrete phases with clear goals and verification criteria. Current phase-by-phase work is tracked in the [GitHub Project](https://github.com/users/spuddeh/projects/1) under the **WebGPU Migration** stream.
+The migration is structured as discrete phases with clear goals and verification criteria. Current phase-by-phase work is tracked in the [GitHub Project](https://github.com/orgs/nczoning/projects/1) under the **3D Scene** stream.
 
 ### Starting a new phase
 
@@ -220,7 +220,7 @@ When all 7 phases are complete and verified on `dev.nczoning.net`:
 
 ## Related documentation
 
-- [GitHub Project](https://github.com/users/spuddeh/projects/1): current phase-by-phase work.
+- [GitHub Project](https://github.com/orgs/nczoning/projects/1): current phase-by-phase work.
   Every item carries **Stream**, **Status** and **Release** — an empty one is a bug.
   Field options, read from the live board 2026-07-26:
   - **Stream** — Upstream & Platform / 3D Scene / Site & Registry / Bugs
