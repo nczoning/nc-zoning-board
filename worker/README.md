@@ -124,17 +124,34 @@ It is empty until then, on purpose. Note that staging has **no cron** and the
 health monitor does not watch it, so nothing there refreshes or is observed;
 `?api=dev` tests API *code*, never API *data*.
 
-Seed it when you want a realistic starting point, then treat it as disposable:
+**Reseed it by copying production**, then treat it as disposable:
 
 ```bash
-# either regenerate from the repo...
-node scripts/import-locations.mjs --out .import/seed.sql
-npx wrangler d1 execute nczoning-data-staging --env staging --remote --file .import/seed.sql
-
-# ...or copy production across
-npx wrangler d1 export nczoning-data --remote --output .import/prod.sql
-npx wrangler d1 execute nczoning-data-staging --env staging --remote --file .import/prod.sql
+npx wrangler d1 export nczoning-data --remote \
+  --table locations --table dismissed_candidates --no-schema \
+  --output .import/prod-data.sql -y
+npx wrangler d1 execute nczoning-data-staging --env staging --remote \
+  --command "DELETE FROM locations; DELETE FROM dismissed_candidates;"
+npx wrangler d1 execute nczoning-data-staging --env staging --remote --file .import/prod-data.sql
 ```
+
+`--table` and `--no-schema` are both load-bearing: a full export carries the
+schema and the `d1_migrations` table, which staging already has, so it conflicts.
+
+**Do not reseed staging with `import-locations.mjs`.** That script regenerates
+from `data/locations/` plus the live API, which produces *equivalent* data, not
+a *copy* — it stamps `created_at`/`updated_at` with the import time and knows
+nothing about the D1-only columns (`admin_notes`, `owner_id`, dismissal reasons,
+`audit_log`). Seeding staging that way left it holding the same 296 records as
+production under a `created_at` almost three hours adrift.
+
+Those columns are not served on `/v1`, so this does not affect the parity gates
+today. It will matter from **Phase 4**, when D1 becomes the source of truth and
+`data/locations/` goes stale — at which point regenerating from the repo would
+actively produce wrong data.
+
+`import-locations.mjs` remains the right tool for exactly one job: the initial
+seed of an empty database, or a rebuild from git if D1 is ever lost.
 
 Full reasoning, including why the Phase 2 soak cannot run here: the
 `staging-is-a-write-sandbox-not-a-preview` decision in the project wiki.

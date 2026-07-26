@@ -37,10 +37,13 @@ const ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || 'b9937d8d595fad7de8d1549
 const SITE = process.env.NCZ_SITE_ORIGIN || 'https://nczoning.net';
 const LOCAL = process.argv.includes('--local');
 
+// See parity-check.mjs: a staging database is invisible without --env staging.
+const envArgs = (db) => (db.endsWith('-staging') ? ['--env', 'staging'] : []);
+
 function query(db, statement) {
   const out = execFileSync(
     process.execPath,
-    [WRANGLER, 'd1', 'execute', db, LOCAL ? '--local' : '--remote', '--json', '--command', statement],
+    [WRANGLER, 'd1', 'execute', db, ...envArgs(db), LOCAL ? '--local' : '--remote', '--json', '--command', statement],
     {
       cwd: WORKER_DIR,
       env: { ...process.env, CLOUDFLARE_ACCOUNT_ID: ACCOUNT_ID },
