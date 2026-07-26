@@ -18,7 +18,7 @@
 	// Set so CI's scoped API token doesn't need User→Memberships→Read to
 	// discover the account (wrangler skips the /memberships lookup). Account
 	// IDs are not secret. Inherited by all environments.
-	"account_id": "ab7ff2fad6832c2db0a25d22e3287227",
+	"account_id": "b9937d8d595fad7de8d1549b22390281",
 	// Custom domain: deploying creates the DNS record + cert on the zone
 	// automatically (the zone must be on the same Cloudflare account).
 	"routes": [
@@ -28,12 +28,25 @@
 		}
 	],
 	"vars": {
-		// SemVer for the API *surface*, reported by /v1/health. MINOR on an
-		// additive field/route, MAJOR on a break (which also moves /v1 → /v2),
-		// PATCH on a behaviour fix worth marking. Bump here, in the staging
-		// block below, in openapi.json and package.json, then run
-		// `npm run version:lock` — test/api-version.test.js enforces all four.
-		"API_VERSION": "1.3.0",
+		// SemVer for the API *surface*, reported by /v1/health.
+		//
+		// PRE-1.0 WINDOW. Rolled back 1.3.0 -> 0.3.0: the surface claimed a
+		// stability it does not have, because nothing consuming it has shipped
+		// yet and the D1 work takes shape changes rather than deferring them.
+		// On a 1.x line every one of those would need MAJOR + a /v1 -> /v2 move,
+		// standing up a parallel surface with no consumers to preserve.
+		//
+		// While on 0.x:  breaking -> MINOR,  additive -> PATCH,  path stays /v1
+		// (SemVer permits breaking changes pre-1.0, which is what resolves this).
+		// Returns to 1.0.0 — and to the MINOR-additive/MAJOR-breaking rules in
+		// decisions/api-version-semver-policy — the day the first in-game mod
+		// ships. The three MINORs already made are preserved as 0.3.0.
+		//
+		// Bump here, in the staging block below, in openapi.json and
+		// package.json, then run `npm run version:lock` —
+		// test/api-version.test.js enforces all four. There is no monotonicity
+		// check, so a decrease passes provided all four move together.
+		"API_VERSION": "0.3.0",
 		// Origin the cron pulls source files from (mods.json, tags, subdistricts).
 		"SITE_ORIGIN": "https://nczoning.net"
 	},
@@ -44,7 +57,7 @@
 	"kv_namespaces": [
 		{
 			"binding": "DATASET",
-			"id": "d86735e00790417e948e423c3df01d68"
+			"id": "2f547f4c22ab4d5fb2cf4636e50a2559"
 		}
 	],
 	// Rebuild the dataset every 5 minutes (faster mod propagation after a
@@ -89,14 +102,15 @@
 				}
 			],
 			"vars": {
-				"API_VERSION": "1.3.0",
+				// Pre-1.0 window — see the production block above.
+				"API_VERSION": "0.3.0",
 				"SITE_ORIGIN": "https://dev.nczoning.net"
 			},
 			// dashboard title: nczoning-api-dataset-staging
 			"kv_namespaces": [
 				{
 					"binding": "DATASET",
-					"id": "ac85bf5c0b6f47afac35085408857d4b"
+					"id": "9fe7b7d13d6348d1913b8a01aca1fef6"
 				}
 			],
 			// MUST be an explicit empty array, not an omitted block. Wrangler

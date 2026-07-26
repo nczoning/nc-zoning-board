@@ -1,6 +1,6 @@
 {
   "name": "nczoning-api",
-  "version": "1.3.0",
+  "version": "0.3.0",
   "private": true,
   "description": "NC Zoning Data API worker (api.nczoning.net)",
   "type": "module",
