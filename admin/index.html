@@ -31,7 +31,8 @@
 <header class="topbar">
   <h1>NC Zoning Board</h1>
   <nav class="tabs" role="tablist">
-    <button type="button" role="tab" data-tab="locations" aria-selected="true">Locations</button>
+    <button type="button" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button type="button" role="tab" data-tab="locations" aria-selected="false">Locations</button>
     <button type="button" role="tab" data-tab="tags" aria-selected="false">Tags</button>
     <button type="button" role="tab" data-tab="audit" aria-selected="false">Audit</button>
   </nav>
@@ -49,8 +50,46 @@
 <main>
   <div id="banner"></div>
 
+  <!-- ------------------------------------------------------- overview -- -->
+  <!--
+    Every number here is DERIVED, client-side, from records already fetched for
+    the other tabs. No aggregate columns on the API and no stats table in D1:
+    `decisions/api-per-location-records` removed server-side aggregates because
+    several consumers computing the same counts independently produced bug #823.
+    This panel must be another consumer that derives, not the first that
+    re-materializes.
+  -->
+  <section id="tab-overview" class="overview">
+    <div class="panel">
+      <h2>Registry</h2>
+      <div id="stat-registry" class="stat-grid"></div>
+    </div>
+
+    <div class="panel">
+      <h2>API health</h2>
+      <div id="health-kv" class="kv"></div>
+    </div>
+
+    <div class="panel">
+      <h2>By category</h2>
+      <div id="stat-category" class="breakdown"></div>
+    </div>
+
+    <div class="panel">
+      <h2>By district</h2>
+      <p class="muted">Districts are assigned by the materializer, so this counts the
+        <em>published</em> records the API is serving.</p>
+      <div id="stat-district" class="breakdown"></div>
+    </div>
+
+    <div class="panel" style="grid-column: 1 / -1">
+      <h2>By tag</h2>
+      <div id="stat-tag" class="breakdown"></div>
+    </div>
+  </section>
+
   <!-- ------------------------------------------------------ locations -- -->
-  <section id="tab-locations" class="split">
+  <section id="tab-locations" class="split" hidden>
     <div class="panel">
       <div class="toolbar">
         <input type="search" id="loc-search" placeholder="Search name, author, nexus id…" aria-label="Search locations">

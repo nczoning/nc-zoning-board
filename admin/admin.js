@@ -815,6 +815,131 @@
       ? `Rebuilt from ${res.body.source}. New dataset version ${res.body.dataset_version}.`
       : `Rebuilt from ${res.body.source}. The content hash was unchanged, so nothing was rewritten.`);
     await refreshFreshness();
+    // A rebuild is precisely what resolves registry-vs-served drift, so the
+    // panel that reports it has to be recomputed or it keeps showing the gap
+    // it just closed.
+    if (!$('#tab-overview').hidden) await renderOverview();
+  }
+
+  // ------------------------------------------------------------ overview --
+
+  /**
+   * The stats panel.
+   *
+   * 🔴 EVERY number here is derived from records already fetched for the other
+   * tabs. Do NOT add aggregate columns to the API or a stats table to D1:
+   * `decisions/api-per-location-records` removed server-side aggregates because
+   * several consumers computing the same counts independently produced bug
+   * #823. This is another consumer that derives, not the first that
+   * re-materializes.
+   */
+  function countBy(records, key) {
+    const counts = new Map();
+    for (const r of records) {
+      for (const v of [].concat(key(r) ?? [])) {
+        if (v === null || v === undefined || v === '') continue;
+        counts.set(v, (counts.get(v) ?? 0) + 1);
+      }
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(b[0]));
+  }
+
+  const stat = (value, label, kind) => h('div', { class: `stat${kind ? ` ${kind}` : ''}` },
+    h('span', { class: 'value', text: String(value) }),
+    h('span', { class: 'label', text: label }));
+
+  function breakdown(entries, total) {
+    if (!entries.length) return h('p', { class: 'muted', text: 'Nothing to count yet.' });
+    const max = Math.max(...entries.map(([, n]) => n));
+    return entries.map(([name, n]) => h('div', { class: 'breakdown-row' },
+      h('span', { class: 'k', text: String(name).replace(/-/g, ' ') }),
+      // The bar is decoration on top of the number, never a replacement for it.
+      h('span', { class: 'bar' }, h('span', { style: `width:${Math.round((n / max) * 100)}%` })),
+      h('span', { class: 'n', text: total ? `${n}  (${Math.round((n / total) * 100)}%)` : String(n) })));
+  }
+
+  const kvRow = (k, v, kind) => h('div', { class: 'kv-row' },
+    h('span', { class: 'k', text: k }),
+    h('span', { class: `v${kind ? ` ${kind}` : ''}`, text: v }));
+
+  /**
+   * Health, and the one comparison that matters most.
+   *
+   * `registry` is what D1 holds; `served` is what the public API returns. They
+   * are two independent counts of the same thing, and a gap between them means
+   * a write has not reached the map. That gap is exactly what went unnoticed
+   * for 14 hours — staging had no cron, so D1 said 297 while /v1 served 296 and
+   * nothing anywhere said so. Prefer the dumbest possible comparison.
+   */
+  async function renderOverview() {
+    const records = state.locations;
+    const published = records.filter((r) => r.status === 'published');
+
+    replace($('#stat-registry'),
+      stat(records.length, 'in D1'),
+      stat(published.length, 'published', 'good'),
+      stat(records.filter((r) => r.status === 'hidden').length, 'hidden',
+        records.some((r) => r.status === 'hidden') ? 'warn' : null),
+      stat(records.filter((r) => r.status === 'draft').length, 'draft'),
+      stat(records.filter((r) => r.source === 'auto').length, 'auto-discovered'),
+      stat(records.filter((r) => !/^\d+$/.test(String(r.nexus_id))).length, 'WIP / Dummy'),
+      stat(state.tags.length, 'tags'),
+      stat(records.filter((r) => !r.tags.length).length, 'untagged',
+        records.some((r) => !r.tags.length) ? 'warn' : null));
+
+    replace($('#stat-category'), breakdown(countBy(records, (r) => r.category), records.length));
+    replace($('#stat-tag'), breakdown(countBy(records, (r) => r.tags), records.length));
+
+    // --- health, from the public endpoints -------------------------------
+    let health = null;
+    let servedCount = null;
+    let servedDistricts = [];
+    try {
+      const [h1, l1] = await Promise.all([
+        fetch(`${API}/v1/health`).then((r) => (r.ok ? r.json() : null)),
+        fetch(`${API}/v1/locations`).then((r) => (r.ok ? r.json() : null)),
+      ]);
+      health = h1?.data ?? null;
+      if (Array.isArray(l1?.data)) {
+        servedCount = l1.data.length;
+        servedDistricts = countBy(l1.data, (r) => r.district);
+      }
+    } catch { /* rendered as unknown below */ }
+
+    replace($('#stat-district'), breakdown(servedDistricts, servedCount ?? 0));
+
+    const rows = [];
+    if (!health) {
+      // Unreadable is its own state. Never draw a blank as healthy.
+      rows.push(kvRow('status', 'could not reach the API', 'bad'));
+    } else {
+      const age = health.refresh_age_seconds;
+      const stale = typeof age === 'number' && age > STALE_AFTER_S;
+      rows.push(kvRow('status', health.status ?? 'unknown', health.status === 'ok' ? 'ok' : 'bad'));
+      rows.push(kvRow('api version', health.version ?? '—'));
+      rows.push(kvRow('last refresh', typeof age === 'number' ? describeAge(age) : 'unknown',
+        stale ? 'warn' : 'ok'));
+      rows.push(kvRow('last refresh at', health.last_refresh_at ?? '—', 'mono'));
+      // discovery_stale means the last cycle failed and last-known-good is being
+      // served. Absent is not the same as false, so it is reported as unknown.
+      const ds = health.discovery_stale;
+      rows.push(kvRow('discovery', ds === true ? 'STALE — last cycle failed'
+        : ds === false ? 'ok' : 'not reported',
+      ds === true ? 'bad' : ds === false ? 'ok' : null));
+    }
+
+    // 🔴 Two independent counts of the same thing.
+    rows.push(kvRow('registry (D1)', String(records.length)));
+    rows.push(kvRow('published in D1', String(published.length)));
+    rows.push(kvRow('served by /v1', servedCount === null ? 'unknown' : String(servedCount),
+      servedCount === null ? null : servedCount === published.length ? 'ok' : 'bad'));
+    if (servedCount !== null && servedCount !== published.length) {
+      rows.push(kvRow('drift',
+        `${published.length - servedCount} record(s) not on the map — rebuild`, 'bad'));
+    }
+    rows.push(kvRow('api host', API.replace('https://', ''), 'mono'));
+
+    replace($('#health-kv'), rows);
   }
 
   // --------------------------------------------------------------- audit --
@@ -860,14 +985,19 @@
 
   // ---------------------------------------------------------------- tabs --
 
+  const TABS = ['overview', 'locations', 'tags', 'audit'];
+
   function switchTab(name) {
     for (const btn of document.querySelectorAll('nav.tabs button')) {
       btn.setAttribute('aria-selected', String(btn.dataset.tab === name));
     }
-    for (const id of ['locations', 'tags', 'audit']) {
+    for (const id of TABS) {
       $(`#tab-${id}`).hidden = id !== name;
     }
     if (name === 'audit') loadAudit();
+    // Recomputed on entry rather than cached: the counts are derived from
+    // state that any edit in another tab may have moved.
+    if (name === 'overview') renderOverview();
   }
 
   // ---------------------------------------------------------------- boot --
@@ -908,6 +1038,9 @@
     await loadTags();
     await loadLocations();
     await refreshFreshness();
+    // Overview is the landing tab, and its numbers come from what was just
+    // loaded, so it is rendered after both rather than on its own fetch.
+    await renderOverview();
   }
 
   main();
