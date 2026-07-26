@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>NC Zoning Board — Admin</title>
+<!--
+  Phase 3 stub. This exists so the collaborator gate can be tested by clicking
+  rather than by curl, and it is the shell the Phase 4 dashboard fills in.
+
+  Self-contained styling on purpose: pulling in theme.css/style.css would drag
+  the whole map layout in for one status line. It adopts the shared theme at
+  Phase 4, when there is actually a UI to theme.
+-->
+<style>
+  :root {
+    --navy: #0a192f;
+    --navy-light: #112240;
+    --cyan: #00f0ff;
+    --amber: #ffb300;
+    --text: #ccd6f6;
+    --muted: #8892b0;
+    --error: #ff5370;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    background: var(--navy);
+    color: var(--text);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    padding: 1.5rem;
+  }
+  main {
+    width: 100%;
+    max-width: 26rem;
+    background: var(--navy-light);
+    border: 1px solid rgb(0 240 255 / 0.15);
+    border-radius: 6px;
+    padding: 2rem;
+  }
+  h1 {
+    margin: 0 0 1.5rem;
+    font-size: 1.1rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--cyan);
+  }
+  button {
+    font: inherit;
+    cursor: pointer;
+    padding: 0.6rem 1.2rem;
+    border-radius: 4px;
+    border: 1px solid var(--cyan);
+    background: transparent;
+    color: var(--cyan);
+  }
+  button:hover { background: rgb(0 240 255 / 0.1); }
+  button.secondary { border-color: var(--muted); color: var(--muted); }
+  .muted { color: var(--muted); font-size: 0.9rem; }
+  .who { color: var(--amber); font-weight: 600; }
+  .error {
+    border-left: 3px solid var(--error);
+    padding: 0.5rem 0.9rem;
+    margin-bottom: 1.25rem;
+    background: rgb(255 83 112 / 0.08);
+    font-size: 0.9rem;
+  }
+  .warn { border-left-color: var(--amber); background: rgb(255 179 0 / 0.08); }
+</style>
+</head>
+<body>
+<main>
+  <h1>NC Zoning Board — Admin</h1>
+  <div id="status" class="muted">Checking session…</div>
+</main>
+
+<script>
+// Mirrors the main site: production API from every origin, ?api=dev to opt into
+// staging when testing an API change.
+const API = new URLSearchParams(location.search).get('api') === 'dev'
+  ? 'https://api-dev.nczoning.net'
+  : 'https://api.nczoning.net';
+
+const el = document.getElementById('status');
+
+// Reasons the callback can bounce back with. `check_unavailable` is
+// deliberately worded as "cannot tell", not "denied" — GitHub being unreachable
+// is not a statement about who you are, and telling an admin they lack access
+// because of a transient blip is a lie the UI should not tell.
+const ERRORS = {
+  bad_state:         ['error', 'Login could not be verified. Start again from this page.'],
+  oauth_failed:      ['error', 'GitHub sign-in failed. Try again.'],
+  not_authorised:    ['error', 'That account is not a collaborator on the repository.'],
+  check_unavailable: ['warn',  'Could not reach GitHub to confirm access. This is not a refusal — try again shortly.'],
+};
+
+function render(html) { el.innerHTML = html; }
+
+function signInButton(label = 'Sign in with GitHub') {
+  return `<button id="signin">${label}</button>`;
+}
+
+function wire() {
+  const signin = document.getElementById('signin');
+  if (signin) {
+    signin.onclick = () => {
+      location.href = `${API}/auth/login?return_to=${encodeURIComponent(location.pathname)}`;
+    };
+  }
+  const out = document.getElementById('signout');
+  if (out) {
+    out.onclick = async () => {
+      await fetch(`${API}/auth/logout`, { method: 'POST', credentials: 'include' });
+      location.replace(location.pathname);
+    };
+  }
+}
+
+async function main() {
+  // Surface a callback error, then strip it so a refresh does not re-show it.
+  const params = new URLSearchParams(location.search);
+  const err = params.get('error');
+  let banner = '';
+  if (err) {
+    const [kind, message] = ERRORS[err] || ['error', `Sign-in failed (${err}).`];
+    banner = `<div class="error ${kind === 'warn' ? 'warn' : ''}">${message}</div>`;
+    params.delete('error');
+    history.replaceState({}, '', location.pathname + (params.toString() ? `?${params}` : ''));
+  }
+
+  let res;
+  try {
+    res = await fetch(`${API}/auth/me`, { credentials: 'include' });
+  } catch {
+    render(`${banner}<div class="error">Could not reach the API.</div>${signInButton('Retry')}`);
+    return wire();
+  }
+
+  const body = await res.json().catch(() => ({}));
+
+  if (res.status === 401) {
+    render(`${banner}<p class="muted">Sign in with a GitHub account that is a collaborator on the repository.</p>${signInButton()}`);
+  } else if (res.status === 503) {
+    // Distinct from 403 on purpose — see ERRORS above.
+    render(`${banner}<div class="error warn">Signed in as <span class="who">${body.login}</span>, but GitHub could not be reached to confirm access. Not a refusal.</div>${signInButton('Retry')}`);
+  } else if (res.status === 403) {
+    render(`${banner}<div class="error">Signed in as <span class="who">${body.login}</span>, which is not a collaborator on the repository.</div><button id="signout" class="secondary">Sign out</button>`);
+  } else {
+    render(`${banner}<p>Signed in as <span class="who">${body.login}</span> — collaborator access confirmed.</p><p class="muted">The dashboard itself arrives at Phase 4.</p><button id="signout" class="secondary">Sign out</button>`);
+  }
+  wire();
+}
+
+main();
+</script>
+</body>
+</html>

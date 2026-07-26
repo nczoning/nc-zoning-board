@@ -9,6 +9,7 @@
 !/README.md
 !/CONTRIBUTING.md
 !/index.html
+!/admin/
 !/mods.schema.json
 !/public/
 !/assets/
@@ -57,3 +58,9 @@ worker/.wrangler/
 
 # Generated D1 seed SQL: rebuild with `node worker/scripts/import-locations.mjs`
 worker/.import/
+
+# Private keys, anywhere. worker/ is whitelisted above, so a GitHub App .pem
+# dropped there would otherwise be committed. Belt and braces: keep the key
+# outside the repo entirely.
+*.pem
+*.key

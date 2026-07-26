@@ -204,6 +204,85 @@ varied** — a sweep that changed nothing tested nothing.
 Waiting is not a test. Do not gate the cutover on elapsed time; gate it on both
 scripts green.
 
+## Admin auth (Phase 3)
+
+Login only — there are no write routes yet. `/admin/` in the site repo is a stub
+that shows who you are signed in as.
+
+| Route | Method | Does |
+| --- | --- | --- |
+| `/auth/login` | GET | 302 to GitHub, sets a one-shot signed `state` cookie |
+| `/auth/callback` | GET | Verifies state, exchanges the code, checks collaborator status, sets the session |
+| `/auth/me` | GET | `{authenticated, login, collaborator}` |
+| `/auth/logout` | POST | Clears the session (POST so a stray link cannot sign you out) |
+
+**The repo's collaborator list is the admin list.** Adding an admin is a
+repo-collaborator change; there is no separate allowlist to drift out of step.
+
+The user's OAuth token is used for exactly one thing — reading their login — and
+is never stored. Collaborator status is checked with the **App's** installation
+token, so an admin never has to grant `repo` scope just to find out they are an
+admin.
+
+### 🔴 The collaborator check has three outcomes, not two
+
+`GET /repos/{owner}/{repo}/collaborators/{login}` answers **204 = yes**,
+**404 = no**, and a broken or under-permissioned credential answers **401/403**.
+Collapsing that third case is a security bug in *both* directions:
+
+- `not 404 → allow` — a dead credential grants everyone admin
+- `not 204 → deny` — a dead credential locks everyone out, silently
+
+So `checkCollaborator()` returns `'yes' | 'no' | 'error'`, and `'error'`:
+
+- **fails closed** for the request,
+- is **never written to the `users` cache** (caching "no" from a transient blip
+  would lock a real admin out for the full 10-minute TTL),
+- surfaces as **503 `check_unavailable`**, not 403 — "we cannot tell" is not
+  "you are not allowed", and the stub page words it that way deliberately.
+
+A consequence worth knowing: **if the App's permissions are wrong, you get
+`check_unavailable`, not a lockout that looks like a refusal.** That is the
+intended diagnosis path.
+
+### One-time setup
+
+Create a **GitHub App** in the `nczoning` org (Settings → Developer settings →
+GitHub Apps):
+
+- **Callback URLs** (add both, one App serves both environments):
+  `https://api.nczoning.net/auth/callback` and
+  `https://api-dev.nczoning.net/auth/callback`
+- **Webhook:** disable (nothing consumes one)
+- **Repository permissions:** `Administration: Read-only` — this is what the
+  collaborator endpoint requires. If it is wrong the check returns 403, which
+  surfaces as `check_unavailable`; it does not silently deny.
+- **Install it on `nczoning/nc-zoning-board`.**
+
+Then fill `GITHUB_APP_ID` and `GITHUB_OAUTH_CLIENT_ID` in `wrangler.jsonc` (both
+public, both environments) and set three secrets **per environment**:
+
+```bash
+# GitHub hands out a PKCS#1 key; WebCrypto only imports PKCS#8. Convert once:
+openssl pkcs8 -topk8 -inform PEM -outform PEM -nocrypt \
+  -in downloaded-private-key.pem -out app-key-pkcs8.pem
+
+npx wrangler secret put GITHUB_APP_PRIVATE_KEY      # paste the PKCS#8 PEM
+npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET
+npx wrangler secret put SESSION_SECRET              # e.g. openssl rand -base64 48
+
+npx wrangler secret put GITHUB_APP_PRIVATE_KEY      --env staging
+npx wrangler secret put GITHUB_OAUTH_CLIENT_SECRET  --env staging
+npx wrangler secret put SESSION_SECRET              --env staging
+```
+
+**`SESSION_SECRET` must differ between production and staging.** It is the
+session signing key: share it and a staging session token is accepted as valid
+by production.
+
+Skipping the PKCS#8 conversion fails with an opaque WebCrypto `DataError`, so
+`github-app.js` detects a PKCS#1 key and says exactly this instead.
+
 ### Test the cron locally
 
 ```bash
