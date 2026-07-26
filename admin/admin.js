@@ -320,10 +320,14 @@
     const val = (name) => form.elements[name]?.value ?? '';
     const trimmed = (name) => val(name).trim();
 
+    // A blank X or Y becomes null, NOT 0. `Number('')` is 0, which would place
+    // a new record at the world origin and look like a deliberate coordinate;
+    // null fails the server's finite-number check and says so against the field.
+    const num = (raw) => (raw === '' ? null : Number(raw));
     const nums = ['x', 'y', 'z'].map((k) => trimmed(`coord_${k}`));
     const coordinates = nums[2] === ''
-      ? [Number(nums[0]), Number(nums[1])]
-      : [Number(nums[0]), Number(nums[1]), Number(nums[2])];
+      ? [num(nums[0]), num(nums[1])]
+      : [num(nums[0]), num(nums[1]), num(nums[2])];
 
     const yawRaw = trimmed('yaw');
     const creditsRaw = trimmed('credits');
@@ -460,8 +464,17 @@
     if (isNew) saveBtn.disabled = false;
   }
 
-  /** Paint server-side field errors next to the inputs they belong to. */
-  function applyFieldErrors(form, errors) {
+  const TAG_FIELDS = ['slug', 'name', 'description', 'sort_order'];
+
+  /**
+   * Paint server-side field errors next to the inputs they belong to.
+   *
+   * `fields` is the form's own writable set — the location list for the record
+   * editor, the tag list for the tag editor. Using one shared list would leave
+   * "slug must be lowercase…" with nowhere to land, and an error the admin has
+   * to hunt for reads as "the save just did not work".
+   */
+  function applyFieldErrors(form, errors, fields = WRITABLE) {
     form.querySelectorAll('.field.invalid').forEach((el) => {
       el.classList.remove('invalid');
       el.querySelector('.msg')?.remove();
@@ -472,7 +485,7 @@
       // unmatched shows in the banner, so nothing is swallowed.
       const key = message.startsWith('unknown tag(s)') ? 'tags'
         : message.startsWith('id cannot be set') ? null
-          : WRITABLE.find((k) => message.startsWith(k) || message.startsWith(`unknown field: ${k}`));
+          : fields.find((k) => message.startsWith(k) || message.startsWith(`unknown field: ${k}`));
       const target = key && form.querySelector(`.field[data-field="${key}"]`);
       if (!target) continue;
       target.classList.add('invalid');
@@ -675,7 +688,7 @@
     if (!res.ok) {
       const [kind, message] = describeFailure(res);
       banner(kind, message);
-      if (res.status === 422) applyFieldErrors(form, res.body.errors || []);
+      if (res.status === 422) applyFieldErrors(form, res.body.errors || [], TAG_FIELDS);
       return;
     }
 
