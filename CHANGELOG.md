@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.2] - 2026-07-26
+
 ### Changed
 
 - The Data API Worker deploys to the project-owned Cloudflare account, with its production and staging KV namespaces repointed to match.
