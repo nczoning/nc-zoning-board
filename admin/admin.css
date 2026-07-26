@@ -10,6 +10,14 @@
 
 * { box-sizing: border-box; }
 
+/* 🔴 The `hidden` attribute is a UA rule of the lowest specificity, so ANY
+   class that sets display beats it. `.split { display: grid }` on a
+   `<section class="split" hidden>` leaves the section visible — every tab would
+   have rendered stacked on top of each other. This is the same mistake as the
+   gate rule below, and the reason both are called out: `hidden` looks like it
+   settles the question and does not. */
+[hidden] { display: none !important; }
+
 body {
     margin: 0;
     min-height: 100vh;
