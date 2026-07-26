@@ -11,6 +11,7 @@
     "version:lock": "node scripts/api-version.mjs --write"
   },
   "devDependencies": {
+    "ajv": "^8.20.0",
     "wrangler": "^4.107.0"
   }
 }

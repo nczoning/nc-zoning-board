@@ -19,6 +19,7 @@ import { KEYS } from './store.js';
 import { docsPage, spec } from './docs.js';
 import { RECENTLY_UPDATED_DAYS } from './config.js';
 import { login, callback, me, logout, adminCors } from './auth.js';
+import { handleAdmin } from './admin.js';
 
 const SCHEMA_VERSION = 1;
 
@@ -171,9 +172,10 @@ export default {
     ctx.waitUntil(runRefresh(env));
   },
 
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const isAuth = url.pathname.startsWith('/auth/');
+    const isAdmin = url.pathname.startsWith('/admin/');
 
     if (request.method === 'OPTIONS') {
       // Auth routes are credentialed, so they need the caller's exact origin
@@ -181,14 +183,22 @@ export default {
       // Allow-Credentials and would fail the preflight.
       return new Response(null, {
         status: 204,
-        headers: isAuth
+        headers: isAuth || isAdmin
           ? {
             ...adminCors(request),
-            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type',
           }
           : CORS_HEADERS,
       });
+    }
+
+    // Admin CRUD, before the read-only method gate: these are the write routes.
+    // handleAdmin gates every one of them on collaborator status itself, so
+    // there is no path through here that reaches a mutation ungated.
+    if (isAdmin) {
+      const res = await handleAdmin(request, env, ctx);
+      if (res) return res;
     }
 
     // Auth routes, before the read-only method gate below: logout is a POST
