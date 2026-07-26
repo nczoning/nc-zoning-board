@@ -62,7 +62,17 @@
 		// Do not flip until parity-ab.mjs and parity-check.mjs are both green
 		// (worker/README.md). Tags and subdistricts still come from SITE_ORIGIN
 		// either way; they move to D1 at Phase 4.
-		"DATA_SOURCE": "mods"
+		"DATA_SOURCE": "mods",
+		// --- Admin auth (Phase 3) -------------------------------------------
+		// Not secrets: an App id and an OAuth client id are both public. The
+		// private key and client secret are Worker secrets — see README.
+		"GITHUB_APP_ID": "",
+		"GITHUB_OAUTH_CLIENT_ID": "",
+		// Repo whose collaborator list IS the admin list. Adding an admin is a
+		// repo-collaborator change; there is no separate allowlist to drift.
+		"GITHUB_REPO": "nczoning/nc-zoning-board",
+		// Where /auth/callback sends the browser back to.
+		"ADMIN_ORIGIN": "https://nczoning.net"
 	},
 	// Dataset store (dashboard title: nczoning-api-dataset). Recreate with:
 	//   npx wrangler kv namespace create nczoning-api-dataset
@@ -152,7 +162,16 @@
 				// archive cache and appear to stall.
 				// Seed its database first — an empty `locations` is refused, by
 				// design, rather than materialized as an empty map.
-				"DATA_SOURCE": "d1"
+				"DATA_SOURCE": "d1",
+				// Admin auth — see the production block. One App carries BOTH
+				// callback URLs (api.nczoning.net and api-dev.nczoning.net), so
+				// it serves both environments. SESSION_SECRET must DIFFER
+				// between them: a shared signing key means a staging session
+				// token is accepted as valid by production.
+				"GITHUB_APP_ID": "",
+				"GITHUB_OAUTH_CLIENT_ID": "",
+				"GITHUB_REPO": "nczoning/nc-zoning-board",
+				"ADMIN_ORIGIN": "https://dev.nczoning.net"
 			},
 			// dashboard title: nczoning-api-dataset-staging
 			"kv_namespaces": [

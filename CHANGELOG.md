@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A parity gate that rebuilds `/v1/locations` from D1 and diffs it byte-for-byte against the live API, with negative controls that prove the diff can fail.
 - The refresh cron can source the registry from D1 via `DATA_SOURCE=d1`. Production stays on `mods.json` until the cutover; unset never means D1.
 - A second harness that runs both source paths head-to-head across a swept clock, and fails if the swept field never varied.
+- GitHub sign-in for admins at `/admin/`, gated on repository collaborator status. Login only — there are no admin write routes yet.
 
 ## [1.7.2] - 2026-07-26
 

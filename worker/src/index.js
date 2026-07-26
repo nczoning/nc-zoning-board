@@ -18,6 +18,7 @@ import { runRefresh } from './refresh.js';
 import { KEYS } from './store.js';
 import { docsPage, spec } from './docs.js';
 import { RECENTLY_UPDATED_DAYS } from './config.js';
+import { login, callback, me, logout, adminCors } from './auth.js';
 
 const SCHEMA_VERSION = 1;
 
@@ -172,10 +173,34 @@ export default {
 
   async fetch(request, env) {
     const url = new URL(request.url);
+    const isAuth = url.pathname.startsWith('/auth/');
 
     if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: CORS_HEADERS });
+      // Auth routes are credentialed, so they need the caller's exact origin
+      // echoed back; the wildcard CORS used by /v1/* is illegal with
+      // Allow-Credentials and would fail the preflight.
+      return new Response(null, {
+        status: 204,
+        headers: isAuth
+          ? {
+            ...adminCors(request),
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+          }
+          : CORS_HEADERS,
+      });
     }
+
+    // Auth routes, before the read-only method gate below: logout is a POST
+    // deliberately, so a stray <img> or link cannot sign someone out.
+    if (isAuth) {
+      if (request.method === 'GET' && url.pathname === '/auth/login') return login(request, env);
+      if (request.method === 'GET' && url.pathname === '/auth/callback') return callback(request, env);
+      if (request.method === 'GET' && url.pathname === '/auth/me') return me(request, env);
+      if (request.method === 'POST' && url.pathname === '/auth/logout') return logout(request, env);
+      return json(envelope({ error: 'not_found' }, null), { status: 404 });
+    }
+
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return json(envelope({ error: 'method_not_allowed' }, null), { status: 405 });
     }
