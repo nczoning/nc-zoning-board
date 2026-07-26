@@ -776,7 +776,10 @@
     const el = $('#freshness');
     let age = null;
     try {
-      const res = await fetch(`${API}/v1/health`);
+      // no-store for the same reason as renderOverview: a cached health payload
+      // reports the age it had when it was cached, which is the one number here
+      // that must never be stale.
+      const res = await fetch(`${API}/v1/health`, { cache: 'no-store' });
       if (res.ok) age = (await res.json())?.data?.refresh_age_seconds ?? null;
     } catch { /* falls through to unknown */ }
 
@@ -895,9 +898,17 @@
     let servedCount = null;
     let servedDistricts = [];
     try {
+      // 🔴 `cache: 'no-store'` is load-bearing, not hygiene. /v1/locations is
+      // served `public, max-age=300`, so a default fetch can answer from the
+      // browser's copy from before the last rebuild — which made the drift row
+      // below report 296 against 297 when the origin already had both at 297.
+      //
+      // A drift alarm that fires spuriously is worse than none: it trains the
+      // reader to dismiss it, and the one time it is real it looks identical.
+      // The comparison is "what does the ORIGIN serve now", so ask the origin.
       const [h1, l1] = await Promise.all([
-        fetch(`${API}/v1/health`).then((r) => (r.ok ? r.json() : null)),
-        fetch(`${API}/v1/locations`).then((r) => (r.ok ? r.json() : null)),
+        fetch(`${API}/v1/health`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)),
+        fetch(`${API}/v1/locations`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)),
       ]);
       health = h1?.data ?? null;
       if (Array.isArray(l1?.data)) {
