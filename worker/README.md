@@ -124,17 +124,34 @@ It is empty until then, on purpose. Note that staging has **no cron** and the
 health monitor does not watch it, so nothing there refreshes or is observed;
 `?api=dev` tests API *code*, never API *data*.
 
-Seed it when you want a realistic starting point, then treat it as disposable:
+**Reseed it by copying production**, then treat it as disposable:
 
 ```bash
-# either regenerate from the repo...
-node scripts/import-locations.mjs --out .import/seed.sql
-npx wrangler d1 execute nczoning-data-staging --env staging --remote --file .import/seed.sql
-
-# ...or copy production across
-npx wrangler d1 export nczoning-data --remote --output .import/prod.sql
-npx wrangler d1 execute nczoning-data-staging --env staging --remote --file .import/prod.sql
+npx wrangler d1 export nczoning-data --remote \
+  --table locations --table dismissed_candidates --no-schema \
+  --output .import/prod-data.sql -y
+npx wrangler d1 execute nczoning-data-staging --env staging --remote \
+  --command "DELETE FROM locations; DELETE FROM dismissed_candidates;"
+npx wrangler d1 execute nczoning-data-staging --env staging --remote --file .import/prod-data.sql
 ```
+
+`--table` and `--no-schema` are both load-bearing: a full export carries the
+schema and the `d1_migrations` table, which staging already has, so it conflicts.
+
+**Do not reseed staging with `import-locations.mjs`.** That script regenerates
+from `data/locations/` plus the live API, which produces *equivalent* data, not
+a *copy* — it stamps `created_at`/`updated_at` with the import time and knows
+nothing about the D1-only columns (`admin_notes`, `owner_id`, dismissal reasons,
+`audit_log`). Seeding staging that way left it holding the same 296 records as
+production under a `created_at` almost three hours adrift.
+
+Those columns are not served on `/v1`, so this does not affect the parity gates
+today. It will matter from **Phase 4**, when D1 becomes the source of truth and
+`data/locations/` goes stale — at which point regenerating from the repo would
+actively produce wrong data.
+
+`import-locations.mjs` remains the right tool for exactly one job: the initial
+seed of an empty database, or a rebuild from git if D1 is ever lost.
 
 Full reasoning, including why the Phase 2 soak cannot run here: the
 `staging-is-a-write-sandbox-not-a-preview` decision in the project wiki.
@@ -159,11 +176,39 @@ run that did not also prove it can go red exits non-zero: the header comment
 explains what the check does and does not cover, and is worth reading before
 trusting a pass.
 
+### Switching the source (`DATA_SOURCE`)
+
+`DATA_SOURCE` in `wrangler.jsonc` decides where the cron reads the registry
+from: `mods` (the compiled `mods.json`) or `d1`. **Anything other than `d1`
+means `mods`, including unset** — absent config must never read as "switch
+production onto the new source".
+
+The Phase 2 cutover is that one word, and so is the rollback. That is the point
+of it being a var: reverting is a config change on a build already known to
+work, not a revert-and-redeploy while production is wrong.
+
+```bash
+node scripts/parity-ab.mjs      # both code paths, swept clock  <- run this first
+node scripts/parity-check.mjs   # D1 vs the live API, byte-for-byte
+```
+
+**`parity-ab.mjs` is the one to trust for the cutover.** `parity-check.mjs`
+compares against the live API, which only changes when the content hash does —
+so on a quiet day re-running it compares the same bytes for hours and cannot
+fail. `parity-ab.mjs` instead runs `buildDataset` and `materializeFromD1`
+head-to-head on identical Nexus input, then sweeps the clock ±365 days across
+the `recently_updated` boundary. It exercises the drift a multi-day soak was
+hoping to stumble into, in seconds, and it **fails if the swept field never
+varied** — a sweep that changed nothing tested nothing.
+
+Waiting is not a test. Do not gate the cutover on elapsed time; gate it on both
+scripts green.
+
 ### Test the cron locally
 
 ```bash
 npm run dev
-curl "http://127.0.0.1:8787/cdn-cgi/handler/scheduled"   # trigger one refresh
+curl "http://127.0.0.1:8787/__scheduled"                 # trigger one refresh
 npx wrangler kv key get "dataset:v1:meta" --binding DATASET --local
 ```
 

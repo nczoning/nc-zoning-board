@@ -15,6 +15,8 @@
 
 import { fetchTaggedModNodes, fetchModsByUidThumbs, fetchModArchiveNames } from './nexus.js';
 import { buildDataset } from './merge.js';
+import { materializeFromD1 } from './materialize.js';
+import { readLocationRows, readDismissedIds } from './d1.js';
 import { districtsPayload } from './districts.js';
 import { HEARTBEAT_MIN_INTERVAL_MS } from './config.js';
 import {
@@ -171,6 +173,64 @@ async function attachArchives(env, fetchImpl, full) {
 }
 
 /**
+ * Build the dataset from whichever source this environment is pointed at.
+ *
+ * `DATA_SOURCE=d1` reads the registry from D1; anything else (including unset)
+ * reads the compiled mods.json from the site origin. **Unset means mods.json on
+ * purpose** — a missing var must not silently switch production onto a new
+ * source, which is the same "absent config read as permissive" trap that
+ * attached every MCP connection to a scheduled agent.
+ *
+ * It is a var rather than a code branch so the Phase 2 cutover, and more
+ * importantly its rollback, is a config change on a known-good build instead of
+ * a revert-and-redeploy under pressure.
+ *
+ * Both paths take the same Nexus inputs and the same clock, and both return the
+ * same `{ full, meta }` shape, which is what lets parity-ab.mjs diff them
+ * head-to-head. tags/subdistricts still come from the site origin in both —
+ * they move to D1 at Phase 4.
+ */
+async function sourceAndBuild(env, fetchImpl, origin, nowMs) {
+  const [tagsDict, subdistricts] = await Promise.all([
+    fetchJson(fetchImpl, origin, '/data/tags.json'),
+    fetchJson(fetchImpl, origin, '/data/subdistricts.json'),
+  ]);
+  const districts = subdistricts.districts;
+  const nexusNodes = await fetchTaggedModNodes(fetchImpl);
+
+  if (env.DATA_SOURCE === 'd1') {
+    const [rows, dismissed] = await Promise.all([
+      readLocationRows(env),
+      readDismissedIds(env),
+    ]);
+    // Thumbnail backfill covers every published record with a numeric id, not
+    // just the "manual" ones: under D1 the auto-discovered records are rows too.
+    const numericIds = rows
+      .filter((r) => r.status === 'published')
+      .map((r) => String(r.nexus_id))
+      .filter((id) => /^\d+$/.test(id));
+    const manualThumbs = await fetchModsByUidThumbs(fetchImpl, numericIds);
+    const built = materializeFromD1({
+      rows, dismissed, tagsDict, nexusNodes, districts, manualThumbs, nowMs,
+    });
+    return { ...built, tagsDict, districts };
+  }
+
+  const [manualMods, excluded] = await Promise.all([
+    fetchJson(fetchImpl, origin, '/mods.json'),
+    fetchJson(fetchImpl, origin, '/data/excluded_mods.json').catch(() => ({})),
+  ]);
+  const manualNumericIds = manualMods
+    .map((m) => String(m.nexus_id))
+    .filter((id) => /^\d+$/.test(id));
+  const manualThumbs = await fetchModsByUidThumbs(fetchImpl, manualNumericIds);
+  const built = buildDataset({
+    manualMods, tagsDict, excluded, nexusNodes, districts, manualThumbs, nowMs,
+  });
+  return { ...built, tagsDict, districts };
+}
+
+/**
  * Run one refresh cycle.
  * @param {object} env  Worker env (DATASET KV binding, SITE_ORIGIN?, DISCORD_WEBHOOK_URL?)
  * @param {typeof fetch} fetchImpl  injectable
@@ -193,28 +253,13 @@ export async function runRefresh(env, fetchImpl = fetch) {
   const generatedAt = new Date().toISOString();
 
   try {
-    const [manualMods, tagsDict, excluded, subdistricts] = await Promise.all([
-      fetchJson(fetchImpl, origin, '/mods.json'),
-      fetchJson(fetchImpl, origin, '/data/tags.json'),
-      fetchJson(fetchImpl, origin, '/data/excluded_mods.json').catch(() => ({})),
-      fetchJson(fetchImpl, origin, '/data/subdistricts.json'),
-    ]);
-    const districts = subdistricts.districts;
-    const nexusNodes = await fetchTaggedModNodes(fetchImpl);
-
-    // Manual-mod thumbnails: the tagged query only backfills manual mods that
-    // are themselves NCZoning-tagged, so pull the rest via modsByUid. Cosmetic
-    // and non-throwing: a failure here just leaves some images null this
-    // cycle, it never marks the dataset stale.
-    const manualNumericIds = manualMods
-      .map((m) => String(m.nexus_id))
-      .filter((id) => /^\d+$/.test(id));
-    const manualThumbs = await fetchModsByUidThumbs(fetchImpl, manualNumericIds);
-
-    const { full, meta } = buildDataset({
-      manualMods, tagsDict, excluded, nexusNodes, districts, manualThumbs,
-      nowMs: Date.parse(generatedAt),
-    });
+    // Thumbnails are cosmetic and non-throwing inside this: a failure there
+    // leaves some images null for a cycle, it never marks the dataset stale.
+    // A D1 read failure, by contrast, throws and lands in the catch below --
+    // last-known-good, discovery_stale, alert. Never an empty map.
+    const { full, meta, tagsDict, districts } = await sourceAndBuild(
+      env, fetchImpl, origin, Date.parse(generatedAt),
+    );
     const districtsOut = districtsPayload(districts);
 
     // Enrich every record with its shipped .archive file names (installed-mod

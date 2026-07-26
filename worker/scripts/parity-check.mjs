@@ -71,11 +71,17 @@ const fail = (msg) => { console.error(`\n❌ ${msg}`); process.exit(1); };
 // remote D1 are entirely separate stores that answer the same command.
 const LOCAL = process.argv.includes('--local');
 
+// Wrangler resolves database names from the TOP-LEVEL config only, so a staging
+// database is invisible without `--env staging` and the command fails with
+// "Couldn't find a D1 DB with the name or binding". Derived from the name so
+// `--db nczoning-data-staging` just works.
+const envArgs = (db) => (db.endsWith('-staging') ? ['--env', 'staging'] : []);
+
 /** Run one SQL statement against the database and return its rows. */
 function query(db, statement) {
   const out = execFileSync(
     process.execPath,
-    [WRANGLER, 'd1', 'execute', db, LOCAL ? '--local' : '--remote', '--json', '--command', statement],
+    [WRANGLER, 'd1', 'execute', db, ...envArgs(db), LOCAL ? '--local' : '--remote', '--json', '--command', statement],
     {
       cwd: WORKER_DIR,
       env: { ...process.env, CLOUDFLARE_ACCOUNT_ID: ACCOUNT_ID },
