@@ -18,7 +18,7 @@
 	// Set so CI's scoped API token doesn't need User→Memberships→Read to
 	// discover the account (wrangler skips the /memberships lookup). Account
 	// IDs are not secret. Inherited by all environments.
-	"account_id": "ab7ff2fad6832c2db0a25d22e3287227",
+	"account_id": "b9937d8d595fad7de8d1549b22390281",
 	// Custom domain: deploying creates the DNS record + cert on the zone
 	// automatically (the zone must be on the same Cloudflare account).
 	"routes": [
@@ -44,7 +44,7 @@
 	"kv_namespaces": [
 		{
 			"binding": "DATASET",
-			"id": "d86735e00790417e948e423c3df01d68"
+			"id": "2f547f4c22ab4d5fb2cf4636e50a2559"
 		}
 	],
 	// Rebuild the dataset every 5 minutes (faster mod propagation after a
@@ -96,7 +96,7 @@
 			"kv_namespaces": [
 				{
 					"binding": "DATASET",
-					"id": "ac85bf5c0b6f47afac35085408857d4b"
+					"id": "9fe7b7d13d6348d1913b8a01aca1fef6"
 				}
 			],
 			// MUST be an explicit empty array, not an omitted block. Wrangler

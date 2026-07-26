@@ -12,12 +12,19 @@
  * refetches (by then the file is usually on the readable UUID path). One-off per
  * environment — re-run on production after a dev -> main promotion.
  *
- * STAGING (ns ac85bf5c0b6f47afac35085408857d4b):
- *   npx wrangler kv key get --remote --namespace-id ac85bf5c0b6f47afac35085408857d4b dataset:v1:archives > cache.json
- *   node scripts/seed-archives.mjs https://api-dev.nczoning.net cache.json merged.json
- *   npx wrangler kv key put --remote --namespace-id ac85bf5c0b6f47afac35085408857d4b dataset:v1:archives --path merged.json
+ * Both accounts are reachable from one wrangler login, so `kv` commands need
+ * CLOUDFLARE_ACCOUNT_ID set or they abort with "More than one account
+ * available". `--remote` is equally mandatory: without it wrangler reads local
+ * miniflare storage and reports an empty namespace for a full one.
  *
- * PRODUCTION (ns d86735e00790417e948e423c3df01d68): same three steps, swapping
+ *   export CLOUDFLARE_ACCOUNT_ID=b9937d8d595fad7de8d1549b22390281
+ *
+ * STAGING (ns 9fe7b7d13d6348d1913b8a01aca1fef6):
+ *   npx wrangler kv key get --remote --namespace-id 9fe7b7d13d6348d1913b8a01aca1fef6 dataset:v1:archives > cache.json
+ *   node scripts/seed-archives.mjs https://api-dev.nczoning.net cache.json merged.json
+ *   npx wrangler kv key put --remote --namespace-id 9fe7b7d13d6348d1913b8a01aca1fef6 dataset:v1:archives --path merged.json
+ *
+ * PRODUCTION (ns 2f547f4c22ab4d5fb2cf4636e50a2559): same three steps, swapping
  *   the namespace id and https://api.nczoning.net for the api base.
  *
  * The next cron tick republishes the dataset with the seeded values attached.
