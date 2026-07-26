@@ -79,11 +79,20 @@
 </main>
 
 <script>
-// Mirrors the main site: production API from every origin, ?api=dev to opt into
-// staging when testing an API change.
-const API = new URLSearchParams(location.search).get('api') === 'dev'
-  ? 'https://api-dev.nczoning.net'
-  : 'https://api.nczoning.net';
+// Resolve by hostname, NOT "always production" the way the map does.
+//
+// The map reads the production API from every origin because there has never
+// been a deliberate dev dataset. Auth is the opposite case: the auth routes
+// reach dev before they reach main, so a dev page pointed at production would
+// call routes that do not exist there yet. dev talks to dev.
+const API = (() => {
+  const override = new URLSearchParams(location.search).get('api');
+  if (override === 'dev') return 'https://api-dev.nczoning.net';
+  if (override === 'prod') return 'https://api.nczoning.net';
+  return location.hostname === 'dev.nczoning.net'
+    ? 'https://api-dev.nczoning.net'
+    : 'https://api.nczoning.net';
+})();
 
 const el = document.getElementById('status');
 
@@ -149,8 +158,14 @@ async function main() {
     render(`${banner}<div class="error warn">Signed in as <span class="who">${body.login}</span>, but GitHub could not be reached to confirm access. Not a refusal.</div>${signInButton('Retry')}`);
   } else if (res.status === 403) {
     render(`${banner}<div class="error">Signed in as <span class="who">${body.login}</span>, which is not a collaborator on the repository.</div><button id="signout" class="secondary">Sign out</button>`);
-  } else {
+  } else if (res.status === 200 && body.collaborator === true) {
     render(`${banner}<p>Signed in as <span class="who">${body.login}</span> — collaborator access confirmed.</p><p class="muted">The dashboard itself arrives at Phase 4.</p><button id="signout" class="secondary">Sign out</button>`);
+  } else {
+    // Anything else is unexpected — most likely this page is pointed at an API
+    // that has no /auth routes yet (a 404). Treating an unrecognised status as
+    // success would render "Signed in as undefined - access confirmed", which
+    // is the worst possible thing for an auth screen to say.
+    render(`${banner}<div class="error">Unexpected response from <code>${API}</code> (HTTP ${res.status}). The auth routes may not be deployed there.</div>${signInButton('Retry')}`);
   }
   wire();
 }
