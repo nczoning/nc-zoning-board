@@ -119,7 +119,7 @@ Help keep docs/ current, write guides for new contributors, or clarify existing 
 - [Tag Registry](docs/tags.md): current tags, and how to add, modify, or remove tags
 - [Tile Generation](docs/tile-generation.md): how the map tiles are generated and upgraded
 - [Skills & Roles](docs/skills-and-roles.md): full role descriptions and recruiting priorities
-- [Roadmap](docs/roadmap.md): what's planned
+- [Roadmap](https://github.com/orgs/nczoning/projects/1): what's shipped, in progress and planned — the project board *is* the roadmap, so it is never out of date
 
 ---
 
