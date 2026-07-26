@@ -159,6 +159,34 @@ run that did not also prove it can go red exits non-zero: the header comment
 explains what the check does and does not cover, and is worth reading before
 trusting a pass.
 
+### Switching the source (`DATA_SOURCE`)
+
+`DATA_SOURCE` in `wrangler.jsonc` decides where the cron reads the registry
+from: `mods` (the compiled `mods.json`) or `d1`. **Anything other than `d1`
+means `mods`, including unset** — absent config must never read as "switch
+production onto the new source".
+
+The Phase 2 cutover is that one word, and so is the rollback. That is the point
+of it being a var: reverting is a config change on a build already known to
+work, not a revert-and-redeploy while production is wrong.
+
+```bash
+node scripts/parity-ab.mjs      # both code paths, swept clock  <- run this first
+node scripts/parity-check.mjs   # D1 vs the live API, byte-for-byte
+```
+
+**`parity-ab.mjs` is the one to trust for the cutover.** `parity-check.mjs`
+compares against the live API, which only changes when the content hash does —
+so on a quiet day re-running it compares the same bytes for hours and cannot
+fail. `parity-ab.mjs` instead runs `buildDataset` and `materializeFromD1`
+head-to-head on identical Nexus input, then sweeps the clock ±365 days across
+the `recently_updated` boundary. It exercises the drift a multi-day soak was
+hoping to stumble into, in seconds, and it **fails if the swept field never
+varied** — a sweep that changed nothing tested nothing.
+
+Waiting is not a test. Do not gate the cutover on elapsed time; gate it on both
+scripts green.
+
 ### Test the cron locally
 
 ```bash

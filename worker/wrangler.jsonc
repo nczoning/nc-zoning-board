@@ -48,7 +48,21 @@
 		// check, so a decrease passes provided all four move together.
 		"API_VERSION": "0.3.0",
 		// Origin the cron pulls source files from (mods.json, tags, subdistricts).
-		"SITE_ORIGIN": "https://nczoning.net"
+		"SITE_ORIGIN": "https://nczoning.net",
+		// Where the LOCATION REGISTRY is read from: "mods" (the compiled
+		// mods.json on SITE_ORIGIN) or "d1" (the DB binding above).
+		//
+		// The Phase 2 cutover is this one word, and so is its rollback -- a
+		// config change on a build already known to work, rather than a revert
+		// and redeploy while production is wrong.
+		//
+		// Anything other than "d1" means mods.json, INCLUDING unset. Absent
+		// config must never read as "switch production to the new source".
+		//
+		// Do not flip until parity-ab.mjs and parity-check.mjs are both green
+		// (worker/README.md). Tags and subdistricts still come from SITE_ORIGIN
+		// either way; they move to D1 at Phase 4.
+		"DATA_SOURCE": "mods"
 	},
 	// Dataset store (dashboard title: nczoning-api-dataset). Recreate with:
 	//   npx wrangler kv namespace create nczoning-api-dataset
@@ -120,7 +134,12 @@
 			"vars": {
 				// Pre-1.0 window — see the production block above.
 				"API_VERSION": "0.3.0",
-				"SITE_ORIGIN": "https://dev.nczoning.net"
+				"SITE_ORIGIN": "https://dev.nczoning.net",
+				// See the production block. Staging can be flipped to "d1"
+				// independently to exercise the D1 path without touching prod —
+				// but note staging has no cron, so trigger a cycle by hand
+				// (`wrangler dev --env staging --test-scheduled`).
+				"DATA_SOURCE": "mods"
 			},
 			// dashboard title: nczoning-api-dataset-staging
 			"kv_namespaces": [
