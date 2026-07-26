@@ -66,8 +66,8 @@
 		// --- Admin auth (Phase 3) -------------------------------------------
 		// Not secrets: an App id and an OAuth client id are both public. The
 		// private key and client secret are Worker secrets — see README.
-		"GITHUB_APP_ID": "",
-		"GITHUB_OAUTH_CLIENT_ID": "",
+		"GITHUB_APP_ID": "4397308",
+		"GITHUB_OAUTH_CLIENT_ID": "Iv23lixJitjZqJuIwhDW",
 		// Repo whose collaborator list IS the admin list. Adding an admin is a
 		// repo-collaborator change; there is no separate allowlist to drift.
 		"GITHUB_REPO": "nczoning/nc-zoning-board",
@@ -168,8 +168,8 @@
 				// it serves both environments. SESSION_SECRET must DIFFER
 				// between them: a shared signing key means a staging session
 				// token is accepted as valid by production.
-				"GITHUB_APP_ID": "",
-				"GITHUB_OAUTH_CLIENT_ID": "",
+				"GITHUB_APP_ID": "4397308",
+				"GITHUB_OAUTH_CLIENT_ID": "Iv23lixJitjZqJuIwhDW",
 				"GITHUB_REPO": "nczoning/nc-zoning-board",
 				"ADMIN_ORIGIN": "https://dev.nczoning.net"
 			},
