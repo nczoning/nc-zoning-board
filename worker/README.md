@@ -86,6 +86,47 @@ KV keys: `dataset:v1:full`, `dataset:v1:districts`, `dataset:v1:tags`,
 `.archive` names, not part of any served payload). There is no longer a slim
 `dataset:v1`: the slim/full fork was collapsed to one representation.
 
+## D1 (`DB` binding)
+
+The location registry. **Phase 1 only populates and verifies it — nothing reads
+it yet**, and the cron still sources from `mods.json`.
+
+Two databases, because named Wrangler environments inherit nothing: production
+is `nczoning-data`, staging is `nczoning-data-staging`. **Every migration must
+be applied to both**, and to remote as well as local — `--local` and `--remote`
+are entirely separate stores that answer the same command, which is exactly how
+a "verified" migration ends up missing in production.
+
+```bash
+export CLOUDFLARE_ACCOUNT_ID=b9937d8d595fad7de8d1549b22390281
+npx wrangler d1 migrations apply nczoning-data         --remote
+npx wrangler d1 migrations apply nczoning-data-staging --remote
+```
+
+Unlike KV, this content is **not derived** — losing it loses data. D1 Time
+Travel covers 30 days; `data/locations/` in git is the longer backstop until
+the nightly export lands.
+
+### One-time import + the parity gate
+
+```bash
+node scripts/import-locations.mjs --out .import/0001-seed.sql   # 287 manual + 9 auto, + 1 dismissal
+npx wrangler d1 execute nczoning-data --remote --file .import/0001-seed.sql
+node scripts/parity-check.mjs                                   # the gate
+```
+
+`parity-check.mjs` rebuilds `/v1/locations` from D1 via `src/materialize.js` and
+diffs it **byte-for-byte** against what the live API is serving. It rebuilds the
+14 fields D1 owns (including `district`/`subdistrict`, recomputed from D1's own
+coordinates) and feeds in the 4 Nexus-derived ones it does not own until Phase 2
+— and it **fails on any served field that falls into neither set**, so a new
+`/v1` field cannot slip past as "not compared".
+
+It then mutates a row five ways and asserts the diff catches each one. A green
+run that did not also prove it can go red exits non-zero: the header comment
+explains what the check does and does not cover, and is worth reading before
+trusting a pass.
+
 ### Test the cron locally
 
 ```bash
