@@ -206,8 +206,9 @@ scripts green.
 
 ## Admin auth (Phase 3)
 
-Login only — there are no write routes yet. `/admin/` in the site repo is a stub
-that shows who you are signed in as.
+Sign-in and the collaborator gate. The write routes it gates are in
+[Admin API](#admin-api-phase-4) below; `/admin/` in the site repo is the
+dashboard that drives them.
 
 | Route | Method | Does |
 | --- | --- | --- |
@@ -290,6 +291,109 @@ npm run dev
 curl "http://127.0.0.1:8787/__scheduled"                 # trigger one refresh
 npx wrangler kv key get "dataset:v1:meta" --binding DATASET --local
 ```
+
+## Admin API (Phase 4)
+
+Every route below is gated on collaborator status, answers `no-store`, and needs
+`credentials: 'include'` from an origin in `ADMIN_ORIGINS` (`src/auth.js`).
+**`*.pages.dev` preview URLs are not on that list**, so a PR preview cannot
+exercise auth — test on `dev.nczoning.net`. These are deliberately absent from
+`openapi.json`, which documents the public read surface only.
+
+| Route | Method | Does |
+| --- | --- | --- |
+| `/admin/locations` | GET | every location, all statuses, including `admin_notes` |
+| `/admin/locations` | POST | 201; `id` is server-generated and refused from input |
+| `/admin/locations/{id}` | GET / PATCH / DELETE | PATCH is partial; DELETE keeps the full record in the audit row |
+| `/admin/tags` | GET | the registry, each row with `usage_count` |
+| `/admin/tags` | POST | 201; 409 `tag_exists` on a duplicate slug |
+| `/admin/tags/{slug}` | GET / PATCH / DELETE | see the two rules below |
+| `/admin/audit` | GET | newest first, `?limit=` capped at 500 |
+| `/admin/refresh` | POST | rebuild the served dataset now; see below |
+
+**Unknown payload keys are a 422, not an ignore**, and `id` is refused outright.
+A silently dropped typo looks exactly like a successful save.
+
+### Rebuilding the read path by hand
+
+**Staging has no cron.** It was removed to stay inside the 1,000 KV writes/day
+free-tier cap, which means nothing there re-materializes on its own: staging's
+KV was found 14 hours stale, still serving the pre-4b `/v1/tags` map shape, with
+nothing to notice it. `POST /admin/refresh` is the fix, and the dashboard shows
+dataset age in the top bar so the state is visible rather than assumed.
+
+Unlike the write-through materialize, it is **not** gated on `DATA_SOURCE`. That
+gate exists so an admin write does not spend a KV write rebuilding from a source
+the write did not touch; this route is someone explicitly asking, and
+`runRefresh` honours `DATA_SOURCE` either way — from `mods.json` in production,
+from D1 on staging. It cannot flip the cutover.
+
+🔴 **`runRefresh` does not throw on failure.** It catches, keeps last-known-good,
+flags `discovery_stale` and *returns* `{stale: true}`. So the route branches on
+that return value, not on whether the call threw — treating "it did not throw" as
+success would report every failed rebuild as a win. `changed: false` is a
+success, meaning the content hash matched and nothing needed rewriting.
+
+### Keeping D1 in step with `data/locations/` before the cutover
+
+Submissions still arrive the old way: issue → PR → `main` → a new
+`data/locations/<uuid>.json`. `mods.json` is rebuilt from those files so
+production picks the record up, and **D1 hears nothing** — so staging, which
+reads D1, silently serves a smaller map than production. A mod merged overnight
+did exactly that.
+
+```bash
+node scripts/sync-locations.mjs --db nczoning-data-staging --env staging --out .import/sync.sql
+npx wrangler d1 execute nczoning-data-staging --env staging --remote --file .import/sync.sql
+```
+
+Emits SQL rather than running it, INSERT-only, and writes **both**
+`locations` and `location_tags` — a record inserted without the join rows
+renders with no tags at all. It never deletes: rows in D1 with no file are not
+drift, since the nine auto-discovered records have never existed as files. It
+also reports records that exist in both and disagree, without rewriting them.
+
+Run it against **both** databases, and delete the script at cleanup — keeping it
+after submissions land in D1 directly would preserve git as a second source of
+truth.
+
+### 🔴 Tags live in the join, and writes must go through it
+
+`locations.tags` is still present (migration 0002 is additive so parity can be
+proven before the column drops), but `materializeFromD1` reads
+**`location_tags`**. A write that touched only the column returned `200` and
+changed nothing on the map. `syncLocationTags()` in `src/tag-registry.js` owns
+both representations and is the only thing that may write either; it batches so
+the join is never briefly empty, and it keeps the synthetic `nczoning` marker in
+the legacy column for `source='auto'` rows so the stored shape does not drift.
+
+Tag validation reads the **`tags` table**, not the KV snapshot. Reading KV was
+correct while tags came from a file in git and became wrong the moment they were
+editable: a tag created through the API would have 422'd on first use.
+
+### 🔴 Two tag rules the schema implies but does not enforce
+
+- **`slug` is the primary key**, so renaming one is an `ON UPDATE CASCADE`
+  through `location_tags` and a link-breaking event. The cascade only fires with
+  foreign keys enforced — D1 has them on, SQLite does not by default — so the
+  handler re-counts the links after a rename and returns **500 `cascade_failed`**
+  rather than reporting a success that silently orphaned every record. The
+  dashboard keeps the slug read-only behind an explicit unlock; routine
+  relabelling is what `name` is for.
+- **Deleting a tag still in use is refused** — 409 `tag_in_use`, with the count
+  and the affected records in the body. `location_tags` has no `ON DELETE` for
+  `tag_slug`, so a bare delete fails on the foreign key with an opaque error, and
+  a cascade would strip the tag from every record as a side effect of one click.
+  Detach first, then delete.
+- **`nczoning` can never be created or renamed into.** It is not a registry row;
+  it is a marker the materializer prepends to auto-sourced records. A row with
+  that slug would collide with it, and deleting that row would strip the tag from
+  every auto-discovered record at once.
+
+Tests run against **real SQLite with the real migrations**
+(`test-support/d1-sqlite.mjs`), not a SQL-shape-matching mock: the two rules
+above are claims about constraints, and a mock can only restate the belief it was
+written from.
 
 ## Routes
 

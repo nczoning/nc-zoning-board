@@ -1,176 +1,137 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="theme-night-corp">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title>NC Zoning Board — Admin</title>
-<!--
-  Phase 3 stub. This exists so the collaborator gate can be tested by clicking
-  rather than by curl, and it is the shell the Phase 4 dashboard fills in.
+<link rel="icon" type="image/svg+xml" href="../assets/img/favicon/favicon-map-cyan.svg">
 
-  Self-contained styling on purpose: pulling in theme.css/style.css would drag
-  the whole map layout in for one status line. It adopts the shared theme at
-  Phase 4, when there is actually a UI to theme.
--->
-<style>
-  :root {
-    --navy: #0a192f;
-    --navy-light: #112240;
-    --cyan: #00f0ff;
-    --amber: #ffb300;
-    --text: #ccd6f6;
-    --muted: #8892b0;
-    --error: #ff5370;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    min-height: 100vh;
-    display: grid;
-    place-items: center;
-    background: var(--navy);
-    color: var(--text);
-    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    padding: 1.5rem;
-  }
-  main {
-    width: 100%;
-    max-width: 26rem;
-    background: var(--navy-light);
-    border: 1px solid rgb(0 240 255 / 0.15);
-    border-radius: 6px;
-    padding: 2rem;
-  }
-  h1 {
-    margin: 0 0 1.5rem;
-    font-size: 1.1rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--cyan);
-  }
-  button {
-    font: inherit;
-    cursor: pointer;
-    padding: 0.6rem 1.2rem;
-    border-radius: 4px;
-    border: 1px solid var(--cyan);
-    background: transparent;
-    color: var(--cyan);
-  }
-  button:hover { background: rgb(0 240 255 / 0.1); }
-  button.secondary { border-color: var(--muted); color: var(--muted); }
-  .muted { color: var(--muted); font-size: 0.9rem; }
-  .who { color: var(--amber); font-weight: 600; }
-  .error {
-    border-left: 3px solid var(--error);
-    padding: 0.5rem 0.9rem;
-    margin-bottom: 1.25rem;
-    background: rgb(255 83 112 / 0.08);
-    font-size: 0.9rem;
-  }
-  .warn { border-left-color: var(--amber); background: rgb(255 179 0 / 0.08); }
-</style>
+<!-- Fonts, as the map loads them. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;500;700&display=swap">
+
+<!-- theme.css only: the custom properties, shared with the map. style.css is
+     map layout (Leaflet panes, sidebar, clusters) and has nothing for this page. -->
+<link rel="stylesheet" href="../assets/css/theme.css">
+<link rel="stylesheet" href="admin.css">
 </head>
-<body>
-<main>
+
+<body class="gate">
+
+<!-- The signed-out / refused screen. Shown until /auth/me answers 200 AND says
+     collaborator; see admin.js. -->
+<main id="gate" class="panel">
   <h1>NC Zoning Board — Admin</h1>
-  <div id="status" class="muted">Checking session…</div>
+  <div id="gate-body" class="spinner">Checking session…</div>
 </main>
 
-<script>
-// Resolve by hostname, NOT "always production" the way the map does.
-//
-// The map reads the production API from every origin because there has never
-// been a deliberate dev dataset. Auth is the opposite case: the auth routes
-// reach dev before they reach main, so a dev page pointed at production would
-// call routes that do not exist there yet. dev talks to dev.
-const API = (() => {
-  const override = new URLSearchParams(location.search).get('api');
-  if (override === 'dev') return 'https://api-dev.nczoning.net';
-  if (override === 'prod') return 'https://api.nczoning.net';
-  return location.hostname === 'dev.nczoning.net'
-    ? 'https://api-dev.nczoning.net'
-    : 'https://api.nczoning.net';
-})();
+<header class="topbar">
+  <h1>NC Zoning Board</h1>
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="locations" aria-selected="true">Locations</button>
+    <button type="button" role="tab" data-tab="tags" aria-selected="false">Tags</button>
+    <button type="button" role="tab" data-tab="audit" aria-selected="false">Audit</button>
+  </nav>
+  <span class="spacer"></span>
+  <!-- What the map is actually serving right now, and how old it is. Staging
+       has no cron, so without this the read path can sit hours stale with
+       nothing to show for it. -->
+  <span class="freshness" id="freshness" title="Age of the dataset the public API is serving"></span>
+  <button type="button" class="btn secondary" id="rebuild" title="Rebuild the served dataset from the current source">Rebuild</button>
+  <span class="muted">Signed in as <span class="who" id="whoami"></span></span>
+  <span class="muted" id="api-label"></span>
+  <button type="button" class="btn secondary" id="signout">Sign out</button>
+</header>
 
-const el = document.getElementById('status');
+<main>
+  <div id="banner"></div>
 
-// Reasons the callback can bounce back with. `check_unavailable` is
-// deliberately worded as "cannot tell", not "denied" — GitHub being unreachable
-// is not a statement about who you are, and telling an admin they lack access
-// because of a transient blip is a lie the UI should not tell.
-const ERRORS = {
-  bad_state:         ['error', 'Login could not be verified. Start again from this page.'],
-  oauth_failed:      ['error', 'GitHub sign-in failed. Try again.'],
-  not_authorised:    ['error', 'That account is not a collaborator on the repository.'],
-  check_unavailable: ['warn',  'Could not reach GitHub to confirm access. This is not a refusal — try again shortly.'],
-};
+  <!-- ------------------------------------------------------ locations -- -->
+  <section id="tab-locations" class="split">
+    <div class="panel">
+      <div class="toolbar">
+        <input type="search" id="loc-search" placeholder="Search name, author, nexus id…" aria-label="Search locations">
+        <select id="loc-status" aria-label="Filter by status">
+          <option value="">All statuses</option>
+          <option value="published">Published</option>
+          <option value="hidden">Hidden</option>
+          <option value="draft">Draft</option>
+        </select>
+        <select id="loc-category" aria-label="Filter by category">
+          <option value="">All categories</option>
+          <option value="location-overhaul">Location overhaul</option>
+          <option value="new-location">New location</option>
+          <option value="other">Other</option>
+        </select>
+        <span class="spacer" style="flex:1"></span>
+        <button type="button" class="btn" id="loc-new">New location</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th><th>Category</th><th>Tags</th><th>Status</th><th>Nexus</th>
+            </tr>
+          </thead>
+          <tbody id="loc-rows"></tbody>
+        </table>
+      </div>
+      <p class="muted" id="loc-count"></p>
+    </div>
 
-function render(html) { el.innerHTML = html; }
+    <div class="panel" id="loc-editor">
+      <p class="muted">Select a location to edit it, or create a new one.</p>
+    </div>
+  </section>
 
-function signInButton(label = 'Sign in with GitHub') {
-  return `<button id="signin">${label}</button>`;
-}
+  <!-- ----------------------------------------------------------- tags -- -->
+  <section id="tab-tags" class="split" hidden>
+    <div class="panel">
+      <div class="toolbar">
+        <span class="muted">The tag registry. Counts are live.</span>
+        <span class="spacer" style="flex:1"></span>
+        <button type="button" class="btn" id="tag-new">New tag</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Slug</th><th>Name</th><th>Description</th><th class="num">Used by</th></tr>
+          </thead>
+          <tbody id="tag-rows"></tbody>
+        </table>
+      </div>
+      <p class="muted">
+        <code>nczoning</code> is not listed: it is a marker auto-discovery adds to every
+        Nexus-sourced record, not a registry entry, and it cannot be created or deleted here.
+      </p>
+    </div>
 
-function wire() {
-  const signin = document.getElementById('signin');
-  if (signin) {
-    signin.onclick = () => {
-      location.href = `${API}/auth/login?return_to=${encodeURIComponent(location.pathname)}`;
-    };
-  }
-  const out = document.getElementById('signout');
-  if (out) {
-    out.onclick = async () => {
-      await fetch(`${API}/auth/logout`, { method: 'POST', credentials: 'include' });
-      location.replace(location.pathname);
-    };
-  }
-}
+    <div class="panel" id="tag-editor">
+      <p class="muted">Select a tag to edit it, or create a new one.</p>
+    </div>
+  </section>
 
-async function main() {
-  // Surface a callback error, then strip it so a refresh does not re-show it.
-  const params = new URLSearchParams(location.search);
-  const err = params.get('error');
-  let banner = '';
-  if (err) {
-    const [kind, message] = ERRORS[err] || ['error', `Sign-in failed (${err}).`];
-    banner = `<div class="error ${kind === 'warn' ? 'warn' : ''}">${message}</div>`;
-    params.delete('error');
-    history.replaceState({}, '', location.pathname + (params.toString() ? `?${params}` : ''));
-  }
+  <!-- ---------------------------------------------------------- audit -- -->
+  <section id="tab-audit" hidden>
+    <div class="panel">
+      <div class="toolbar">
+        <span class="muted">Append-only. A correction is another row, never an edit.</span>
+        <span class="spacer" style="flex:1"></span>
+        <select id="audit-limit" aria-label="How many entries">
+          <option value="50">Last 50</option>
+          <option value="100" selected>Last 100</option>
+          <option value="500">Last 500</option>
+        </select>
+        <button type="button" class="btn secondary" id="audit-refresh">Refresh</button>
+      </div>
+      <div id="audit-list"></div>
+    </div>
+  </section>
+</main>
 
-  let res;
-  try {
-    res = await fetch(`${API}/auth/me`, { credentials: 'include' });
-  } catch {
-    render(`${banner}<div class="error">Could not reach the API.</div>${signInButton('Retry')}`);
-    return wire();
-  }
-
-  const body = await res.json().catch(() => ({}));
-
-  if (res.status === 401) {
-    render(`${banner}<p class="muted">Sign in with a GitHub account that is a collaborator on the repository.</p>${signInButton()}`);
-  } else if (res.status === 503) {
-    // Distinct from 403 on purpose — see ERRORS above.
-    render(`${banner}<div class="error warn">Signed in as <span class="who">${body.login}</span>, but GitHub could not be reached to confirm access. Not a refusal.</div>${signInButton('Retry')}`);
-  } else if (res.status === 403) {
-    render(`${banner}<div class="error">Signed in as <span class="who">${body.login}</span>, which is not a collaborator on the repository.</div><button id="signout" class="secondary">Sign out</button>`);
-  } else if (res.status === 200 && body.collaborator === true) {
-    render(`${banner}<p>Signed in as <span class="who">${body.login}</span> — collaborator access confirmed.</p><p class="muted">The dashboard itself arrives at Phase 4.</p><button id="signout" class="secondary">Sign out</button>`);
-  } else {
-    // Anything else is unexpected — most likely this page is pointed at an API
-    // that has no /auth routes yet (a 404). Treating an unrecognised status as
-    // success would render "Signed in as undefined - access confirmed", which
-    // is the worst possible thing for an auth screen to say.
-    render(`${banner}<div class="error">Unexpected response from <code>${API}</code> (HTTP ${res.status}). The auth routes may not be deployed there.</div>${signInButton('Retry')}`);
-  }
-  wire();
-}
-
-main();
-</script>
+<script src="admin.js"></script>
 </body>
 </html>

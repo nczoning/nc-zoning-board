@@ -1,0 +1,114 @@
+/**
+ * A D1 binding backed by real SQLite, running the real migrations.
+ *
+ * The admin tests used to run against a hand-rolled fake that matched SQL by
+ * substring. That was adequate while every statement was a plain single-table
+ * read or write, and it stopped being adequate the moment tag behaviour became
+ * a question about CONSTRAINTS: "deleting a tag in use is refused" and "renaming
+ * a slug cascades to location_tags" are claims about SQLite, and a mock can only
+ * ever restate the author's belief about them. Proving them needs an engine.
+ *
+ * node:sqlite is experimental, and it is a test-only dependency — nothing here
+ * ships to the Worker, which talks to D1.
+ *
+ * Two behaviours matter and are asserted by the tests that use this:
+ * - `PRAGMA foreign_keys = ON`. SQLite defaults it OFF, D1 defaults it ON. With
+ *   it off, ON UPDATE CASCADE silently does nothing and every rename orphans
+ *   its links — which is why admin.js re-counts after a rename rather than
+ *   trusting the cascade.
+ * - `batch()` runs inside a transaction, as D1's does.
+ */
+
+import { DatabaseSync } from 'node:sqlite';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Outside test/ on purpose: `node --test` treats every .js/.mjs under a test/
+// directory as a test file, and a helper with no tests in it would be reported
+// as a passing suite.
+const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
+
+/** D1 returns `{results, meta}` from all(), a bare row (or null) from first(). */
+function statement(db, sql, args = []) {
+  return {
+    bind(...next) { return statement(db, sql, next); },
+    async first(column) {
+      const row = db.prepare(sql).get(...args) ?? null;
+      if (row === null || column === undefined) return row;
+      return row[column];
+    },
+    async all() {
+      return { results: db.prepare(sql).all(...args), success: true };
+    },
+    async run() {
+      const info = db.prepare(sql).run(...args);
+      return { success: true, meta: { changes: Number(info.changes) } };
+    },
+    // Internal: batch() needs the pieces, not the promise.
+    _sql: sql,
+    _args: args,
+  };
+}
+
+/**
+ * @param {object} [seed]
+ * @param {Array}  [seed.locations]      raw `locations` rows
+ * @param {Array}  [seed.locationTags]   `[location_id, tag_slug]` pairs
+ * @param {Array}  [seed.users]          raw `users` rows
+ * @param {Array}  [seed.tags]           extra tag rows beyond migration 0002's seed
+ */
+export function sqliteD1(seed = {}) {
+  const db = new DatabaseSync(':memory:');
+  db.exec('PRAGMA foreign_keys = ON');
+
+  // The real migrations, in order. If a migration stops being valid SQLite this
+  // throws here rather than producing a subtly different schema to test against.
+  for (const file of readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort()) {
+    db.exec(readFileSync(join(MIGRATIONS, file), 'utf8'));
+  }
+
+  for (const row of seed.locations ?? []) {
+    const cols = Object.keys(row);
+    db.prepare(
+      `INSERT INTO locations (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
+    ).run(...cols.map((c) => row[c]));
+  }
+  for (const [locationId, tagSlug] of seed.locationTags ?? []) {
+    db.prepare('INSERT INTO location_tags (location_id, tag_slug) VALUES (?, ?)')
+      .run(locationId, tagSlug);
+  }
+  for (const row of seed.users ?? []) {
+    db.prepare(
+      'INSERT INTO users (id, login, is_collaborator, checked_at, first_seen_at) VALUES (?, ?, ?, ?, ?)',
+    ).run(row.id, row.login, row.is_collaborator, row.checked_at, row.first_seen_at);
+  }
+  for (const row of seed.tags ?? []) {
+    db.prepare(
+      'INSERT INTO tags (slug, name, description, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run(row.slug, row.name ?? null, row.description, row.sort_order ?? null,
+      row.created_at ?? 'seed', row.updated_at ?? 'seed');
+  }
+
+  return {
+    _db: db,
+    prepare: (sql) => statement(db, sql),
+    async batch(statements) {
+      db.exec('BEGIN');
+      try {
+        const out = statements.map((s) => {
+          const info = db.prepare(s._sql).run(...s._args);
+          return { success: true, meta: { changes: Number(info.changes) } };
+        });
+        db.exec('COMMIT');
+        return out;
+      } catch (err) {
+        db.exec('ROLLBACK');
+        throw err;
+      }
+    },
+    /** Test conveniences — reads, never writes. */
+    rows: (sql, ...args) => db.prepare(sql).all(...args),
+    one: (sql, ...args) => db.prepare(sql).get(...args) ?? null,
+  };
+}
