@@ -309,9 +309,53 @@ exercise auth — test on `dev.nczoning.net`. These are deliberately absent from
 | `/admin/tags` | POST | 201; 409 `tag_exists` on a duplicate slug |
 | `/admin/tags/{slug}` | GET / PATCH / DELETE | see the two rules below |
 | `/admin/audit` | GET | newest first, `?limit=` capped at 500 |
+| `/admin/refresh` | POST | rebuild the served dataset now; see below |
 
 **Unknown payload keys are a 422, not an ignore**, and `id` is refused outright.
 A silently dropped typo looks exactly like a successful save.
+
+### Rebuilding the read path by hand
+
+**Staging has no cron.** It was removed to stay inside the 1,000 KV writes/day
+free-tier cap, which means nothing there re-materializes on its own: staging's
+KV was found 14 hours stale, still serving the pre-4b `/v1/tags` map shape, with
+nothing to notice it. `POST /admin/refresh` is the fix, and the dashboard shows
+dataset age in the top bar so the state is visible rather than assumed.
+
+Unlike the write-through materialize, it is **not** gated on `DATA_SOURCE`. That
+gate exists so an admin write does not spend a KV write rebuilding from a source
+the write did not touch; this route is someone explicitly asking, and
+`runRefresh` honours `DATA_SOURCE` either way — from `mods.json` in production,
+from D1 on staging. It cannot flip the cutover.
+
+🔴 **`runRefresh` does not throw on failure.** It catches, keeps last-known-good,
+flags `discovery_stale` and *returns* `{stale: true}`. So the route branches on
+that return value, not on whether the call threw — treating "it did not throw" as
+success would report every failed rebuild as a win. `changed: false` is a
+success, meaning the content hash matched and nothing needed rewriting.
+
+### Keeping D1 in step with `data/locations/` before the cutover
+
+Submissions still arrive the old way: issue → PR → `main` → a new
+`data/locations/<uuid>.json`. `mods.json` is rebuilt from those files so
+production picks the record up, and **D1 hears nothing** — so staging, which
+reads D1, silently serves a smaller map than production. A mod merged overnight
+did exactly that.
+
+```bash
+node scripts/sync-locations.mjs --db nczoning-data-staging --env staging --out .import/sync.sql
+npx wrangler d1 execute nczoning-data-staging --env staging --remote --file .import/sync.sql
+```
+
+Emits SQL rather than running it, INSERT-only, and writes **both**
+`locations` and `location_tags` — a record inserted without the join rows
+renders with no tags at all. It never deletes: rows in D1 with no file are not
+drift, since the nine auto-discovered records have never existed as files. It
+also reports records that exist in both and disagree, without rewriting them.
+
+Run it against **both** databases, and delete the script at cleanup — keeping it
+after submissions land in D1 directly would preserve git as a second source of
+truth.
 
 ### 🔴 Tags live in the join, and writes must go through it
 

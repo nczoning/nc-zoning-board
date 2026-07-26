@@ -14,6 +14,66 @@ const SECRET = 'admin-test-secret';
 
 const fakeKv = () => ({ async get() { return null; }, async put() {} });
 
+/**
+ * A KV that actually stores, for the tests that run a real refresh through.
+ *
+ * The discarding KV above is fine for the CRUD tests, which never read back.
+ * It is NOT fine for a refresh: runRefresh compares the new content hash
+ * against the stored meta, so with a KV that forgets, every rebuild looks like
+ * a first one.
+ */
+function storingKv(initial = {}) {
+  const store = new Map(Object.entries(initial));
+  return {
+    _store: store,
+    async get(key, type) {
+      const v = store.get(key);
+      if (v === undefined) return null;
+      return type === 'json' ? JSON.parse(v) : v;
+    },
+    async put(key, value) { store.set(key, value); },
+  };
+}
+
+const SUBDISTRICTS = {
+  districts: [{
+    id: 'testville',
+    name: 'Testville',
+    polygon: [[-9000, -9000], [9000, -9000], [9000, 9000], [-9000, 9000]],
+    subdistricts: [],
+  }],
+};
+
+/**
+ * Everything runRefresh reaches for. Mirrors the stub in refresh-d1.test.js.
+ *
+ * 🔴 Installed as globalThis.fetch, because admin.js calls `runRefresh(env)`
+ * without a fetchImpl. An earlier test in this file replaces globalThis.fetch
+ * with a hard failure and does not restore it, so a refresh test that does not
+ * set this inherits that and rebuilds "successfully" against nothing.
+ */
+function refreshFetch() {
+  return async (url, init) => {
+    const u = String(url);
+    if (u.includes('/mods.json')) return { ok: true, json: async () => [] };
+    if (u.includes('/tags.json')) return { ok: true, json: async () => ({ apartment: 'a place' }) };
+    if (u.includes('/excluded_mods.json')) return { ok: true, json: async () => ({}) };
+    if (u.includes('/subdistricts.json')) return { ok: true, json: async () => SUBDISTRICTS };
+    // Non-fatal by construction in refresh.js: a miss leaves images null.
+    if (u.includes('api-router.nexusmods.com')) return { ok: false, status: 503 };
+    if (u.includes('file-metadata.nexusmods.com')) return { ok: false, status: 503 };
+    if (u.includes('api.nexusmods.com')) {
+      const query = init?.body ? JSON.parse(init.body).query : '';
+      if (query.includes('modsByUid')) {
+        return { ok: true, json: async () => ({ data: { modsByUid: { nodes: [] } } }) };
+      }
+      return { ok: true, json: async () => ({ data: { mods: { nodes: [], totalCount: 0 } } }) };
+    }
+    if (u.includes('discord')) return { ok: true };
+    throw new Error(`unexpected fetch: ${u}`);
+  };
+}
+
 const ROW = {
   id: 'loc-1', name: 'Existing Loft', nexus_id: '12345', category: 'new-location',
   x: 1, y: 2, z: 3, yaw: 90, description: 'a place', credits: null,
@@ -81,7 +141,7 @@ test('every admin route is refused without a session', async () => {
     ['DELETE', '/admin/locations/loc-1'], ['GET', '/admin/audit'],
     ['GET', '/admin/tags'], ['POST', '/admin/tags'],
     ['GET', '/admin/tags/corpo'], ['PATCH', '/admin/tags/corpo'],
-    ['DELETE', '/admin/tags/corpo'],
+    ['DELETE', '/admin/tags/corpo'], ['POST', '/admin/refresh'],
   ]) {
     const res = await worker.fetch(
       new Request(`https://api.nczoning.net${path}`, { method }), env, {},
@@ -435,11 +495,72 @@ test('a tag write does NOT materialize while DATA_SOURCE is mods either', async 
 });
 
 test('a write DOES materialize once DATA_SOURCE is d1', async () => {
-  const env = envFor({ dataSource: 'd1' });
+  // 🔴 Asserts KV actually gained the dataset, not merely that waitUntil was
+  // handed a promise. materializeAfterWrite catches its own errors, so the
+  // previous `await waited[0]; // must not reject` could not fail: a rebuild
+  // that blew up on every record passed it as happily as one that worked.
+  const env = refreshableEnv({ dataSource: 'd1' });
   const waited = [];
   await hit(env, 'POST', '/admin/locations', VALID, { waitUntil: (p) => waited.push(p) });
   assert.equal(waited.length, 1, 'the read path must be rebuilt write-through');
-  await waited[0]; // must not reject
+  await waited[0];
+  assert.ok(env.DATASET._store.size > 0, 'the rebuild must reach KV, not just be scheduled');
+});
+
+// ------------------------------------------------------ manual rebuild ---
+
+/** An env whose refresh can actually succeed: storing KV, working fetch. */
+function refreshableEnv(opts = {}) {
+  const env = envFor(opts);
+  env.DATASET = storingKv();
+  globalThis.fetch = refreshFetch();
+  return env;
+}
+
+test('POST /admin/refresh rebuilds and says which source it used', async () => {
+  const env = refreshableEnv({ dataSource: 'd1' });
+  const res = await hit(env, 'POST', '/admin/refresh');
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.refreshed, true);
+  assert.equal(body.source, 'd1');
+  assert.equal(body.changed, true, 'a first rebuild into an empty KV must write');
+  assert.ok(env.DATASET._store.size > 0, 'and the dataset must actually be in KV');
+  assert.equal(auditRows(env).at(-1).action, 'dataset.refresh');
+});
+
+test('🔴 a manual refresh runs even while DATA_SOURCE is mods', async () => {
+  // Unlike the write-through materialize, which is skipped there. The gate on
+  // that one avoids spending a KV write rebuilding from a source the write did
+  // not touch; this route is someone explicitly asking, and runRefresh honours
+  // DATA_SOURCE either way, so it cannot flip the cutover.
+  const env = refreshableEnv({ dataSource: 'mods' });
+  const res = await hit(env, 'POST', '/admin/refresh');
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).source, 'mods');
+});
+
+test('an unchanged rebuild reports changed:false, which is still a success', async () => {
+  const env = refreshableEnv({ dataSource: 'd1' });
+  assert.equal((await (await hit(env, 'POST', '/admin/refresh')).json()).changed, true);
+  const second = await (await hit(env, 'POST', '/admin/refresh')).json();
+  assert.equal(second.refreshed, true);
+  assert.equal(second.changed, false, 'the content hash matched, so nothing was rewritten');
+});
+
+test('🔴 a failed rebuild is a 500 that says so, not a reported success', async () => {
+  // runRefresh does NOT throw on failure -- it catches, keeps last-known-good
+  // and returns {stale: true}. Reporting success off "it did not throw" would
+  // have called every failed rebuild a win. An empty registry is the trigger
+  // here (readLocationRows refuses to materialize an empty map); the shape of
+  // the failure is what matters, not its cause.
+  const env = refreshableEnv({ dataSource: 'd1', locations: [], locationTags: [] });
+  const res = await hit(env, 'POST', '/admin/refresh');
+  assert.equal(res.status, 500);
+  const body = await res.json();
+  assert.equal(body.error, 'refresh_failed');
+  assert.match(body.detail, /empty/);
+  assert.equal(auditRows(env).length, 0, 'a rebuild that did not happen is not audited');
 });
 
 test('a tag write rebuilds the read path too, since /v1/tags serves it', async () => {

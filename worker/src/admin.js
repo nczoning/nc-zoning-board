@@ -161,6 +161,53 @@ export async function handleAdmin(request, env, ctx) {
     return json(request, { entries: await readAudit(env, url.searchParams.get('limit')) });
   }
 
+  // ---- rebuild the read path ---------------------------------------------
+  //
+  // Deliberately NOT gated on DATA_SOURCE, unlike materializeAfterWrite. That
+  // gate exists so an admin write does not spend a KV write rebuilding from a
+  // source the write did not touch; this route is someone explicitly asking for
+  // a rebuild, and runRefresh honours DATA_SOURCE either way — from mods.json in
+  // production, from D1 on staging. It cannot flip the cutover.
+  //
+  // It exists because staging has NO CRON (removed to stay inside the 1,000
+  // KV writes/day free-tier cap), so nothing there re-materializes on its own.
+  // Staging's KV sat 14 hours stale and served the pre-4b /v1/tags shape, and
+  // there was no way to notice or fix it short of an admin write.
+  //
+  // Awaited rather than fire-and-forget: the caller asked for a rebuild, so the
+  // response has to say whether they got one.
+  if (url.pathname === '/admin/refresh' && method === 'POST') {
+    const source = env.DATA_SOURCE ?? 'mods';
+    let result;
+    try {
+      result = await runRefresh(env);
+    } catch (err) {
+      // 🔴 runRefresh does NOT throw on a failed rebuild -- it catches, keeps
+      // last-known-good, flags discovery_stale and RETURNS {stale: true}. So
+      // this catch is only for a failure of its own error path, and branching
+      // on `stale` below is what actually detects a failed rebuild. Reporting
+      // success off "it did not throw" would have called every failure a win.
+      return json(request, { error: 'refresh_failed', detail: String(err).slice(0, 300) }, 500);
+    }
+
+    if (result?.stale) {
+      return json(request, {
+        error: 'refresh_failed',
+        detail: String(result.error ?? 'unknown').slice(0, 300),
+      }, 500);
+    }
+
+    await writeAudit(env, { actor, action: 'dataset.refresh', target: source });
+    // `changed: false` is a success: the content hash matched, so there was
+    // nothing to write. Distinct from a failure, and the caller is told which.
+    return json(request, {
+      refreshed: true,
+      source,
+      changed: result?.changed === true,
+      dataset_version: result?.version ?? null,
+    });
+  }
+
   // ---- tags --------------------------------------------------------------
   const tagResponse = await handleTags(
     { request, env, ctx, actor, method, tagListMatch, tagOneMatch },

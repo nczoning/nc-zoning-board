@@ -49,6 +49,23 @@ a { color: var(--secondary); }
 
 .who { color: var(--tertiary); font-weight: 600; }
 
+/* Dataset age. Three states rather than two, because "I have not asked yet" is
+   not the same as "it is current" — a blank indicator must never read as fresh. */
+.freshness {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px var(--space-xs);
+    border: var(--ui-border-thin) solid var(--border-neutral);
+    border-radius: var(--ui-radius-xs);
+    color: var(--gray);
+    white-space: nowrap;
+}
+
+.freshness.fresh { border-color: var(--status-ok); color: var(--status-ok); }
+.freshness.stale { border-color: var(--tertiary); color: var(--tertiary); }
+.freshness.unknown { border-style: dashed; }
+
 nav.tabs { display: flex; gap: var(--space-2xs); }
 
 nav.tabs button {

@@ -751,6 +751,72 @@
     if (tag) renderTagEditor(tag);
   }
 
+  // ----------------------------------------------------------- freshness --
+
+  // Matches the external health monitor's threshold. The cron runs every 5
+  // minutes, so anything past this is either a failing cron or, on staging,
+  // no cron at all.
+  const STALE_AFTER_S = 45 * 60;
+
+  function describeAge(seconds) {
+    if (seconds < 90) return `${Math.round(seconds)}s ago`;
+    if (seconds < 5400) return `${Math.round(seconds / 60)}m ago`;
+    if (seconds < 172800) return `${Math.round(seconds / 3600)}h ago`;
+    return `${Math.round(seconds / 86400)}d ago`;
+  }
+
+  /**
+   * Read dataset age off /v1/health — public and uncached, so no extra route.
+   *
+   * 🔴 An unreadable health check renders as `unknown`, never as fresh. A blank
+   * or green indicator that actually means "I could not tell" is the same class
+   * of lie as reporting an unrecognised status as a successful login.
+   */
+  async function refreshFreshness() {
+    const el = $('#freshness');
+    let age = null;
+    try {
+      const res = await fetch(`${API}/v1/health`);
+      if (res.ok) age = (await res.json())?.data?.refresh_age_seconds ?? null;
+    } catch { /* falls through to unknown */ }
+
+    if (typeof age !== 'number') {
+      el.className = 'freshness unknown';
+      el.textContent = 'dataset age unknown';
+      return;
+    }
+    const stale = age > STALE_AFTER_S;
+    el.className = `freshness ${stale ? 'stale' : 'fresh'}`;
+    el.textContent = `dataset ${describeAge(age)}`;
+    el.title = stale
+      ? 'The served dataset is older than the cron interval. Staging has no cron, so this is expected there until you rebuild.'
+      : 'The served dataset is current.';
+  }
+
+  /** Rebuild the served dataset from whatever DATA_SOURCE says. */
+  async function rebuildDataset(button) {
+    button.disabled = true;
+    button.textContent = 'Rebuilding…';
+    const res = await api('/admin/refresh', { method: 'POST' });
+    button.disabled = false;
+    button.textContent = 'Rebuild';
+
+    if (!res.ok) {
+      const [kind, message] = res.status === 500 && res.body?.error === 'refresh_failed'
+        ? ['error', `The rebuild failed, so the previous dataset is still being served: ${res.body.detail}`]
+        : describeFailure(res);
+      await refreshFreshness();
+      return banner(kind, message);
+    }
+    // "Nothing changed" is a real outcome, not a nicer way of saying "done".
+    // If the admin just edited a record and the rebuild reports no change,
+    // that is worth knowing rather than smoothing over.
+    banner('ok', res.body.changed
+      ? `Rebuilt from ${res.body.source}. New dataset version ${res.body.dataset_version}.`
+      : `Rebuilt from ${res.body.source}. The content hash was unchanged, so nothing was rewritten.`);
+    await refreshFreshness();
+  }
+
   // --------------------------------------------------------------- audit --
 
   /** Field-level diff between two audit snapshots. */
@@ -836,10 +902,12 @@
     $('#tag-new').onclick = () => selectTag('');
     $('#audit-refresh').onclick = loadAudit;
     $('#audit-limit').onchange = loadAudit;
+    $('#rebuild').onclick = (e) => rebuildDataset(e.currentTarget);
 
     // Tags first: the location editor's picker is built from them.
     await loadTags();
     await loadLocations();
+    await refreshFreshness();
   }
 
   main();

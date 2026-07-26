@@ -36,6 +36,11 @@
     <button type="button" role="tab" data-tab="audit" aria-selected="false">Audit</button>
   </nav>
   <span class="spacer"></span>
+  <!-- What the map is actually serving right now, and how old it is. Staging
+       has no cron, so without this the read path can sit hours stale with
+       nothing to show for it. -->
+  <span class="freshness" id="freshness" title="Age of the dataset the public API is serving"></span>
+  <button type="button" class="btn secondary" id="rebuild" title="Rebuild the served dataset from the current source">Rebuild</button>
   <span class="muted">Signed in as <span class="who" id="whoami"></span></span>
   <span class="muted" id="api-label"></span>
   <button type="button" class="btn secondary" id="signout">Sign out</button>

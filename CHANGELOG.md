@@ -18,9 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The admin dashboard at `/admin/`: browse and filter every location, edit the full record, and read the audit log. Saves send only the fields that actually changed.
 - Tag management in the dashboard. A tag still attached to locations cannot be deleted — the refusal lists what is using it. Renaming a tag's identifier is locked behind an explicit unlock, because it re-points existing records and breaks `?tag=` links; the display name is the safe thing to edit.
 
+- The dashboard shows how old the served dataset is, and a Rebuild button that regenerates it on demand. Staging has no cron, so nothing there refreshed on its own and there was no way to see that.
+- `scripts/sync-locations.mjs` copies location records that exist in `data/locations/` but not yet in D1. Needed until submissions land in D1 directly: a mod merged to `main` reaches production but not the D1 registry.
+
 ### Fixed
 
 - Admin tag edits reached the legacy column but not the join the map reads, so they returned success and changed nothing. Both are now written together.
+- The new location added to `main` overnight reached production but not the D1 registry, so staging served one fewer mod than production.
 
 ### Changed
 
