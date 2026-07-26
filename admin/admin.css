@@ -377,9 +377,13 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ---------------------------------------------------------------- gate -- */
 
-/* The signed-out / refused screen, which is the whole page rather than a tab. */
+/* The signed-out / refused screen, which is the whole page rather than a tab.
+ *
+ * `main:not(#gate)` matters: the gate is itself a <main>, so hiding a bare
+ * `main` here hid the sign-in screen along with the dashboard and rendered an
+ * empty navy page on a perfectly correct 401. */
 body.gate { display: grid; place-items: center; padding: var(--space-lg); }
-body.gate .topbar, body.gate main { display: none; }
+body.gate .topbar, body.gate main:not(#gate) { display: none; }
 
 #gate { width: 100%; max-width: 30rem; }
 #gate h1 {
