@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "NC Zoning Data API",
-    "version": "1.3.0",
+    "version": "0.3.0",
     "description": "Read-only API serving the NC Zoning Board mod registry (Cyberpunk 2077 location mods) to in-game mods and the website. Every response is wrapped in a versioned envelope. Coordinates are raw CET world values [X, Y, Z], usable in-game with no transform. The JSON stays DTO-mappable for the in-game RedData parser: no arrays-of-arrays, property names are case-sensitive. See https://github.com/spuddeh/nc-zoning-board for the project.",
     "contact": { "name": "NC Zoning Board", "url": "https://nczoning.net" }
   },
@@ -22,7 +22,7 @@
               "allOf": [{ "$ref": "#/components/schemas/Envelope" }, { "type": "object", "properties": {
                 "data": { "type": "object", "properties": {
                   "status": { "type": "string", "const": "ok" },
-                  "version": { "type": "string", "example": "1.3.0", "description": "SemVer for the API surface: MINOR on an additive field or route, MAJOR on a break (which also moves /v1 to /v2), PATCH on a behaviour fix. Read it to tell whether a field you want exists yet. Distinct from dataset_version (a content hash) and from the in-game NCZoningCore mod's ApiVersion() integer, which gates only on breaking changes." },
+                  "version": { "type": "string", "example": "0.3.0", "description": "SemVer for the API surface. The API is currently PRE-1.0 and the rules are inverted while it is: breaking changes bump MINOR, additive changes bump PATCH, and the path stays /v1 throughout (SemVer permits breaking changes before 1.0). Do not pin to /v1 alone - read this field and pin to a shape you have seen. From 1.0.0, which returns when the first in-game mod ships, the usual rules resume: MINOR on an additive field or route, MAJOR on a break (which also moves /v1 to /v2), PATCH on a behaviour fix. Note 0.3.0 is numerically lower than the 1.3.0 recent deploys served; that is a deliberate rollback, not a downgrade. Distinct from dataset_version (a content hash) and from the in-game NCZoningCore mod's ApiVersion() integer, which gates only on breaking changes." },
                   "last_refresh_at": { "type": ["string", "null"], "format": "date-time", "description": "When the refresh cron last ran (heartbeat), or null before the first tick." },
                   "refresh_age_seconds": { "type": ["integer", "null"], "description": "Server-computed age of last_refresh_at in seconds, or null before the first tick. A clock-free freshness read for the in-game consumer." }
                 } } } }]
