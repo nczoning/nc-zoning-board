@@ -69,6 +69,33 @@
     tags: [],
     selectedLocation: null,   // id, or '' for a new record
     selectedTag: null,        // slug, or '' for a new tag
+    editing: false,           // detail view vs. the form; see selectLocation
+    // District is computed by the materializer, not stored on the record, so it
+    // is learned from /v1/locations when the Overview loads. Published records
+    // only — which is what "district" means anyway.
+    districtById: new Map(),
+    // Structured rather than "shove it in the search box": the Overview tiles
+    // filter by things free text cannot express (untagged, source, district),
+    // and each one has to be individually removable from the chip row.
+    filter: {
+      q: '', status: '', category: '', tag: '', district: '', source: '', special: '',
+    },
+  };
+
+  /** Human label for a filter, used on the chips. */
+  const FILTER_LABELS = {
+    q: 'search',
+    status: 'status',
+    category: 'category',
+    tag: 'tag',
+    district: 'district',
+    source: 'source',
+    special: '',
+  };
+
+  const SPECIAL_LABELS = {
+    untagged: 'no tags',
+    wip: 'WIP / Dummy id',
   };
 
   // ----------------------------------------------------------- DOM utils --
@@ -263,22 +290,71 @@
 
   const tagsOf = (loc) => (loc.source === 'auto' ? ['nczoning', ...loc.tags] : loc.tags);
 
-  function locationMatches(loc, { q, status, category }) {
-    if (status && loc.status !== status) return false;
-    if (category && loc.category !== category) return false;
-    if (!q) return true;
+  /** Category, in the map's own pin colours. See .cat in admin.css. */
+  const categoryTag = (category) => h('span', {
+    class: `cat cat-${category}`,
+    text: category.replace(/-/g, ' '),
+  });
+
+  function locationMatches(loc, f) {
+    if (f.status && loc.status !== f.status) return false;
+    if (f.category && loc.category !== f.category) return false;
+    if (f.source && loc.source !== f.source) return false;
+    if (f.tag && !(loc.tags || []).includes(f.tag)) return false;
+    if (f.district && state.districtById.get(loc.id) !== f.district) return false;
+    if (f.special === 'untagged' && (loc.tags || []).length) return false;
+    if (f.special === 'wip' && /^\d+$/.test(String(loc.nexus_id))) return false;
+    if (!f.q) return true;
     const hay = [loc.name, loc.nexus_id, ...(loc.authors || []), ...(loc.tags || [])]
       .join(' ').toLowerCase();
-    return hay.includes(q.toLowerCase());
+    return hay.includes(f.q.toLowerCase());
+  }
+
+  const activeFilters = () => Object.entries(state.filter).filter(([, v]) => v !== '');
+
+  /**
+   * Apply a filter and show the result.
+   *
+   * `patch` merges, so a tile can narrow an existing filter rather than
+   * replacing it. Pass `reset: true` for the Overview tiles, which mean "show
+   * me these" rather than "and also these".
+   */
+  function setFilter(patch, { reset = false, go = false } = {}) {
+    if (reset) {
+      state.filter = { q: '', status: '', category: '', tag: '', district: '', source: '', special: '' };
+    }
+    Object.assign(state.filter, patch);
+    // The selects are a second view of the same state, so they follow it.
+    $('#loc-search').value = state.filter.q;
+    $('#loc-status').value = state.filter.status;
+    $('#loc-category').value = state.filter.category;
+    renderLocations();
+    if (go) switchTab('locations');
+  }
+
+  function renderChips() {
+    const active = activeFilters();
+    if (!active.length) return replace($('#loc-chips'));
+
+    const chips = active.map(([key, value]) => h('span', { class: 'chip' },
+      `${FILTER_LABELS[key] ? `${FILTER_LABELS[key]}: ` : ''}${
+        key === 'special' ? SPECIAL_LABELS[value] ?? value : value}`,
+      h('button', {
+        type: 'button', text: '✕', title: `Remove this filter`,
+        onclick: () => setFilter({ [key]: '' }),
+      })));
+
+    if (active.length > 1) {
+      chips.push(h('button', {
+        class: 'btn secondary', type: 'button', text: 'Clear all',
+        onclick: () => setFilter({}, { reset: true }),
+      }));
+    }
+    replace($('#loc-chips'), chips);
   }
 
   function renderLocations() {
-    const filters = {
-      q: $('#loc-search').value.trim(),
-      status: $('#loc-status').value,
-      category: $('#loc-category').value,
-    };
-    const shown = state.locations.filter((l) => locationMatches(l, filters));
+    const shown = state.locations.filter((l) => locationMatches(l, state.filter));
 
     replace($('#loc-rows'), shown.map((loc) => h('tr', {
       'aria-selected': loc.id === state.selectedLocation ? 'true' : 'false',
@@ -286,7 +362,7 @@
       style: 'cursor:pointer',
     },
     h('td', {}, loc.name),
-    h('td', {}, loc.category.replace(/-/g, ' ')),
+    h('td', {}, categoryTag(loc.category)),
     h('td', {}, tagsOf(loc).map((t) => h('span', {
       class: `badge${t === 'nczoning' ? ' synthetic' : ''}`,
       title: t === 'nczoning' ? 'Synthetic marker, added to auto-discovered records. Not editable.' : null,
@@ -300,6 +376,7 @@
     $('#loc-count').textContent = shown.length === state.locations.length
       ? `${shown.length} locations`
       : `${shown.length} of ${state.locations.length} locations`;
+    renderChips();
   }
 
   async function loadLocations() {
@@ -444,8 +521,14 @@
     const actions = h('div', { class: 'editor-actions' },
       saveBtn,
       h('button', {
+        // Cancel goes back to reading the record, not to nothing — you were
+        // looking at it before you chose to edit.
         class: 'btn secondary', type: 'button', text: 'Cancel',
-        onclick: () => selectLocation(null),
+        onclick: () => {
+          state.editing = false;
+          if (isNew) selectLocation(null);
+          else renderLocationDetail(loc);
+        },
       }),
       dirtyLabel,
       h('span', { class: 'spacer' }),
@@ -456,7 +539,7 @@
     );
 
     replace($('#loc-editor'),
-      h('h2', { style: 'margin-top:0;font-size:var(--text-md)', text: isNew ? 'New location' : loc.name }),
+      h('h2', { text: isNew ? 'New location' : `Editing — ${loc.name}` }),
       isNew ? null : h('p', { class: 'muted', text: `id ${loc.id} · updated ${loc.updated_at}` }),
       form, actions);
 
@@ -520,6 +603,8 @@
       ? `Created "${res.body.location.name}".`
       : `Saved ${Object.keys(payload).join(', ')} on "${res.body.location.name}".`);
     await loadLocations();
+    // Back to reading it: the save is done, so the form has nothing left to say.
+    state.editing = false;
     selectLocation(res.body.location.id);
   }
 
@@ -541,20 +626,81 @@
     banner('ok', `Deleted "${loc.name}". The record is in the audit log if you need it back.`);
     state.selectedLocation = null;
     await loadLocations();
-    replace($('#loc-editor'), h('p', { class: 'muted', text: 'Select a location to edit it, or create a new one.' }));
+    replace($('#loc-editor'), h('p', { class: 'muted', text: 'Select a location to view it, or create a new one.' }));
+  }
+
+  /**
+   * Read-only view of a record.
+   *
+   * Opening a record shows it; changing it is a separate act. Clicking a row
+   * used to drop straight into a live form, which made every browse a potential
+   * edit — one stray keystroke in a focused field and the dirty summary lights
+   * up on a record you only meant to look at.
+   */
+  function renderLocationDetail(loc) {
+    const row = (label, value, cls) => [
+      h('dt', { text: label }),
+      value === null || value === undefined || value === ''
+        ? h('dd', { class: 'empty', text: '—' })
+        : h('dd', { class: cls || null }, value),
+    ];
+
+    const coords = loc.coordinates.map((n) => Number(n).toFixed(3)).join(', ');
+
+    replace($('#loc-editor'),
+      h('h2', { text: loc.name }),
+      h('div', { class: 'detail' }, h('dl', {},
+        row('Status', h('span', { class: `badge status-${loc.status}`, text: loc.status })),
+        row('Category', categoryTag(loc.category)),
+        row('Tags', tagsOf(loc).length
+          ? tagsOf(loc).map((t) => h('span', {
+            class: `badge${t === 'nczoning' ? ' synthetic' : ''}`, text: t,
+          }))
+          : null),
+        row('Authors', (loc.authors || []).join(', ')),
+        row('Credits', loc.credits),
+        row('Nexus ID', loc.nexus_id, 'mono'),
+        row('Source', loc.source),
+        row('Coordinates', coords, 'mono'),
+        row('Yaw', loc.yaw === null || loc.yaw === undefined ? null : String(loc.yaw), 'mono'),
+        row('District', state.districtById.get(loc.id)),
+        row('Description', loc.description),
+        // Internal, and never served on /v1. Worth showing plainly here.
+        row('Admin notes', loc.admin_notes),
+        row('ID', loc.id, 'mono'),
+        row('Created', loc.created_at, 'mono'),
+        row('Updated', loc.updated_at, 'mono'),
+      )),
+      h('div', { class: 'editor-actions' },
+        h('button', {
+          class: 'btn', type: 'button', text: 'Edit',
+          onclick: () => { state.editing = true; renderLocationEditor(loc); },
+        }),
+        h('button', {
+          class: 'btn secondary', type: 'button', text: 'Close',
+          onclick: () => selectLocation(null),
+        }),
+        h('span', { class: 'spacer' }),
+        h('button', {
+          class: 'btn danger', type: 'button', text: 'Delete',
+          onclick: () => deleteLocation(loc),
+        })));
   }
 
   function selectLocation(id) {
     state.selectedLocation = id;
+    state.editing = id === '';   // a new record has nothing to view
     clearBanner();
     if (id === null) {
       renderLocations();
       return replace($('#loc-editor'),
-        h('p', { class: 'muted', text: 'Select a location to edit it, or create a new one.' }));
+        h('p', { class: 'muted', text: 'Select a location to view it, or create a new one.' }));
     }
     renderLocations();
     const loc = id === '' ? { ...BLANK_LOCATION } : state.locations.find((l) => l.id === id);
-    if (loc) renderLocationEditor(loc);
+    if (!loc) return;
+    if (state.editing) renderLocationEditor(loc);
+    else renderLocationDetail(loc);
   }
 
   // ---------------------------------------------------------------- tags --
@@ -632,7 +778,10 @@
 
     const actions = h('div', { class: 'editor-actions' },
       saveBtn,
-      h('button', { class: 'btn secondary', type: 'button', text: 'Cancel', onclick: () => selectTag(null) }),
+      h('button', {
+        class: 'btn secondary', type: 'button', text: 'Cancel',
+        onclick: () => (isNew ? selectTag(null) : renderTagDetail(tag)),
+      }),
       h('span', { class: 'spacer' }),
       isNew ? null : h('button', {
         class: 'btn danger', type: 'button', text: 'Delete', onclick: () => deleteTag(tag),
@@ -640,7 +789,7 @@
     );
 
     replace($('#tag-editor'),
-      h('h2', { style: 'margin-top:0;font-size:var(--text-md)', text: isNew ? 'New tag' : tag.slug }),
+      h('h2', { text: isNew ? 'New tag' : `Editing — ${tag.slug}` }),
       isNew ? null : h('p', { class: 'muted', text: `used by ${tag.usage_count} location(s)` }),
       form, actions);
   }
@@ -711,13 +860,9 @@
     if (res.status === 409 && res.body.error === 'tag_in_use') {
       const jump = h('button', {
         class: 'btn secondary', type: 'button', text: `Show the ${res.body.usage_count} location(s)`,
-        onclick: () => {
-          switchTab('locations');
-          $('#loc-search').value = tag.slug;
-          $('#loc-status').value = '';
-          $('#loc-category').value = '';
-          renderLocations();
-        },
+        // A real tag filter, not a text search for the slug: searching would
+        // also match a location whose NAME contains the word.
+        onclick: () => setFilter({ tag: tag.slug }, { reset: true, go: true }),
       });
       return banner('error',
         `"${tag.slug}" is still attached to ${res.body.usage_count} location(s), so it was not deleted. `
@@ -735,7 +880,42 @@
     banner('ok', `Deleted tag "${tag.slug}".`);
     state.selectedTag = null;
     await loadTags();
-    replace($('#tag-editor'), h('p', { class: 'muted', text: 'Select a tag to edit it, or create a new one.' }));
+    replace($('#tag-editor'), h('p', { class: 'muted', text: 'Select a tag to view it, or create a new one.' }));
+  }
+
+  /** Read-only view of a tag, for the same reason locations have one. */
+  function renderTagDetail(tag) {
+    const row = (label, value, cls) => [
+      h('dt', { text: label }),
+      value === null || value === undefined || value === ''
+        ? h('dd', { class: 'empty', text: '—' })
+        : h('dd', { class: cls || null }, value),
+    ];
+
+    replace($('#tag-editor'),
+      h('h2', { text: tag.slug }),
+      h('div', { class: 'detail' }, h('dl', {},
+        row('Slug', tag.slug, 'mono'),
+        row('Name', tag.name ?? null),
+        row('Description', tag.description),
+        row('Sort order', tag.sort_order === null || tag.sort_order === undefined
+          ? null : String(tag.sort_order), 'mono'),
+        row('Used by', `${tag.usage_count} location(s)`),
+      )),
+      h('div', { class: 'editor-actions' },
+        h('button', {
+          class: 'btn', type: 'button', text: 'Edit',
+          onclick: () => renderTagEditor(tag),
+        }),
+        tag.usage_count > 0 ? h('button', {
+          class: 'btn secondary', type: 'button', text: `Show the ${tag.usage_count} location(s)`,
+          onclick: () => setFilter({ tag: tag.slug }, { reset: true, go: true }),
+        }) : null,
+        h('span', { class: 'spacer' }),
+        h('button', {
+          class: 'btn danger', type: 'button', text: 'Delete',
+          onclick: () => deleteTag(tag),
+        })));
   }
 
   function selectTag(slug) {
@@ -744,11 +924,14 @@
     if (slug === null) {
       renderTags();
       return replace($('#tag-editor'),
-        h('p', { class: 'muted', text: 'Select a tag to edit it, or create a new one.' }));
+        h('p', { class: 'muted', text: 'Select a tag to view it, or create a new one.' }));
     }
     renderTags();
     const tag = slug === '' ? { ...BLANK_TAG } : state.tags.find((t) => t.slug === slug);
-    if (tag) renderTagEditor(tag);
+    if (!tag) return;
+    // A new tag has nothing to view, so it opens straight in the form.
+    if (slug === '') renderTagEditor(tag);
+    else renderTagDetail(tag);
   }
 
   // ----------------------------------------------------------- freshness --
@@ -847,18 +1030,46 @@
     return [...counts.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(b[0]));
   }
 
-  const stat = (value, label, kind) => h('div', { class: `stat${kind ? ` ${kind}` : ''}` },
-    h('span', { class: 'value', text: String(value) }),
-    h('span', { class: 'label', text: label }));
+  /**
+   * A headline number. `filter` makes it a button that shows you the records
+   * behind it.
+   *
+   * Only tiles that lead somewhere become buttons: a hover state on an inert
+   * number is a promise the UI does not keep.
+   */
+  const stat = (value, label, kind, filter) => {
+    const inner = [
+      h('span', { class: 'value', text: String(value) }),
+      h('span', { class: 'label', text: label }),
+    ];
+    const cls = `stat${kind ? ` ${kind}` : ''}`;
+    if (!filter || value === 0) return h('div', { class: cls }, inner);
+    return h('button', {
+      class: cls,
+      type: 'button',
+      title: `Show these ${value} record(s) in the locations list`,
+      onclick: () => setFilter(filter, { reset: true, go: true }),
+    }, inner);
+  };
 
-  function breakdown(entries, total) {
+  function breakdown(entries, total, filterFor) {
     if (!entries.length) return h('p', { class: 'muted', text: 'Nothing to count yet.' });
     const max = Math.max(...entries.map(([, n]) => n));
-    return entries.map(([name, n]) => h('div', { class: 'breakdown-row' },
-      h('span', { class: 'k', text: String(name).replace(/-/g, ' ') }),
-      // The bar is decoration on top of the number, never a replacement for it.
-      h('span', { class: 'bar' }, h('span', { style: `width:${Math.round((n / max) * 100)}%` })),
-      h('span', { class: 'n', text: total ? `${n}  (${Math.round((n / total) * 100)}%)` : String(n) })));
+    return entries.map(([name, n]) => {
+      const inner = [
+        h('span', { class: 'k', text: String(name).replace(/-/g, ' ') }),
+        // The bar is decoration on top of the number, never a replacement for it.
+        h('span', { class: 'bar' }, h('span', { style: `width:${Math.round((n / max) * 100)}%` })),
+        h('span', { class: 'n', text: total ? `${n}  (${Math.round((n / total) * 100)}%)` : String(n) }),
+      ];
+      if (!filterFor) return h('div', { class: 'breakdown-row' }, inner);
+      return h('button', {
+        class: 'breakdown-row',
+        type: 'button',
+        title: `Show the ${n} location(s) with ${name}`,
+        onclick: () => setFilter(filterFor(name), { reset: true, go: true }),
+      }, inner);
+    });
   }
 
   const kvRow = (k, v, kind) => h('div', { class: 'kv-row' },
@@ -878,20 +1089,32 @@
     const records = state.locations;
     const published = records.filter((r) => r.status === 'published');
 
-    replace($('#stat-registry'),
-      stat(records.length, 'in D1'),
-      stat(published.length, 'published', 'good'),
-      stat(records.filter((r) => r.status === 'hidden').length, 'hidden',
-        records.some((r) => r.status === 'hidden') ? 'warn' : null),
-      stat(records.filter((r) => r.status === 'draft').length, 'draft'),
-      stat(records.filter((r) => r.source === 'auto').length, 'auto-discovered'),
-      stat(records.filter((r) => !/^\d+$/.test(String(r.nexus_id))).length, 'WIP / Dummy'),
-      stat(state.tags.length, 'tags'),
-      stat(records.filter((r) => !r.tags.length).length, 'untagged',
-        records.some((r) => !r.tags.length) ? 'warn' : null));
+    const hidden = records.filter((r) => r.status === 'hidden').length;
+    const untagged = records.filter((r) => !r.tags.length).length;
 
-    replace($('#stat-category'), breakdown(countBy(records, (r) => r.category), records.length));
-    replace($('#stat-tag'), breakdown(countBy(records, (r) => r.tags), records.length));
+    replace($('#stat-registry'),
+      stat(records.length, 'in D1', null, {}),
+      stat(published.length, 'published', 'good', { status: 'published' }),
+      stat(hidden, 'hidden', hidden ? 'warn' : null, { status: 'hidden' }),
+      stat(records.filter((r) => r.status === 'draft').length, 'draft', null, { status: 'draft' }),
+      stat(records.filter((r) => r.source === 'auto').length, 'auto-discovered', null,
+        { source: 'auto' }),
+      stat(records.filter((r) => !/^\d+$/.test(String(r.nexus_id))).length, 'WIP / Dummy', null,
+        { special: 'wip' }),
+      // Tags are a different collection, so this one leads to the Tags tab, not
+      // to a filtered location list. It is a count of tags, not of locations.
+      h('button', {
+        class: 'stat', type: 'button', title: 'Open the tag registry',
+        onclick: () => switchTab('tags'),
+      },
+      h('span', { class: 'value', text: String(state.tags.length) }),
+      h('span', { class: 'label', text: 'tags' })),
+      stat(untagged, 'untagged', untagged ? 'warn' : null, { special: 'untagged' }));
+
+    replace($('#stat-category'),
+      breakdown(countBy(records, (r) => r.category), records.length, (name) => ({ category: name })));
+    replace($('#stat-tag'),
+      breakdown(countBy(records, (r) => r.tags), records.length, (name) => ({ tag: name })));
 
     // --- health, from the public endpoints -------------------------------
     let health = null;
@@ -914,10 +1137,15 @@
       if (Array.isArray(l1?.data)) {
         servedCount = l1.data.length;
         servedDistricts = countBy(l1.data, (r) => r.district);
+        // District is assigned by the materializer and is not on the admin
+        // record, so this is the only place it can be learned. Cached on state
+        // so the list filter and the detail view can both use it.
+        state.districtById = new Map(l1.data.map((r) => [r.id, r.district]));
       }
     } catch { /* rendered as unknown below */ }
 
-    replace($('#stat-district'), breakdown(servedDistricts, servedCount ?? 0));
+    replace($('#stat-district'),
+      breakdown(servedDistricts, servedCount ?? 0, (name) => ({ district: name })));
 
     const rows = [];
     if (!health) {
@@ -1036,9 +1264,22 @@
     for (const btn of document.querySelectorAll('nav.tabs button')) {
       btn.onclick = () => switchTab(btn.dataset.tab);
     }
-    for (const id of ['#loc-search', '#loc-status', '#loc-category']) {
-      $(id).addEventListener('input', renderLocations);
-    }
+    // The inputs write into the filter state rather than being read from it,
+    // so the Overview tiles and the controls cannot disagree about what the
+    // list is showing.
+    $('#loc-search').addEventListener('input', (e) => setFilter({ q: e.target.value.trim() }));
+    $('#loc-status').addEventListener('change', (e) => setFilter({ status: e.target.value }));
+    $('#loc-category').addEventListener('change', (e) => setFilter({ category: e.target.value }));
+
+    // The split panes are sized against the viewport minus the top bar, and the
+    // bar wraps on narrow windows — so measure it rather than assuming a height
+    // that would clip the last row or leave a dead gap.
+    const topbar = document.querySelector('.topbar');
+    const measure = () => document.documentElement.style.setProperty(
+      '--topbar-h', `${topbar.offsetHeight}px`,
+    );
+    measure();
+    new ResizeObserver(measure).observe(topbar);
     $('#loc-new').onclick = () => selectLocation('');
     $('#tag-new').onclick = () => selectTag('');
     $('#audit-refresh').onclick = loadAudit;
