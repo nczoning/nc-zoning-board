@@ -29,19 +29,42 @@ import { fileURLToPath } from 'node:url';
 // as a passing suite.
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
 
+/**
+ * 🔴 D1 refuses more than 100 bound parameters in one query, and SQLite does
+ * not — its own ceiling is 32766. So a harness that is "a real engine" is still
+ * not "the real platform", and an `IN (?, ?, ...)` over 297 locations passed
+ * every test here while throwing `D1_ERROR: too many SQL variables` in
+ * production.
+ *
+ * Measured against real D1, not taken from docs: 100 placeholders are accepted,
+ * 101 are refused. Enforcing it here is what makes this harness stand in for D1
+ * rather than merely for SQLite.
+ */
+const D1_MAX_BOUND_PARAMS = 100;
+
 /** D1 returns `{results, meta}` from all(), a bare row (or null) from first(). */
 function statement(db, sql, args = []) {
+  const guard = () => {
+    if (args.length > D1_MAX_BOUND_PARAMS) {
+      throw new Error(
+        `D1_ERROR: too many SQL variables: ${args.length} bound, D1 allows ${D1_MAX_BOUND_PARAMS}`,
+      );
+    }
+  };
   return {
     bind(...next) { return statement(db, sql, next); },
     async first(column) {
+      guard();
       const row = db.prepare(sql).get(...args) ?? null;
       if (row === null || column === undefined) return row;
       return row[column];
     },
     async all() {
+      guard();
       return { results: db.prepare(sql).all(...args), success: true };
     },
     async run() {
+      guard();
       const info = db.prepare(sql).run(...args);
       return { success: true, meta: { changes: Number(info.changes) } };
     },
@@ -97,6 +120,9 @@ export function sqliteD1(seed = {}) {
       db.exec('BEGIN');
       try {
         const out = statements.map((s) => {
+          if (s._args.length > D1_MAX_BOUND_PARAMS) {
+            throw new Error(`D1_ERROR: too many SQL variables: ${s._args.length}`);
+          }
           const info = db.prepare(s._sql).run(...s._args);
           return { success: true, meta: { changes: Number(info.changes) } };
         });

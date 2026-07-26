@@ -232,6 +232,43 @@ test('delete: the join rows cascade away with the location', async () => {
   assert.deepEqual(tagsOf(env, 'loc-1'), [], 'ON DELETE CASCADE must clear the join');
 });
 
+// ------------------------------------------------------------ at scale ---
+
+test('🔴 the list route works at production scale, not just with one record', async () => {
+  // This is the bug the whole suite missed. Every other test seeds ONE
+  // location, so `IN (?, ?, ...)` never grew past a single placeholder. With
+  // the real 297 it blew D1's 100-parameter ceiling on every call, and the
+  // dashboard rendered an empty table behind a misleading CORS error.
+  //
+  // 150 is enough: the limit is 100, and the point is to cross it, not to
+  // reproduce the exact corpus size.
+  const many = Array.from({ length: 150 }, (_, i) => ({
+    ...ROW,
+    id: `loc-${i}`,
+    name: `Location ${String(i).padStart(3, '0')}`,
+    nexus_id: String(10000 + i),
+  }));
+  const env = envFor({
+    locations: many,
+    locationTags: many.map((l) => [l.id, 'apartment']),
+  });
+
+  const res = await hit(env, 'GET', '/admin/locations');
+  assert.equal(res.status, 200, 'must not throw on a full-size registry');
+  const { locations } = await res.json();
+  assert.equal(locations.length, 150);
+  // And the tags must still be joined correctly for every one of them, not
+  // dropped in the name of staying under the limit.
+  assert.ok(locations.every((l) => l.tags.length === 1 && l.tags[0] === 'apartment'));
+});
+
+test('the single-record route still uses a targeted lookup', async () => {
+  const env = envFor();
+  const res = await hit(env, 'GET', '/admin/locations/loc-1');
+  assert.equal(res.status, 200);
+  assert.deepEqual((await res.json()).location.tags, ['apartment']);
+});
+
 // ------------------------------------------------- tags on the write path ---
 
 test('🔴 a tag edit reaches location_tags, not just the legacy column', async () => {

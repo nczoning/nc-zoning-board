@@ -157,15 +157,40 @@ export async function readTag(env, slug) {
   ).bind(slug).first();
 }
 
-/** Slugs attached to each of `ids`, as Map(location_id -> string[]). */
+/**
+ * Slugs attached to each of `ids`, as Map(location_id -> string[]).
+ *
+ * 🔴 NEVER `IN (?, ?, ...)` with one placeholder per id. **D1 refuses more than
+ * 100 bound parameters in a single query** — measured, not assumed: `SELECT`
+ * with 100 placeholders is accepted and 101 fails with
+ * `D1_ERROR: too many SQL variables`. The admin list route passes every
+ * location, which is 297 today, so that query threw on every call and the
+ * dashboard showed an empty table behind a misleading CORS error (a route that
+ * throws returns a 500 from the error handler, without the CORS headers the
+ * normal path adds).
+ *
+ * The whole-table read is what d1.js's readLocationTags already does for the
+ * materializer, for the same reason. It binds nothing at all, so it does not
+ * merely raise the ceiling — it removes it.
+ */
 export async function readTagsForLocations(env, ids) {
   const map = new Map(ids.map((id) => [id, []]));
   if (!ids.length) return map;
-  const placeholders = ids.map(() => '?').join(', ');
+
+  // One id is the editor's case: a targeted lookup, one bound parameter.
+  if (ids.length === 1) {
+    const { results } = await env.DB.prepare(
+      'SELECT tag_slug FROM location_tags WHERE location_id = ? ORDER BY tag_slug',
+    ).bind(ids[0]).all();
+    map.set(ids[0], (results ?? []).map((r) => r.tag_slug));
+    return map;
+  }
+
+  // Many ids: read the join whole and group in JS. 572 rows against 297
+  // locations, so the transfer is cheaper than the round trips chunking needs.
   const { results } = await env.DB.prepare(
-    `SELECT location_id, tag_slug FROM location_tags
-     WHERE location_id IN (${placeholders}) ORDER BY location_id, tag_slug`,
-  ).bind(...ids).all();
+    'SELECT location_id, tag_slug FROM location_tags ORDER BY location_id, tag_slug',
+  ).all();
   for (const r of results ?? []) map.get(r.location_id)?.push(r.tag_slug);
   return map;
 }
