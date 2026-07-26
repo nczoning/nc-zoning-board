@@ -65,7 +65,7 @@ See the [Coordinate System docs](coordinate-system.md) for more details and a pr
 
 Best for modders who don't use Git:
 
-1. Go to the [Issues tab](https://github.com/spuddeh/nc-zoning-board/issues)
+1. Go to the [Issues tab](https://github.com/nczoning/nc-zoning-board/issues)
 2. Click **New Issue** → **"📍 Submit a New Mod Location"**
 3. Fill in the form fields
 4. Submit. The automated bot creates a PR (with `validate-json` running automatically)

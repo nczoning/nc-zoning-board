@@ -220,7 +220,12 @@ When all 7 phases are complete and verified on `dev.nczoning.net`:
 
 ## Related documentation
 
-- [GitHub Project](https://github.com/users/spuddeh/projects/1): current phase-by-phase work, organised by Stream (WebGPU Migration / Three.js Parity / Roadmap / Bugs) and Release (Schema map / Post schema map / Future / Ongoing)
+- [GitHub Project](https://github.com/users/spuddeh/projects/1): current phase-by-phase work.
+  Every item carries **Stream**, **Status** and **Release** — an empty one is a bug.
+  Field options, read from the live board 2026-07-26:
+  - **Stream** — Upstream & Platform / 3D Scene / Site & Registry / Bugs
+  - **Status** — Ideas / Todo / In progress / In review / Done / Blocked
+  - **Release** — Schema map / Post schema map / Future / Ongoing / API
 - [`three-js-scene.md`](three-js-scene.md): Current implementation reference
 - [`coordinate-system-3d.md`](coordinate-system-3d.md): CET/GLB/instance texture coordinate details
 - [`3dmap-asset-reference.md`](3dmap-asset-reference.md): Game asset inventory and transform chains

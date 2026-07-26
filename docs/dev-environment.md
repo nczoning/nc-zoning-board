@@ -54,7 +54,7 @@ The staging deployment is hosted on Cloudflare Pages under the project `nc-zonin
 |---------|-------|
 | Platform | Cloudflare Pages |
 | Project name | `nc-zoning-board-dev` |
-| Connected repository | `spuddeh/nc-zoning-board` |
+| Connected repository | `nczoning/nc-zoning-board` |
 | Production branch | `dev` |
 | Build command | `node scripts/build_mods.js` |
 | Build output directory | `/` |

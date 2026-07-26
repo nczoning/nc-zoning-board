@@ -19,7 +19,7 @@ For a permanent, manually curated entry. See **[docs/adding-mods.md](docs/adding
 **Short version:**
 
 1. Get your in-game coordinates from the CET console: `print(GetPlayer():GetWorldPosition())`
-2. Go to [Issues → New Issue → 📍 Submit a New Mod Location](https://github.com/spuddeh/nc-zoning-board/issues/new/choose)
+2. Go to [Issues → New Issue → 📍 Submit a New Mod Location](https://github.com/nczoning/nc-zoning-board/issues/new/choose)
 3. Fill in the form, and the bot creates a PR automatically
 4. A maintainer reviews and merges it → your pin appears on the live map
 
