@@ -102,8 +102,13 @@ NCZ.API_BASE =
 // TTL-based cacheGet/cacheSet.
 NCZ.API_LOCATIONS_CACHE_KEY = "nc_api_locations_full";
 
-// Data paths. tags.json stays a local static fetch (same-origin) alongside the
-// /v1 dataset — the tag registry the sidebar and BBCode generator render from.
+// The tag registry now comes from /v1/tags alongside the locations: one origin,
+// one contract. It used to be a same-origin fetch of data/tags.json, which was
+// fine while the file was the source of truth — from Phase 4 the D1 `tags`
+// table is, edited in the dashboard rather than by pull request.
+//
+// Kept only as the fallback if /v1/tags cannot be reached, so a tag-registry
+// hiccup degrades tooltips rather than the map.
 NCZ.DATA_TAGS_PATH = "data/tags.json";
 
 // 3D scene GLB source folder. The committed runtime path is "assets/glb-meshopt"

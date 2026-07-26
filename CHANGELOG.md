@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub sign-in for admins at `/admin/`, gated on repository collaborator status.
 - Admin CRUD over the location registry, with an append-only audit log: every mutation records who did it, and the record before and after. Nothing on the live map reads these writes yet.
 
+### Changed
+
+- **API `0.3.0` → `0.4.0`.** `/v1/tags` now returns an array of `{slug, name, description, sort_order}` instead of a `{tag: description}` map, matching `/v1/locations` and the shape the in-game parser maps most easily. `name` falls back to the slug, so nothing renders differently. Breaking, and taken now while the pre-1.0 window makes it free.
+- Tags are registry data in D1 rather than `data/tags.json`, so they can be edited in the dashboard instead of by pull request, and a mistyped tag is rejected on write rather than caught in CI afterwards. The site reads `/v1/tags`, falling back to the static file only if the API is unreachable.
+
 ## [1.7.2] - 2026-07-26
 
 ### Changed

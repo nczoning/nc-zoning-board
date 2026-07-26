@@ -116,6 +116,16 @@ async function main() {
   const rows = query(db, 'SELECT * FROM locations ORDER BY id');
   const dismissed = new Set(query(db, 'SELECT nexus_id FROM dismissed_candidates').map((r) => String(r.nexus_id)));
 
+  // The join, not the legacy locations.tags column. Passing this is what makes
+  // the comparison test the path production will actually take; without it
+  // materializeFromD1 silently falls back to the JSON column and the sweep
+  // proves nothing about the migration.
+  const locationTags = new Map();
+  for (const r of query(db, 'SELECT location_id, tag_slug FROM location_tags ORDER BY location_id, tag_slug')) {
+    if (!locationTags.has(r.location_id)) locationTags.set(r.location_id, []);
+    locationTags.get(r.location_id).push(r.tag_slug);
+  }
+
   // The tagged-mod nodes both paths consume. Reconstructed from the live auto
   // records so the two sides are fed byte-identical Nexus input; a real fetch
   // would introduce a second variable and could change mid-run.
@@ -163,7 +173,7 @@ async function main() {
   for (const days of offsets) {
     const nowMs = base + days * day;
     const a = buildDataset({ manualMods, tagsDict, excluded, nexusNodes, districts, manualThumbs, nowMs }).full;
-    const b = materializeFromD1({ rows, dismissed, tagsDict, nexusNodes, districts, manualThumbs, nowMs }).full;
+    const b = materializeFromD1({ rows, dismissed, tagsDict, nexusNodes, districts, manualThumbs, locationTags, nowMs }).full;
     const d = diff(a, b);
     const recent = Object.values(a).filter((r) => r.recently_updated).length;
     const label = `clock ${days >= 0 ? '+' : ''}${days}d`.padEnd(12);

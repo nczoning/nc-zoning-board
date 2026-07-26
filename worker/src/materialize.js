@@ -37,7 +37,7 @@ import { RECENTLY_UPDATED_DAYS } from './config.js';
  * - NULL `yaw` / `credits` must OMIT the key rather than emit null, matching
  *   merge.js's conditional spreads.
  */
-export function rowToEntry(row) {
+export function rowToEntry(row, locationTags) {
   return {
     id: row.id,
     name: row.name,
@@ -47,12 +47,30 @@ export function rowToEntry(row) {
       : [row.x, row.y, row.z],
     yaw: row.yaw,
     category: row.category,
-    tags: JSON.parse(row.tags ?? '[]'),
+    tags: resolveTags(row, locationTags),
     authors: JSON.parse(row.authors ?? '[]'),
     source: row.source,
     description: row.description ?? '',
     credits: row.credits,
   };
+}
+
+/**
+ * Tags for one record.
+ *
+ * When `locationTags` is supplied it is authoritative — that is the join, and
+ * the production path. Without it the legacy `locations.tags` JSON column is
+ * used; migration 0002 keeps both in sync precisely so the switch can be
+ * proven byte-for-byte before the column is dropped.
+ *
+ * `nczoning` is re-added for auto-sourced records because it is not a registry
+ * row: it is a marker auto-discovery adds, and merge.js prepends it the same
+ * way. It goes first, matching every existing auto record.
+ */
+function resolveTags(row, locationTags) {
+  if (!locationTags) return JSON.parse(row.tags ?? '[]');
+  const slugs = locationTags.get(row.id) ?? [];
+  return row.source === 'auto' ? ['nczoning', ...slugs] : [...slugs];
 }
 
 /**
@@ -67,7 +85,8 @@ export function rowToEntry(row) {
  * @returns {{full: Object<string, object>, meta: object}}
  */
 export function materializeFromD1({
-  rows, dismissed, tagsDict, nexusNodes, districts, manualThumbs = {}, nowMs = Date.now(),
+  rows, dismissed, tagsDict, nexusNodes, districts, manualThumbs = {},
+  locationTags = null, nowMs = Date.now(),
 }) {
   const validTagNames = new Set(Object.keys(tagsDict));
   const dismissedIds = dismissed instanceof Set ? dismissed : new Set(dismissed || []);
@@ -105,7 +124,9 @@ export function materializeFromD1({
     if (!parsed) skipped.push({ nexus_id: nexusId, name: node.name || 'Unknown Mod' });
   }
 
-  const all = published.map(rowToEntry).sort((a, b) => a.name.localeCompare(b.name));
+  const all = published
+    .map((row) => rowToEntry(row, locationTags))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const cutoffMs = nowMs - RECENTLY_UPDATED_DAYS * 86400000;
   const full = {};

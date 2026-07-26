@@ -16,7 +16,9 @@
 import { fetchTaggedModNodes, fetchModsByUidThumbs, fetchModArchiveNames } from './nexus.js';
 import { buildDataset } from './merge.js';
 import { materializeFromD1 } from './materialize.js';
-import { readLocationRows, readDismissedIds } from './d1.js';
+import {
+  readLocationRows, readDismissedIds, readTags, readLocationTags,
+} from './d1.js';
 import { districtsPayload } from './districts.js';
 import { HEARTBEAT_MIN_INTERVAL_MS } from './config.js';
 import {
@@ -191,17 +193,30 @@ async function attachArchives(env, fetchImpl, full) {
  * they move to D1 at Phase 4.
  */
 async function sourceAndBuild(env, fetchImpl, origin, nowMs) {
-  const [tagsDict, subdistricts] = await Promise.all([
-    fetchJson(fetchImpl, origin, '/data/tags.json'),
-    fetchJson(fetchImpl, origin, '/data/subdistricts.json'),
-  ]);
+  const useD1 = env.DATA_SOURCE === 'd1';
+  const subdistricts = await fetchJson(fetchImpl, origin, '/data/subdistricts.json');
   const districts = subdistricts.districts;
+
+  // The tag registry. From D1 once it owns tags, from the file otherwise — but
+  // EITHER WAY the served payload is the array shape. The public contract must
+  // not depend on an internal source flag, or /v1/tags would silently change
+  // shape when DATA_SOURCE flips. `tagsDict` stays a slug->description map for
+  // block validation, which is all the parsers need.
+  const tagsList = useD1
+    ? await readTags(env)
+    : Object.entries(await fetchJson(fetchImpl, origin, '/data/tags.json'))
+      .map(([slug, description], i) => ({
+        slug, name: slug, description, sort_order: i + 1,
+      }));
+  const tagsDict = Object.fromEntries(tagsList.map((t) => [t.slug, t.description]));
+
   const nexusNodes = await fetchTaggedModNodes(fetchImpl);
 
-  if (env.DATA_SOURCE === 'd1') {
-    const [rows, dismissed] = await Promise.all([
+  if (useD1) {
+    const [rows, dismissed, locationTags] = await Promise.all([
       readLocationRows(env),
       readDismissedIds(env),
+      readLocationTags(env),
     ]);
     // Thumbnail backfill covers every published record with a numeric id, not
     // just the "manual" ones: under D1 the auto-discovered records are rows too.
@@ -211,9 +226,9 @@ async function sourceAndBuild(env, fetchImpl, origin, nowMs) {
       .filter((id) => /^\d+$/.test(id));
     const manualThumbs = await fetchModsByUidThumbs(fetchImpl, numericIds);
     const built = materializeFromD1({
-      rows, dismissed, tagsDict, nexusNodes, districts, manualThumbs, nowMs,
+      rows, dismissed, tagsDict, nexusNodes, districts, manualThumbs, locationTags, nowMs,
     });
-    return { ...built, tagsDict, districts };
+    return { ...built, tagsList, districts };
   }
 
   const [manualMods, excluded] = await Promise.all([
@@ -227,7 +242,7 @@ async function sourceAndBuild(env, fetchImpl, origin, nowMs) {
   const built = buildDataset({
     manualMods, tagsDict, excluded, nexusNodes, districts, manualThumbs, nowMs,
   });
-  return { ...built, tagsDict, districts };
+  return { ...built, tagsList, districts };
 }
 
 /**
@@ -257,7 +272,7 @@ export async function runRefresh(env, fetchImpl = fetch) {
     // leaves some images null for a cycle, it never marks the dataset stale.
     // A D1 read failure, by contrast, throws and lands in the catch below --
     // last-known-good, discovery_stale, alert. Never an empty map.
-    const { full, meta, tagsDict, districts } = await sourceAndBuild(
+    const { full, meta, tagsList, districts } = await sourceAndBuild(
       env, fetchImpl, origin, Date.parse(generatedAt),
     );
     const districtsOut = districtsPayload(districts);
@@ -274,7 +289,7 @@ export async function runRefresh(env, fetchImpl = fetch) {
     // caches even though nothing on Nexus changed). This is why the cron
     // rebuilds every tick against a fresh clock, with no Nexus short-circuit.
     const version = await contentHash(
-      JSON.stringify({ full, districts: districtsOut, tags: tagsDict }),
+      JSON.stringify({ full, districts: districtsOut, tags: tagsList }),
     );
 
     const prev = await readMeta(env);
@@ -302,7 +317,7 @@ export async function runRefresh(env, fetchImpl = fetch) {
     await writeDataset(env, {
       full,
       districts: districtsOut,
-      tags: tagsDict,
+      tags: tagsList,
       meta: {
         schema: SCHEMA_VERSION,
         generated_at: generatedAt,

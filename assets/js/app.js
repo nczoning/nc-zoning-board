@@ -1814,15 +1814,29 @@ async function initMap() {
   try {
     // The server-built Data API (/v1) is the site's sole data source: it does
     // the manual + Nexus auto-discovery merge, district enrichment and thumbnail
-    // resolution server-side, so the browser makes no Nexus calls here. tags.json
-    // stays a local static fetch (same-origin, not the Nexus fragility this
-    // replaces). There is no client-side fallback — if the API is down the outer
-    // catch shows a loud "map data unavailable" state, keeping the site a real
-    // canary for the API (whose in-game consumer has no fallback either).
-    const [apiResult, tagsDict] = await Promise.all([
+    // resolution server-side, so the browser makes no Nexus calls here. Tags now
+    // come from /v1/tags too — one origin, one contract — since the D1 `tags`
+    // table replaced data/tags.json as the source of truth. There is no
+    // client-side fallback for LOCATIONS — if the API is down the outer catch
+    // shows a loud "map data unavailable" state, keeping the site a real canary
+    // for the API (whose in-game consumer has no fallback either).
+    //
+    // Tags are the one exception: they degrade to the static file rather than
+    // taking the map down, because a missing tag registry costs tooltips and
+    // filter labels, not pins.
+    const [apiResult, tagsPayload] = await Promise.all([
       NCZ.fetchLocationsFromApi(),
-      fetch(NCZ.DATA_TAGS_PATH).then((r) => r.json()),
+      fetch(`${NCZ.API_BASE}/v1/tags`)
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+        .then((body) => body.data)
+        .catch((err) => {
+          console.warn("/v1/tags unavailable, falling back to the static file:", err);
+          return fetch(NCZ.DATA_TAGS_PATH).then((r) => r.json());
+        }),
     ]);
+    // Accepts both the array-of-records shape and the legacy dictionary, so the
+    // site and the Worker can deploy in either order during the migration.
+    const tagsDict = NCZ.normaliseTags(tagsPayload);
     const { mods, nexusThumbs } = apiResult;
     // The API owns the recency window (it computes each mod's recently_updated
     // bool against it). Adopt it so the tooltip text matches; fall back to the
