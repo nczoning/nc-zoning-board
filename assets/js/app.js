@@ -1900,11 +1900,15 @@ async function initMap() {
         document.body.appendChild(updateNoticeEl);
       }
 
-      // Say what changed, in the user's terms. "The dataset changed" is true
-      // and useless; "1 new location" is why they would click.
+      // Say what changed, in the user's terms, and NAME it when there is one.
+      // "1 new location" tells you something happened; "Sea Wall Towers
+      // Detailed" tells you what, which is the difference between refreshing
+      // and then hunting 298 pins for whatever moved.
       const parts = [];
-      if (added.length) parts.push(`${added.length} new location${added.length === 1 ? "" : "s"}`);
-      if (removed.length) parts.push(`${removed.length} removed`);
+      if (added.length === 1) parts.push(`${added[0].name} added`);
+      else if (added.length) parts.push(`${added.length} new locations`);
+      if (removed.length === 1) parts.push(`${removed[0].name} removed`);
+      else if (removed.length) parts.push(`${removed.length} removed`);
       // Neither: an existing record was edited. Still worth surfacing, since a
       // corrected coordinate or description is exactly the kind of change a
       // stale tab would keep showing wrongly.
@@ -1917,8 +1921,26 @@ async function initMap() {
       const refresh = document.createElement("button");
       refresh.type = "button";
       refresh.className = "dataset-update-refresh";
-      refresh.textContent = "Refresh";
-      refresh.addEventListener("click", () => location.reload());
+      // Land ON the new pin, not merely on a fresher map. Reuses the existing
+      // ?mod= deep link, so the reload opens its popup and flies to it — the
+      // same path a shared link takes.
+      const focusTarget = added[0] ?? null;
+      refresh.textContent = focusTarget ? "Show me" : "Refresh";
+      refresh.addEventListener("click", () => {
+        // Rebuild from the CURRENT url so ?api=dev and any other params
+        // survive; a bare location.search assignment would drop them and
+        // silently send a dev tab back to production.
+        const url = new URL(window.location.href);
+        if (focusTarget) {
+          // Same id rule as the copy-link button (utils.js modLinkId): the
+          // numeric Nexus id when there is one, the UUID otherwise.
+          const linkId = /^\d+$/.test(String(focusTarget.nexus_id))
+            ? String(focusTarget.nexus_id)
+            : focusTarget.id;
+          url.searchParams.set(NCZ.URL_PARAM_MOD, linkId);
+        }
+        window.location.href = url.toString();
+      });
       const dismiss = document.createElement("button");
       dismiss.type = "button";
       dismiss.className = "dataset-update-dismiss";
