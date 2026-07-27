@@ -64,7 +64,13 @@ function statement(db, sql, args = []) {
     async run() {
       guard();
       const info = db.prepare(sql).run(...args);
-      return { success: true, meta: { changes: Number(info.changes) } };
+      // `last_row_id` as D1 names it, not node:sqlite's `lastInsertRowid`. A
+      // caller reading the D1 name off this harness would otherwise get
+      // undefined, and undefined is a plausible-looking id.
+      return {
+        success: true,
+        meta: { changes: Number(info.changes), last_row_id: Number(info.lastInsertRowid) },
+      };
     },
     // Internal: batch() needs the pieces, not the promise.
     _sql: sql,
@@ -122,7 +128,10 @@ export function sqliteD1(seed = {}) {
             throw new Error(`D1_ERROR: too many SQL variables: ${s._args.length}`);
           }
           const info = db.prepare(s._sql).run(...s._args);
-          return { success: true, meta: { changes: Number(info.changes) } };
+          return {
+            success: true,
+            meta: { changes: Number(info.changes), last_row_id: Number(info.lastInsertRowid) },
+          };
         });
         db.exec('COMMIT');
         return out;
