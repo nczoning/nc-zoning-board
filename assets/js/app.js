@@ -2258,13 +2258,32 @@ async function initMap() {
     // squashed the city into a corner (badlands outliers stretch the bounds) and
     // only ever showed on the fallback; superseded by the 3D-equivalent default.
 
-    // Deep-link: open pin if ?mod= is in the URL
+    // Deep-link: open pin if ?mod= is in the URL.
+    //
+    // 🔴 MUST route by active view, exactly as onViewSwitched below does. This
+    // used to always take the Leaflet path, which broke every shared ?mod= link
+    // once the 3D scene became the default view: the Leaflet container is
+    // `display: none` then, so `map.getSize()` is 0x0, `flyTo` divides by zero
+    // and Leaflet throws `Invalid LatLng object: (NaN, NaN)` from unproject.
+    //
+    // The throw escaped into the outer catch, so the whole map rendered as
+    // "Map data temporarily unavailable" — an API-outage message for what was
+    // actually a view-routing bug, with the API perfectly healthy.
     const deepLinkParam = new URLSearchParams(window.location.search).get(NCZ.URL_PARAM_MOD);
     if (deepLinkParam) {
-      const targetMarker = allMarkers.find(
-        (m) => String(m.modData.nexus_id) === deepLinkParam || m.modData.id === deepLinkParam,
-      );
-      if (targetMarker) focusMarker(targetMarker);
+      // Same test onViewSwitched and focusRandomVisibleMarker use.
+      const isSchema = mapEl.style.display === "none";
+      if (isSchema) {
+        const mod = mods.find(
+          (m) => String(m.nexus_id) === deepLinkParam || m.id === deepLinkParam,
+        );
+        if (mod) NCZ.ThreeMarkers?.focusMod?.(mod.id);
+      } else {
+        const targetMarker = allMarkers.find(
+          (m) => String(m.modData.nexus_id) === deepLinkParam || m.modData.id === deepLinkParam,
+        );
+        if (targetMarker) focusMarker(targetMarker);
+      }
     }
 
     // Re-open the popup in the freshly-activated view. Both ThreeMarkers and
