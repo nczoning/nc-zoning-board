@@ -1,17 +1,17 @@
 /**
  * Quota burn-down: how much of each free-tier cap today has already spent.
  *
- * ⭐ This is the panel that would have surfaced the KV write overage before
+ * This is the panel that would have surfaced the KV write overage before
  * Cloudflare emailed about it. The caps are per-ACCOUNT and the failure mode is
- * silent — nothing degrades until the cap is hit, and then the cron simply
+ * silent: nothing degrades until the cap is hit, and then the cron simply
  * stops writing.
  *
- * 🔴 The token never leaves the Worker. `CF_ANALYTICS_TOKEN` is an
+ * The token never leaves the Worker. `CF_ANALYTICS_TOKEN` is an
  * Account Analytics:Read credential; the dashboard reads THIS route instead of
  * talking to Cloudflare, so a browser never holds a token that can read the
  * whole account's analytics.
  *
- * Dataset names are CONFIRMED BY INTROSPECTION, not guessed — the endpoint
+ * Dataset names are CONFIRMED BY INTROSPECTION, not guessed. The endpoint
  * supports it, and the `*AdaptiveGroups` naming is close enough between
  * datasets that a guess looks plausible and returns an empty result rather than
  * an error. An empty result is indistinguishable from "no usage today", which
@@ -51,7 +51,7 @@ export async function cfGraphQL(env, query, variables = {}, fetchImpl = fetch) {
   const body = await res.json().catch(() => null);
   if (!body) return { ok: false, errors: ['response was not JSON'] };
 
-  // 🔴 GraphQL answers 200 with an `errors` array on failure. Reading only the
+  // GraphQL answers 200 with an `errors` array on failure. Reading only the
   // status here would treat a permissions failure as a successful empty result.
   if (Array.isArray(body.errors) && body.errors.length) {
     return { ok: false, errors: body.errors.map((e) => e.message ?? String(e)) };
@@ -70,7 +70,7 @@ export async function cfGraphQL(env, query, variables = {}, fetchImpl = fetch) {
  * Free-tier caps, per ACCOUNT per UTC day.
  *
  * The caps reset at UTC midnight, not local midnight, which is why the panel
- * says UTC on the date — a burn-down measured against the wrong day boundary
+ * says UTC on the date: a burn-down measured against the wrong day boundary
  * reads as "plenty left" for the ~10 hours AEST runs ahead of UTC.
  *
  * `metric` names come from introspection (AccountKvOperationsAdaptiveGroupsSum
@@ -119,7 +119,7 @@ export async function readQuota(env, { nowMs = Date.now(), fetchImpl = fetch } =
 
   const account = result.data?.viewer?.accounts?.[0];
   if (!account) {
-    // The token is valid but sees no such account — a scope problem, not zero
+    // The token is valid but sees no such account: a scope problem, not zero
     // usage. Reported as a failure so the panel says "unknown", not "0%".
     return { ok: false, errors: [`no analytics for account ${env.CF_ACCOUNT_ID}`] };
   }
@@ -147,8 +147,8 @@ export async function readQuota(env, { nowMs = Date.now(), fetchImpl = fetch } =
     d1_rows_read: d1.rowsRead,
   };
 
-  // 🔴 How far into the UTC day we are. Without it "1 of 1,000 KV writes" reads
-  // as enormous headroom when the day is twenty minutes old — and AEST runs ~10
+  // How far into the UTC day the reading is. Without it "1 of 1,000 KV writes" reads
+  // as enormous headroom when the day is twenty minutes old, and AEST runs ~10
   // hours ahead of the reset, so for most of the working day the local reading
   // is the misleading one. The panel projects against this rather than letting
   // the raw fraction speak.
@@ -172,7 +172,7 @@ export async function readQuota(env, { nowMs = Date.now(), fetchImpl = fetch } =
         cap,
         used: used[key],
         pct: cap ? Math.round((used[key] / cap) * 1000) / 10 : null,
-        // Straight-line projection to UTC midnight. Crude on purpose — it is a
+        // Straight-line projection to UTC midnight. Crude on purpose: it is a
         // "will this run out today" signal, not a forecast, and it is null for
         // the first half hour where dividing by a tiny elapsed fraction
         // produces a number that is confident and meaningless.
@@ -190,7 +190,7 @@ export async function readQuota(env, { nowMs = Date.now(), fetchImpl = fetch } =
 
 /**
  * Fields of one named type. Used to confirm a dataset's dimensions and metrics
- * before writing a query against it — the sums are named differently per
+ * before writing a query against it. The sums are named differently per
  * dataset (`requests`, `count`, `readQueries`…), and a wrong name is a GraphQL
  * error rather than a wrong number, but only if you never wrote it in the first
  * place.
@@ -217,11 +217,11 @@ export async function introspectType(env, typeName, fetchImpl = fetch) {
 }
 
 export async function introspectDatasets(env, fetchImpl = fetch) {
-  // Walk the schema instead of assuming a type name. The first attempt asked
-  // for `__type(name: "Account")`, which does not exist here — GraphQL answered
-  // 200 with `__type: null`, and reading that as "no datasets" is the same
-  // mistake as reading an empty query result as "no usage". The type name is
-  // discovered, and a null at any step is reported as a null.
+  // Walk the schema instead of assuming a type name. `__type(name: "Account")`
+  // does not exist here (the type is `account`, reached through `viewer`), and
+  // GraphQL answers a missing type with 200 and `__type: null`. Reading that as
+  // "no datasets" is the same mistake as reading an empty result as "no usage",
+  // so the type is discovered and a null at any step is reported as null.
   const query = `{
     __schema {
       queryType {
@@ -256,9 +256,9 @@ export async function introspectDatasets(env, fetchImpl = fetch) {
   }
 
   // Second hop: the accounts field on the viewer type, and the type of ITS
-  // elements — that is what carries the dataset fields.
+  // elements, which is what carries the dataset fields.
   // Five levels of `ofType`, because the wrappers nest: `accounts` is
-  // `[account!]!` — NonNull(List(NonNull(account))) — and unwrapping only three
+  // `[account!]!`, meaning NonNull(List(NonNull(account))), and unwrapping only three
   // deep reported "no accounts field" for a field that was plainly there.
   const second = await cfGraphQL(env, `{
     __type(name: "${viewerType}") {

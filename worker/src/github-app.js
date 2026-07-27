@@ -119,7 +119,7 @@ export async function getInstallationToken(env, fetchImpl = fetch, nowMs = Date.
 /**
  * Is `login` a collaborator on the repo?
  *
- * 🔴 THREE OUTCOMES, NOT TWO. The endpoint answers 204 for yes and 404 for no,
+ * THREE OUTCOMES, NOT TWO. The endpoint answers 204 for yes and 404 for no,
  * and a broken or unauthorised credential answers 401/403. Folding that third
  * case into either of the first two is a security bug in both directions:
  *

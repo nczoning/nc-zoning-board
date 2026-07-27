@@ -1,22 +1,21 @@
 /*
- * NC Zoning Board — admin dashboard.
+ * NC Zoning Board admin dashboard.
  *
  * Phase 4c. The server side already exists (worker/src/admin.js); this is the
  * surface for it. No framework and no build step, matching the rest of the
  * site: a few hundred lines of DOM against a JSON API does not need one.
  *
- * Three rules run through the whole file, and all three exist because the
- * opposite already shipped once:
+ * Three rules run through the whole file:
  *
  * 1. A response is a success only when it says so. `res.ok` is checked
  *    explicitly and an unrecognised status is an error, never a fall-through to
- *    the happy path. The stub once rendered "Signed in as undefined —
- *    collaborator access confirmed" against a 404 by doing the reverse.
+ *    the happy path. Treating an unrecognised status as success renders
+ *    "Signed in as undefined, collaborator access confirmed" against a 404.
  * 2. 403 and 503 are different things. 403 is "you are not a collaborator".
  *    503 `check_unavailable` is "GitHub could not be reached", which is not a
  *    refusal and is never worded as one.
  * 3. Writes send only fields that actually changed. The API rejects unknown
- *    keys with a 422 rather than ignoring them, so a typo is loud — but only if
+ *    keys with a 422 rather than ignoring them, so a typo is loud, but only if
  *    the client does not paper over it by resending everything.
  */
 
@@ -51,14 +50,14 @@
   ];
 
   // Reasons the OAuth callback can bounce back with. `check_unavailable` is
-  // deliberately worded as "cannot tell", not "denied" — GitHub being
+  // deliberately worded as "cannot tell", not "denied". GitHub being
   // unreachable is not a statement about who you are, and telling an admin they
   // lack access because of a transient blip is a lie the UI should not tell.
   const CALLBACK_ERRORS = {
     bad_state: ['error', 'Login could not be verified. Start again from this page.'],
     oauth_failed: ['error', 'GitHub sign-in failed. Try again.'],
     not_authorised: ['error', 'That account is not a collaborator on the repository.'],
-    check_unavailable: ['warn', 'Could not reach GitHub to confirm access. This is not a refusal — try again shortly.'],
+    check_unavailable: ['warn', 'Could not reach GitHub to confirm access. This is not a refusal. Try again shortly.'],
   };
 
   // --------------------------------------------------------------- state --
@@ -72,7 +71,7 @@
     editing: false,           // detail view vs. the form; see selectLocation
     // District is computed by the materializer, not stored on the record, so it
     // is learned from /v1/locations when the Overview loads. Published records
-    // only — which is what "district" means anyway.
+    // only, which is what "district" means anyway.
     districtById: new Map(),
     // Structured rather than "shove it in the search box": the Overview tiles
     // filter by things free text cannot express (untagged, source, district),
@@ -104,7 +103,7 @@
 
   /**
    * Element builder. Text goes in via textContent, never innerHTML, so mod
-   * names and admin notes cannot inject markup — this page renders strings
+   * names and admin notes cannot inject markup. This page renders strings
    * written by third parties on Nexus.
    */
   function h(tag, attrs = {}, ...children) {
@@ -130,7 +129,7 @@
   // ------------------------------------------------------------ requests --
 
   /**
-   * One JSON call. Always credentialed — the session is an HttpOnly cookie, and
+   * One JSON call. Always credentialed: the session is an HttpOnly cookie, and
    * the origin has to be in ADMIN_ORIGINS (worker/src/auth.js) for the browser
    * to send it. `*.pages.dev` preview URLs are NOT on that list, so a PR
    * preview cannot exercise auth; test on dev.nczoning.net.
@@ -171,13 +170,13 @@
         return ['error', 'Refused: your account is not a collaborator on the repository.'];
       case 503:
         // Not a refusal. See rule 2 at the top of this file.
-        return ['warn', 'GitHub could not be reached to confirm your access. This is not a refusal — try again shortly.'];
+        return ['warn', 'GitHub could not be reached to confirm your access. This is not a refusal. Try again shortly.'];
       case 404:
         return ['error', 'Not found. It may have been deleted in another tab.'];
       case 409:
         return ['error', res.body?.error === 'tag_exists'
           ? `A tag with the slug "${res.body.slug}" already exists.`
-          : 'Conflict — nothing was changed.'];
+          : 'Conflict. Nothing was changed.'];
       case 422:
         return ['error', 'The server rejected this: ' + (res.body?.errors || ['validation failed']).join('; ')];
       case 400:
@@ -188,7 +187,7 @@
         // cascade_failed is the one 500 with something useful to say: the tag
         // was renamed but its links did not follow, which needs a person.
         return ['error', res.body?.error === 'cascade_failed'
-          ? `The rename did not propagate — ${res.body.detail}. The registry and the location links are now out of step; do not retry, check the database.`
+          ? `The rename did not propagate: ${res.body.detail}. The registry and the location links are now out of step; do not retry, check the database.`
           : 'The server failed on this request. Nothing is guaranteed to have been written.'];
       default:
         // Anything unrecognised is an error, never a silent success.
@@ -229,7 +228,7 @@
   /**
    * Decide whether this browser gets a dashboard.
    *
-   * 🔴 Success requires an explicit 200 AND collaborator === true. Everything
+   * Success requires an explicit 200 AND collaborator === true. Everything
    * else falls to the final branch, including statuses this page has never
    * seen. Treating "not one of the failures I listed" as success is how the
    * stub once greeted a 404 with "Signed in as undefined".
@@ -521,7 +520,7 @@
     const actions = h('div', { class: 'editor-actions' },
       saveBtn,
       h('button', {
-        // Cancel goes back to reading the record, not to nothing — you were
+        // Cancel goes back to reading the record, not to nothing. You were
         // looking at it before you chose to edit.
         class: 'btn secondary', type: 'button', text: 'Cancel',
         onclick: () => {
@@ -539,7 +538,7 @@
     );
 
     replace($('#loc-editor'),
-      h('h2', { text: isNew ? 'New location' : `Editing — ${loc.name}` }),
+      h('h2', { text: isNew ? 'New location' : `Editing: ${loc.name}` }),
       isNew ? null : h('p', { class: 'muted', text: `id ${loc.id} · updated ${loc.updated_at}` }),
       form, actions);
 
@@ -552,7 +551,7 @@
   /**
    * Paint server-side field errors next to the inputs they belong to.
    *
-   * `fields` is the form's own writable set — the location list for the record
+   * `fields` is the form's own writable set: the location list for the record
    * editor, the tag list for the tag editor. Using one shared list would leave
    * "slug must be lowercase…" with nowhere to land, and an error the admin has
    * to hunt for reads as "the save just did not work".
@@ -601,7 +600,7 @@
 
     await loadLocations();
     // Tag usage counts live on the tag records, and a location's tags just
-    // moved — without this the Tags tab and the slug-rename warning keep
+    // moved. Without this the Tags tab and the slug-rename warning keep
     // showing the count from before the edit. That warning exists to say how
     // many records a rename will re-point, so a stale count there is the one
     // number that must not be wrong.
@@ -610,7 +609,7 @@
     // Back to reading it: the save is done, so the form has nothing left to say.
     state.editing = false;
     selectLocation(res.body.location.id);
-    // 🔴 AFTER selectLocation, not before: it calls clearBanner(), so a
+    // AFTER selectLocation, not before: it calls clearBanner(), so a
     // confirmation set first is wiped by the navigation that follows it. Every
     // successful save reported nothing at all.
     banner('ok', isNew
@@ -623,7 +622,7 @@
     // should never have existed. Say so, rather than asking "are you sure?".
     const ok = confirm(
       `Delete "${loc.name}" outright?\n\n`
-      + 'The full record is preserved in the audit log, so this is recoverable — but if you '
+      + 'The full record is preserved in the audit log, so this is recoverable. If you only '
       + 'only want it off the map, set the status to "hidden" instead.',
     );
     if (!ok) return;
@@ -642,16 +641,15 @@
   /**
    * Read-only view of a record.
    *
-   * Opening a record shows it; changing it is a separate act. Clicking a row
-   * used to drop straight into a live form, which made every browse a potential
-   * edit — one stray keystroke in a focused field and the dirty summary lights
-   * up on a record you only meant to look at.
+   * Opening a record shows it; changing it is a separate act. A row click that
+   * opened a live form would make every browse a potential edit: one stray
+   * keystroke in a focused field marks a record dirty that was only being read.
    */
   function renderLocationDetail(loc) {
     const row = (label, value, cls) => [
       h('dt', { text: label }),
       value === null || value === undefined || value === ''
-        ? h('dd', { class: 'empty', text: '—' })
+        ? h('dd', { class: 'empty', text: 'not set' })
         : h('dd', { class: cls || null }, value),
     ];
 
@@ -722,7 +720,7 @@
       style: 'cursor:pointer',
     },
     h('td', {}, h('code', { text: tag.slug })),
-    h('td', {}, tag.name || h('span', { class: 'muted', text: '— (falls back to the slug)' })),
+    h('td', {}, tag.name || h('span', { class: 'muted', text: '(falls back to the slug)' })),
     h('td', {}, tag.description),
     h('td', { class: 'num' }, String(tag.usage_count)))));
   }
@@ -752,7 +750,7 @@
     let slugUnlocked = isNew;
 
     if (!isNew) {
-      // 🔴 Renaming a slug is an ON UPDATE CASCADE through location_tags and a
+      // Renaming a slug is an ON UPDATE CASCADE through location_tags and a
       // link-breaking event: anything pointing at ?tag=<slug> stops resolving.
       // Routine relabelling is what `name` is for, so the identifier is
       // read-only until it is deliberately unlocked.
@@ -799,7 +797,7 @@
     );
 
     replace($('#tag-editor'),
-      h('h2', { text: isNew ? 'New tag' : `Editing — ${tag.slug}` }),
+      h('h2', { text: isNew ? 'New tag' : `Editing: ${tag.slug}` }),
       isNew ? null : h('p', { class: 'muted', text: `used by ${tag.usage_count} location(s)` }),
       form, actions);
   }
@@ -877,7 +875,7 @@
       });
       return banner('error',
         `"${tag.slug}" is still attached to ${res.body.usage_count} location(s), so it was not deleted. `
-        + 'Remove it from those records first — nothing was changed.',
+        + 'Remove it from those records first. Nothing was changed.',
         h('div', { style: 'margin-top:var(--space-sm)' },
           h('ul', {}, res.body.locations.map((l) => h('li', { text: l.name }))),
           jump));
@@ -899,7 +897,7 @@
     const row = (label, value, cls) => [
       h('dt', { text: label }),
       value === null || value === undefined || value === ''
-        ? h('dd', { class: 'empty', text: '—' })
+        ? h('dd', { class: 'empty', text: 'not set' })
         : h('dd', { class: cls || null }, value),
     ];
 
@@ -960,9 +958,9 @@
   }
 
   /**
-   * Read dataset age off /v1/health — public and uncached, so no extra route.
+   * Read dataset age off /v1/health, which is public and uncached, so no extra route.
    *
-   * 🔴 An unreadable health check renders as `unknown`, never as fresh. A blank
+   * An unreadable health check renders as `unknown`, never as fresh. A blank
    * or green indicator that actually means "I could not tell" is the same class
    * of lie as reporting an unrecognised status as a successful login.
    */
@@ -1023,7 +1021,7 @@
   /**
    * The stats panel.
    *
-   * 🔴 EVERY number here is derived from records already fetched for the other
+   * EVERY number here is derived from records already fetched for the other
    * tabs. Do NOT add aggregate columns to the API or a stats table to D1:
    * `decisions/api-per-location-records` removed server-side aggregates because
    * several consumers computing the same counts independently produced bug
@@ -1092,9 +1090,8 @@
    *
    * `registry` is what D1 holds; `served` is what the public API returns. They
    * are two independent counts of the same thing, and a gap between them means
-   * a write has not reached the map. That gap is exactly what went unnoticed
-   * for 14 hours — staging had no cron, so D1 said 297 while /v1 served 296 and
-   * nothing anywhere said so. Prefer the dumbest possible comparison.
+   * a write has not reached the map. Staging has no cron, so nothing there
+   * closes that gap on its own and it can persist indefinitely.
    */
   async function renderOverview() {
     const records = state.locations;
@@ -1132,9 +1129,9 @@
     let servedCount = null;
     let servedDistricts = [];
     try {
-      // 🔴 `cache: 'no-store'` is load-bearing, not hygiene. /v1/locations is
+      // `cache: 'no-store'` is load-bearing, not hygiene. /v1/locations is
       // served `public, max-age=300`, so a default fetch can answer from the
-      // browser's copy from before the last rebuild — which made the drift row
+      // browser's copy from before the last rebuild, which made the drift row
       // below report 296 against 297 when the origin already had both at 297.
       //
       // A drift alarm that fires spuriously is worse than none: it trains the
@@ -1166,26 +1163,26 @@
       const age = health.refresh_age_seconds;
       const stale = typeof age === 'number' && age > STALE_AFTER_S;
       rows.push(kvRow('status', health.status ?? 'unknown', health.status === 'ok' ? 'ok' : 'bad'));
-      rows.push(kvRow('api version', health.version ?? '—'));
+      rows.push(kvRow('api version', health.version ?? 'not reported'));
       rows.push(kvRow('last refresh', typeof age === 'number' ? describeAge(age) : 'unknown',
         stale ? 'warn' : 'ok'));
-      rows.push(kvRow('last refresh at', health.last_refresh_at ?? '—', 'mono'));
+      rows.push(kvRow('last refresh at', health.last_refresh_at ?? 'not reported', 'mono'));
       // discovery_stale means the last cycle failed and last-known-good is being
       // served. Absent is not the same as false, so it is reported as unknown.
       const ds = health.discovery_stale;
-      rows.push(kvRow('discovery', ds === true ? 'STALE — last cycle failed'
+      rows.push(kvRow('discovery', ds === true ? 'STALE: last cycle failed'
         : ds === false ? 'ok' : 'not reported',
       ds === true ? 'bad' : ds === false ? 'ok' : null));
     }
 
-    // 🔴 Two independent counts of the same thing.
+    // Two independent counts of the same thing.
     rows.push(kvRow('registry (D1)', String(records.length)));
     rows.push(kvRow('published in D1', String(published.length)));
     rows.push(kvRow('served by /v1', servedCount === null ? 'unknown' : String(servedCount),
       servedCount === null ? null : servedCount === published.length ? 'ok' : 'bad'));
     if (servedCount !== null && servedCount !== published.length) {
       rows.push(kvRow('drift',
-        `${published.length - servedCount} record(s) not on the map — rebuild`, 'bad'));
+        `${published.length - servedCount} record(s) not on the map. Rebuild.`, 'bad'));
     }
     rows.push(kvRow('api host', API.replace('https://', ''), 'mono'));
 
@@ -1201,11 +1198,11 @@
   /**
    * Free-tier burn-down.
    *
-   * ⭐ The panel that would have surfaced the KV write overage before
-   * Cloudflare emailed about it. The token stays in the Worker — this reads
+   * The panel that would have surfaced the KV write overage before
+   * Cloudflare emailed about it. The token stays in the Worker: this reads
    * /admin/quota, never Cloudflare directly.
    *
-   * 🔴 A failed read renders as "could not read", never as empty meters. An
+   * A failed read renders as "could not read", never as empty meters. An
    * empty meter is indistinguishable from zero usage, which is the single most
    * reassuring thing this panel could wrongly say.
    */
@@ -1218,7 +1215,7 @@
       return replace($('#quota-meters'),
         h('div', { class: 'kv-row' },
           h('span', { class: 'k', text: 'status' }),
-          h('span', { class: 'v bad', text: 'unknown — not zero' })));
+          h('span', { class: 'v bad', text: 'unknown, not zero' })));
     }
 
     const { date, utc_hours_elapsed: hours, usage, worker_errors: errors } = res.body;
@@ -1248,7 +1245,7 @@
           u.projected === null
             ? 'too early in the UTC day to project'
             : `on track for ~${u.projected.toLocaleString()} by midnight UTC${
-              u.projected > u.cap ? ' — over the cap' : ''}`));
+              u.projected > u.cap ? ', over the cap' : ''}`));
     }).concat(errors > 0
       ? [h('div', { class: 'kv-row' },
         h('span', { class: 'k', text: 'worker errors today' }),
@@ -1347,7 +1344,7 @@
     $('#loc-category').addEventListener('change', (e) => setFilter({ category: e.target.value }));
 
     // The split panes are sized against the viewport minus the top bar, and the
-    // bar wraps on narrow windows — so measure it rather than assuming a height
+    // bar wraps on narrow windows, so measure it rather than assuming a height
     // that would clip the last row or leave a dead gap.
     const topbar = document.querySelector('.topbar');
     const measure = () => document.documentElement.style.setProperty(

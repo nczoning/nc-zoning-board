@@ -77,7 +77,7 @@
 		// Not a secret: the account tag appears in every wrangler invocation and
 		// in worker/README.md. The ANALYTICS TOKEN is the secret
 		// (CF_ANALYTICS_TOKEN, Account Analytics:Read), and it never leaves the
-		// Worker — the dashboard reads /admin/quota instead of Cloudflare.
+		// Worker: the dashboard reads /admin/quota instead of Cloudflare.
 		"CF_ACCOUNT_ID": "b9937d8d595fad7de8d1549b22390281"
 	},
 	// Dataset store (dashboard title: nczoning-api-dataset). Recreate with:

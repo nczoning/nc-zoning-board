@@ -4,7 +4,7 @@
  *
  * Every route is gated on repository collaborator status, and every mutation
  * writes an audit row in the same request. The audit row is not optional
- * bookkeeping — once edits stop arriving as pull requests, it is the only
+ * bookkeeping: once edits stop arriving as pull requests, it is the only
  * record of who changed what.
  */
 
@@ -50,7 +50,7 @@ async function requireCollaborator(request, env) {
  *
  * `tags` comes from the `location_tags` join, passed in by the caller, NOT from
  * the legacy `locations.tags` column. The join is what the materializer reads,
- * so it is what the dashboard must show — rendering the column would let an
+ * so it is what the dashboard must show. Rendering the column would let an
  * edit that never reached the join look like it had landed.
  *
  * The synthetic `nczoning` marker is absent here by construction (it is not a
@@ -87,11 +87,11 @@ async function loadAdminRecord(env, row) {
  * Rebuild the KV read path from D1 after a write, so an approved change appears
  * in seconds rather than at the next cron tick.
  *
- * 🔴 GATED ON DATA_SOURCE. If the cron is still sourcing from mods.json, a
+ * GATED ON DATA_SOURCE. If the cron is still sourcing from mods.json, a
  * write-through materialize would overwrite KV with D1-derived content and
  * silently perform the Phase 2 cutover as a side effect of an admin edit. So
  * when DATA_SOURCE is not 'd1' the write lands in D1 and the map keeps showing
- * mods.json — which is correct, and is what "nothing reads D1 yet" means.
+ * mods.json, which is correct, and is what "nothing reads D1 yet" means.
  */
 function materializeAfterWrite(env, ctx) {
   if (env.DATA_SOURCE !== 'd1') return;
@@ -166,13 +166,10 @@ export async function handleAdmin(request, env, ctx) {
   //
   // Kept, not scaffolding. Cloudflare's analytics schema is 213 datasets whose
   // names follow a convention closely enough that a WRONG name looks right and
-  // returns an EMPTY result rather than an error — and "no rows" reads exactly
+  // returns an EMPTY result rather than an error, and "no rows" reads exactly
   // like "no usage today". Every dataset this Worker queries was confirmed
   // here first, and the next one (R2, at cleanup) should be too.
   //
-  // It nearly lied on its first run: `__type(name: "Account")` does not exist —
-  // the type is `account`, reached via `viewer` — and GraphQL answered 200 with
-  // `__type: null`, which a `?? []` turned into "zero datasets found".
   //
   // Read-only, collaborator-gated, and it exposes only schema field names.
   //   GET /admin/quota/datasets            -> every dataset on the account type
@@ -201,13 +198,13 @@ export async function handleAdmin(request, env, ctx) {
   // Deliberately NOT gated on DATA_SOURCE, unlike materializeAfterWrite. That
   // gate exists so an admin write does not spend a KV write rebuilding from a
   // source the write did not touch; this route is someone explicitly asking for
-  // a rebuild, and runRefresh honours DATA_SOURCE either way — from mods.json in
+  // a rebuild, and runRefresh honours DATA_SOURCE either way: from mods.json in
   // production, from D1 on staging. It cannot flip the cutover.
   //
   // It exists because staging has NO CRON (removed to stay inside the 1,000
   // KV writes/day free-tier cap), so nothing there re-materializes on its own.
-  // Staging's KV sat 14 hours stale and served the pre-4b /v1/tags shape, and
-  // there was no way to notice or fix it short of an admin write.
+  // Staging has no cron, so its KV changes only when a rebuild is requested
+  // here or an admin write triggers one.
   //
   // Awaited rather than fire-and-forget: the caller asked for a rebuild, so the
   // response has to say whether they got one.
@@ -217,11 +214,11 @@ export async function handleAdmin(request, env, ctx) {
     try {
       result = await runRefresh(env);
     } catch (err) {
-      // 🔴 runRefresh does NOT throw on a failed rebuild -- it catches, keeps
+      // runRefresh does NOT throw on a failed rebuild -- it catches, keeps
       // last-known-good, flags discovery_stale and RETURNS {stale: true}. So
       // this catch is only for a failure of its own error path, and branching
       // on `stale` below is what actually detects a failed rebuild. Reporting
-      // success off "it did not throw" would have called every failure a win.
+      // success on "it did not throw" would call every failed rebuild a win.
       return json(request, { error: 'refresh_failed', detail: String(err).slice(0, 300) }, 500);
     }
 
@@ -368,7 +365,7 @@ export async function handleAdmin(request, env, ctx) {
  * non-admin paths.
  *
  * Every mutation writes an audit row and rebuilds the read path, same as
- * locations — a tag's name and description are served on /v1/tags, so an edit
+ * locations: a tag's name and description are served on /v1/tags, so an edit
  * that skipped the materialize would sit invisible until the next cron tick.
  */
 async function handleTags({ request, env, ctx, actor, method, tagListMatch, tagOneMatch }) {
@@ -444,7 +441,7 @@ async function handleTags({ request, env, ctx, actor, method, tagListMatch, tagO
     sets.push('updated_at = ?');
     binds.push(new Date().toISOString(), slug);
 
-    // 🔴 A slug change propagates to location_tags through ON UPDATE CASCADE,
+    // A slug change propagates to location_tags through ON UPDATE CASCADE,
     // which only fires with foreign keys enforced. D1 enforces them by default;
     // if that ever stops being true the rename silently orphans every link,
     // which is why the count is re-read below and compared.

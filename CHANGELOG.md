@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub sign-in for admins at `/admin/`, gated on repository collaborator status.
 - Admin CRUD over the location registry, with an append-only audit log: every mutation records who did it, and the record before and after. Nothing on the live map reads these writes yet.
 - The admin dashboard at `/admin/`: browse and filter every location, edit the full record, and read the audit log. Saves send only the fields that actually changed.
-- Tag management in the dashboard. A tag still attached to locations cannot be deleted — the refusal lists what is using it. Renaming a tag's identifier is locked behind an explicit unlock, because it re-points existing records and breaks `?tag=` links; the display name is the safe thing to edit.
+- Tag management in the dashboard. A tag still attached to locations cannot be deleted; the refusal lists what is using it. Renaming a tag's identifier is locked behind an explicit unlock, because it re-points existing records and breaks `?tag=` links; the display name is the safe thing to edit.
 
 - The dashboard shows how old the served dataset is, and a Rebuild button that regenerates it on demand. Staging has no cron, so nothing there refreshed on its own and there was no way to see that.
 - `scripts/sync-locations.mjs` copies location records that exist in `data/locations/` but not yet in D1. Needed until submissions land in D1 directly: a mod merged to `main` reaches production but not the D1 registry.

@@ -145,7 +145,7 @@ export async function callback(request, env) {
 
   const verdict = await checkCollaborator(env, viewer.login);
 
-  // 🔴 Indeterminate is not "no". Fail closed, but do NOT cache it and do not
+  // Indeterminate is not "no". Fail closed, but do NOT cache it and do not
   // tell the user they lack access — a transient GitHub blip would otherwise
   // lock a real admin out for the whole cache TTL.
   if (verdict === 'error') return failRedirect(env, 'check_unavailable');

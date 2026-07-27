@@ -1857,7 +1857,7 @@ async function initMap() {
     // ── Passive dataset updates ──────────────────────────────────────────
     //
     // An open tab notices when the map data changes underneath it. Before
-    // this, a tab loaded once and stayed on that snapshot forever — and even a
+    // this, a tab loaded once and stayed on that snapshot forever, and even a
     // manual reload could serve the previous copy for up to 5 minutes, because
     // /v1/locations is `max-age=300` and the browser honoured it.
     //
@@ -1865,9 +1865,9 @@ async function initMap() {
     // answers from its own cache inside the TTL, so the Worker sees ~1 request
     // per tab per 5 minutes. See NCZ.checkForDatasetUpdate.
     //
-    // 🔴 This DETECTS and announces; it does not re-render. Injecting pins
+    // This DETECTS and announces; it does not re-render. Injecting pins
     // live would mean rebuilding allMarkers, the sidebar list and the 3D pin
-    // layer from a data set that is closed over in a dozen places — an
+    // layer from a data set that is closed over in a dozen places: an
     // init-path refactor, not a feature flag. The notice offers a reload, and
     // the reload is now guaranteed to fetch fresh data because the ETag is
     // finally readable (see worker/src/index.js CORS_HEADERS).
@@ -1888,7 +1888,7 @@ async function initMap() {
       }, NCZ.DATASET_POLL_MS);
     }
 
-    // The notice itself. Built once, reused — a change that lands while an
+    // The notice itself. Built once and reused, so a change that lands while an
     // earlier notice is still showing replaces its text rather than stacking a
     // second toast over the map.
     let updateNoticeEl = null;
@@ -1917,12 +1917,12 @@ async function initMap() {
       updateNoticeEl.replaceChildren();
       const text = document.createElement("span");
       text.className = "dataset-update-text";
-      text.textContent = `Map updated — ${summary}`;
+      text.textContent = `Map updated: ${summary}`;
       const refresh = document.createElement("button");
       refresh.type = "button";
       refresh.className = "dataset-update-refresh";
       // Land ON the new pin, not merely on a fresher map. Reuses the existing
-      // ?mod= deep link, so the reload opens its popup and flies to it — the
+      // ?mod= deep link, so the reload opens its popup and flies to it, the
       // same path a shared link takes.
       const focusTarget = added[0] ?? null;
       refresh.textContent = focusTarget ? "Show me" : "Refresh";
@@ -2260,14 +2260,14 @@ async function initMap() {
 
     // Deep-link: open pin if ?mod= is in the URL.
     //
-    // 🔴 MUST route by active view, exactly as onViewSwitched below does. This
+    // MUST route by active view, exactly as onViewSwitched below does. This
     // used to always take the Leaflet path, which broke every shared ?mod= link
     // once the 3D scene became the default view: the Leaflet container is
     // `display: none` then, so `map.getSize()` is 0x0, `flyTo` divides by zero
     // and Leaflet throws `Invalid LatLng object: (NaN, NaN)` from unproject.
     //
     // The throw escaped into the outer catch, so the whole map rendered as
-    // "Map data temporarily unavailable" — an API-outage message for what was
+    // "Map data temporarily unavailable", an API-outage message for what is
     // actually a view-routing bug, with the API perfectly healthy.
     const deepLinkParam = new URLSearchParams(window.location.search).get(NCZ.URL_PARAM_MOD);
     if (deepLinkParam) {

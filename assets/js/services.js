@@ -11,22 +11,22 @@
 // ZERO Nexus calls. Uses If-None-Match/304 against a localStorage-cached body.
 //
 // That localStorage layer sits BEHIND the browser's own HTTP cache, and is not
-// the thing saving most requests — inside `max-age=300` the browser answers
-// without asking us, and after it expires the browser revalidates with its own
+// the thing saving most requests: inside `max-age=300` the browser answers
+// without asking the origin, and after it expires the browser revalidates with its own
 // ETag. This layer earns its place when the HTTP cache is evicted or cleared:
 // localStorage survives that, so a returning tab revalidates instead of
 // re-downloading ~250KB. It stored nothing at all until the API began exposing
 // `ETag` through CORS.
 //
 // `?full=1` is gone from this call. It dates from the slim/full split, which
-// was removed — the Worker still accepts it as a no-op alias for older
+// was removed. The Worker still accepts it as a no-op alias for older
 // consumers (in-game mods), but the site passing it only suggested the split
 // still exists.
 //
 // Returns { mods, nexusThumbs, recentlyUpdatedDays } in the shapes the rest of
 // app.js expects. THROWS on any failure (network, non-2xx, malformed, slim
 // payload). There is deliberately no client-side fallback: the API's primary
-// consumer (in-game mods) has none, so the site stays a real canary — a throw
+// consumer (in-game mods) has none, so the site stays a real canary: a throw
 // here surfaces a loud "map data unavailable" state, never a silent empty map.
 NCZ.fetchLocationsFromApi = async function () {
   const url = `${NCZ.API_BASE}/v1/locations`;
@@ -41,15 +41,15 @@ NCZ.fetchLocationsFromApi = async function () {
   const headers = {};
   if (cached?.etag) headers["If-None-Match"] = cached.etag;
 
-  // 🔴 `no-cache` means "always revalidate", NOT "don't cache" (that is
+  // `no-cache` means "always revalidate", NOT "don't cache" (that is
   // `no-store`). The browser still sends its conditional headers and still
-  // reuses the cached body on a 304 — it just refuses to serve a fresh-by-TTL
+  // reuses the cached body on a 304. It just refuses to serve a fresh-by-TTL
   // copy without asking first.
   //
   // Without this, a page load replays whatever the browser cached, for up to
   // max-age. `/v1/locations` is CROSS-ORIGIN (api.nczoning.net vs
   // nczoning.net), and a normal F5 does not force-revalidate cross-origin
-  // fetches — so pressing refresh after adding a location could show the
+  // fetches, so pressing refresh after adding a location can show the
   // pre-change map for five minutes, with no way for the user to tell.
   // Observed exactly that: a reload 50s after a create still rendered a record
   // that had already been deleted.
@@ -57,7 +57,7 @@ NCZ.fetchLocationsFromApi = async function () {
   // The cost is one conditional request per PAGE LOAD, which is user-initiated
   // and rare. It deliberately does NOT apply to the update poll
   // (NCZ.checkForDatasetUpdate), which stays a plain fetch so the browser can
-  // answer it locally — that is what keeps polling nearly free.
+  // answer it locally, which is what keeps polling nearly free.
   const res = await fetch(url, { headers, cache: "no-cache" });
 
   let rawLocations;
@@ -71,7 +71,7 @@ NCZ.fetchLocationsFromApi = async function () {
   // against on every load, not only on a fresh 200.
   let datasetVersion = null;
   if (res.status === 304 && Array.isArray(cached?.data)) {
-    console.log(`Data API: 304 Not Modified — reusing ${cached.data.length} cached locations`);
+    console.log(`Data API: 304 Not Modified, reusing ${cached.data.length} cached locations`);
     rawLocations = cached.data;
     recentlyUpdatedDays = cached.recentlyUpdatedDays ?? null;
     datasetVersion = cached.datasetVersion ?? null;
@@ -94,7 +94,7 @@ NCZ.fetchLocationsFromApi = async function () {
   // as unusable and surface the loud error state rather than ship a degraded
   // map. (Zero locations is a valid dataset; don't trip on it.)
   //
-  // This outlived the slim/full split it was written for — it now guards
+  // This outlived the slim/full split it was written for. It now guards
   // against any API that answers this route with something other than full
   // records. Runs before caching so a rejected body is never stored.
   if (rawLocations.length > 0 && !("description" in rawLocations[0])) {
@@ -139,7 +139,7 @@ NCZ.fetchLocationsFromApi = async function () {
 // Has the served dataset changed since `knownVersion`? Returns the new envelope
 // when it has, otherwise null.
 //
-// 🔴 A PLAIN fetch, with no conditional header and no cache-buster, on purpose.
+// A PLAIN fetch, with no conditional header and no cache-buster, on purpose.
 // `/v1/locations` is served `public, max-age=300`, so inside that window the
 // browser answers this from its own HTTP cache and NO request reaches the
 // Worker. Measured: 4 identical plain fetches produced 0 Worker invocations,

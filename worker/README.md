@@ -225,7 +225,7 @@ is never stored. Collaborator status is checked with the **App's** installation
 token, so an admin never has to grant `repo` scope just to find out they are an
 admin.
 
-### 🔴 The collaborator check has three outcomes, not two
+### The collaborator check has three outcomes, not two
 
 `GET /repos/{owner}/{repo}/collaborators/{login}` answers **204 = yes**,
 **404 = no**, and a broken or under-permissioned credential answers **401/403**.
@@ -297,7 +297,7 @@ npx wrangler kv key get "dataset:v1:meta" --binding DATASET --local
 Every route below is gated on collaborator status, answers `no-store`, and needs
 `credentials: 'include'` from an origin in `ADMIN_ORIGINS` (`src/auth.js`).
 **`*.pages.dev` preview URLs are not on that list**, so a PR preview cannot
-exercise auth — test on `dev.nczoning.net`. These are deliberately absent from
+exercise auth. Test on `dev.nczoning.net`. These are deliberately absent from
 `openapi.json`, which documents the public read surface only.
 
 | Route | Method | Does |
@@ -325,12 +325,12 @@ dataset age in the top bar so the state is visible rather than assumed.
 Unlike the write-through materialize, it is **not** gated on `DATA_SOURCE`. That
 gate exists so an admin write does not spend a KV write rebuilding from a source
 the write did not touch; this route is someone explicitly asking, and
-`runRefresh` honours `DATA_SOURCE` either way — from `mods.json` in production,
+`runRefresh` honours `DATA_SOURCE` either way: from `mods.json` in production,
 from D1 on staging. It cannot flip the cutover.
 
-🔴 **`runRefresh` does not throw on failure.** It catches, keeps last-known-good,
+**`runRefresh` does not throw on failure.** It catches, keeps last-known-good,
 flags `discovery_stale` and *returns* `{stale: true}`. So the route branches on
-that return value, not on whether the call threw — treating "it did not throw" as
+that return value, not on whether the call threw. Treating "it did not throw" as
 success would report every failed rebuild as a win. `changed: false` is a
 success, meaning the content hash matched and nothing needed rewriting.
 
@@ -338,7 +338,7 @@ success, meaning the content hash matched and nothing needed rewriting.
 
 Submissions still arrive the old way: issue → PR → `main` → a new
 `data/locations/<uuid>.json`. `mods.json` is rebuilt from those files so
-production picks the record up, and **D1 hears nothing** — so staging, which
+production picks the record up, and **D1 hears nothing**, so staging, which
 reads D1, silently serves a smaller map than production. A mod merged overnight
 did exactly that.
 
@@ -348,16 +348,16 @@ npx wrangler d1 execute nczoning-data-staging --env staging --remote --file .imp
 ```
 
 Emits SQL rather than running it, INSERT-only, and writes **both**
-`locations` and `location_tags` — a record inserted without the join rows
+`locations` and `location_tags`. A record inserted without the join rows
 renders with no tags at all. It never deletes: rows in D1 with no file are not
 drift, since the nine auto-discovered records have never existed as files. It
 also reports records that exist in both and disagree, without rewriting them.
 
-Run it against **both** databases, and delete the script at cleanup — keeping it
+Run it against **both** databases, and delete the script at cleanup. Keeping it
 after submissions land in D1 directly would preserve git as a second source of
 truth.
 
-### 🔴 Tags live in the join, and writes must go through it
+### Tags live in the join, and writes must go through it
 
 `locations.tags` is still present (migration 0002 is additive so parity can be
 proven before the column drops), but `materializeFromD1` reads
@@ -371,16 +371,16 @@ Tag validation reads the **`tags` table**, not the KV snapshot. Reading KV was
 correct while tags came from a file in git and became wrong the moment they were
 editable: a tag created through the API would have 422'd on first use.
 
-### 🔴 Two tag rules the schema implies but does not enforce
+### Two tag rules the schema implies but does not enforce
 
 - **`slug` is the primary key**, so renaming one is an `ON UPDATE CASCADE`
   through `location_tags` and a link-breaking event. The cascade only fires with
-  foreign keys enforced — D1 has them on, SQLite does not by default — so the
+  foreign keys enforced (D1 has them on, SQLite does not by default), so the
   handler re-counts the links after a rename and returns **500 `cascade_failed`**
   rather than reporting a success that silently orphaned every record. The
   dashboard keeps the slug read-only behind an explicit unlock; routine
   relabelling is what `name` is for.
-- **Deleting a tag still in use is refused** — 409 `tag_in_use`, with the count
+- **Deleting a tag still in use is refused**: 409 `tag_in_use`, with the count
   and the affected records in the body. `location_tags` has no `ON DELETE` for
   `tag_slug`, so a bare delete fails on the foreign key with an opaque error, and
   a cascade would strip the tag from every record as a side effect of one click.

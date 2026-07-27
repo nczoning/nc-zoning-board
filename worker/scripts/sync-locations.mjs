@@ -7,8 +7,8 @@
  * PR, the PR merges to `main`, and a new `data/locations/<uuid>.json` appears.
  * `mods.json` is rebuilt from those files, so production picks the record up on
  * the next cron tick. **D1 hears nothing.** A mod merged overnight is live on
- * `nczoning.net` and absent from both D1 databases, so staging — which reads D1
- * — silently serves a smaller map than production.
+ * `nczoning.net` and absent from both D1 databases, so staging, which reads
+ * D1, silently serves a smaller map than production.
  *
  * That is the same failure the whole migration exists to remove, just pointing
  * the other way: after the cutover a submission that merges into git and never
@@ -17,7 +17,7 @@
  * directly; keeping it afterwards would preserve git as a second source of
  * truth, which is the redundant-representation problem the migration removes.
  *
- * Usage — emits SQL, never executes it, so the delta is reviewable first:
+ * Usage. Emits SQL, never executes it, so the delta is reviewable first:
  *
  *   node worker/scripts/sync-locations.mjs --db nczoning-data-staging --env staging --out .import/sync.sql
  *   npx wrangler d1 execute nczoning-data-staging --env staging --remote --file .import/sync.sql
@@ -33,7 +33,7 @@
  * It also reports records that exist in BOTH but disagree, without changing
  * them. Once D1 is authoritative an edit belongs in the dashboard, and having
  * this script quietly overwrite a D1 row from a git file would make the file
- * authoritative again — the exact inversion the migration is undoing. Reporting
+ * authoritative again, the exact inversion the migration is undoing. Reporting
  * is the point: nothing else currently notices that drift at all.
  */
 
@@ -101,10 +101,10 @@ function readManual(stamp) {
 /**
  * Ask the target database what it already has.
  *
- * 🔴 `--remote` is not optional. Without it wrangler answers from a local
+ * `--remote` is not optional. Without it wrangler answers from a local
  * SQLite file that is usually empty, so the delta would be "every record is
  * missing" and the script would cheerfully emit 288 INSERTs against a full
- * table. Every one would fail on the primary key, which is the safe outcome —
+ * table. Every one would fail on the primary key, which is the safe outcome,
  * but the same mistake on a query that is not INSERT-only would not be.
  */
 function readD1(db, envName) {
@@ -205,7 +205,7 @@ function main() {
   for (const row of missing) {
     const values = COLUMNS.map((c) => sql(row[c])).join(', ');
     statements.push(`INSERT INTO locations (${COLUMNS.join(', ')}) VALUES (${values});`);
-    // 🔴 The join, not just the column. The materializer reads location_tags;
+    // The join, not just the column. The materializer reads location_tags;
     // a record inserted without these rows renders on the map with no tags at
     // all. `nczoning` is excluded because it is not a registry row -- the
     // materializer re-adds it for auto records, and these are all manual.

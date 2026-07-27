@@ -1,20 +1,18 @@
 /**
  * A D1 binding backed by real SQLite, running the real migrations.
  *
- * The admin tests used to run against a hand-rolled fake that matched SQL by
- * substring. That was adequate while every statement was a plain single-table
- * read or write, and it stopped being adequate the moment tag behaviour became
- * a question about CONSTRAINTS: "deleting a tag in use is refused" and "renaming
- * a slug cascades to location_tags" are claims about SQLite, and a mock can only
- * ever restate the author's belief about them. Proving them needs an engine.
+ * Tag behaviour is mostly a question about CONSTRAINTS: "deleting a tag in use
+ * is refused" and "renaming a slug cascades to location_tags" are claims about
+ * SQLite, and a mock that matches SQL by substring can only restate the belief
+ * it was written from. Proving them needs an engine.
  *
- * node:sqlite is experimental, and it is a test-only dependency — nothing here
+ * node:sqlite is experimental, and it is a test-only dependency: nothing here
  * ships to the Worker, which talks to D1.
  *
  * Two behaviours matter and are asserted by the tests that use this:
  * - `PRAGMA foreign_keys = ON`. SQLite defaults it OFF, D1 defaults it ON. With
  *   it off, ON UPDATE CASCADE silently does nothing and every rename orphans
- *   its links — which is why admin.js re-counts after a rename rather than
+ *   its links, which is why admin.js re-counts after a rename rather than
  *   trusting the cascade.
  * - `batch()` runs inside a transaction, as D1's does.
  */
@@ -30,8 +28,8 @@ import { fileURLToPath } from 'node:url';
 const MIGRATIONS = join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations');
 
 /**
- * 🔴 D1 refuses more than 100 bound parameters in one query, and SQLite does
- * not — its own ceiling is 32766. So a harness that is "a real engine" is still
+ * D1 refuses more than 100 bound parameters in one query, and SQLite does
+ * not: its own ceiling is 32766. So a harness that is "a real engine" is still
  * not "the real platform", and an `IN (?, ?, ...)` over 297 locations passed
  * every test here while throwing `D1_ERROR: too many SQL variables` in
  * production.
@@ -133,7 +131,7 @@ export function sqliteD1(seed = {}) {
         throw err;
       }
     },
-    /** Test conveniences — reads, never writes. */
+    /** Test conveniences: reads, never writes. */
     rows: (sql, ...args) => db.prepare(sql).all(...args),
     one: (sql, ...args) => db.prepare(sql).get(...args) ?? null,
   };

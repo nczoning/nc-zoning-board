@@ -160,8 +160,8 @@ export async function readTag(env, slug) {
 /**
  * Slugs attached to each of `ids`, as Map(location_id -> string[]).
  *
- * 🔴 NEVER `IN (?, ?, ...)` with one placeholder per id. **D1 refuses more than
- * 100 bound parameters in a single query** — measured, not assumed: `SELECT`
+ * NEVER `IN (?, ?, ...)` with one placeholder per id. **D1 refuses more than
+ * 100 bound parameters in a single query**, measured rather than assumed: `SELECT`
  * with 100 placeholders is accepted and 101 fails with
  * `D1_ERROR: too many SQL variables`. The admin list route passes every
  * location, which is 297 today, so that query threw on every call and the
@@ -171,7 +171,7 @@ export async function readTag(env, slug) {
  *
  * The whole-table read is what d1.js's readLocationTags already does for the
  * materializer, for the same reason. It binds nothing at all, so it does not
- * merely raise the ceiling — it removes it.
+ * merely raise the ceiling: it removes it.
  */
 export async function readTagsForLocations(env, ids) {
   const map = new Map(ids.map((id) => [id, []]));

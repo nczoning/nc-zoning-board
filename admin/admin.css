@@ -1,13 +1,13 @@
 /*
  * Admin dashboard layout.
  *
- * Colour comes from ../assets/css/theme.css — the same custom properties the
+ * Colour comes from ../assets/css/theme.css: the same custom properties the
  * map uses, so switching theme switches this page too. TYPE DOES NOT.
  *
- * 🔴 Two things are deliberately overridden rather than inherited:
+ * Two things are deliberately overridden rather than inherited:
  *
  * 1. `body`. theme.css sets `height: 100svh; display: flex; overflow: hidden`
- *    — correct for the map, which is a fixed viewport with Leaflet panes inside
+ *    which is correct for the map, which is a fixed viewport with Leaflet panes inside
  *    it, and fatal here: the admin page is a long document and that rule
  *    silently clipped everything below the fold with no scrollbar. The content
  *    was present the whole time (scrollHeight 10300 against clientHeight 1249).
@@ -16,7 +16,7 @@
  *    page was built on --text-sm (12px) and --text-xs (11px), which in Rajdhani
  *    is barely legible. The roles below are lifted from nc-zoning-academy,
  *    which hit the same wall and fixed it there. Its note on why the gaps look
- *    large is worth keeping: sizes are NOT comparable across families —
+ *    large is worth keeping: sizes are NOT comparable across families:
  *    Orbitron at 15px and Rajdhani at 18px have the same 11px cap height, so a
  *    heading has to sit well above body size to read as one.
  *
@@ -27,7 +27,7 @@
 
 :root {
     /* Type roles, from nc-zoning-academy. A call site names a ROLE, never a
-       pixel size — that discipline is what keeps one adjustment here from
+       pixel size. That discipline is what keeps one adjustment here from
        turning back into two dozen ad-hoc sizes. */
     --fs-title: 34px;      /* page titles, hero numerics */
     --fs-heading: 22px;    /* panel headings */
@@ -52,15 +52,15 @@
 
 * { box-sizing: border-box; }
 
-/* 🔴 The `hidden` attribute is a UA rule of the lowest specificity, so ANY
+/* The `hidden` attribute is a UA rule of the lowest specificity, so ANY
    class that sets display beats it. `.split { display: grid }` on a
-   `<section class="split" hidden>` leaves the section visible — every tab would
+   `<section class="split" hidden>` leaves the section visible. Every tab would
    have rendered stacked on top of each other. Same trap as the body rule
    above: something that looks like it settles the question, and does not. */
 [hidden] { display: none !important; }
 
 /* Undoes theme.css's map shell. Every property here is countering one of
-   `height: 100svh`, `display: flex`, `overflow: hidden` — do not "tidy" them
+   `height: 100svh`, `display: flex`, `overflow: hidden`. Do not "tidy" them
    away by deleting what looks like a default. */
 body {
     margin: 0;
@@ -95,7 +95,7 @@ a { color: var(--secondary); }
 
 /* The wordmark. Night Corp Display is a caps-only subset (A-Z, 0-9,
    punctuation) drawn from the logo, so it belongs on exactly this kind of
-   short, large, branded string and nowhere else — never body copy, and never
+   short, large, branded string and nowhere else: never body copy, and never
    anything that might render a lowercase glyph it does not have. */
 .topbar h1 {
     margin: 0;
@@ -113,7 +113,7 @@ a { color: var(--secondary); }
 .who { color: var(--tertiary); font-weight: 600; }
 
 /* Dataset age. Three states rather than two, because "I have not asked yet" is
-   not the same as "it is current" — a blank indicator must never read as fresh. */
+   not the same as "it is current": a blank indicator must never read as fresh. */
 .freshness {
     font-size: var(--fs-label);
     text-transform: uppercase;
@@ -238,7 +238,7 @@ textarea { resize: vertical; min-height: 6rem; line-height: var(--lh-body); }
     line-height: var(--lh-body);
 }
 
-/* 🔴 Three states, three colours, and they are NOT interchangeable.
+/* Three states, three colours, and they are NOT interchangeable.
    `.warn` is "we could not tell" (503). `.error` is "no" (403, 422, 409).
    Rendering an indeterminate check in the refusal colour tells an admin they
    lack access when the truth is that GitHub was unreachable. */
@@ -303,7 +303,7 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* Category, in the same colours the map uses for its pins, so a category means
    one thing across the product. The dot carries the colour and the word carries
-   the meaning — colour alone would fail for anyone who cannot separate cyan
+   the meaning. Colour alone would fail for anyone who cannot separate cyan
    from amber. */
 .cat { display: inline-flex; align-items: center; gap: var(--space-xs); white-space: nowrap; }
 
@@ -390,7 +390,7 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .stat.bad .value { color: var(--status-critical); }
 .stat.good .value { color: var(--status-ok); }
 
-/* A tile that filters. Only tiles that lead somewhere get the affordance —
+/* A tile that filters. Only tiles that lead somewhere get the affordance:
    a hover state on an inert number is a promise the UI does not keep. */
 button.stat {
     width: 100%;
@@ -442,7 +442,7 @@ button.breakdown-row:hover .k { color: var(--secondary); }
     flex-wrap: wrap;
 }
 
-/* No filters, no row — otherwise it keeps .toolbar's bottom margin as a gap
+/* No filters, no row, otherwise it keeps .toolbar's bottom margin as a gap
    under nothing. */
 .filter-chips:empty { display: none; }
 
@@ -507,7 +507,7 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 .detail dd.empty { color: var(--text-dim); font-style: italic; }
 
 /* A count with a proportional bar. The bar is decoration on top of the number,
-   never a replacement for it — a reader must be able to get the exact value. */
+   never a replacement for it: a reader must be able to get the exact value. */
 .breakdown { display: grid; gap: var(--space-2xs); }
 
 .breakdown-row {
@@ -522,7 +522,7 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 .breakdown-row .n { color: var(--white); font-variant-numeric: tabular-nums; }
 
 /* display:block is load-bearing. As a <span> this is inline by default, and an
-   inline box ignores height and collapses to its content width — it only looked
+   inline box ignores height and collapses to its content width. It only looked
    right inside .breakdown-row because being a grid item blockified it. In
    .quota-row it rendered as a thin vertical sliver. */
 .bar {
@@ -597,10 +597,10 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 /*
  * Two panes, each scrolling on its own.
  *
- * The page used to scroll as one document, which meant scrolling the 297-row
- * list also scrolled the editor off the screen — the form you were filling in
- * left the viewport because you went looking for a record. Now the split is
- * exactly one viewport tall and each pane owns its own overflow.
+ * The split is exactly one viewport tall and each pane owns its overflow. A
+ * single document scroll carries the editor off screen while the 297-row list
+ * is scrolled, so a form being filled in leaves the viewport whenever the
+ * reader goes looking for a record.
  *
  * --topbar-h is measured in JS rather than hard-coded: the top bar wraps on
  * narrow windows, so its height is not a constant, and a wrong guess here

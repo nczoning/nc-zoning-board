@@ -47,7 +47,7 @@ const SUBDISTRICTS = {
 /**
  * Everything runRefresh reaches for. Mirrors the stub in refresh-d1.test.js.
  *
- * 🔴 Installed as globalThis.fetch, because admin.js calls `runRefresh(env)`
+ * Installed as globalThis.fetch, because admin.js calls `runRefresh(env)`
  * without a fetchImpl. An earlier test in this file replaces globalThis.fetch
  * with a hard failure and does not restore it, so a refresh test that does not
  * set this inherits that and rebuilds "successfully" against nothing.
@@ -234,11 +234,11 @@ test('delete: the join rows cascade away with the location', async () => {
 
 // ------------------------------------------------------------ at scale ---
 
-test('🔴 the list route works at production scale, not just with one record', async () => {
+test('the list route works at production scale, not just with one record', async () => {
   // This is the bug the whole suite missed. Every other test seeds ONE
-  // location, so `IN (?, ?, ...)` never grew past a single placeholder. With
-  // the real 297 it blew D1's 100-parameter ceiling on every call, and the
-  // dashboard rendered an empty table behind a misleading CORS error.
+  // location, so `IN (?, ?, ...)` never grows past a single placeholder. At
+  // the real 297 that exceeds D1's 100-parameter ceiling on every call, and the
+  // dashboard renders an empty table behind a misleading CORS error.
   //
   // 150 is enough: the limit is 100, and the point is to cross it, not to
   // reproduce the exact corpus size.
@@ -271,7 +271,7 @@ test('the single-record route still uses a targeted lookup', async () => {
 
 // ------------------------------------------------- tags on the write path ---
 
-test('🔴 a tag edit reaches location_tags, not just the legacy column', async () => {
+test('a tag edit reaches location_tags, not just the legacy column', async () => {
   // The 4a/4b gap: admin writes set locations.tags, the materializer reads the
   // join. A PATCH that only moved the column returned 200 and changed nothing
   // on the map.
@@ -411,7 +411,7 @@ test('update: editing name and description leaves the slug and the links alone',
   assert.equal(auditRows(env).at(-1).action, 'tag.update');
 });
 
-test('🔴 renaming a slug cascades to location_tags', async () => {
+test('renaming a slug cascades to location_tags', async () => {
   // Proven against SQLite with foreign keys on, which is D1's default. With
   // them off the UPDATE succeeds and every link silently orphans -- the exact
   // failure the cascade_failed guard in admin.js exists to catch.
@@ -430,7 +430,7 @@ test('renaming onto an existing slug is 409, not a merge', async () => {
   assert.deepEqual(tagsOf(env, 'loc-1'), ['apartment']);
 });
 
-test('🔴 deleting a tag that is in use is refused, with the count and the records', async () => {
+test('deleting a tag that is in use is refused, with the count and the records', async () => {
   const env = envFor();
   const res = await hit(env, 'DELETE', '/admin/tags/apartment');
   assert.equal(res.status, 409);
@@ -532,10 +532,10 @@ test('a tag write does NOT materialize while DATA_SOURCE is mods either', async 
 });
 
 test('a write DOES materialize once DATA_SOURCE is d1', async () => {
-  // 🔴 Asserts KV actually gained the dataset, not merely that waitUntil was
+  // Asserts KV actually gained the dataset, not merely that waitUntil was
   // handed a promise. materializeAfterWrite catches its own errors, so the
-  // previous `await waited[0]; // must not reject` could not fail: a rebuild
-  // that blew up on every record passed it as happily as one that worked.
+  // bare `await waited[0]` cannot fail: a rebuild that fails on every record
+  // satisfies it as readily as one that works.
   const env = refreshableEnv({ dataSource: 'd1' });
   const waited = [];
   await hit(env, 'POST', '/admin/locations', VALID, { waitUntil: (p) => waited.push(p) });
@@ -566,7 +566,7 @@ test('POST /admin/refresh rebuilds and says which source it used', async () => {
   assert.equal(auditRows(env).at(-1).action, 'dataset.refresh');
 });
 
-test('🔴 a manual refresh runs even while DATA_SOURCE is mods', async () => {
+test('a manual refresh runs even while DATA_SOURCE is mods', async () => {
   // Unlike the write-through materialize, which is skipped there. The gate on
   // that one avoids spending a KV write rebuilding from a source the write did
   // not touch; this route is someone explicitly asking, and runRefresh honours
@@ -585,10 +585,10 @@ test('an unchanged rebuild reports changed:false, which is still a success', asy
   assert.equal(second.changed, false, 'the content hash matched, so nothing was rewritten');
 });
 
-test('🔴 a failed rebuild is a 500 that says so, not a reported success', async () => {
+test('a failed rebuild is a 500 that says so, not a reported success', async () => {
   // runRefresh does NOT throw on failure -- it catches, keeps last-known-good
-  // and returns {stale: true}. Reporting success off "it did not throw" would
-  // have called every failed rebuild a win. An empty registry is the trigger
+  // and returns {stale: true}. Reporting success on "it did not throw" would
+  // call every failed rebuild a win. An empty registry is the trigger
   // here (readLocationRows refuses to materialize an empty map); the shape of
   // the failure is what matters, not its cause.
   const env = refreshableEnv({ dataSource: 'd1', locations: [], locationTags: [] });
