@@ -599,13 +599,23 @@
       return;
     }
 
-    banner('ok', isNew
-      ? `Created "${res.body.location.name}".`
-      : `Saved ${Object.keys(payload).join(', ')} on "${res.body.location.name}".`);
     await loadLocations();
+    // Tag usage counts live on the tag records, and a location's tags just
+    // moved — without this the Tags tab and the slug-rename warning keep
+    // showing the count from before the edit. That warning exists to say how
+    // many records a rename will re-point, so a stale count there is the one
+    // number that must not be wrong.
+    if (Object.prototype.hasOwnProperty.call(payload, 'tags')) await loadTags();
+
     // Back to reading it: the save is done, so the form has nothing left to say.
     state.editing = false;
     selectLocation(res.body.location.id);
+    // 🔴 AFTER selectLocation, not before: it calls clearBanner(), so a
+    // confirmation set first is wiped by the navigation that follows it. Every
+    // successful save reported nothing at all.
+    banner('ok', isNew
+      ? `Created "${res.body.location.name}".`
+      : `Saved ${Object.keys(payload).join(', ')} on "${res.body.location.name}".`);
   }
 
   async function deleteLocation(loc) {
@@ -841,9 +851,10 @@
       return;
     }
 
-    banner('ok', isNew ? `Created tag "${res.body.tag.slug}".` : `Saved tag "${res.body.tag.slug}".`);
     await Promise.all([loadTags(), loadLocations()]);
     selectTag(res.body.tag.slug);
+    // After selectTag for the same reason as saveLocation: it clears the banner.
+    banner('ok', isNew ? `Created tag "${res.body.tag.slug}".` : `Saved tag "${res.body.tag.slug}".`);
   }
 
   /**
