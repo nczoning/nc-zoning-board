@@ -20,6 +20,7 @@ import { docsPage, spec } from './docs.js';
 import { RECENTLY_UPDATED_DAYS } from './config.js';
 import { login, callback, me, logout, adminCors } from './auth.js';
 import { handleAdmin } from './admin.js';
+import { handleSubmissions, purgeSubmitterIps } from './submissions.js';
 
 const SCHEMA_VERSION = 1;
 
@@ -181,17 +182,38 @@ export default {
   // 5-minute cron: rebuild the dataset into KV (see refresh.js).
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(runRefresh(env));
+    // Retention on the submitters' hashed addresses. Separate from the refresh
+    // so a failed rebuild cannot stop the clock on data the site promised to
+    // delete. An UPDATE matching nothing writes nothing, which is every tick
+    // but a handful. See docs/privacy.md.
+    if (env.DB) ctx.waitUntil(purgeSubmitterIps(env).catch(() => 0));
   },
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const isAuth = url.pathname.startsWith('/auth/');
     const isAdmin = url.pathname.startsWith('/admin/');
+    const isSubmission = url.pathname === '/submissions' || url.pathname.startsWith('/submissions/');
 
     if (request.method === 'OPTIONS') {
       // Auth routes are credentialed, so they need the caller's exact origin
       // echoed back; the wildcard CORS used by /v1/* is illegal with
       // Allow-Credentials and would fail the preflight.
+      //
+      // Submissions are anonymous and wildcard, but they still POST JSON, so
+      // they need Allow-Methods and Allow-Headers that /v1/* does not: without
+      // this branch every submission fails at the preflight, before the
+      // handler is reached.
+      if (isSubmission) {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+          },
+        });
+      }
       return new Response(null, {
         status: 204,
         headers: isAuth || isAdmin
@@ -220,6 +242,15 @@ export default {
       if (request.method === 'GET' && url.pathname === '/auth/me') return me(request, env);
       if (request.method === 'POST' && url.pathname === '/auth/logout') return logout(request, env);
       return json(envelope({ error: 'not_found' }, null), { status: 404 });
+    }
+
+    // The public write route, before the read-only method gate below. It is
+    // anonymous by design, so its own gate is Turnstile plus a rate limit
+    // rather than a session, and nothing it accepts reaches the map without a
+    // separate, collaborator-gated approval.
+    if (isSubmission) {
+      const res = await handleSubmissions(request, env);
+      if (res) return res;
     }
 
     if (request.method !== 'GET' && request.method !== 'HEAD') {
