@@ -5,6 +5,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { validateLocationInput, CATEGORIES } from '../src/validate.js';
+import {
+  WORLD_MIN_X, WORLD_MAX_X, WORLD_MIN_Y, WORLD_MAX_Y, COORD_Z_MIN, COORD_Z_MAX,
+} from '../src/config.js';
 
 const require = createRequire(import.meta.url);
 const Ajv = require('ajv');
@@ -127,4 +130,68 @@ test('non-finite coordinates are rejected', () => {
     const r = validateLocationInput({ ...asInput(RECORDS[0]), coordinates: bad }, { tagNames: TAG_NAMES });
     assert.equal(r.ok, false, JSON.stringify(bad));
   }
+});
+
+// ------------------------------------------------------- coordinate range ---
+// ajv has no opinion here: `mods.schema.json` never carried a range, so these
+// are write-path-only. The rule lived in the browser until Phase 5, which was
+// survivable while every writer was an authenticated collaborator and stops
+// being so the moment /submissions accepts anonymous writes.
+
+test('coordinates outside the world bounds are rejected', () => {
+  const base = asInput(RECORDS[0]);
+  const cases = [
+    ['X below min', [WORLD_MIN_X - 1, 0, 0], /coordinate X/],
+    ['X above max', [WORLD_MAX_X + 1, 0, 0], /coordinate X/],
+    ['Y below min', [0, WORLD_MIN_Y - 1, 0], /coordinate Y/],
+    ['Y above max', [0, WORLD_MAX_Y + 1, 0], /coordinate Y/],
+    ['Z below min', [0, 0, COORD_Z_MIN - 1], /coordinate Z/],
+    ['Z above max', [0, 0, COORD_Z_MAX + 1], /coordinate Z/],
+    ['a pasted nonsense value', [999999, 999999, 999999], /coordinate/],
+  ];
+  for (const [label, coordinates, pattern] of cases) {
+    const r = validateLocationInput({ ...base, coordinates }, { tagNames: TAG_NAMES });
+    assert.equal(r.ok, false, `accepted ${label}: ${JSON.stringify(coordinates)}`);
+    assert.match(r.errors.join(' '), pattern, label);
+  }
+});
+
+test('the bounds admit the real corpus, including its four extremes', () => {
+  // The guard on the whole change. The browser rule of +/-5000 on X/Y and
+  // +/-1000 on Z rejects four records that are live on the map right now, so
+  // porting those numbers would have refused real data. Named individually
+  // because a corpus-wide loop that silently stopped covering them would still
+  // pass. Measured 2026-07-27.
+  const extremes = [
+    ['Sea Wall Towers Detailed', -5782.011, 1781.279, 195.898],
+    ['Outdoor V - Canyon Forest', 5321.252, -226.151, 99.817],
+    ['Forest Canyon Campsite', 5320.874, -240.78528, 97.97386],
+    ['Crystal Palace Resort', 322.9296, -1017.5965, 1524.5823],
+  ];
+  for (const [name, x, y, z] of extremes) {
+    const inCorpus = RECORDS.find((r) => r.name === name);
+    assert.ok(inCorpus, `${name} has left data/locations, so this test no longer guards anything`);
+    assert.deepEqual(
+      inCorpus.coordinates.map(Number), [x, y, z],
+      `${name} moved; re-measure the bounds rather than editing this expectation`,
+    );
+    const r = validateLocationInput({ ...asInput(inCorpus) }, { tagNames: TAG_NAMES });
+    assert.equal(r.ok, true, `bounds reject the live record ${name}: ${r.errors.join('; ')}`);
+  }
+});
+
+test('partial mode still range-checks coordinates that are present', () => {
+  const ok = validateLocationInput({ coordinates: [0, 0, 0] }, { tagNames: TAG_NAMES, partial: true });
+  assert.equal(ok.ok, true);
+  const bad = validateLocationInput({ coordinates: [999999, 0, 0] }, { tagNames: TAG_NAMES, partial: true });
+  assert.equal(bad.ok, false, 'a PATCH could smuggle an out-of-range coordinate past the check');
+});
+
+test('a two-element coordinate skips the Z check rather than reading undefined', () => {
+  // [X, Y] is still valid input. Reading c[2] as a number here would compare
+  // undefined against the bounds and quietly pass, or throw, depending on order.
+  const r = validateLocationInput(
+    { ...asInput(RECORDS[0]), coordinates: [0, 0] }, { tagNames: TAG_NAMES },
+  );
+  assert.equal(r.ok, true, r.errors.join('; '));
 });
