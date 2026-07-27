@@ -547,19 +547,19 @@ margin. A WAF rate-limit rule is deployed as belt-and-braces (zone config,
 not `wrangler deploy`):
 
 > Dashboard → nczoning.net → **Security → Security rules → Rate limiting
-> rules**. Rule "API rate limit": match **URI Path starts with `/v1/`**,
-> characteristic **IP**, **100 requests / 10 seconds**, action **Block**,
-> duration **10 s**.
+> rules**. Rule "API rate limit": match **URI Path starts with `/v1/`**, `Or`
+> **`/submissions`**, `Or` **`/auth/`**; characteristic **IP**, **100 requests /
+> 10 seconds**, action **Block**, duration **10 s**.
 
-A second rule covers the write routes, which are not cached and not covered by
-the `/v1/` rule:
+**The free plan allows exactly one rate-limiting rule**, so the write routes are
+`Or` conditions on that rule rather than a second one with a tighter threshold.
+100 requests / 10 s is far looser than `/submissions` needs, which is acceptable
+because this is only an edge burst guard: the limit that decides how many
+submissions an address may actually queue is the per-hour one inside the Worker,
+and no zone setting can weaken it.
 
-> Rule "submissions and auth": match **URI Path starts with `/submissions`** or
-> **`/auth/`**, characteristic **IP**, **20 requests / 10 seconds**, action
-> **Block**, duration **10 s**.
-
-That is a burst guard at the edge. The per-hour limit inside the Worker is the
-one that decides how many submissions an address may actually queue.
+`/submissions` is matched without a trailing slash so it covers both the POST
+and `/submissions/candidates`.
 
 **Free-plan constraints (why it's path-based, not host-based):** the free
 rate-limiting rule only matches on **URI Path** (hostname isn't offered),
