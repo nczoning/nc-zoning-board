@@ -38,6 +38,21 @@
  * "Cliffside Abode Player Home". Serving this column would undo that. It exists
  * so a rename can be detected by diffing it against locations.name.
  *
+ * ## Archives live here too, and cost the most to fetch
+ *
+ * The `.archive` file names a mod ships (installed-mod detection) are a
+ * per-mod, multi-subrequest fetch, so they are budgeted per tick and refetched
+ * only when a mod re-uploads. `archives_at` records the `updated_at` they were
+ * read against, because `updated_at` itself moves the instant Nexus reports the
+ * re-upload.
+ *
+ * refreshArchives() is a SEPARATE pass from the sweep, driven by the records
+ * the dataset actually serves rather than by the `locations` table. While
+ * production still builds from mods.json those two sets can differ -- a mod
+ * merged to main reaches mods.json and does not reach D1 until someone runs
+ * sync-locations.mjs -- and driving archives off the table would silently ship
+ * no file list for exactly those mods.
+ *
  * ## D1 bound parameters
  *
  * The ceiling is 100 per query, measured
@@ -47,10 +62,23 @@
  * surfaces in a browser as a CORS error rather than a SQL one.
  */
 
-import { fetchTaggedModNodes, fetchModsByUidThumbs } from './nexus.js';
+import { fetchTaggedModNodes, fetchModsByUidThumbs, fetchModArchiveNames } from './nexus.js';
+import { readArchives } from './store.js';
 
 /** Columns compared to decide whether a row needs writing. */
-const TRACKED = ['name', 'updated_at', 'thumbnail_url', 'picture_url', 'archives', 'nczoning_tagged'];
+const TRACKED = [
+  'name', 'updated_at', 'thumbnail_url', 'picture_url', 'archives', 'archives_at',
+  'nczoning_tagged',
+];
+
+// Per-tick archive budgets, carried over from refresh.js unchanged. Archives are
+// near-static, so steady state fetches nothing; these cap the cold fill and any
+// re-upload burst so archive work can never breach the Worker's 50-subrequest
+// limit alongside the tagged query and the thumbnail batches. A cold cache fills
+// over roughly ceil(records / ARCHIVE_MOD_BUDGET) ticks, which the one-time
+// carry-over below is there to avoid paying at all.
+const ARCHIVE_MOD_BUDGET = 15;
+const ARCHIVE_SUBREQUEST_BUDGET = 25;
 
 /** Nexus ids that are placeholders rather than real mods. */
 const isRealNexusId = (id) => Boolean(id) && /^\d+$/.test(String(id));
@@ -77,12 +105,63 @@ function nodeToRow(node, tagged) {
 export async function readNexusCache(env) {
   const { results } = await env.DB.prepare(
     `SELECT nexus_id, name, updated_at, thumbnail_url, picture_url, archives,
-            nczoning_tagged, fetched_at
+            archives_at, nczoning_tagged, fetched_at
        FROM nexus_cache`,
   ).all();
   const map = new Map();
   for (const r of results ?? []) map.set(String(r.nexus_id), r);
   return map;
+}
+
+/**
+ * A stored `archives` value as an array. Never throws: a malformed cell is a
+ * cosmetic loss for one mod, and letting it propagate would take the whole
+ * refresh into last-known-good over a file listing.
+ */
+function parseArchives(value) {
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The four Nexus-derived /v1 fields, keyed by nexus_id, for the materializer to
+ * join on. One-to-many: two locations sharing a mod read the same entry.
+ *
+ * Callers must treat an empty index as a failure rather than as "no images" --
+ * see the guard in refresh.js. Serving 297 records with every image stripped is
+ * a valid-looking dataset that would sail through the content hash and replace
+ * a good one.
+ */
+export async function readNexusIndex(env) {
+  const { results } = await env.DB.prepare(
+    `SELECT nexus_id, updated_at, thumbnail_url, picture_url, archives, archives_at,
+            nczoning_tagged
+       FROM nexus_cache`,
+  ).all();
+  const index = new Map();
+  for (const r of results ?? []) {
+    index.set(String(r.nexus_id), {
+      thumbnailUrl: r.thumbnail_url ?? null,
+      pictureUrl: r.picture_url ?? null,
+      updatedAt: r.updated_at ?? null,
+      archives: parseArchives(r.archives),
+      // Carried so an archives-only write can preserve it: writeRows sets the
+      // flag unconditionally, and a candidate that lost it here would quietly
+      // drop out of the candidates list.
+      nczoning_tagged: r.nczoning_tagged ?? 0,
+      // `archives: []` is a real answer -- plenty of mods ship no .archive at
+      // all -- so the array cannot say whether the listing has ever been read.
+      // These two carry that, and only refreshArchives looks at them.
+      archivesKnown: r.archives != null,
+      archivesAt: r.archives_at ?? null,
+    });
+  }
+  return index;
 }
 
 /**
@@ -148,14 +227,15 @@ async function writeRows(env, rows, nowIso) {
   const stmt = env.DB.prepare(
     `INSERT INTO nexus_cache
        (nexus_id, name, updated_at, thumbnail_url, picture_url, archives,
-        nczoning_tagged, fetched_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        archives_at, nczoning_tagged, fetched_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(nexus_id) DO UPDATE SET
        name            = COALESCE(excluded.name, nexus_cache.name),
        updated_at      = COALESCE(excluded.updated_at, nexus_cache.updated_at),
        thumbnail_url   = COALESCE(excluded.thumbnail_url, nexus_cache.thumbnail_url),
        picture_url     = COALESCE(excluded.picture_url, nexus_cache.picture_url),
        archives        = COALESCE(excluded.archives, nexus_cache.archives),
+       archives_at     = COALESCE(excluded.archives_at, nexus_cache.archives_at),
        nczoning_tagged = excluded.nczoning_tagged,
        fetched_at      = excluded.fetched_at`,
   );
@@ -166,10 +246,105 @@ async function writeRows(env, rows, nowIso) {
     r.thumbnail_url ?? null,
     r.picture_url ?? null,
     r.archives ?? null,
+    r.archives_at ?? null,
     r.nczoning_tagged ?? 0,
     nowIso,
   )));
   return rows.length;
+}
+
+/**
+ * Resolve `archives` for the records this cycle is about to serve, budgeted.
+ *
+ * Driven by `records` (the built dataset), not by the `locations` table -- see
+ * the header note. Updates `index` in place so the caller can attach the result
+ * without re-reading, and writes only the rows whose listing actually changed.
+ *
+ * A mod is due when its listing has never been read, or when the `updated_at`
+ * it was read against no longer matches the record's -- the exact re-upload
+ * signal for its file contents. Newest first, so a re-upload beats the cold
+ * fill for the budget. A transient failure (`ok:false`) is skipped rather than
+ * stored, so the next tick retries instead of recording a partial listing as
+ * final.
+ *
+ * @param {object} env
+ * @param {typeof fetch} fetchImpl
+ * @param {object} opts
+ * @param {Array}  opts.records  served records, each `{nexus_id, updated_at}`
+ * @param {Map}    opts.index    readNexusIndex(), mutated in place
+ * @param {string} opts.nowIso
+ */
+export async function refreshArchives(env, fetchImpl, { records, index, nowIso }) {
+  const summary = { seeded: 0, fetched: 0, pending: 0, written: 0 };
+  const stamp = nowIso ?? new Date().toISOString();
+
+  const due = new Map();
+  for (const rec of records) {
+    const id = String(rec.nexus_id);
+    if (!isRealNexusId(id) || due.has(id)) continue;
+    const updatedAt = rec.updated_at ?? null;
+    const entry = index.get(id);
+    if (entry?.archivesKnown && entry.archivesAt === updatedAt) continue;
+    due.set(id, updatedAt);
+  }
+  if (!due.size) return summary;
+
+  // One-time carry-over from the KV blob this table replaces. Worth the read
+  // twice over: it skips a ~20 tick cold fill, and archive-seeds.json holds
+  // hand-built listings for mods whose Nexus "Preview file contents" is broken,
+  // which a refetch would silently replace with nothing. The read stops
+  // happening once every served mod has a listing, because `due` is then empty.
+  let seeds = {};
+  try {
+    seeds = await readArchives(env);
+  } catch {
+    // The blob is an optimisation, not a source. Fetching covers its absence.
+  }
+
+  const resolved = new Map();
+  const take = (id, updatedAt, archives) => {
+    resolved.set(id, { archives, updatedAt });
+    index.set(id, {
+      ...(index.get(id) ?? { thumbnailUrl: null, pictureUrl: null, updatedAt }),
+      archives,
+      archivesKnown: true,
+      archivesAt: updatedAt,
+    });
+    due.delete(id);
+  };
+
+  for (const [id, updatedAt] of [...due]) {
+    const seed = seeds[id];
+    if (!seed || (seed.updatedAt ?? null) !== updatedAt || !Array.isArray(seed.archives)) continue;
+    take(id, updatedAt, seed.archives);
+    summary.seeded += 1;
+  }
+
+  const ordered = [...due].sort((a, b) => String(b[1] ?? '').localeCompare(String(a[1] ?? '')));
+  let mods = 0;
+  let subrequests = 0;
+  for (const [id, updatedAt] of ordered) {
+    if (mods >= ARCHIVE_MOD_BUDGET || subrequests >= ARCHIVE_SUBREQUEST_BUDGET) break;
+    const res = await fetchModArchiveNames(fetchImpl, id);
+    mods += 1;
+    subrequests += res.subrequests;
+    if (!res.ok) continue;
+    take(id, updatedAt, res.archives);
+    summary.fetched += 1;
+  }
+  summary.pending = due.size;
+
+  // A row per mod, same batching and the same 100-bound-parameter ceiling as
+  // the sweep. Nothing resolved means nothing written, which is the steady
+  // state: archives only move when a mod re-uploads.
+  const rows = [...resolved].map(([nexusId, r]) => ({
+    nexus_id: nexusId,
+    nczoning_tagged: index.get(nexusId)?.nczoning_tagged ?? 0,
+    archives: JSON.stringify(r.archives),
+    archives_at: r.updatedAt,
+  }));
+  summary.written = await writeRows(env, rows, stamp);
+  return summary;
 }
 
 /**
@@ -181,19 +356,24 @@ async function writeRows(env, rows, nowIso) {
  * @param {object} [opts]
  * @param {Function} [opts.fetchImpl]  injected for tests
  * @param {string}   [opts.nowIso]     injected for tests
+ * @param {Array}    [opts.taggedNodes] the tagged set, when the caller has
+ *   already fetched it. The cron does: one GraphQL call serves both this sweep
+ *   and the dataset build, and a second would double the cost of the tick.
  */
-export async function refreshNexusCache(env, { fetchImpl = fetch, nowIso } = {}) {
+export async function refreshNexusCache(env, { fetchImpl = fetch, nowIso, taggedNodes: given } = {}) {
   const stamp = nowIso ?? new Date().toISOString();
   const summary = { tagged: 0, backfilled: 0, written: 0, untagged: 0, stale: false };
 
-  let taggedNodes;
-  try {
-    taggedNodes = await fetchTaggedModNodes(fetchImpl);
-  } catch (err) {
-    // Last known good stays. Reported, not thrown: see the header note.
-    summary.stale = true;
-    summary.error = String(err).slice(0, 200);
-    return summary;
+  let taggedNodes = given;
+  if (!taggedNodes) {
+    try {
+      taggedNodes = await fetchTaggedModNodes(fetchImpl);
+    } catch (err) {
+      // Last known good stays. Reported, not thrown: see the header note.
+      summary.stale = true;
+      summary.error = String(err).slice(0, 200);
+      return summary;
+    }
   }
 
   const existing = await readNexusCache(env);
@@ -206,8 +386,8 @@ export async function refreshNexusCache(env, { fetchImpl = fetch, nowIso } = {})
   }
   summary.tagged = incoming.size;
 
-  // Locations whose images we serve but which are not tagged, so the tagged
-  // query said nothing about them.
+  // Mods with a pin but no NCZoning tag, which the tagged query says nothing
+  // about. DISTINCT, because one mod can supply two locations.
   const { results: locRows } = await env.DB.prepare(
     'SELECT DISTINCT nexus_id FROM locations WHERE nexus_id IS NOT NULL',
   ).all();

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runRefresh } from '../src/refresh.js';
 import { KEYS } from '../src/store.js';
+import { sqliteD1 } from '../test-support/d1-sqlite.mjs';
 
 // Minimal in-memory KV: get(key, 'json') + put(key, string). `_putCount` exists
 // because KV writes are the scarce resource here (1,000/day per ACCOUNT), so
@@ -21,6 +22,14 @@ function fakeKV(initial = {}) {
     _putCount: () => puts,
   };
 }
+
+// Production binds D1 in every environment, including the one still building
+// from mods.json: the cron sweeps `nexus_cache` either way, and archive
+// listings persist there rather than in KV. An env without DB is a separate
+// case, asserted in refresh-d1.test.js.
+const newEnv = (over = {}) => ({
+  DATASET: fakeKV(), DB: sqliteD1(), SITE_ORIGIN: 'https://x', ...over,
+});
 
 const TAGS = { apartment: 'a place', corpo: 'suits' };
 const EXCLUDED = { 777: 'mistagged' };
@@ -114,7 +123,7 @@ function fakeFetch({ failNexus = false, failMods = false, discordSink, archiveCa
 }
 
 test('first run writes the full dataset (changed=true)', async () => {
-  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const env = newEnv();
   const r = await runRefresh(env, fakeFetch());
   assert.equal(r.changed, true);
   assert.ok(r.version);
@@ -130,15 +139,30 @@ test('first run writes the full dataset (changed=true)', async () => {
 });
 
 test('manual-mod images are backfilled into full via modsByUid', async () => {
-  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const env = newEnv();
   await runRefresh(env, fakeFetch());
   const full = await env.DATASET.get(KEYS.full, 'json');
   assert.equal(full.m1.thumbnail_url, 'tm'); // manual mod 12345, not NCZoning-tagged
   assert.equal(full.m1.updated_at, '2026-07-08');
 });
 
+test('the tagged query is fetched once per tick, not once per consumer', async () => {
+  // The sweep and the dataset build both need the NCZoning tag set. Fetching it
+  // twice would double the tick's most expensive Nexus call for nothing, and
+  // would let the two see different answers if a mod were tagged in between.
+  const env = newEnv();
+  let tagged = 0;
+  const counting = (inner) => async (url, init) => {
+    if (String(url).includes('api.nexusmods.com')
+      && !JSON.parse(init.body).query.includes('modsByUid')) tagged += 1;
+    return inner(url, init);
+  };
+  await runRefresh(env, counting(fakeFetch()));
+  assert.equal(tagged, 1);
+});
+
 test('unchanged content on the second run skips the content write (changed=false)', async () => {
-  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const env = newEnv();
   await runRefresh(env, fakeFetch());
   const before = (await env.DATASET.get(KEYS.meta, 'json')).generated_at;
   const r2 = await runRefresh(env, fakeFetch());
@@ -149,7 +173,7 @@ test('unchanged content on the second run skips the content write (changed=false
 });
 
 test('an unchanged cycle advances the heartbeat once the interval has elapsed', async () => {
-  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const env = newEnv();
   await runRefresh(env, fakeFetch());
   const m1 = await env.DATASET.get(KEYS.meta, 'json');
   assert.ok(m1.last_refresh_at, 'first run stamps a heartbeat');
@@ -172,7 +196,7 @@ test('an unchanged cycle inside the heartbeat interval writes NOTHING', async ()
   // The write that caused the free-tier alert: the heartbeat bypasses the
   // content-hash gate, so writing it every tick costs 288 writes/day/env against
   // a 1,000/day ACCOUNT cap. Rate-limiting it must make an idle tick cost zero.
-  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const env = newEnv();
   await runRefresh(env, fakeFetch());          // seeds; stamps the heartbeat "now"
   const before = await env.DATASET.get(KEYS.meta, 'json');
   const writesAfterSeed = env.DATASET._putCount();
@@ -191,7 +215,7 @@ test('a missing last_refresh_at is treated as due (no permanent suppression)', a
   // NaN, and every comparison against NaN is false — so a naive `elapsed >= X`
   // guard would suppress the heartbeat forever and the monitor would read the
   // Worker as wedged. It must fall through to "write it".
-  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const env = newEnv();
   await runRefresh(env, fakeFetch());
   const seeded = await env.DATASET.get(KEYS.meta, 'json');
   delete seeded.last_refresh_at;
@@ -204,7 +228,7 @@ test('a missing last_refresh_at is treated as due (no permanent suppression)', a
 });
 
 test('a failed refresh still advances the heartbeat (cron ran; Nexus did not answer)', async () => {
-  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const env = newEnv();
   await runRefresh(env, fakeFetch()); // seed good
   const seeded = await env.DATASET.get(KEYS.meta, 'json');
   await env.DATASET.put(KEYS.meta, JSON.stringify({ ...seeded, last_refresh_at: '2000-01-01T00:00:00.000Z' }));
@@ -215,11 +239,8 @@ test('a failed refresh still advances the heartbeat (cron ran; Nexus did not ans
 });
 
 test('Nexus failure keeps last-known-good and flags stale + alerts Discord', async () => {
-  const env = {
-    DATASET: fakeKV(), SITE_ORIGIN: 'https://x',
-    // Dedicated alerts channel (preferred over the legacy DISCORD_WEBHOOK_URL).
-    NCZ_ALERTS_DISCORD_WEBHOOK_URL: 'https://discord/webhook',
-  };
+  // Dedicated alerts channel (preferred over the legacy DISCORD_WEBHOOK_URL).
+  const env = newEnv({ NCZ_ALERTS_DISCORD_WEBHOOK_URL: 'https://discord/webhook' });
   await runRefresh(env, fakeFetch()); // seed good data
   const goodFull = await env.DATASET.get(KEYS.full, 'json');
 
@@ -237,7 +258,7 @@ test('Nexus failure keeps last-known-good and flags stale + alerts Discord', asy
 });
 
 test('failure with no prior dataset returns stale with null version, no crash', async () => {
-  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const env = newEnv();
   const r = await runRefresh(env, fakeFetch({ failMods: true }));
   assert.equal(r.stale, true);
   assert.equal(r.version, null);
@@ -245,7 +266,7 @@ test('failure with no prior dataset returns stale with null version, no crash', 
 });
 
 test('recovery after a stale cycle rewrites and clears the stale flag', async () => {
-  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const env = newEnv();
   await runRefresh(env, fakeFetch());
   await runRefresh(env, fakeFetch({ failNexus: true }));
   assert.equal((await env.DATASET.get(KEYS.meta, 'json')).discovery_stale, true);
@@ -258,7 +279,7 @@ test('recovery after a stale cycle rewrites and clears the stale flag', async ()
 // ── Archive names (installed-mod detection) ─────────────────────────────────
 
 test('archive names are fetched and attached to every record', async () => {
-  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const env = newEnv();
   const archiveCalls = [];
   await runRefresh(env, fakeFetch({ archiveCalls }));
   const full = await env.DATASET.get(KEYS.full, 'json');
@@ -270,7 +291,7 @@ test('archive names are fetched and attached to every record', async () => {
 });
 
 test('archive cache is reused when updatedAt is unchanged (no refetch)', async () => {
-  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const env = newEnv();
   await runRefresh(env, fakeFetch()); // fills the cache
   const archiveCalls = [];
   await runRefresh(env, fakeFetch({ archiveCalls }));
@@ -278,7 +299,7 @@ test('archive cache is reused when updatedAt is unchanged (no refetch)', async (
 });
 
 test('archive fetch failure degrades to [] and never marks the dataset stale', async () => {
-  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const env = newEnv();
   const r = await runRefresh(env, fakeFetch({ failArchives: true }));
   assert.equal(r.stale, false); // archives are supplementary, not load-bearing
   assert.equal(r.changed, true);
@@ -316,7 +337,7 @@ test('archive refresh is budgeted per run and cold-fills over multiple runs', as
     throw new Error(`unexpected fetch: ${url}`);
   };
 
-  const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
+  const env = newEnv();
   const run1 = [];
   await runRefresh(env, impl(run1));
   const refreshed1 = run1.filter((c) => c === 'router').length;
@@ -334,10 +355,7 @@ test('archive refresh is budgeted per run and cold-fills over multiple runs', as
 });
 
 test('recovery posts a recovery alert exactly once (edge, not every cycle)', async () => {
-  const env = {
-    DATASET: fakeKV(), SITE_ORIGIN: 'https://x',
-    NCZ_ALERTS_DISCORD_WEBHOOK_URL: 'https://discord/webhook',
-  };
+  const env = newEnv({ NCZ_ALERTS_DISCORD_WEBHOOK_URL: 'https://discord/webhook' });
   const discordSink = [];
   await runRefresh(env, fakeFetch({ discordSink }));                  // seed good
   await runRefresh(env, fakeFetch({ failNexus: true, discordSink })); // fail → stale + alert

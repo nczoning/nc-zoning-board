@@ -19,5 +19,14 @@ ALTER TABLE nexus_cache ADD COLUMN name TEXT;
 -- a record first arrived and is being retired.
 ALTER TABLE nexus_cache ADD COLUMN nczoning_tagged INTEGER NOT NULL DEFAULT 0;
 
+-- The mod updated_at that the stored `archives` listing was fetched against.
+--
+-- `updated_at` alone cannot carry this. The sweep overwrites it as soon as
+-- Nexus reports a re-upload, while the previous version's file list is still in
+-- the row, so the two columns must be compared to decide a refetch. Without it,
+-- a mod deferred past the per-tick budget would be written with the new
+-- updated_at and never refetched.
+ALTER TABLE nexus_cache ADD COLUMN archives_at TEXT;
+
 -- Only the candidates query selects by this.
 CREATE INDEX idx_nexus_cache_tagged ON nexus_cache (nczoning_tagged);

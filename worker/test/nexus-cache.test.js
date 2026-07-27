@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { sqliteD1 } from '../test-support/d1-sqlite.mjs';
-import { refreshNexusCache, readNexusCache, readCandidates, diffRows } from '../src/nexus-cache.js';
+import {
+  refreshNexusCache, refreshArchives, readNexusCache, readNexusIndex,
+  readCandidates, diffRows,
+} from '../src/nexus-cache.js';
 
 // Real SQLite running the real migrations, so 0003 is exercised here rather
 // than asserted about. The harness also enforces D1's 100 bound parameter
@@ -169,6 +172,218 @@ test('a backfill that returns nothing is reported, not read as a clean sweep', a
   assert.equal(r.backfill_requested, 1);
   assert.equal(r.backfilled, 0);
   assert.equal(r.stale, true, 'a silent empty backfill must not report success');
+});
+
+// ------------------------------------------------------------- archives ---
+// The file listing behind installed-mod detection. Its own pass, because the
+// mods that need one are the records the dataset serves, which is not the
+// `locations` table while production still builds from mods.json.
+
+/** A fetch answering the two archive endpoints for any mod. */
+function fakeArchiveFetch({ fail = false, files = 1, calls = [] } = {}) {
+  const impl = async (url, init) => {
+    if (String(url).includes('api-router.nexusmods.com')) {
+      calls.push(`router:${JSON.parse(init.body).variables.modId}`);
+      if (fail) return { ok: false, status: 503 };
+      return {
+        ok: true,
+        async json() {
+          return { data: { modFiles: Array.from({ length: files }, (_, i) => ({ uri: `f${i}.7z`, category: 'MAIN' })) } };
+        },
+      };
+    }
+    if (String(url).includes('file-metadata.nexusmods.com')) {
+      // Deliberately not restricted to numeric ids: if this only answered for
+      // real mods, a test that a placeholder id is refused would pass because
+      // the stub declined it rather than because the code did.
+      const modId = String(url).match(/\/3333\/([^/]+)\//)[1];
+      calls.push(`file:${modId}`);
+      return {
+        ok: true,
+        async json() {
+          return { children: [{ name: 'archive', type: 'directory', children: [
+            { name: 'pc', type: 'directory', children: [
+              { name: 'mod', type: 'directory', children: [
+                { name: `mod_${modId}.archive`, type: 'file', path: `archive/pc/mod/mod_${modId}.archive` },
+              ] },
+            ] },
+          ] }] };
+        },
+      };
+    }
+    throw new Error(`unexpected fetch: ${url}`);
+  };
+  impl.calls = calls;
+  return impl;
+}
+
+const record = (nexusId, updatedAt = '2026-07-01T00:00:00.000Z') => ({
+  nexus_id: nexusId, updated_at: updatedAt,
+});
+
+test('a listing is fetched once and then reused until the mod re-uploads', async () => {
+  const env = { DB: sqliteD1(), DATASET: null };
+  const index = await readNexusIndex(env);
+  const calls = [];
+
+  const first = await refreshArchives(env, fakeArchiveFetch({ calls }), {
+    records: [record('100')], index, nowIso: NOW,
+  });
+  assert.equal(first.fetched, 1);
+  assert.equal(first.written, 1);
+  assert.deepEqual(index.get('100').archives, ['mod_100.archive']);
+
+  // Same updated_at: nothing due, so no subrequest and no row write. This is
+  // the whole reason archives are affordable on a 5-minute cron.
+  const stored = await readNexusIndex(env);
+  const second = await refreshArchives(env, fakeArchiveFetch({ calls: [] }), {
+    records: [record('100')], index: stored, nowIso: NOW,
+  });
+  assert.equal(second.fetched, 0);
+  assert.equal(second.written, 0);
+  assert.deepEqual(stored.get('100').archives, ['mod_100.archive']);
+
+  // A re-upload moves updated_at, which is the refetch signal.
+  const third = await refreshArchives(env, fakeArchiveFetch({ calls: [] }), {
+    records: [record('100', '2026-07-20T00:00:00.000Z')], index: stored, nowIso: NOW,
+  });
+  assert.equal(third.fetched, 1, 'a re-upload must refetch, or the listing goes stale forever');
+  assert.equal(
+    env.DB.one('SELECT archives_at FROM nexus_cache WHERE nexus_id = ?', '100').archives_at,
+    '2026-07-20T00:00:00.000Z',
+  );
+});
+
+test('a mod that ships no .archive is not refetched every tick', async () => {
+  // `archives: []` is a real answer, so the array alone cannot say whether the
+  // listing has ever been read. Without archives_known this mod would be due on
+  // every single tick, at two subrequests a time, forever.
+  const env = { DB: sqliteD1(), DATASET: null };
+  const empty = fakeArchiveFetch({ files: 0 });
+  const index = await readNexusIndex(env);
+  await refreshArchives(env, empty, { records: [record('100')], index, nowIso: NOW });
+  assert.deepEqual(index.get('100').archives, []);
+
+  const calls = [];
+  const again = await refreshArchives(env, fakeArchiveFetch({ calls }), {
+    records: [record('100')], index: await readNexusIndex(env), nowIso: NOW,
+  });
+  assert.equal(again.fetched, 0);
+  assert.equal(calls.length, 0);
+});
+
+test('a transient failure stores nothing, so the next tick retries', async () => {
+  const env = { DB: sqliteD1(), DATASET: null };
+  const index = await readNexusIndex(env);
+  const failed = await refreshArchives(env, fakeArchiveFetch({ fail: true }), {
+    records: [record('100')], index, nowIso: NOW,
+  });
+  assert.equal(failed.fetched, 0);
+  assert.equal(failed.written, 0, 'caching a failed read would make it permanent');
+  assert.equal(failed.pending, 1);
+
+  const ok = await refreshArchives(env, fakeArchiveFetch(), {
+    records: [record('100')], index: await readNexusIndex(env), nowIso: NOW,
+  });
+  assert.equal(ok.fetched, 1);
+});
+
+test('the KV blob is carried over instead of refetched, and only while it is current', async () => {
+  // scripts/archive-seeds.json holds hand-built listings for mods whose Nexus
+  // file preview is broken. A refetch replaces those with nothing, so the
+  // carry-over is not just a cold-start optimisation.
+  const env = {
+    DB: sqliteD1(),
+    DATASET: {
+      async get() {
+        return {
+          100: { updatedAt: '2026-07-01T00:00:00.000Z', archives: ['hand_built.archive'] },
+          200: { updatedAt: '2020-01-01T00:00:00.000Z', archives: ['ancient.archive'] },
+        };
+      },
+    },
+  };
+  const calls = [];
+  const r = await refreshArchives(env, fakeArchiveFetch({ calls }), {
+    records: [record('100'), record('200')], index: await readNexusIndex(env), nowIso: NOW,
+  });
+
+  assert.equal(r.seeded, 1);
+  assert.equal(calls.some((c) => c.startsWith('router:100')), false,
+    'a current seed must not be refetched, or the hand-built listing is lost');
+  assert.equal(r.fetched, 1, 'the stale seed is refetched rather than trusted');
+  assert.deepEqual(
+    JSON.parse(env.DB.one('SELECT archives FROM nexus_cache WHERE nexus_id = ?', '100').archives),
+    ['hand_built.archive'],
+  );
+  assert.deepEqual(
+    JSON.parse(env.DB.one('SELECT archives FROM nexus_cache WHERE nexus_id = ?', '200').archives),
+    ['mod_200.archive'],
+  );
+});
+
+test('archive work is budgeted per tick and cold-fills across ticks', async () => {
+  const env = { DB: sqliteD1(), DATASET: null };
+  const records = Array.from({ length: 40 }, (_, i) => record(String(1000 + i)));
+
+  const first = await refreshArchives(env, fakeArchiveFetch(), {
+    records, index: await readNexusIndex(env), nowIso: NOW,
+  });
+  assert.ok(first.fetched < 40, `fetched ${first.fetched}: the budget must cap a cold fill`);
+  assert.equal(first.pending, 40 - first.fetched);
+
+  let done = first.fetched;
+  for (let tick = 0; tick < 6 && done < 40; tick += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    done += (await refreshArchives(env, fakeArchiveFetch(), {
+      records, index: await readNexusIndex(env), nowIso: NOW,
+    })).fetched;
+  }
+  assert.equal(done, 40, 'the fill must complete, one budget at a time');
+
+  const settled = await refreshArchives(env, fakeArchiveFetch(), {
+    records, index: await readNexusIndex(env), nowIso: NOW,
+  });
+  assert.equal(settled.fetched, 0);
+  assert.equal(settled.written, 0, 'steady state costs no D1 write at all');
+});
+
+test('an archives-only write leaves the NCZoning tag flag alone', async () => {
+  // writeRows sets nczoning_tagged unconditionally, so an archive write that
+  // did not carry the flag would silently drop the mod out of candidates.
+  const env = { DB: sqliteD1(), DATASET: null };
+  await refreshNexusCache(env, { fetchImpl: fakeNexus({ tagged: [node('100')] }), nowIso: NOW });
+  assert.deepEqual((await readCandidates(env)).map((c) => c.nexus_id), ['100']);
+
+  await refreshArchives(env, fakeArchiveFetch(), {
+    records: [record('100')], index: await readNexusIndex(env), nowIso: NOW,
+  });
+  assert.deepEqual((await readCandidates(env)).map((c) => c.nexus_id), ['100'],
+    'the mod is still tagged, and still not a location');
+});
+
+test('placeholder nexus ids are never written as rows', async () => {
+  // Nexus is stubbed to answer for these ids, so the only thing that can keep
+  // them out of the table is the code refusing to ask.
+  const env = { DB: sqliteD1({ locations: [location('l1', 'WIP'), location('l2', 'Dummy')] }) };
+  const calls = [];
+  await refreshNexusCache(env, { fetchImpl: fakeNexus({ tagged: [] }), nowIso: NOW });
+  await refreshArchives(env, fakeArchiveFetch({ calls }), {
+    records: [record('WIP'), record('Dummy')], index: await readNexusIndex(env), nowIso: NOW,
+  });
+  assert.deepEqual(calls, [], 'a placeholder is not a mod id and must not be looked up');
+  assert.equal((await readNexusCache(env)).size, 0,
+    'WIP and Dummy are placeholders, not mods; a row for one could be joined to');
+});
+
+test('readNexusIndex survives a malformed archives cell', async () => {
+  const env = { DB: sqliteD1() };
+  env.DB._db.prepare(
+    'INSERT INTO nexus_cache (nexus_id, archives, fetched_at) VALUES (?, ?, ?)',
+  ).run('100', 'not json', NOW);
+  const index = await readNexusIndex(env);
+  assert.deepEqual(index.get('100').archives, [],
+    'one unreadable cell must not take the whole refresh into last-known-good');
 });
 
 test('a location that is not tagged still gets its images backfilled', async () => {

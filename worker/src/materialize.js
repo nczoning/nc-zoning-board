@@ -18,8 +18,8 @@
  * The record key ORDER below is load-bearing: /v1 responses are compared
  * byte-for-byte at the Phase 1 gate, and JSON.stringify emits insertion order.
  * It mirrors merge.js:141-157 deliberately, and the parity diff is what proves
- * the mirror is faithful. `archives` is appended by the caller (as refresh.js
- * does today), so it is absent here by design, not by omission.
+ * the mirror is faithful. `archives` is appended afterwards by attachArchives
+ * below, so it is absent from the literal by design, not by omission.
  */
 
 import { parseNcZoningBlock } from './parse.js';
@@ -80,12 +80,15 @@ function resolveTags(row, locationTags) {
  * @param {object} input.tagsDict      data/tags.json, for block validation
  * @param {Array}  input.nexusNodes    raw nodes from the NCZoning GraphQL query
  * @param {Array}  input.districts     data/subdistricts.json `districts[]`
- * @param {object} [input.manualThumbs] modsByUid image/updatedAt, keyed by nexus_id
+ * @param {Map}    [input.nexusIndex]  readNexusIndex(): the Nexus-derived fields
+ *   keyed by nexus_id. One lookup, not two: under D1 the tagged nodes and the
+ *   modsByUid backfill have both already been folded into `nexus_cache` by the
+ *   sweep, so a second in-memory channel would only be a way for them to disagree.
  * @param {number} [input.nowMs]       clock the recently_updated bool is computed against
  * @returns {{full: Object<string, object>, meta: object}}
  */
 export function materializeFromD1({
-  rows, dismissed, tagsDict, nexusNodes, districts, manualThumbs = {},
+  rows, dismissed, tagsDict, nexusNodes, districts, nexusIndex = new Map(),
   locationTags = null, nowMs = Date.now(),
 }) {
   const validTagNames = new Set(Object.keys(tagsDict));
@@ -103,20 +106,14 @@ export function materializeFromD1({
       .filter((id) => id && !['wip', 'dummy'].includes(id.toLowerCase())),
   );
 
-  const nexusThumbs = {};
   const skipped = [];
 
   for (const node of nexusNodes || []) {
     const nexusId = String(node.modId);
     if (dismissedIds.has(nexusId)) continue;
-    if (existingNexusIds.has(nexusId)) {
-      nexusThumbs[nexusId] = {
-        pictureUrl: node.pictureUrl || null,
-        thumbnailUrl: node.thumbnailUrl || null,
-        updatedAt: node.updatedAt || null,
-      };
-      continue;
-    }
+    // Already on the map. Its images come from the index like every other
+    // record's, so the node has nothing left to contribute here.
+    if (existingNexusIds.has(nexusId)) continue;
     // Not a location and not dismissed: a candidate. Surfaced on /v1/meta as
     // `skipped` exactly as before when it has no valid block. A mod WITH a
     // valid block is also not published here -- see the header note.
@@ -133,7 +130,7 @@ export function materializeFromD1({
 
   for (const entry of all) {
     const { district, subdistrict } = assignDistrict(entry.coordinates, districts);
-    const t = manualThumbs[String(entry.nexus_id)] || nexusThumbs[String(entry.nexus_id)] || null;
+    const t = nexusIndex.get(String(entry.nexus_id)) || null;
     const thumbs = {
       thumbnail_url: t?.thumbnailUrl ?? null,
       picture_url: t?.pictureUrl ?? null,
@@ -162,5 +159,21 @@ export function materializeFromD1({
     };
   }
 
-  return { full, meta: { skipped, nexus_thumbs: nexusThumbs } };
+  return { full, meta: { skipped } };
+}
+
+/**
+ * Attach each record's `.archive` file names, in place and last, matching the
+ * position refresh.js has always appended them in. Always an array: `[]` means
+ * unknown or not yet swept, never "ships no archives", and the in-game consumer
+ * reads it that way.
+ *
+ * Pure, and shared by the cron and the parity gate so the gate cannot pass
+ * against a channel the cron does not use.
+ */
+export function attachArchives(full, nexusIndex = new Map()) {
+  for (const rec of Object.values(full)) {
+    rec.archives = nexusIndex.get(String(rec.nexus_id))?.archives ?? [];
+  }
+  return full;
 }
