@@ -11,43 +11,34 @@
  * ---------------------------------------------------------------------------
  * WHAT THIS CHECK CAN AND CANNOT CATCH -- read before trusting a green run.
  *
- * The live API is the still-running reference system. 13 of the 18 served
- * fields are rebuilt from D1 and compared; the other 5 are Nexus-derived and
- * are NOT D1's job until Phase 2, so they are fed in from the live record:
+ * The live API is the still-running reference system. EVERY served field is now
+ * rebuilt from D1 and compared; nothing is fed in from the live record:
  *
- *   REBUILT FROM D1   id, name, nexus_id, coordinates, yaw, category, tags,
- *                     authors, source, description, credits  (D1 columns)
- *                     district, subdistrict                  (recomputed from
- *                                                             D1's OWN x/y/z,
- *                                                             which is what
- *                                                             catches a mangled
- *                                                             coordinate)
- *                     recently_updated                       (recomputed from
- *                                                             updated_at against
- *                                                             the envelope's
- *                                                             generated_at clock)
- *   FED IN FROM LIVE  thumbnail_url, picture_url, updated_at  (Nexus images,
- *                                                             via the same
- *                                                             manualThumbs
- *                                                             channel the cron
- *                                                             uses)
- *                     archives                                (KV-cached Nexus
- *                                                             file listing)
+ *   FROM `locations`     id, name, nexus_id, coordinates, yaw, category, tags,
+ *                        authors, source, description, credits
+ *   FROM `nexus_cache`   thumbnail_url, picture_url, updated_at, archives
+ *   RECOMPUTED           district, subdistrict   (from D1's OWN x/y/z, which is
+ *                                                 what catches a mangled
+ *                                                 coordinate)
+ *                        recently_updated        (from nexus_cache.updated_at
+ *                                                 against the envelope's
+ *                                                 generated_at clock)
  *
  * A field in NEITHER set fails the run (see assertKeyCoverage). That is what
  * stops a newly added /v1 field from silently slipping past the gate as
  * "not compared".
  *
- * The 5 fed-in fields are therefore unverified BY THIS CHECK, by construction
- * and on purpose -- Phase 2 moves them into `nexus_cache` and they become
- * D1's problem then.
+ * Feeding a field in from the live record makes the gate agree with itself for
+ * that field: an image the cron resolves wrongly still matches, because both
+ * sides came from the same place. So a field belongs in FED_IN_KEYS only while
+ * D1 genuinely cannot answer for it, and the set is empty.
  * ---------------------------------------------------------------------------
  */
 
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { materializeFromD1 } from '../src/materialize.js';
+import { materializeFromD1, attachArchives } from '../src/materialize.js';
 
 const WORKER_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 // Wrangler's JS entrypoint, not `npx`: node >=20 refuses to spawn a .cmd shim
@@ -61,8 +52,11 @@ const ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || 'b9937d8d595fad7de8d1549
 const REBUILT_KEYS = new Set([
   'id', 'name', 'nexus_id', 'coordinates', 'yaw', 'category', 'tags', 'authors',
   'source', 'description', 'credits', 'district', 'subdistrict', 'recently_updated',
+  'thumbnail_url', 'picture_url', 'updated_at', 'archives',
 ]);
-const FED_IN_KEYS = new Set(['thumbnail_url', 'picture_url', 'updated_at', 'archives']);
+// Empty on purpose, and kept rather than deleted: it is the list of fields this
+// gate does not actually check, and it should stay visible and stay at zero.
+const FED_IN_KEYS = new Set();
 
 const fail = (msg) => { console.error(`\n❌ ${msg}`); process.exit(1); };
 
@@ -107,26 +101,29 @@ async function getJson(url) {
 }
 
 /**
- * Rebuild the manualThumbs channel from the live records. Keyed by nexus_id,
- * which WIP/Dummy entries share -- so assert that colliding keys agree rather
- * than letting the last one win silently.
+ * readNexusIndex()'s output, built from a `nexus_cache` dump rather than a live
+ * binding. Deliberately a separate implementation of the same shape: importing
+ * the Worker's version would need a D1 binding, and this script talks to
+ * wrangler.
  */
-function thumbsFromLive(records) {
-  const thumbs = {};
-  for (const r of records) {
-    const key = String(r.nexus_id);
-    const value = {
-      thumbnailUrl: r.thumbnail_url,
-      pictureUrl: r.picture_url,
-      updatedAt: r.updated_at,
-    };
-    const prev = thumbs[key];
-    if (prev && JSON.stringify(prev) !== JSON.stringify(value)) {
-      throw new Error(`nexus_id ${key} appears twice with different images -- cannot key thumbs by it`);
+function indexFromRows(rows) {
+  const index = new Map();
+  for (const r of rows) {
+    let archives = [];
+    if (typeof r.archives === 'string') {
+      try {
+        const parsed = JSON.parse(r.archives);
+        if (Array.isArray(parsed)) archives = parsed;
+      } catch { /* a malformed cell reads as no listing, exactly as the Worker does */ }
     }
-    thumbs[key] = value;
+    index.set(String(r.nexus_id), {
+      thumbnailUrl: r.thumbnail_url ?? null,
+      pictureUrl: r.picture_url ?? null,
+      updatedAt: r.updated_at ?? null,
+      archives,
+    });
   }
-  return thumbs;
+  return index;
 }
 
 /** Every served key must be classified, or the gate has a blind spot. */
@@ -145,27 +142,23 @@ function assertKeyCoverage(records) {
   }
 }
 
-/** Attach the fed-in Nexus fields, in the position refresh.js appends them. */
-function withArchives(record, liveRecord) {
-  return { ...record, archives: liveRecord.archives };
-}
-
-function buildFromRows(rows, dismissedIds, tagsDict, districts, liveRecords, nowMs, locationTags) {
+function buildFromRows(rows, dismissedIds, tagsDict, districts, nexusIndex, nowMs, locationTags) {
   const { full } = materializeFromD1({
     rows,
     dismissed: dismissedIds,
     tagsDict,
-    nexusNodes: [], // nothing auto-publishes; images arrive via manualThumbs
+    nexusNodes: [], // nothing auto-publishes; images arrive via nexusIndex
     districts,
-    manualThumbs: thumbsFromLive(liveRecords),
+    nexusIndex,
     // The join. Without it materializeFromD1 falls back to the legacy
     // locations.tags column, so the gate would pass while testing the path
     // production no longer takes.
     locationTags,
     nowMs,
   });
-  const byId = new Map(liveRecords.map((r) => [r.id, r]));
-  return Object.values(full).map((rec) => withArchives(rec, byId.get(rec.id) ?? {}));
+  // Appended last, in the position the cron appends it, because the comparison
+  // below is on bytes and JSON.stringify emits insertion order.
+  return Object.values(attachArchives(full, nexusIndex));
 }
 
 async function main() {
@@ -188,6 +181,10 @@ async function main() {
 
   const rows = query(db, 'SELECT * FROM locations ORDER BY id');
   const dismissedRows = query(db, 'SELECT nexus_id FROM dismissed_candidates');
+  const nexusRows = query(
+    db,
+    'SELECT nexus_id, updated_at, thumbnail_url, picture_url, archives FROM nexus_cache',
+  );
 
   // A truncated result set is the failure mode that looks like success, so
   // compare the rows returned against a count the database computed itself.
@@ -196,7 +193,16 @@ async function main() {
     fail(`D1 returned ${rows.length} rows but COUNT(*) is ${n} -- the result set was truncated`);
   }
   console.log(`D1: ${rows.length} locations (COUNT(*) agrees), ${dismissedRows.length} dismissed`);
-  console.log(`live: ${liveRecords.length} records, generated_at ${envelope.generated_at}\n`);
+  console.log(`live: ${liveRecords.length} records, generated_at ${envelope.generated_at}`);
+
+  // An unswept nexus_cache would rebuild every image as null and every listing
+  // as [], which is a difference in ~300 records reported as ~300 mismatches.
+  // Say what it is instead: this database has not been swept yet.
+  const withArchivesCount = nexusRows.filter((r) => r.archives != null).length;
+  console.log(`nexus_cache: ${nexusRows.length} mods, ${withArchivesCount} with a file listing\n`);
+  if (nexusRows.length === 0) {
+    fail('nexus_cache is empty -- deploy the sweep and let one cron tick run before comparing.');
+  }
 
   const dismissedIds = new Set(dismissedRows.map((r) => String(r.nexus_id)));
 
@@ -206,7 +212,8 @@ async function main() {
     locationTags.get(r.location_id).push(r.tag_slug);
   }
 
-  const candidate = buildFromRows(rows, dismissedIds, tagsDict, subdistricts.districts, liveRecords, nowMs, locationTags);
+  const nexusIndex = indexFromRows(nexusRows);
+  const candidate = buildFromRows(rows, dismissedIds, tagsDict, subdistricts.districts, nexusIndex, nowMs, locationTags);
 
   // --- ID assertion (the deep-link contract) ----------------------------
   const liveIds = new Set(liveRecords.map((r) => r.id));
@@ -247,19 +254,36 @@ async function main() {
   // A green result above is worthless unless this comparison can go red. Prove
   // it on the same run, against the same code path, with the same data.
   console.log('\nnegative control (the check must FAIL on each of these):');
+  // Two families: the location columns, and the Nexus-derived fields. The
+  // second family only detects anything while those fields are rebuilt rather
+  // than fed in, so these four controls are what keeps FED_IN_KEYS empty.
   const controls = [
-    ['id changed', (r) => ({ ...r, id: `${r.id}-x` })],
-    ['name changed', (r) => ({ ...r, name: `${r.name} ` })],
-    ['coordinate nudged', (r) => ({ ...r, x: r.x + 0.0001 })],
-    ['z dropped to NULL', (r) => ({ ...r, z: null })],
-    ['tag removed', (r) => ({ ...r, tags: JSON.stringify(JSON.parse(r.tags).slice(1)) })],
+    ['id changed', (r) => ({ ...r, id: `${r.id}-x` }), null],
+    ['name changed', (r) => ({ ...r, name: `${r.name} ` }), null],
+    ['coordinate nudged', (r) => ({ ...r, x: r.x + 0.0001 }), null],
+    ['z dropped to NULL', (r) => ({ ...r, z: null }), null],
+    ['tag removed', (r) => ({ ...r, tags: JSON.stringify(JSON.parse(r.tags).slice(1)) }), null],
+    ['thumbnail_url changed', null, (e) => ({ ...e, thumbnailUrl: `${e.thumbnailUrl}?x` })],
+    ['picture_url dropped', null, (e) => ({ ...e, pictureUrl: null })],
+    ['updated_at moved', null, (e) => ({ ...e, updatedAt: '2020-01-01T00:00:00.000Z' })],
+    ['archive name changed', null, (e) => ({ ...e, archives: [...e.archives, 'ghost.archive'] })],
   ];
   let controlsPassed = 0;
-  for (const [label, mutate] of controls) {
-    const mutated = rows.map((r, i) => (i === 0 ? mutate(r) : r));
+  for (const [label, mutateRow, mutateIndex] of controls) {
+    const mutatedRows = mutateRow ? rows.map((r, i) => (i === 0 ? mutateRow(r) : r)) : rows;
+    let mutatedIndex = nexusIndex;
+    if (mutateIndex) {
+      // The first record's mod, so a one-record mutation stays a one-record
+      // difference even though the index is keyed by mod rather than location.
+      const key = String(rows[0].nexus_id);
+      mutatedIndex = new Map(nexusIndex);
+      const entry = mutatedIndex.get(key);
+      if (!entry) fail(`negative control cannot run: no nexus_cache row for ${key}`);
+      mutatedIndex.set(key, mutateIndex(entry));
+    }
     let differs;
     try {
-      const out = buildFromRows(mutated, dismissedIds, tagsDict, subdistricts.districts, liveRecords, nowMs, locationTags);
+      const out = buildFromRows(mutatedRows, dismissedIds, tagsDict, subdistricts.districts, mutatedIndex, nowMs, locationTags);
       differs = !compare(out, liveRecords);
     } catch {
       differs = true; // a throw is also a detection

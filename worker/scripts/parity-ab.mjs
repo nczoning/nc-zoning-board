@@ -112,6 +112,16 @@ async function main() {
   const live = envelope.data;
   const districts = subdistricts.districts;
   const manualThumbs = thumbsFromLive(live);
+  // The D1 builder reads images from the nexus_cache index rather than the
+  // modsByUid channel. Deriving it from the same thumbs keeps this an A/B of
+  // the two BUILDERS: feeding them different image data would make every
+  // difference ambiguous between "the builders disagree" and "the inputs did".
+  const nexusIndex = new Map(Object.entries(manualThumbs).map(([id, t]) => [id, {
+    thumbnailUrl: t.thumbnailUrl ?? null,
+    pictureUrl: t.pictureUrl ?? null,
+    updatedAt: t.updatedAt ?? null,
+    archives: [],
+  }]));
   const manualMods = readManualMods();
   const rows = query(db, 'SELECT * FROM locations ORDER BY id');
   const dismissed = new Set(query(db, 'SELECT nexus_id FROM dismissed_candidates').map((r) => String(r.nexus_id)));
@@ -173,7 +183,7 @@ async function main() {
   for (const days of offsets) {
     const nowMs = base + days * day;
     const a = buildDataset({ manualMods, tagsDict, excluded, nexusNodes, districts, manualThumbs, nowMs }).full;
-    const b = materializeFromD1({ rows, dismissed, tagsDict, nexusNodes, districts, manualThumbs, locationTags, nowMs }).full;
+    const b = materializeFromD1({ rows, dismissed, tagsDict, nexusNodes, districts, nexusIndex, locationTags, nowMs }).full;
     const d = diff(a, b);
     const recent = Object.values(a).filter((r) => r.recently_updated).length;
     const label = `clock ${days >= 0 ? '+' : ''}${days}d`.padEnd(12);
