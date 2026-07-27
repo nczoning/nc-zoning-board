@@ -164,11 +164,19 @@ export async function handleAdmin(request, env, ctx) {
 
   // ---- quota: dataset introspection --------------------------------------
   //
-  // TEMPORARY. Confirms the GraphQL dataset field names for the real quota
-  // query; removed once /admin/quota is built against them. Guessing the names
-  // is the trap this avoids — the `*AdaptiveGroups` convention makes a wrong
-  // guess look plausible and return an EMPTY result rather than an error, and
-  // "no rows" reads exactly like "no usage today".
+  // Kept, not scaffolding. Cloudflare's analytics schema is 213 datasets whose
+  // names follow a convention closely enough that a WRONG name looks right and
+  // returns an EMPTY result rather than an error — and "no rows" reads exactly
+  // like "no usage today". Every dataset this Worker queries was confirmed
+  // here first, and the next one (R2, at cleanup) should be too.
+  //
+  // It nearly lied on its first run: `__type(name: "Account")` does not exist —
+  // the type is `account`, reached via `viewer` — and GraphQL answered 200 with
+  // `__type: null`, which a `?? []` turned into "zero datasets found".
+  //
+  // Read-only, collaborator-gated, and it exposes only schema field names.
+  //   GET /admin/quota/datasets            -> every dataset on the account type
+  //   GET /admin/quota/datasets?type=NAME  -> one type's fields and inputFields
   if (url.pathname === '/admin/quota/datasets' && method === 'GET') {
     const typeName = url.searchParams.get('type');
     const result = typeName

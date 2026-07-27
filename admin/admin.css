@@ -521,7 +521,13 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 .breakdown-row .k { color: var(--text-subtle); }
 .breakdown-row .n { color: var(--white); font-variant-numeric: tabular-nums; }
 
+/* display:block is load-bearing. As a <span> this is inline by default, and an
+   inline box ignores height and collapses to its content width — it only looked
+   right inside .breakdown-row because being a grid item blockified it. In
+   .quota-row it rendered as a thin vertical sliver. */
 .bar {
+    display: block;
+    width: 100%;
     height: var(--space-sm);
     background: var(--black-30);
     border-radius: var(--ui-radius-xs);
