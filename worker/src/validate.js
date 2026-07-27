@@ -22,6 +22,10 @@
  *   file format.
  */
 
+import {
+  WORLD_MIN_X, WORLD_MAX_X, WORLD_MIN_Y, WORLD_MAX_Y, COORD_Z_MIN, COORD_Z_MAX,
+} from './config.js';
+
 export const CATEGORIES = ['location-overhaul', 'new-location', 'other'];
 export const STATUSES = ['published', 'hidden', 'draft'];
 export const DESCRIPTION_MAX = 500;
@@ -93,6 +97,21 @@ export function validateLocationInput(payload, { tagNames, partial = false } = {
       // Number.isFinite matters: JSON.parse yields NaN/Infinity for neither,
       // but a client can still send them as strings that coerce badly later.
       err('coordinates must all be finite numbers');
+    } else {
+      // Range, which until Phase 5 lived only in the browser. That was survivable
+      // while every write was a collaborator using the dashboard; it stops being
+      // survivable when /submissions accepts anonymous writes, because the rule
+      // would sit entirely in the layer the submitter controls.
+      const [x, y, z] = c;
+      if (x < WORLD_MIN_X || x > WORLD_MAX_X) {
+        err(`coordinate X must be between ${WORLD_MIN_X} and ${WORLD_MAX_X}`);
+      }
+      if (y < WORLD_MIN_Y || y > WORLD_MAX_Y) {
+        err(`coordinate Y must be between ${WORLD_MIN_Y} and ${WORLD_MAX_Y}`);
+      }
+      if (c.length === 3 && (z < COORD_Z_MIN || z > COORD_Z_MAX)) {
+        err(`coordinate Z must be between ${COORD_Z_MIN} and ${COORD_Z_MAX}`);
+      }
     }
   }
 
