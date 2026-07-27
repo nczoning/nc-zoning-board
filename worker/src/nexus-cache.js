@@ -1,70 +1,50 @@
 /**
- * nexus_cache: the Nexus mod index, refreshed from the cron.
+ * nexus_cache: the Nexus mod index, swept from the cron.
  *
- * Holds one row per mod we care about, which is the union of
- *   - every mod currently carrying the NCZoning tag (candidates), and
- *   - every location's numeric nexus_id (served images and update times).
+ * One row per mod, being the union of every NCZoning-tagged mod (the candidate
+ * pool) and every location's numeric nexus_id (served images and update times).
+ * Serves the four Nexus-derived `/v1` fields via a join on nexus_id, and backs
+ * the candidates list as a query rather than a live Nexus call on a public
+ * route.
  *
- * WHY THIS TABLE EARNS ITS KEEP
+ * ## Fetch every tick, write only what changed
  *
- * Before it, the four Nexus-derived served fields were fetched live on every
- * cron tick and resolved two different ways depending on `source`: auto records
- * carried their own images from the tagged query, manual ones came from a
- * separate modsByUid backfill (materialize.js:136, merge.js resolveThumbs).
- * One table collapses that to a single lookup, and it is what lets the
- * candidates list be a query instead of a live Nexus call on a public
- * unauthenticated route.
+ * D1's free tier allows 100k row-writes/day and the cron fires 288 times.
+ * Writing ~300 rows per tick is 86,400 writes/day, 86% of the cap before
+ * locations and audit rows. So a sweep writes only rows whose content differs
+ * from what is stored, and an unchanged tick costs nothing. Fetching is cheap
+ * either way: one GraphQL call for the whole tagged set plus batched modsByUid.
  *
- * THE WRITE BUDGET IS THE WHOLE DESIGN
+ * Same gate refresh.js applies to KV, and worth holding: the #849 heartbeat
+ * bypassed that gate and reinstated the per-tick cost it existed to remove
+ * (HEARTBEAT_MIN_INTERVAL_MS in config.js).
  *
- * D1's free tier allows 100k row-writes/day. The cron fires every 5 minutes,
- * so 288 times a day. Writing ~300 rows on every tick is 86,400 writes/day,
- * 86% of the cap, before locations writes and audit rows. That does not fit.
+ * Follows from the gate: **`fetched_at` is when the row last CHANGED**, not
+ * when it was last checked. A per-row checked-timestamp is the 86k writes being
+ * avoided. Sweep freshness is a dataset-level value.
  *
- * So: FETCH every tick (cheap: one GraphQL call for the whole tagged set, plus
- * batched modsByUid for the rest), but WRITE only rows whose content actually
- * changed. A tick where nothing changed on Nexus costs zero writes, and a mod's
- * name, images or file list change rarely.
+ * ## nexus_id is not unique across locations
  *
- * This is the same content-hash gate refresh.js already applies to KV, and the
- * reason to be strict about it is on the record: issue #849 added a liveness
- * heartbeat that deliberately bypassed that gate and reinstated the exact
- * per-tick write cost the gate existed to remove. HEARTBEAT_MIN_INTERVAL_MS in
- * config.js is the scar. This is the same mistake available at 86x the scale.
- *
- * Consequence, deliberately accepted: `fetched_at` means "when this row last
- * CHANGED", not "when we last checked". Storing a per-row checked-timestamp is
- * precisely the 86k writes being avoided. Sweep freshness is a dataset-level
- * value, not a per-row one.
- *
- * nexus_id IS NOT UNIQUE ACROSS LOCATIONS
- *
- * Measured 2026-07-27: 296 locations carry a numeric nexus_id and they use 295
- * distinct values. Mod 23896 ("Watson Tattoo Shops") supplies two locations,
- * Little China Pink Ink and Northside Tattoo & Body Mods, which is legitimate:
- * one mod can add two separate places, each deserving its own pin.
- *
- * So the join from here to `locations` is ONE-TO-MANY. Both locations read the
- * same images and the same upstream title, which is correct. Do not add a
+ * 296 locations carry a numeric nexus_id and use 295 distinct values: mod 23896
+ * supplies two separate tattoo shops. The join to `locations` is therefore
+ * ONE-TO-MANY, and both rows correctly read the same images. Do not add a
  * UNIQUE constraint on locations.nexus_id, and do not key a location lookup by
- * it.
+ * it (see #889).
  *
- * NAME IS NOT DERIVED FROM THIS TABLE, deliberately. 34 of 295 location names
- * differ from the Nexus title, and the differences are curation rather than
- * staleness: stripped version prefixes ("CP2.31 Cliffside Abode Player Home"),
- * stripped tool suffixes ("(World Builder)", "Worldbuilder"), stripped
- * marketing tails ("- REVOLUTION"), tidied whitespace. Serving `name` from
- * here would undo all of it. The stored title is for DETECTING a rename, by
- * comparing it against locations.name, not for replacing one.
+ * ## `name` is stored for comparison, never for display
  *
- * D1 BOUND PARAMETER LIMIT
+ * 34 of 295 location names differ from their Nexus title by curation rather
+ * than staleness, for example "CP2.31 Cliffside Abode Player Home" served as
+ * "Cliffside Abode Player Home". Serving this column would undo that. It exists
+ * so a rename can be detected by diffing it against locations.name.
  *
- * D1 allows exactly 100 bound parameters PER QUERY, measured, not documented
- * (learnings/d1-refuses-more-than-100-bound-parameters). Every write here goes
- * through DB.batch() as one statement per row, so each statement binds about
- * eight. Never assemble a single multi-row statement with one placeholder per
- * mod: at ~300 mods that throws on every call, and the browser reports it as a
- * CORS error rather than as the SQL error it is.
+ * ## D1 bound parameters
+ *
+ * The ceiling is 100 per query, measured
+ * (learnings/d1-refuses-more-than-100-bound-parameters). Writes go through
+ * DB.batch() as one statement per row, binding eight each. A single multi-row
+ * statement with a placeholder per mod throws on every call at this size, and
+ * surfaces in a browser as a CORS error rather than a SQL one.
  */
 
 import { fetchTaggedModNodes, fetchModsByUidThumbs } from './nexus.js';
@@ -236,11 +216,10 @@ export async function refreshNexusCache(env, { fetchImpl = fetch, nowIso } = {})
     .filter((id) => isRealNexusId(id) && !incoming.has(id));
 
   if (needBackfill.length) {
-    // fetchModsByUidThumbs NEVER throws: thumbnails are cosmetic, so it swallows
-    // and returns {} on any failure. A try/catch here would be dead code, and
-    // the empty object it returns on total failure is indistinguishable from a
-    // successful call that found nothing. So the check is on the COUNT against
-    // what was asked for, not on an exception that cannot arrive.
+    // Do not wrap this in a try/catch: fetchModsByUidThumbs never throws, it
+    // returns {} on failure because images are cosmetic. That empty object is
+    // indistinguishable from a successful call that found nothing, so the only
+    // usable signal is the count against what was requested.
     const thumbs = await fetchModsByUidThumbs(fetchImpl, needBackfill);
     for (const [id, t] of Object.entries(thumbs ?? {})) {
       incoming.set(String(id), {
