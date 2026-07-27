@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The cron keeps a Nexus mod index in D1, covering every tagged mod and every mod the map serves. It backs the submissions candidate list without a live Nexus call, and it is where the four Nexus-derived fields on each location now come from.
 - The parity gate covers all 18 served fields, including the thumbnails, pictures, update times and archive listings it could not rebuild before.
+- `POST /submissions` queues a new location, an edit or a removal request for review. Anonymous, behind a Turnstile check and a limit of 5 per address per hour, and nothing it accepts reaches the map without a reviewer approving it. The map's own submit form still goes through GitHub until the modal is rebuilt.
+- A privacy note at [docs/privacy.md](docs/privacy.md). Submissions are the first personal data the site collects: a salted one-way hash of the submitter's address, kept 90 days and then cleared automatically.
 
 ### Fixed
 
