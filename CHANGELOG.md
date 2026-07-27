@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Share links pointed at the mod rather than the pin, so when one Nexus mod supplied two locations both pins produced the same link and it always opened the first. Links now use the location's own id. Links shared before this keep working.
 - Admin tag edits reached the legacy column but not the join the map reads, so they returned success and changed nothing. Both are now written together.
 - The API never told browsers they could read the `ETag` header, so the site's own conditional-request cache had never stored anything and its `304` handling was unreachable code. The browser's built-in cache masked it, which is why nothing looked wrong.
 - The new location added to `main` overnight reached production but not the D1 registry, so staging served one fewer mod than production.

@@ -270,6 +270,17 @@ NCZ.normaliseTags = function (payload) {
   return payload && typeof payload === "object" ? payload : {};
 };
 
+/**
+ * The id a shared ?mod= link addresses. Always the location id: a Nexus id
+ * identifies a mod, and one mod can supply several locations (#889).
+ *
+ * The resolver must keep accepting a Nexus id too. Every link shared before
+ * this uses one.
+ */
+NCZ.modLinkId = function (mod) {
+  return mod.id;
+};
+
 NCZ.buildPopupHtml = function (mod, catStyle, nexusThumbs, tagsDict) {
   const nexus_id_lower = String(mod.nexus_id).toLowerCase();
   let nexusUrl = `https://www.nexusmods.com/cyberpunk2077/mods/${mod.nexus_id}`;
@@ -282,9 +293,7 @@ NCZ.buildPopupHtml = function (mod, catStyle, nexusThumbs, tagsDict) {
     nexusLabel = "Status: Dummy/Test";
   }
 
-  const isNumericNexusId = /^\d+$/.test(String(mod.nexus_id));
-  const modLinkId = isNumericNexusId ? String(mod.nexus_id) : mod.id;
-  const copyLinkUrl = `${NCZ.SITE_URL}?${NCZ.URL_PARAM_MOD}=${encodeURIComponent(modLinkId)}`;
+  const copyLinkUrl = `${NCZ.SITE_URL}?${NCZ.URL_PARAM_MOD}=${encodeURIComponent(NCZ.modLinkId(mod))}`;
 
   const [cX, cY, cZ] = mod.coordinates;
   const yawParam = mod.yaw != null ? `&yaw=${mod.yaw}` : "";

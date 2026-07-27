@@ -1132,10 +1132,8 @@ async function initMap() {
   // opened synchronously and were unaffected).
   function setModUrlParam(mod) {
     if (!mod) return;
-    const isNum = /^\d+$/.test(String(mod.nexus_id));
-    const lid = isNum ? String(mod.nexus_id) : mod.id;
     const url = new URL(window.location.href);
-    url.searchParams.set(NCZ.URL_PARAM_MOD, lid);
+    url.searchParams.set(NCZ.URL_PARAM_MOD, NCZ.modLinkId(mod));
     history.replaceState(null, "", url.toString());
   }
   function clearModUrlParam() {
@@ -1932,12 +1930,7 @@ async function initMap() {
         // silently send a dev tab back to production.
         const url = new URL(window.location.href);
         if (focusTarget) {
-          // Same id rule as the copy-link button (utils.js modLinkId): the
-          // numeric Nexus id when there is one, the UUID otherwise.
-          const linkId = /^\d+$/.test(String(focusTarget.nexus_id))
-            ? String(focusTarget.nexus_id)
-            : focusTarget.id;
-          url.searchParams.set(NCZ.URL_PARAM_MOD, linkId);
+          url.searchParams.set(NCZ.URL_PARAM_MOD, NCZ.modLinkId(focusTarget));
         }
         window.location.href = url.toString();
       });
