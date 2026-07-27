@@ -23,7 +23,7 @@
  */
 
 import {
-  WORLD_MIN_X, WORLD_MAX_X, WORLD_MIN_Y, WORLD_MAX_Y, COORD_Z_MIN, COORD_Z_MAX,
+  TERRAIN_MIN_X, TERRAIN_MAX_X, TERRAIN_MIN_Y, TERRAIN_MAX_Y, COORD_Z_MIN, COORD_Z_MAX,
 } from './config.js';
 
 export const CATEGORIES = ['location-overhaul', 'new-location', 'other'];
@@ -98,16 +98,15 @@ export function validateLocationInput(payload, { tagNames, partial = false } = {
       // but a client can still send them as strings that coerce badly later.
       err('coordinates must all be finite numbers');
     } else {
-      // Range, which until Phase 5 lived only in the browser. That was survivable
-      // while every write was a collaborator using the dashboard; it stops being
-      // survivable when /submissions accepts anonymous writes, because the rule
-      // would sit entirely in the layer the submitter controls.
+      // Range is enforced here rather than only in the form, because
+      // /submissions accepts anonymous writes and a browser-side rule sits
+      // entirely in the layer the submitter controls. Bounds in config.js.
       const [x, y, z] = c;
-      if (x < WORLD_MIN_X || x > WORLD_MAX_X) {
-        err(`coordinate X must be between ${WORLD_MIN_X} and ${WORLD_MAX_X}`);
+      if (x < TERRAIN_MIN_X || x > TERRAIN_MAX_X) {
+        err(`coordinate X must be between ${TERRAIN_MIN_X} and ${TERRAIN_MAX_X}`);
       }
-      if (y < WORLD_MIN_Y || y > WORLD_MAX_Y) {
-        err(`coordinate Y must be between ${WORLD_MIN_Y} and ${WORLD_MAX_Y}`);
+      if (y < TERRAIN_MIN_Y || y > TERRAIN_MAX_Y) {
+        err(`coordinate Y must be between ${TERRAIN_MIN_Y} and ${TERRAIN_MAX_Y}`);
       }
       if (c.length === 3 && (z < COORD_Z_MIN || z > COORD_Z_MAX)) {
         err(`coordinate Z must be between ${COORD_Z_MIN} and ${COORD_Z_MAX}`);
