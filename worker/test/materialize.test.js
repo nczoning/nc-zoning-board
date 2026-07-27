@@ -36,6 +36,11 @@ const build = (rows, over = {}) => materializeFromD1({
   nowMs: Date.parse('2026-01-10T00:00:00Z'), ...over,
 });
 
+/** readNexusIndex()'s shape, for the four Nexus-derived fields. */
+const index = (entries) => new Map(Object.entries(entries).map(([id, e]) => [id, {
+  thumbnailUrl: null, pictureUrl: null, updatedAt: null, archives: [], ...e,
+}]));
+
 test('a NULL z rebuilds the legacy 2-element coordinate pair, not [x, y, null]', () => {
   const { full } = build([row({ z: null })]);
   assert.deepEqual(full['aaaa-1111'].coordinates, [250, 250]);
@@ -107,14 +112,21 @@ test('a dismissed candidate is not even reported as skipped', () => {
   assert.deepEqual(meta.skipped, []);
 });
 
-test('an existing record suppresses its own re-creation and contributes thumbs', () => {
+test('an existing record suppresses its own re-creation, and is imaged from the index', () => {
+  // The tagged node still names a mod already on the map, and must not create a
+  // second record. What it no longer does is supply the images: those come from
+  // nexus_cache for every record, tagged or not, so there is one channel and no
+  // way for the two to disagree.
   const nexusNodes = [{
     modId: 12345, name: 'Alpha (Nexus page)', summary: 'dup',
     description: 'NCZoning:\ncoords=1,1\ncategory=other',
-    pictureUrl: 'pic', thumbnailUrl: 'thumb', updatedAt: '2026-01-08T00:00:00Z',
+    pictureUrl: 'node-pic', thumbnailUrl: 'node-thumb', updatedAt: '2026-01-08T00:00:00Z',
     uploader: { name: 'Spud' },
   }];
-  const { full } = build([row()], { nexusNodes });
+  const nexusIndex = index({
+    12345: { thumbnailUrl: 'thumb', pictureUrl: 'pic', updatedAt: '2026-01-08T00:00:00Z' },
+  });
+  const { full } = build([row()], { nexusNodes, nexusIndex });
   assert.equal(Object.keys(full).length, 1);
   assert.equal(full['aaaa-1111'].thumbnail_url, 'thumb');
   assert.equal(full['aaaa-1111'].picture_url, 'pic');
@@ -122,22 +134,36 @@ test('an existing record suppresses its own re-creation and contributes thumbs',
   assert.equal(full['aaaa-1111'].recently_updated, true);
 });
 
-test('recently_updated is false outside the window and for an unknown date', () => {
-  const stale = [{
-    modId: 12345, name: 'x', summary: '', description: '',
-    updatedAt: '2025-01-01T00:00:00Z', uploader: { name: 'Spud' },
+test('a tagged node cannot image a record on its own', () => {
+  // Negative control for the test above: the same node, no index entry. If the
+  // node channel were still wired up this would leak 'node-thumb'.
+  const nexusNodes = [{
+    modId: 12345, name: 'Alpha (Nexus page)', summary: '', description: '',
+    pictureUrl: 'node-pic', thumbnailUrl: 'node-thumb', uploader: { name: 'Spud' },
   }];
-  assert.equal(build([row()], { nexusNodes: stale }).full['aaaa-1111'].recently_updated, false);
-  // No node at all: updated_at null, so the bool is false rather than NaN-ish.
+  const { full } = build([row()], { nexusNodes });
+  assert.equal(full['aaaa-1111'].thumbnail_url, null);
+});
+
+test('recently_updated is false outside the window and for an unknown date', () => {
+  const stale = index({ 12345: { updatedAt: '2025-01-01T00:00:00Z' } });
+  assert.equal(build([row()], { nexusIndex: stale }).full['aaaa-1111'].recently_updated, false);
+  // No index entry at all: updated_at null, so the bool is false rather than
+  // NaN-ish.
   assert.equal(build([row()]).full['aaaa-1111'].recently_updated, false);
 });
 
-test('WIP and Dummy nexus ids never match a Nexus node', () => {
+test('a WIP record stays image-less rather than borrowing another mod images', () => {
+  // The index is keyed by real mod id and never carries a placeholder (the
+  // sweep refuses to write one -- asserted in nexus-cache.test.js), so a WIP
+  // record simply misses. The populated 12345 entry is here so a miss is
+  // distinguishable from a lookup that finds nothing for anyone.
+  const nexusIndex = index({ 12345: { thumbnailUrl: 'thumb' } });
   const nexusNodes = [{
     modId: 'WIP', name: 'nope', summary: '', description: '',
     thumbnailUrl: 'leaked', uploader: { name: 'x' },
   }];
-  const { full } = build([row({ nexus_id: 'WIP' })], { nexusNodes });
+  const { full } = build([row({ nexus_id: 'WIP' })], { nexusNodes, nexusIndex });
   assert.equal(full['aaaa-1111'].thumbnail_url, null);
 });
 

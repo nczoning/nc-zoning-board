@@ -67,13 +67,23 @@ function uidFetch(responses) {
     return { ok: r.ok ?? true, status: r.status ?? 200, json: async () => r.json };
   };
 }
-const uidNode = (i) => ({ modId: i, pictureUrl: `p${i}`, thumbnailUrl: `t${i}`, updatedAt: `u${i}` });
+const uidNode = (i) => ({
+  modId: i, name: `n${i}`, pictureUrl: `p${i}`, thumbnailUrl: `t${i}`, updatedAt: `u${i}`,
+});
 
 test('modsByUid: returns a thumb map keyed by modId', async () => {
   const impl = uidFetch([{ json: { data: { modsByUid: { nodes: [uidNode(1), uidNode(2)] } } } }]);
   const map = await fetchModsByUidThumbs(impl, ['1', '2']);
-  assert.deepEqual(map['1'], { pictureUrl: 'p1', thumbnailUrl: 't1', updatedAt: 'u1' });
-  assert.deepEqual(map['2'], { pictureUrl: 'p2', thumbnailUrl: 't2', updatedAt: 'u2' });
+  assert.deepEqual(map['1'], { name: 'n1', pictureUrl: 'p1', thumbnailUrl: 't1', updatedAt: 'u1' });
+  assert.deepEqual(map['2'], { name: 'n2', pictureUrl: 'p2', thumbnailUrl: 't2', updatedAt: 'u2' });
+});
+
+test('modsByUid: a mod with no name yields null rather than dropping the key', async () => {
+  // nexus_cache stores this, and `undefined` is not a legal D1 bind. The shape
+  // has to stay stable whether or not Nexus supplied a name.
+  const impl = uidFetch([{ json: { data: { modsByUid: { nodes: [{ modId: 1, pictureUrl: 'p1' }] } } } }]);
+  const map = await fetchModsByUidThumbs(impl, ['1']);
+  assert.equal(map['1'].name, null);
 });
 
 test('modsByUid: skips non-numeric ids and never fetches for an empty set', async () => {

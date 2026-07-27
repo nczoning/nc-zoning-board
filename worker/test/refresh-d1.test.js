@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runRefresh } from '../src/refresh.js';
 import { KEYS } from '../src/store.js';
+import { sqliteD1 } from '../test-support/d1-sqlite.mjs';
 
 // Phase 2: the cron sourcing from D1 instead of mods.json. The load-bearing
 // test here is `both sources produce an identical dataset` -- the unit-scale
@@ -85,8 +86,10 @@ const NEXUS_PAGE = {
  * @param {object} opts
  * @param {boolean} opts.banModsJson  throw if /mods.json is fetched -- proves
  *   the D1 path does not quietly keep reading the file it replaced.
+ * @param {boolean} opts.nexusKnowsNothing  Nexus answers both queries with an
+ *   empty node list, so nothing lands in nexus_cache.
  */
-function fakeFetch({ banModsJson = false } = {}) {
+function fakeFetch({ banModsJson = false, nexusKnowsNothing = false } = {}) {
   return async (url, init) => {
     if (url.includes('/mods.json')) {
       if (banModsJson) throw new Error('D1 mode must not fetch mods.json');
@@ -100,10 +103,13 @@ function fakeFetch({ banModsJson = false } = {}) {
     if (url.includes('api.nexusmods.com')) {
       if (JSON.parse(init.body).query.includes('modsByUid')) {
         return { ok: true, json: async () => ({
-          data: { modsByUid: { nodes: [
+          data: { modsByUid: { nodes: nexusKnowsNothing ? [] : [
             { modId: 12345, pictureUrl: 'pm', thumbnailUrl: 'tm', updatedAt: '2026-07-08' },
           ] } },
         }) };
+      }
+      if (nexusKnowsNothing) {
+        return { ok: true, json: async () => ({ data: { mods: { nodes: [], totalCount: 0 } } }) };
       }
       return { ok: true, json: async () => NEXUS_PAGE };
     }
@@ -112,35 +118,38 @@ function fakeFetch({ banModsJson = false } = {}) {
   };
 }
 
-// The tag registry and the join, mirroring migration 0002. `nczoning` is
-// absent from both, exactly as in the real schema — the materializer re-adds it
-// for auto-sourced records.
-const TAG_ROWS = [
-  { slug: 'apartment', name: null, description: 'a place', sort_order: 1 },
-  { slug: 'corpo', name: null, description: 'suits', sort_order: 2 },
-];
-const LOCATION_TAG_ROWS = [{ location_id: 'm1', tag_slug: 'apartment' }];
-
+// Real SQLite on the real migrations, not a substring-matching mock. The cron
+// now sweeps `nexus_cache` as well as reading the registry, and a mock that
+// answers by matching SQL fragments can only restate the belief it was written
+// from -- it cannot show that an upsert, a foreign key or a bound-parameter
+// count behaves as D1 does.
+//
+// `apartment` is a real registry slug, so migration 0002 already seeds it and
+// location_tags.tag_slug (a real foreign key here) resolves. Those 14 rows also
+// mean the D1 path serves a longer /v1/tags than the mods.json fixture; the
+// parity test below compares the record set, which is unaffected.
 function fakeD1({
   rows = ROWS, dismissed = [{ nexus_id: '777' }], count, fail = false,
-  tagRows = TAG_ROWS, locationTagRows = LOCATION_TAG_ROWS,
 } = {}) {
+  const db = sqliteD1({
+    locations: rows,
+    locationTags: rows.some((r) => r.id === 'm1') ? [['m1', 'apartment']] : [],
+  });
+  for (const d of dismissed) {
+    db._db.prepare(
+      'INSERT INTO dismissed_candidates (nexus_id, reason, dismissed_by, dismissed_at) VALUES (?, ?, ?, ?)',
+    ).run(String(d.nexus_id), null, 'test', '2026-01-01T00:00:00Z');
+  }
   return {
+    ...db,
     prepare(sql) {
-      return {
-        async all() {
-          if (fail) throw new Error('D1 unavailable');
-          if (sql.includes('dismissed_candidates')) return { results: dismissed };
-          // Checked before `FROM locations`: "FROM location_tags" contains it.
-          if (sql.includes('FROM location_tags')) return { results: locationTagRows };
-          if (sql.includes('FROM tags')) return { results: tagRows };
-          return { results: rows };
-        },
-        async first() {
-          if (fail) throw new Error('D1 unavailable');
-          return { n: count ?? rows.length };
-        },
-      };
+      if (fail) throw new Error('D1 unavailable');
+      // The truncation fault: a result set that disagrees with the database's
+      // own COUNT(*), which is the failure that otherwise looks like success.
+      if (count !== undefined && sql.includes('COUNT(*)')) {
+        return { ...db.prepare(sql), async first() { return { n: count }; } };
+      }
+      return db.prepare(sql);
     },
   };
 }
@@ -217,6 +226,19 @@ test('a truncated result set fails the refresh rather than shrinking the map', a
   const r = await runRefresh(env, fakeFetch());
   assert.equal(r.stale, true);
   assert.match(r.error, /COUNT\(\*\)/);
+});
+
+test('an empty nexus_cache is refused rather than served image-less', async () => {
+  // Cold table plus a Nexus that answers nothing: every record would serve with
+  // thumbnail_url, picture_url and updated_at all null. That hashes cleanly and
+  // would replace a good dataset with a stripped one, so it must fail into
+  // last-known-good instead.
+  const env = {
+    DATASET: fakeKV(), DB: fakeD1(), SITE_ORIGIN: 'https://x', DATA_SOURCE: 'd1',
+  };
+  const r = await runRefresh(env, fakeFetch({ nexusKnowsNothing: true }));
+  assert.equal(r.stale, true);
+  assert.match(r.error, /nexus_cache is empty/);
 });
 
 test('an empty locations table is refused, not materialized', async () => {

@@ -13,10 +13,12 @@
  *                          which only moves on content change); /v1/health serves
  *                          it so a wedged cron can be detected (issue #849).
  * - dataset:v1:archives  { [nexus_id]: { updatedAt, archives: [name, ...] } }:
- *                        a persistent cache, NOT part of the served envelope.
- *                        The cron refetches a mod's archive names only when its
- *                        updatedAt moves (a re-upload), so this survives across
- *                        runs; see refresh.js for the budgeted fill.
+ *                        RETIRED. `nexus_cache.archives` in D1 holds this now.
+ *                        Read once more, by the sweep, to carry the existing
+ *                        entries across (including the hand-built listings from
+ *                        scripts/archive-seeds.json, which a refetch cannot
+ *                        reproduce for mods whose Nexus file preview is broken).
+ *                        Nothing writes it. Delete the key at cutover.
  *
  * dataset_version is a content hash: the cron writes only when it changes,
  * and it doubles as the ETag for the read path.
@@ -63,14 +65,10 @@ export async function writeMeta(env, meta) {
 }
 
 /**
- * Read the archive-name cache ({ [nexus_id]: { updatedAt, archives } }), or {}
- * before the first fill. This is a cross-run cache, not a served payload.
+ * Read the retired archive-name cache ({ [nexus_id]: { updatedAt, archives } }),
+ * or {} once it is gone. Carry-over only: see the key note above.
  */
 export async function readArchives(env) {
+  if (!env.DATASET) return {};
   return (await env.DATASET.get(KEYS.archives, 'json')) || {};
-}
-
-/** Persist the archive-name cache. The caller writes only when it changed. */
-export async function writeArchives(env, cache) {
-  await env.DATASET.put(KEYS.archives, JSON.stringify(cache));
 }

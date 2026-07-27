@@ -65,7 +65,12 @@ function refreshFetch() {
     if (u.includes('api.nexusmods.com')) {
       const query = init?.body ? JSON.parse(init.body).query : '';
       if (query.includes('modsByUid')) {
-        return { ok: true, json: async () => ({ data: { modsByUid: { nodes: [] } } }) };
+        // Answers for the fixture's own mod. An empty answer here would leave
+        // nexus_cache with no rows at all, which the D1 build refuses rather
+        // than serving every record image-less.
+        return { ok: true, json: async () => ({ data: { modsByUid: { nodes: [
+          { modId: 12345, name: 'Existing Loft', pictureUrl: 'p', thumbnailUrl: 't', updatedAt: '2026-01-02T00:00:00Z' },
+        ] } } }) };
       }
       return { ok: true, json: async () => ({ data: { mods: { nodes: [], totalCount: 0 } } }) };
     }
