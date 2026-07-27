@@ -121,6 +121,18 @@ test('candidates exclude locations and dismissed mods', async () => {
     '100 is already a location, 200 was dismissed');
 });
 
+test('one mod supplying two locations is still one cache row and not a candidate', async () => {
+  // Measured on the live data: mod 23896 supplies both Watson Tattoo Shops
+  // pins. The join is one-to-many, so a NOT IN anti-join must still exclude it
+  // rather than counting it twice or letting it back into candidates.
+  const env = { DB: sqliteD1({ locations: [location('l1', '100'), location('l2', '100')] }) };
+  await refreshNexusCache(env, { fetchImpl: fakeNexus({ tagged: [node('100'), node('300')] }), nowIso: NOW });
+
+  assert.equal((await readNexusCache(env)).size, 2, 'two locations share one cache row');
+  assert.deepEqual((await readCandidates(env)).map((c) => c.nexus_id), ['300'],
+    'a mod with two locations is still already on the map');
+});
+
 // ------------------------------------------------------------------- limits ---
 
 test('a sweep of 300 mods stays inside D1 bound parameter limits', async () => {

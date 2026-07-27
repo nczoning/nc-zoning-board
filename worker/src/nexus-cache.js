@@ -37,6 +37,26 @@
  * precisely the 86k writes being avoided. Sweep freshness is a dataset-level
  * value, not a per-row one.
  *
+ * nexus_id IS NOT UNIQUE ACROSS LOCATIONS
+ *
+ * Measured 2026-07-27: 296 locations carry a numeric nexus_id and they use 295
+ * distinct values. Mod 23896 ("Watson Tattoo Shops") supplies two locations,
+ * Little China Pink Ink and Northside Tattoo & Body Mods, which is legitimate:
+ * one mod can add two separate places, each deserving its own pin.
+ *
+ * So the join from here to `locations` is ONE-TO-MANY. Both locations read the
+ * same images and the same upstream title, which is correct. Do not add a
+ * UNIQUE constraint on locations.nexus_id, and do not key a location lookup by
+ * it.
+ *
+ * NAME IS NOT DERIVED FROM THIS TABLE, deliberately. 34 of 295 location names
+ * differ from the Nexus title, and the differences are curation rather than
+ * staleness: stripped version prefixes ("CP2.31 Cliffside Abode Player Home"),
+ * stripped tool suffixes ("(World Builder)", "Worldbuilder"), stripped
+ * marketing tails ("- REVOLUTION"), tidied whitespace. Serving `name` from
+ * here would undo all of it. The stored title is for DETECTING a rename, by
+ * comparing it against locations.name, not for replacing one.
+ *
  * D1 BOUND PARAMETER LIMIT
  *
  * D1 allows exactly 100 bound parameters PER QUERY, measured, not documented
