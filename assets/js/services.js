@@ -41,7 +41,24 @@ NCZ.fetchLocationsFromApi = async function () {
   const headers = {};
   if (cached?.etag) headers["If-None-Match"] = cached.etag;
 
-  const res = await fetch(url, { headers });
+  // 🔴 `no-cache` means "always revalidate", NOT "don't cache" (that is
+  // `no-store`). The browser still sends its conditional headers and still
+  // reuses the cached body on a 304 — it just refuses to serve a fresh-by-TTL
+  // copy without asking first.
+  //
+  // Without this, a page load replays whatever the browser cached, for up to
+  // max-age. `/v1/locations` is CROSS-ORIGIN (api.nczoning.net vs
+  // nczoning.net), and a normal F5 does not force-revalidate cross-origin
+  // fetches — so pressing refresh after adding a location could show the
+  // pre-change map for five minutes, with no way for the user to tell.
+  // Observed exactly that: a reload 50s after a create still rendered a record
+  // that had already been deleted.
+  //
+  // The cost is one conditional request per PAGE LOAD, which is user-initiated
+  // and rare. It deliberately does NOT apply to the update poll
+  // (NCZ.checkForDatasetUpdate), which stays a plain fetch so the browser can
+  // answer it locally — that is what keeps polling nearly free.
+  const res = await fetch(url, { headers, cache: "no-cache" });
 
   let rawLocations;
   let freshEtag = null; // set only on a fresh 200 we should cache
