@@ -21,9 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The dashboard shows how old the served dataset is, and a Rebuild button that regenerates it on demand. Staging has no cron, so nothing there refreshed on its own and there was no way to see that.
 - `scripts/sync-locations.mjs` copies location records that exist in `data/locations/` but not yet in D1. Needed until submissions land in D1 directly: a mod merged to `main` reaches production but not the D1 registry.
 
+- The map notices when locations change while a tab is open and offers to refresh, instead of showing its load-time snapshot indefinitely. The check is served from the browser's own cache almost every time, so it costs roughly one request per tab per five minutes.
+
 ### Fixed
 
 - Admin tag edits reached the legacy column but not the join the map reads, so they returned success and changed nothing. Both are now written together.
+- The API never told browsers they could read the `ETag` header, so the site's own conditional-request cache had never stored anything and its `304` handling was unreachable code. The browser's built-in cache masked it, which is why nothing looked wrong.
 - The new location added to `main` overnight reached production but not the D1 registry, so staging served one fewer mod than production.
 
 ### Changed

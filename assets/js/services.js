@@ -10,6 +10,14 @@
 // merge, district enrichment and thumbnail resolution, so the browser makes
 // ZERO Nexus calls. Uses If-None-Match/304 against a localStorage-cached body.
 //
+// That localStorage layer sits BEHIND the browser's own HTTP cache, and is not
+// the thing saving most requests — inside `max-age=300` the browser answers
+// without asking us, and after it expires the browser revalidates with its own
+// ETag. This layer earns its place when the HTTP cache is evicted or cleared:
+// localStorage survives that, so a returning tab revalidates instead of
+// re-downloading ~250KB. It stored nothing at all until the API began exposing
+// `ETag` through CORS.
+//
 // `?full=1` is gone from this call. It dates from the slim/full split, which
 // was removed — the Worker still accepts it as a no-op alias for older
 // consumers (in-game mods), but the site passing it only suggested the split
