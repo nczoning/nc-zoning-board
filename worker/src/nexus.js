@@ -106,6 +106,7 @@ const THUMBS_QUERY = `query modsByUid($uids: [ID!]!, $count: Int!) {
   modsByUid(uids: $uids, count: $count) {
     nodes {
       modId
+      name
       pictureUrl
       thumbnailUrl
       updatedAt
@@ -147,6 +148,7 @@ export async function fetchModsByUidThumbs(fetchImpl = fetch, numericIds = []) {
       const map = {};
       for (const node of nodes) {
         map[String(node.modId)] = {
+          name: node.name || null,
           pictureUrl: node.pictureUrl || null,
           thumbnailUrl: node.thumbnailUrl || null,
           updatedAt: node.updatedAt || null,
