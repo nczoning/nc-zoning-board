@@ -1854,6 +1854,82 @@ async function initMap() {
     // District info panel stats: attribute each mod to its district/subdistrict.
     NCZ.DistrictInfo?.setMods?.(sortedMods);
 
+    // ── Passive dataset updates ──────────────────────────────────────────
+    //
+    // An open tab notices when the map data changes underneath it. Before
+    // this, a tab loaded once and stayed on that snapshot forever — and even a
+    // manual reload could serve the previous copy for up to 5 minutes, because
+    // /v1/locations is `max-age=300` and the browser honoured it.
+    //
+    // Costs effectively nothing: the poll is a plain fetch that the browser
+    // answers from its own cache inside the TTL, so the Worker sees ~1 request
+    // per tab per 5 minutes. See NCZ.checkForDatasetUpdate.
+    //
+    // 🔴 This DETECTS and announces; it does not re-render. Injecting pins
+    // live would mean rebuilding allMarkers, the sidebar list and the 3D pin
+    // layer from a data set that is closed over in a dozen places — an
+    // init-path refactor, not a feature flag. The notice offers a reload, and
+    // the reload is now guaranteed to fetch fresh data because the ETag is
+    // finally readable (see worker/src/index.js CORS_HEADERS).
+    let knownDatasetVersion = apiResult.datasetVersion ?? null;
+    if (knownDatasetVersion) {
+      setInterval(async () => {
+        const fresh = await NCZ.checkForDatasetUpdate(knownDatasetVersion);
+        if (!fresh) return;
+        // Adopt the new version immediately, so a user who dismisses the notice
+        // is not told about the same change on the next tick.
+        knownDatasetVersion = fresh.dataset_version;
+
+        const before = new Set(mods.map((m) => m.id));
+        const after = new Set(fresh.data.map((m) => m.id));
+        const added = fresh.data.filter((m) => !before.has(m.id));
+        const removed = mods.filter((m) => !after.has(m.id));
+        showDatasetUpdateNotice({ added, removed });
+      }, NCZ.DATASET_POLL_MS);
+    }
+
+    // The notice itself. Built once, reused — a change that lands while an
+    // earlier notice is still showing replaces its text rather than stacking a
+    // second toast over the map.
+    let updateNoticeEl = null;
+    function showDatasetUpdateNotice({ added, removed }) {
+      if (!updateNoticeEl) {
+        updateNoticeEl = document.createElement("div");
+        updateNoticeEl.className = "dataset-update-notice";
+        updateNoticeEl.setAttribute("role", "status");
+        document.body.appendChild(updateNoticeEl);
+      }
+
+      // Say what changed, in the user's terms. "The dataset changed" is true
+      // and useless; "1 new location" is why they would click.
+      const parts = [];
+      if (added.length) parts.push(`${added.length} new location${added.length === 1 ? "" : "s"}`);
+      if (removed.length) parts.push(`${removed.length} removed`);
+      // Neither: an existing record was edited. Still worth surfacing, since a
+      // corrected coordinate or description is exactly the kind of change a
+      // stale tab would keep showing wrongly.
+      const summary = parts.length ? parts.join(", ") : "Locations updated";
+
+      updateNoticeEl.replaceChildren();
+      const text = document.createElement("span");
+      text.className = "dataset-update-text";
+      text.textContent = `Map updated — ${summary}`;
+      const refresh = document.createElement("button");
+      refresh.type = "button";
+      refresh.className = "dataset-update-refresh";
+      refresh.textContent = "Refresh";
+      refresh.addEventListener("click", () => location.reload());
+      const dismiss = document.createElement("button");
+      dismiss.type = "button";
+      dismiss.className = "dataset-update-dismiss";
+      dismiss.setAttribute("aria-label", "Dismiss");
+      dismiss.textContent = "✕";
+      dismiss.addEventListener("click", () => updateNoticeEl.classList.remove("is-visible"));
+
+      updateNoticeEl.append(text, refresh, dismiss);
+      updateNoticeEl.classList.add("is-visible");
+    }
+
     // Cluster panel wiring: both views call the same populateClusterPanel
     // helper. Registered here (inside the try block) so each handler's
     // closure can pass `nexusThumbs` and reference the loaded `mods` array.

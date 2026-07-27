@@ -27,6 +27,18 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
   'Access-Control-Allow-Headers': 'If-None-Match',
+  // 🔴 Without this the whole conditional-request path is DEAD, silently.
+  //
+  // Cross-origin JS can only read a short safelist of response headers
+  // (cache-control, content-type, and a few others) unless the server names the
+  // rest here. `ETag` is not on that list, so `res.headers.get('ETag')` returned
+  // null in the browser, services.js never stored one, `If-None-Match` was never
+  // sent, and the 304 branch it carefully implements had never executed in
+  // production — every cache expiry re-downloaded all ~300 records.
+  //
+  // Nothing failed loudly, because the fallback path is a correct 200. The only
+  // symptom was bandwidth, which nobody was watching.
+  'Access-Control-Expose-Headers': 'ETag',
 };
 
 // Dataset routes are cached for 5 min at the edge/browser, with a 1-hour

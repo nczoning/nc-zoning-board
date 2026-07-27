@@ -97,10 +97,29 @@ NCZ.API_BASE =
   new URLSearchParams(location.search).get("api") === "dev"
     ? "https://api-dev.nczoning.net"
     : "https://api.nczoning.net";
-// { etag, data } for the full-locations list. Freshness is driven by the ETag
+// { etag, data } for the locations list. Freshness is driven by the ETag
 // (If-None-Match → 304), not a TTL, so this is stored raw rather than via the
 // TTL-based cacheGet/cacheSet.
-NCZ.API_LOCATIONS_CACHE_KEY = "nc_api_locations_full";
+//
+// Renamed off `nc_api_locations_full` with the `?full=1` alias: the "_full"
+// suffix named the slim/full split, which no longer exists. Renaming orphans
+// any existing entry, which costs one extra fetch and nothing else — and this
+// cache had never populated anyway, because the API did not expose `ETag`
+// through CORS, so `res.headers.get("ETag")` was always null.
+NCZ.API_LOCATIONS_CACHE_KEY = "nc_api_locations";
+
+// How often an open tab asks whether the dataset changed.
+//
+// 60s is not a cost decision — it cannot be. `/v1/locations` is `max-age=300`,
+// so the browser answers most of these locally and the Worker sees roughly one
+// request per tab per 5 minutes whatever this is set to. Polling every 60s and
+// every 300s cost the same; 60s just means the tab notices promptly once the
+// cached copy does expire.
+//
+// Chrome throttles timers in hidden tabs to about once a minute, which this
+// already matches, and a tab that is merely unfocused (another monitor) is not
+// throttled at all.
+NCZ.DATASET_POLL_MS = 60 * 1000;
 
 // The tag registry now comes from /v1/tags alongside the locations: one origin,
 // one contract. It used to be a same-origin fetch of data/tags.json, which was

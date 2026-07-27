@@ -95,6 +95,24 @@ test('the base ETag satisfies a ?full=1 request (one representation, shared ETag
   assert.equal(res.status, 304); // same hash, same body → a correct 304
 });
 
+test('🔴 ETag is exposed to cross-origin JS, or the whole 304 path is dead', async () => {
+  // Cross-origin JS can read only a short safelist of response headers unless
+  // the server names the rest in Access-Control-Expose-Headers. ETag is not on
+  // that list, so without this header `res.headers.get('ETag')` returns null in
+  // the browser — services.js then stores no ETag, never sends If-None-Match,
+  // and the 304 branch it implements can never execute.
+  //
+  // It failed exactly that way in production and nothing noticed, because the
+  // fallback is a perfectly correct 200. The only symptom was re-downloading
+  // ~300 records on every cache expiry.
+  const res = await worker.fetch(GET('/v1/locations'), seededEnv());
+  const exposed = (res.headers.get('Access-Control-Expose-Headers') ?? '')
+    .split(',').map((s) => s.trim().toLowerCase());
+  assert.ok(exposed.includes('etag'),
+    `ETag must be exposed for conditional requests to work; saw: ${res.headers.get('Access-Control-Expose-Headers')}`);
+  assert.ok(res.headers.get('ETag'), 'and an ETag must actually be sent');
+});
+
 test('matching If-None-Match yields 304 with no body', async () => {
   const res = await worker.fetch(GET('/v1/locations', { 'If-None-Match': '"abc123"' }), seededEnv());
   assert.equal(res.status, 304);

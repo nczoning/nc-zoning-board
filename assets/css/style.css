@@ -2778,3 +2778,90 @@ body::before {
     }
 }
 
+
+/* ── Passive dataset update notice ──────────────────────────────────────────
+   Shown when an open tab detects that the served dataset changed. Deliberately
+   small and corner-anchored: it must be noticeable without covering the map or
+   stealing focus from whatever the user was doing when it appeared. */
+.dataset-update-notice {
+    position: fixed;
+    left: 50%;
+    bottom: var(--space-lg);
+    transform: translateX(-50%) translateY(150%);
+    z-index: 1200;
+
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-sm) var(--space-lg);
+
+    background: var(--surface-tooltip-95);
+    border: var(--ui-border-thin) solid var(--secondary);
+    border-radius: var(--ui-radius-sm);
+    box-shadow: 0 4px 20px var(--black-50);
+    color: var(--white);
+    font-family: var(--font-body);
+    font-size: var(--text-md);
+
+    /* Off-screen and inert until shown, so it never intercepts a map drag. */
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.28s ease, opacity 0.28s ease;
+
+    &.is-visible {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+.dataset-update-text {
+    white-space: nowrap;
+}
+
+.dataset-update-refresh {
+    font: inherit;
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    padding: var(--space-2xs) var(--space-md);
+    border-radius: var(--ui-radius-xs);
+    border: var(--ui-border-thin) solid var(--secondary);
+    background: transparent;
+    color: var(--secondary);
+
+    &:hover {
+        background: var(--secondary-10);
+    }
+}
+
+.dataset-update-dismiss {
+    font: inherit;
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: var(--gray);
+    line-height: 1;
+    padding: var(--space-2xs);
+
+    &:hover {
+        color: var(--white);
+    }
+}
+
+@media (max-width: 600px) {
+    .dataset-update-notice {
+        left: var(--space-sm);
+        right: var(--space-sm);
+        transform: translateY(150%);
+
+        &.is-visible {
+            transform: translateY(0);
+        }
+    }
+
+    .dataset-update-text {
+        white-space: normal;
+    }
+}

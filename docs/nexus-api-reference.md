@@ -272,7 +272,7 @@ This limitation has been **confirmed directly with Nexus Mods staff (Pickysaurus
 These Nexus calls now run only inside the Data API cron (`worker/`), not the browser — the old client-side `localStorage` caches (`nc_nexus_thumbs`, `nc_nexus_autodiscovery`) are gone. Freshness for the site is driven by the Data API instead:
 
 - **Server side:** the cron re-runs auto-discovery + thumbnail fetches on its schedule and bakes the result into the `/v1` dataset. Nexus responses are not persisted between runs.
-- **Browser side:** the site fetches `/v1/locations?full=1` once per load and revalidates with `If-None-Match`/`304` against a single `localStorage` entry (`nc_api_locations_full`). See `fetchLocationsFromApi()` in [`services.js`](../assets/js/services.js).
+- **Browser side:** the site fetches `/v1/locations` once per load and revalidates with `If-None-Match`/`304` against a single `localStorage` entry (`nc_api_locations`). See `fetchLocationsFromApi()` in [`services.js`](../assets/js/services.js).
 
 ---
 
