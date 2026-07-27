@@ -22,6 +22,10 @@
  *   file format.
  */
 
+import {
+  TERRAIN_MIN_X, TERRAIN_MAX_X, TERRAIN_MIN_Y, TERRAIN_MAX_Y, COORD_Z_MIN, COORD_Z_MAX,
+} from './config.js';
+
 export const CATEGORIES = ['location-overhaul', 'new-location', 'other'];
 export const STATUSES = ['published', 'hidden', 'draft'];
 export const DESCRIPTION_MAX = 500;
@@ -93,6 +97,20 @@ export function validateLocationInput(payload, { tagNames, partial = false } = {
       // Number.isFinite matters: JSON.parse yields NaN/Infinity for neither,
       // but a client can still send them as strings that coerce badly later.
       err('coordinates must all be finite numbers');
+    } else {
+      // Range is enforced here rather than only in the form, because
+      // /submissions accepts anonymous writes and a browser-side rule sits
+      // entirely in the layer the submitter controls. Bounds in config.js.
+      const [x, y, z] = c;
+      if (x < TERRAIN_MIN_X || x > TERRAIN_MAX_X) {
+        err(`coordinate X must be between ${TERRAIN_MIN_X} and ${TERRAIN_MAX_X}`);
+      }
+      if (y < TERRAIN_MIN_Y || y > TERRAIN_MAX_Y) {
+        err(`coordinate Y must be between ${TERRAIN_MIN_Y} and ${TERRAIN_MAX_Y}`);
+      }
+      if (c.length === 3 && (z < COORD_Z_MIN || z > COORD_Z_MAX)) {
+        err(`coordinate Z must be between ${COORD_Z_MIN} and ${COORD_Z_MAX}`);
+      }
     }
   }
 

@@ -457,6 +457,65 @@ Docs: `openapi.json` is the source of truth (drift-guarded by
 versa). The human-facing reference with redscript/CET snippets is
 [docs/api-reference.md](../docs/api-reference.md).
 
+## Submissions (Phase 5)
+
+`POST /submissions` is the **first public write route on this API**. Every other
+write path is a pull request or a signed-in collaborator, so this module owns
+checks that sit elsewhere for them:
+
+| Route | Auth | Does |
+| --- | --- | --- |
+| `POST /submissions` | anonymous, Turnstile + rate limit | queues a `create`, `edit` or `remove`; `201` with the id |
+| `GET /submissions/candidates` | anonymous | NCZoning-tagged mods that are neither a location nor dismissed |
+
+Nothing this route accepts reaches the map. A row lands in `submissions` with
+status `pending`; approval is a separate collaborator-gated action (PR B).
+
+**Validation is shared with the admin editor** (`validateLocationInput`), so a
+submission cannot express something the editor would refuse. On top of it,
+`status`, `admin_notes` and `source` are **refused rather than dropped**: they
+are writable by an admin and part of the same validator, and silently discarding
+them would leave an approve path applying a field the submitter chose.
+
+**Two secrets, and both fail closed when unset:**
+
+```bash
+npx wrangler secret put SUBMISSION_IP_SALT                  # production
+npx wrangler secret put SUBMISSION_IP_SALT --env staging     # and staging
+npx wrangler secret put TURNSTILE_SECRET_KEY
+npx wrangler secret put TURNSTILE_SECRET_KEY --env staging
+```
+
+Missing `SUBMISSION_IP_SALT` returns `503 submissions_unavailable` rather than
+storing an unsalted hash: SHA-256 of an IPv4 address has four billion possible
+inputs and is reversed by enumeration, so an unsalted hash is a stored address
+with extra steps. Missing `TURNSTILE_SECRET_KEY` returns `503` rather than
+skipping the bot check, and so does a `siteverify` outage. **A bot check that
+opens on error is one an attacker triggers on purpose.**
+
+The salts may differ between environments; nothing compares them.
+
+Refusals carry distinct codes so the modal can act on them:
+`turnstile_missing`, `turnstile_expired` (single-use token reused, or the form
+sat open past five minutes: re-render the widget, the submitter did nothing
+wrong), `turnstile_failed`, `rate_limited`, `invalid_submission`.
+
+**The rate limit is 5 accepted submissions per address per hour**, counted with
+a `COUNT(*)` over `submissions` rather than a counter store, so it needs no
+table and no KV write per attempt. Only accepted submissions count: someone
+fixing a validation error six times is not locked out. The check runs before
+Turnstile, so a flood does not become a flood of `siteverify` calls.
+
+`submitter_ip_hash` is cleared after 90 days by `purgeSubmitterIps()`, which
+`scheduled()` calls alongside the refresh (separately, so a failed rebuild
+cannot stop the clock on data the site promised to delete). See
+[docs/privacy.md](../docs/privacy.md), which is a ship gate for this phase
+rather than paperwork: this is the first personal data the site collects.
+
+`/submissions` is **not in `openapi.json` and does not bump `API_VERSION`**,
+following `/auth/` and `/admin/`. The spec documents the `/v1` data contract
+that in-game consumers read, and this route is not part of it.
+
 ## Versioning
 
 `API_VERSION` (served as `version` on `/v1/health`) is SemVer for the API
@@ -488,9 +547,19 @@ margin. A WAF rate-limit rule is deployed as belt-and-braces (zone config,
 not `wrangler deploy`):
 
 > Dashboard → nczoning.net → **Security → Security rules → Rate limiting
-> rules**. Rule "API rate limit": match **URI Path starts with `/v1/`**,
-> characteristic **IP**, **100 requests / 10 seconds**, action **Block**,
-> duration **10 s**.
+> rules**. Rule "API rate limit": match **URI Path starts with `/v1/`**, `Or`
+> **`/submissions`**, `Or` **`/auth/`**; characteristic **IP**, **100 requests /
+> 10 seconds**, action **Block**, duration **10 s**.
+
+**The free plan allows exactly one rate-limiting rule**, so the write routes are
+`Or` conditions on that rule rather than a second one with a tighter threshold.
+100 requests / 10 s is far looser than `/submissions` needs, which is acceptable
+because this is only an edge burst guard: the limit that decides how many
+submissions an address may actually queue is the per-hour one inside the Worker,
+and no zone setting can weaken it.
+
+`/submissions` is matched without a trailing slash so it covers both the POST
+and `/submissions/candidates`.
 
 **Free-plan constraints (why it's path-based, not host-based):** the free
 rate-limiting rule only matches on **URI Path** (hostname isn't offered),
