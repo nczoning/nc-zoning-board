@@ -1179,6 +1179,70 @@
     rows.push(kvRow('api host', API.replace('https://', ''), 'mono'));
 
     replace($('#health-kv'), rows);
+
+    // Its own request, so a slow or failing analytics read cannot hold up the
+    // stats that come from data already in hand.
+    renderQuota();
+  }
+
+  // --------------------------------------------------------------- quota --
+
+  /**
+   * Free-tier burn-down.
+   *
+   * ⭐ The panel that would have surfaced the KV write overage before
+   * Cloudflare emailed about it. The token stays in the Worker — this reads
+   * /admin/quota, never Cloudflare directly.
+   *
+   * 🔴 A failed read renders as "could not read", never as empty meters. An
+   * empty meter is indistinguishable from zero usage, which is the single most
+   * reassuring thing this panel could wrongly say.
+   */
+  async function renderQuota() {
+    const res = await api(`/admin/quota?cb=${Date.now()}`);
+
+    if (!res.ok) {
+      const detail = res.body?.errors?.join('; ') ?? describeFailure(res)[1];
+      $('#quota-note').textContent = `Could not read usage: ${detail}`;
+      return replace($('#quota-meters'),
+        h('div', { class: 'kv-row' },
+          h('span', { class: 'k', text: 'status' }),
+          h('span', { class: 'v bad', text: 'unknown — not zero' })));
+    }
+
+    const { date, utc_hours_elapsed: hours, usage, worker_errors: errors } = res.body;
+    // Say which day and how far into it. The caps reset at UTC midnight, and
+    // AEST runs ~10 hours ahead of that, so "1 of 1,000" early in the UTC day
+    // is not the reassurance it looks like.
+    $('#quota-note').textContent =
+      `UTC day ${date}, ${hours}h elapsed of 24. Caps are per account, and reset at UTC midnight.`;
+
+    replace($('#quota-meters'), usage.map((u) => {
+      // Colour on the PROJECTION, not on what has been spent so far: a cap that
+      // will be hit at 22:00 UTC matters at 09:00, and the raw fraction says
+      // nothing is wrong until it is too late to act.
+      const basis = u.projected ?? u.used;
+      const ratio = u.cap ? basis / u.cap : 0;
+      const kind = ratio >= 1 ? 'bad' : ratio >= 0.7 ? 'warn' : 'ok';
+      const pctOfCap = Math.min(100, Math.round((u.used / u.cap) * 100));
+
+      return h('div', { class: 'quota-row' },
+        h('div', { class: 'quota-head' },
+          h('span', { class: 'k', text: u.label }),
+          h('span', { class: `v ${kind}`, text: `${u.used.toLocaleString()} / ${u.cap.toLocaleString()}` })),
+        h('span', { class: 'bar' }, h('span', {
+          class: kind, style: `width:${Math.max(pctOfCap, u.used > 0 ? 1 : 0)}%`,
+        })),
+        h('span', { class: 'quota-projection' },
+          u.projected === null
+            ? 'too early in the UTC day to project'
+            : `on track for ~${u.projected.toLocaleString()} by midnight UTC${
+              u.projected > u.cap ? ' — over the cap' : ''}`));
+    }).concat(errors > 0
+      ? [h('div', { class: 'kv-row' },
+        h('span', { class: 'k', text: 'worker errors today' }),
+        h('span', { class: 'v bad', text: String(errors) }))]
+      : []));
   }
 
   // --------------------------------------------------------------- audit --

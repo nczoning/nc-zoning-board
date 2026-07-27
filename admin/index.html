@@ -70,6 +70,14 @@
       <div id="health-kv" class="kv"></div>
     </div>
 
+    <!-- ⭐ The panel that would have surfaced the KV write overage before
+         Cloudflare emailed about it. Caps are per-account per UTC day. -->
+    <div class="panel">
+      <h2>Free-tier burn-down</h2>
+      <p class="muted" id="quota-note">Reading usage…</p>
+      <div id="quota-meters" class="kv"></div>
+    </div>
+
     <div class="panel">
       <h2>By category</h2>
       <div id="stat-category" class="breakdown"></div>

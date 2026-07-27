@@ -535,6 +535,38 @@ button.breakdown-row:hover .k { color: var(--secondary); }
     opacity: 0.7;
 }
 
+/* ----------------------------------------------------------------- quota -- */
+
+.quota-row { padding-bottom: var(--space-md); }
+
+.quota-head {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-md);
+    font-size: var(--fs-ui);
+    margin-bottom: var(--space-2xs);
+}
+
+.quota-head .k { color: var(--text-subtle); }
+.quota-head .v { font-variant-numeric: tabular-nums; }
+.quota-head .v.ok { color: var(--status-ok); }
+.quota-head .v.warn { color: var(--tertiary); }
+.quota-head .v.bad { color: var(--status-critical); }
+
+.bar span.ok { background: var(--status-ok); }
+.bar span.warn { background: var(--tertiary); }
+.bar span.bad { background: var(--status-critical); opacity: 1; }
+
+/* The projection carries the actual warning, so it is text rather than a
+   colour: "on track for 1,400 by midnight" is actionable in a way that an
+   amber bar at 8% is not. */
+.quota-projection {
+    display: block;
+    margin-top: var(--space-2xs);
+    font-size: var(--fs-label);
+    color: var(--gray);
+}
+
 /* Key/value rows for the health panel. */
 .kv { display: grid; gap: var(--space-xs); }
 

@@ -72,7 +72,13 @@
 		// repo-collaborator change; there is no separate allowlist to drift.
 		"GITHUB_REPO": "nczoning/nc-zoning-board",
 		// Where /auth/callback sends the browser back to.
-		"ADMIN_ORIGIN": "https://nczoning.net"
+		"ADMIN_ORIGIN": "https://nczoning.net",
+		// --- Quota burn-down (Phase 4c) -------------------------------------
+		// Not a secret: the account tag appears in every wrangler invocation and
+		// in worker/README.md. The ANALYTICS TOKEN is the secret
+		// (CF_ANALYTICS_TOKEN, Account Analytics:Read), and it never leaves the
+		// Worker — the dashboard reads /admin/quota instead of Cloudflare.
+		"CF_ACCOUNT_ID": "b9937d8d595fad7de8d1549b22390281"
 	},
 	// Dataset store (dashboard title: nczoning-api-dataset). Recreate with:
 	//   npx wrangler kv namespace create nczoning-api-dataset
@@ -171,7 +177,11 @@
 				"GITHUB_APP_ID": "4397308",
 				"GITHUB_OAUTH_CLIENT_ID": "Iv23lixJitjZqJuIwhDW",
 				"GITHUB_REPO": "nczoning/nc-zoning-board",
-				"ADMIN_ORIGIN": "https://dev.nczoning.net"
+				"ADMIN_ORIGIN": "https://dev.nczoning.net",
+				// Same account as production: the quotas being burned down are
+				// per-ACCOUNT, so staging must report the same numbers rather
+				// than a staging-only slice that would always look healthy.
+				"CF_ACCOUNT_ID": "b9937d8d595fad7de8d1549b22390281"
 			},
 			// dashboard title: nczoning-api-dataset-staging
 			"kv_namespaces": [

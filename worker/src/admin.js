@@ -17,6 +17,7 @@ import {
   validateTagInput, readTagSlugs, readTagsWithUsage, readTagUsers, readTag,
   readTagsForLocations, syncLocationTags,
 } from './tag-registry.js';
+import { introspectDatasets, introspectType, readQuota } from './quota.js';
 
 const json = (request, body, status = 200) => new Response(JSON.stringify(body), {
   status,
@@ -159,6 +160,32 @@ export async function handleAdmin(request, env, ctx) {
   // ---- audit -------------------------------------------------------------
   if (url.pathname === '/admin/audit' && method === 'GET') {
     return json(request, { entries: await readAudit(env, url.searchParams.get('limit')) });
+  }
+
+  // ---- quota: dataset introspection --------------------------------------
+  //
+  // TEMPORARY. Confirms the GraphQL dataset field names for the real quota
+  // query; removed once /admin/quota is built against them. Guessing the names
+  // is the trap this avoids — the `*AdaptiveGroups` convention makes a wrong
+  // guess look plausible and return an EMPTY result rather than an error, and
+  // "no rows" reads exactly like "no usage today".
+  if (url.pathname === '/admin/quota/datasets' && method === 'GET') {
+    const typeName = url.searchParams.get('type');
+    const result = typeName
+      ? await introspectType(env, typeName)
+      : await introspectDatasets(env);
+    if (!result.ok) return json(request, { error: 'introspection_failed', errors: result.errors }, 502);
+    return json(request, result.data);
+  }
+
+  // ---- quota burn-down ----------------------------------------------------
+  //
+  // 502, not 200-with-nulls, when the read fails: the dashboard must be able to
+  // say "unknown" rather than draw an empty meter, which reads as "no usage".
+  if (url.pathname === '/admin/quota' && method === 'GET') {
+    const result = await readQuota(env);
+    if (!result.ok) return json(request, { error: 'quota_unavailable', errors: result.errors }, 502);
+    return json(request, result.data);
   }
 
   // ---- rebuild the read path ---------------------------------------------
