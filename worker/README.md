@@ -165,16 +165,53 @@ node scripts/parity-check.mjs                                   # the gate
 ```
 
 `parity-check.mjs` rebuilds `/v1/locations` from D1 via `src/materialize.js` and
-diffs it **byte-for-byte** against what the live API is serving. It rebuilds the
-14 fields D1 owns (including `district`/`subdistrict`, recomputed from D1's own
-coordinates) and feeds in the 4 Nexus-derived ones it does not own until Phase 2
-— and it **fails on any served field that falls into neither set**, so a new
-`/v1` field cannot slip past as "not compared".
+diffs it **byte-for-byte** against what the live API is serving. All 18 served
+fields are rebuilt: 11 from `locations`, 4 from `nexus_cache`, and
+`district`/`subdistrict`/`recently_updated` recomputed from D1's own data. It
+**fails on any served field it neither rebuilds nor feeds in**, so a new `/v1`
+field cannot slip past as "not compared".
 
-It then mutates a row five ways and asserts the diff catches each one. A green
-run that did not also prove it can go red exits non-zero: the header comment
-explains what the check does and does not cover, and is worth reading before
-trusting a pass.
+It then mutates the input nine ways (five location columns and the four
+Nexus-derived fields) and asserts the diff catches each one. A green run that
+did not also prove it can go red exits non-zero: the header comment explains
+what the check does and does not cover, and is worth reading before trusting a
+pass.
+
+**It needs a swept `nexus_cache`.** Against a database the sweep has never run
+on, every image rebuilds as null; the script says so and stops rather than
+reporting ~300 mismatches.
+
+### `nexus_cache`: the Nexus mod index
+
+One row per mod, swept from the cron: every NCZoning-tagged mod (the candidate
+pool for submissions) plus every mod the map serves a pin for. It supplies the
+four Nexus-derived fields on each location through a join on `nexus_id`, and it
+lets the candidates list be a SQL query instead of a live Nexus call on a public
+route.
+
+Three properties worth knowing before changing anything here:
+
+- **The sweep writes only what changed.** ~300 rows on 288 daily ticks would be
+  86k row-writes against a 100k/day free-tier cap, so an unchanged tick must
+  cost zero writes. Measured against the live corpus: a first sweep writes 296
+  rows, the next writes 0.
+- **`nexus_id` is not unique across locations.** 296 locations use 295 distinct
+  ids: mod 23896 supplies two tattoo shops. The join is one-to-many by design.
+- **`name` is stored for comparison, never for display.** 34 location names
+  differ from their Nexus title by curation, not staleness. Serving this column
+  would undo that; diffing it detects a rename.
+
+Archive listings (the `.archive` file names behind installed-mod detection) live
+here too, in `archives`, with `archives_at` recording the mod `updated_at` they
+were read against. `updated_at` alone cannot carry that, because the sweep
+overwrites it the moment Nexus reports a re-upload, so the two columns are
+compared to decide a refetch.
+
+The KV key `dataset:v1:archives` is now a carry-over source, read once by the
+sweep and never written. **Do not delete it until the sweep has run against both
+databases**: it holds the hand-built listings from `scripts/archive-seeds.json`
+for mods whose Nexus file preview is broken, and a refetch replaces those with
+nothing.
 
 ### Switching the source (`DATA_SOURCE`)
 

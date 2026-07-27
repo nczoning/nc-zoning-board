@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The map notices when locations change while a tab is open and offers to refresh, instead of showing its load-time snapshot indefinitely. The check is served from the browser's own cache almost every time, so it costs roughly one request per tab per five minutes.
 
+- The cron keeps a Nexus mod index in D1, covering every tagged mod and every mod the map serves. It backs the submissions candidate list without a live Nexus call, and it is where the four Nexus-derived fields on each location now come from.
+- The parity gate covers all 18 served fields, including the thumbnails, pictures, update times and archive listings it could not rebuild before.
+
 ### Fixed
 
 - Admin tag edits reached the legacy column but not the join the map reads, so they returned success and changed nothing. Both are now written together.
