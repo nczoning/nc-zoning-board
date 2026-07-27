@@ -26,31 +26,29 @@ export const RECENTLY_UPDATED_DAYS = 7;
 // a self-heal redeploy. Never change one without the other.
 export const HEARTBEAT_MIN_INTERVAL_MS = 15 * 60 * 1000;
 
-// Submission bounds: the extent of the 3D map terrain mesh, which is the outer
-// envelope of anything this site can render in either view.
+// Coordinate bounds for the write path: the extent of the 3D map terrain mesh,
+// which is the outer envelope of anything renderable in either view.
 //
-// Measured from assets/glb-meshopt/3dmap_terrain.glb on 2026-07-27, applying the
-// node transform to the quantised POSITION accessors: X [-7999.3, 7999.4] and
-// world Y [-8000.1, 8000.9], a symmetric 16km square. The water sheet sits
-// inside it at X [-7998, 7439], world Y [-7329, 5958].
+// Measured from assets/glb-meshopt/3dmap_terrain.glb, applying the node
+// transform to the quantised POSITION accessors: a symmetric 16km square, X
+// [-7999.3, 7999.4] and world Y [-8000.1, 8000.9]. The water sheet sits inside
+// it.
 //
-// NOT the same as NCZ.WORLD_MIN_X/MAX_X/MIN_Y/MAX_Y in assets/js/constants.js,
-// which are X [-6298, 5815] and Y [-7684, 4427]. Those describe the satellite
-// TILE projection, so they are the right numbers for the CET-to-Leaflet
-// transform and the wrong ones for a submission gate: they are tighter than the
-// terrain in every direction, and a location on rendered ground outside them
-// would be refused for being outside a picture rather than outside the world.
+// DELIBERATELY NOT NCZ.WORLD_MIN_X and friends (assets/js/constants.js), which
+// are X [-6298, 5815], Y [-7684, 4427]. Those describe the satellite TILE
+// projection: correct for the CET-to-Leaflet transform, wrong as a gate. They
+// are tighter than the terrain in every direction, so they would refuse a
+// location standing on rendered ground for being outside a picture. Named
+// TERRAIN_* rather than WORLD_* so the two are not synced by mistake.
 //
-// The website enforced +/-5000 on X/Y and +/-1000 on Z instead. Those appear to
-// be stale leftovers. Measured against the 297 live records, that rule rejects
-// four of them: Sea Wall Towers Detailed at x=-5782, two canyon locations at
-// x=5321, and Crystal Palace Resort at z=1525. All four arrived through the git
-// PR path, which never ran the browser check, so the rule has been wrong in the
-// browser without ever being able to reject anything. Do not port those numbers.
-export const WORLD_MIN_X = -8000;
-export const WORLD_MAX_X = 8000;
-export const WORLD_MIN_Y = -8000;
-export const WORLD_MAX_Y = 8000;
+// Do NOT adopt the browser form's +/-5000 on X/Y and +/-1000 on Z. That rule
+// rejects four records live on the map today (x=-5782, two at x=5321, and
+// z=1525), and never rejected anything because every one of them arrived
+// through the PR path rather than the form.
+export const TERRAIN_MIN_X = -8000;
+export const TERRAIN_MAX_X = 8000;
+export const TERRAIN_MIN_Y = -8000;
+export const TERRAIN_MAX_Y = 8000;
 
 // Z has no mesh to measure against: it is elevation, and nothing projects from
 // it. An explicit sanity range for catching garbage, not a geometry rule.

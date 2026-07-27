@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { validateLocationInput, CATEGORIES } from '../src/validate.js';
 import {
-  WORLD_MIN_X, WORLD_MAX_X, WORLD_MIN_Y, WORLD_MAX_Y, COORD_Z_MIN, COORD_Z_MAX,
+  TERRAIN_MIN_X, TERRAIN_MAX_X, TERRAIN_MIN_Y, TERRAIN_MAX_Y, COORD_Z_MIN, COORD_Z_MAX,
 } from '../src/config.js';
 
 const require = createRequire(import.meta.url);
@@ -141,10 +141,10 @@ test('non-finite coordinates are rejected', () => {
 test('coordinates outside the world bounds are rejected', () => {
   const base = asInput(RECORDS[0]);
   const cases = [
-    ['X below min', [WORLD_MIN_X - 1, 0, 0], /coordinate X/],
-    ['X above max', [WORLD_MAX_X + 1, 0, 0], /coordinate X/],
-    ['Y below min', [0, WORLD_MIN_Y - 1, 0], /coordinate Y/],
-    ['Y above max', [0, WORLD_MAX_Y + 1, 0], /coordinate Y/],
+    ['X below min', [TERRAIN_MIN_X - 1, 0, 0], /coordinate X/],
+    ['X above max', [TERRAIN_MAX_X + 1, 0, 0], /coordinate X/],
+    ['Y below min', [0, TERRAIN_MIN_Y - 1, 0], /coordinate Y/],
+    ['Y above max', [0, TERRAIN_MAX_Y + 1, 0], /coordinate Y/],
     ['Z below min', [0, 0, COORD_Z_MIN - 1], /coordinate Z/],
     ['Z above max', [0, 0, COORD_Z_MAX + 1], /coordinate Z/],
     ['a pasted nonsense value', [999999, 999999, 999999], /coordinate/],
@@ -157,11 +157,10 @@ test('coordinates outside the world bounds are rejected', () => {
 });
 
 test('the bounds admit the real corpus, including its four extremes', () => {
-  // The guard on the whole change. The browser rule of +/-5000 on X/Y and
-  // +/-1000 on Z rejects four records that are live on the map right now, so
-  // porting those numbers would have refused real data. Named individually
-  // because a corpus-wide loop that silently stopped covering them would still
-  // pass. Measured 2026-07-27.
+  // These four sit outside the browser form's +/-5000 X/Y and +/-1000 Z, so
+  // they are what stops those numbers being adopted here. Named individually
+  // rather than left to the corpus-wide loop, which would still pass if it
+  // silently stopped covering them.
   const extremes = [
     ['Sea Wall Towers Detailed', -5782.011, 1781.279, 195.898],
     ['Outdoor V - Canyon Forest', 5321.252, -226.151, 99.817],
