@@ -32,6 +32,13 @@ const STATE_TTL_S = 10 * 60;
  * `Allow-Credentials: true`, so these routes cannot reuse the public wildcard
  * CORS that /v1/* serves. The origin must be echoed back exactly, and only for
  * origins on this list.
+ *
+ * THIS IS A CORS LIST, NOT A SIGN-IN LIST. `localhost:3000` being here does NOT
+ * mean you can sign in from a local server: the OAuth callback redirects to
+ * `ADMIN_ORIGIN`, which is one value per environment, so signing in at
+ * localhost lands you on dev.nczoning.net with a cookie for that origin. A
+ * locally served dashboard can only be exercised against a session it already
+ * has. Test the admin UI on dev.nczoning.net.
  */
 export const ADMIN_ORIGINS = [
   'https://nczoning.net',
