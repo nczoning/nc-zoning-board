@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A new-pin submission for a mod already on the map shows the records it would sit alongside, and how far away they are. One mod can legitimately supply several locations, so this is context rather than a warning; where the existing record is hidden, the queue offers to restore that one instead of creating a second.
 - A candidates tab listing NCZoning-tagged Nexus mods with no pin yet. Add one to the map with the editor prefilled, or dismiss it with a reason. Dismissals are reversible, which the Discord alert this replaces was not.
 - The submit form sends a location to the review queue. It starts from your mod (picked from the tagged list, or a Nexus link) and now collects the name and description the registry requires, which the block never carried.
+- Picking a tagged mod prefills its title, short description and uploader, the same three things auto-discovery took from the Nexus page. All three stay editable.
+- The coordinate boxes are checked as you type. The box that is wrong goes red, and every problem in the row is named at once rather than one per attempt.
 
 ### Fixed
 

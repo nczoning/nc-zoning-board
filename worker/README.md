@@ -468,6 +468,14 @@ checks that sit elsewhere for them:
 | `POST /submissions` | anonymous, Turnstile + rate limit | queues a `create`, `edit` or `remove`; `201` with the id |
 | `GET /submissions/candidates` | anonymous | NCZoning-tagged mods that are neither a location nor dismissed |
 
+Each candidate carries `nexus_id`, `name`, `summary`, `uploader`, `thumbnail_url`,
+`picture_url` and `updated_at`. The middle two are what the `NCZoning` tag is
+now for: `merge.js` builds an auto-discovered record's `description` from
+`summary` and its first author from `uploader.name`, and the submit form
+prefills the same two fields from them, so replacing auto-discovery with the
+queue keeps the prefill instead of taking it away. Migration `0004` added both
+columns to `nexus_cache`; the next sweep backfills them.
+
 Nothing this route accepts reaches the map. A row lands in `submissions` with
 status `pending`; approval is a separate collaborator-gated action (PR B).
 

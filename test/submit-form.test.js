@@ -190,6 +190,64 @@ test('the browser bounds are the same numbers the Worker enforces', () => {
   assert.equal(NCZ.COORD_Z_MAX, value('COORD_Z_MAX'));
 });
 
+test('the failing axes are named, so the form can redden the box that is wrong', () => {
+  // The row is one message and three boxes. Without this the form can only
+  // colour all three, which points at two values that are fine.
+  assert.deepEqual(NCZ.coordinateProblems('9999', '100', '50').axes, ['x']);
+  assert.deepEqual(NCZ.coordinateProblems('9999', '-9999', '50').axes, ['x', 'y']);
+  assert.deepEqual(NCZ.coordinateProblems('0', '0', '5000').axes, ['z']);
+  assert.deepEqual(NCZ.coordinateProblems('0', '', '50').axes, ['y']);
+  assert.deepEqual(NCZ.coordinateProblems('0', '0', '0').axes, []);
+});
+
+test('every problem in the row is reported, not the first one', () => {
+  // Reporting only the first means fixing X reveals the bad Z, and a submitter
+  // meets one complaint per attempt.
+  const problems = NCZ.coordinateProblems('9999', '100', '');
+  assert.deepEqual(problems.axes, ['x', 'z']);
+  assert.match(problems.message, /numbers/);
+  assert.match(problems.message, /8000/);
+});
+
+test('an out-of-range X and an out-of-range Z are both named', () => {
+  const problems = NCZ.coordinateProblems('9999', '100', '5000');
+  assert.deepEqual(problems.axes, ['x', 'z']);
+  assert.match(problems.message, /8000/);
+  assert.match(problems.message, /Z must be/);
+});
+
+// ── the description prefill ───────────────────────────────────────────────────
+
+test('a summary becomes the starting description, whole when it fits', () => {
+  assert.equal(NCZ.summaryToDescription('  A rooftop bar above Kabuki.  '), 'A rooftop bar above Kabuki.');
+  assert.equal(NCZ.summaryToDescription(null), '');
+});
+
+test('an over-long summary is truncated exactly as merge.js truncates it', () => {
+  // merge.js:83 builds an auto-discovered record's description this way, so a
+  // submitter sees what that path would have published.
+  const long = 'x'.repeat(600);
+  const out = NCZ.summaryToDescription(long);
+  assert.equal(out.length, 500);
+  assert.ok(out.endsWith('...'));
+  assert.equal(out, `${'x'.repeat(497)}...`);
+});
+
+test('a summary at exactly the limit is not truncated', () => {
+  const exact = 'x'.repeat(500);
+  assert.equal(NCZ.summaryToDescription(exact), exact);
+});
+
+test('a prefilled description passes the validator that will judge it', () => {
+  // A prefill that the form then refuses would be the site handing someone an
+  // error.
+  const { errors } = NCZ.collectLocationForm({
+    ...complete(),
+    description: NCZ.summaryToDescription('y'.repeat(900)),
+  });
+  assert.equal(errors.description, undefined);
+});
+
 // ── yaw ───────────────────────────────────────────────────────────────────────
 
 test('a blank yaw is null rather than an error', () => {

@@ -209,6 +209,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const modCardName = document.getElementById("submit-mod-card-name");
   const modThumb = document.getElementById("submit-mod-thumb");
   const nameInput = document.getElementById("submit-name");
+  const authorsInput = document.getElementById("bbcode-authors");
   const descriptionInput = document.getElementById("submit-description");
   const descriptionCount = document.getElementById("submit-description-count");
   const sendBtn = document.getElementById("submit-send-btn");
@@ -235,8 +236,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let candidates = [];
   let candidatesState = "idle";
-  // A prefilled name is replaced when the mod changes; a typed one is not.
+  // A prefilled value is replaced when the mod changes; a typed one is not.
   let nameIsPrefilled = true;
+  let descriptionIsPrefilled = true;
+  let authorsIsPrefilled = true;
 
   function openBbcodeModal() {
     bbcodeModal.classList.remove("hidden");
@@ -316,6 +319,17 @@ document.addEventListener("DOMContentLoaded", () => {
     if (control) control.setAttribute("aria-invalid", message ? "true" : "false");
   }
 
+  // The coordinate row is one message and three boxes, so the message alone
+  // cannot say which number is wrong. aria-invalid carries it, and the styling
+  // hangs off that attribute rather than a class, so the marking a screen
+  // reader announces and the red border are the same fact.
+  function markCoordinateAxes(axes) {
+    ["x", "y", "z"].forEach((axis) => {
+      const box = document.getElementById(`bbcode-coord-${axis}`);
+      box?.setAttribute("aria-invalid", axes.includes(axis) ? "true" : "false");
+    });
+  }
+
   function setFormError(message, { tone = "error" } = {}) {
     if (!formErrorEl) return;
     formErrorEl.textContent = message ?? "";
@@ -325,11 +339,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
   function clearErrors() {
     ERROR_FIELDS.forEach((field) => setFieldError(field, null));
+    markCoordinateAxes([]);
     setFormError(null);
   }
 
   function showErrors(errors) {
     Object.entries(errors).forEach(([field, message]) => setFieldError(field, message));
+    const raw = readForm();
+    markCoordinateAxes(errors.coordinates ? NCZ.coordinateProblems(raw.x, raw.y, raw.z).axes : []);
     const first = ERROR_FIELDS.find((field) => errors[field]);
     const control = document.getElementById(FIELD_CONTROL[first]);
     if (control) control.focus();
@@ -399,6 +416,18 @@ document.addEventListener("DOMContentLoaded", () => {
         modThumb.alt = "";
       }
       if (nameIsPrefilled && nameInput) nameInput.value = candidate.name;
+      // The mod's Nexus summary, truncated the way an auto-discovered record's
+      // description was built from it. A starting point to edit, not an answer.
+      if (descriptionIsPrefilled && descriptionInput) {
+        descriptionInput.value = NCZ.summaryToDescription(candidate.summary);
+        updateDescriptionCount();
+      }
+      // The uploader is the first author on an auto-discovered record, and a
+      // co-author is a name only the submitter knows, so the field stays a
+      // comma-separated list rather than becoming read-only.
+      if (authorsIsPrefilled && authorsInput) {
+        authorsInput.value = candidate.uploader ?? "";
+      }
     }
     setFieldError("nexus_id", null);
   }
@@ -443,9 +472,19 @@ document.addEventListener("DOMContentLoaded", () => {
   if (nameInput) {
     nameInput.addEventListener("input", () => { nameIsPrefilled = false; });
   }
-  if (descriptionInput && descriptionCount) {
-    descriptionInput.addEventListener("input", () => {
+  if (authorsInput) {
+    authorsInput.addEventListener("input", () => { authorsIsPrefilled = false; });
+  }
+  function updateDescriptionCount() {
+    if (descriptionCount && descriptionInput) {
       descriptionCount.textContent = String(descriptionInput.value.length);
+    }
+  }
+
+  if (descriptionInput) {
+    descriptionInput.addEventListener("input", () => {
+      descriptionIsPrefilled = false;
+      updateDescriptionCount();
     });
   }
 
@@ -461,11 +500,16 @@ document.addEventListener("DOMContentLoaded", () => {
     const typed = ["x", "y", "z"].map((axis) => String(raw[axis] ?? "").trim());
     if (typed.every((value) => !value)) {
       setFieldError("coordinates", null);
+      markCoordinateAxes([]);
       return;
     }
     const [x, y, z] = typed;
-    const { errors } = NCZ.collectLocationForm({ ...raw, x: x || "0", y: y || "0", z: z || "0" });
-    setFieldError("coordinates", errors.coordinates ?? null);
+    const problems = NCZ.coordinateProblems(x || "0", y || "0", z || "0");
+    setFieldError("coordinates", problems.message);
+    // Only the boxes with something in them: a blank stood in as 0 above, and
+    // reddening a box the submitter has not reached yet is a false accusation.
+    const filled = new Set(["x", "y", "z"].filter((_, i) => typed[i]));
+    markCoordinateAxes(problems.axes.filter((axis) => filled.has(axis)));
   }
 
   ["bbcode-coord-x", "bbcode-coord-y", "bbcode-coord-z"].forEach((id) => {
@@ -597,6 +641,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (contactInput) contactInput.value = "";
     if (modSelect) modSelect.value = candidates.length ? "" : MANUAL_MOD_VALUE;
     nameIsPrefilled = true;
+    descriptionIsPrefilled = true;
+    authorsIsPrefilled = true;
     onModSelectionChange();
 
     clearErrors();

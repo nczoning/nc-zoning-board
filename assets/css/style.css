@@ -2506,20 +2506,39 @@ body::before {
     flex-shrink: 0;
 }
 
-/* Amber, matching .warning-text: the palette has no error colour, and a red
-   would be the only one on the page. */
 .submit-field-error {
-    color: var(--tertiary);
+    color: var(--status-critical);
     font-size: var(--text-sm);
     margin: var(--space-2xs) 0 0 0;
 }
 
+/* The refused control itself, keyed off the attribute the script sets rather
+   than a parallel class, so what a screen reader announces and what the eye
+   sees cannot drift apart.
+
+   The element is named in the selector to beat the base control rule
+   (`input:not([type="checkbox"]):not([type="radio"]), select, textarea`), whose
+   two :not() arguments carry the specificity of an attribute selector each. A
+   class plus a bare attribute loses to it and the border stays grey. Held
+   through :focus, or it reverts the moment the box being complained about is
+   clicked. */
+.bbcode-modal-body .bbcode-form input[aria-invalid="true"],
+.bbcode-modal-body .bbcode-form select[aria-invalid="true"],
+.bbcode-modal-body .bbcode-form textarea[aria-invalid="true"] {
+    border-color: var(--status-critical);
+    background: var(--status-critical-10);
+
+    &:focus {
+        border-color: var(--status-critical);
+    }
+}
+
 .submit-form-error {
-    color: var(--tertiary);
+    color: var(--status-critical);
     font-size: var(--text-sm);
     padding: var(--space-sm);
-    border: var(--ui-border-thin) dashed var(--tertiary);
-    background: var(--tertiary-05);
+    border: var(--ui-border-thin) solid var(--status-critical);
+    background: var(--status-critical-10);
     margin: 0 0 var(--space-md) 0;
 }
 

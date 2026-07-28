@@ -504,7 +504,7 @@
             </div>
             <div class="terminal-body bbcode-modal-body">
                 <ol class="bbcode-steps">
-                    <li><strong>TAG YOUR MOD</strong>: add the <code>NCZoning</code> tag to your mod on Nexus Mods. Tagged mods appear in the list below with their name and image ready to pick, which is all the tag does. It is optional: paste your mod's link instead and nothing else changes.</li>
+                    <li><strong>TAG YOUR MOD</strong>: add the <code>NCZoning</code> tag to your mod on Nexus Mods. That is all the tag does now: it puts your mod in the list below, with its title, short description and uploader ready to edit. It is optional, and a mod submitted by link is treated exactly the same.</li>
                     <li><strong>ACQUIRE COORDINATES</strong>: open CET in-game, run the command below in the console. Copy the output and paste the values below:
                         <div class="bbcode-cet-command-block">
                             <code id="bbcode-cet-command">local p,r = GetPlayer():GetWorldPosition(), GetPlayer():GetWorldOrientation():ToEulerAngles(); print(string.format("x=%.4f  y=%.4f  z=%.4f  yaw=%.4f", p.x, p.y, p.z, r.yaw))</code>
@@ -537,14 +537,14 @@
                     <div class="bbcode-field-row">
                         <label class="bbcode-label" for="submit-name">Location name</label>
                         <input type="text" id="submit-name" class="bbcode-input" placeholder="e.g. Cliffside Abode Player Home">
-                        <div class="bbcode-coord-note">Prefilled from your mod's Nexus title once you pick it above, which is what the <code>NCZoning</code> tag is for. Edit it to name the location itself, not the mod page.</div>
                         <p class="submit-field-error" id="submit-error-name" hidden></p>
+                        <div class="bbcode-coord-note">Prefilled from your mod's Nexus title once you pick it above. Edit it to name the location itself, not the mod page.</div>
                     </div>
                     <div class="bbcode-field-row">
                         <label class="bbcode-label" for="submit-description">Description</label>
                         <textarea id="submit-description" class="bbcode-textarea" rows="3" maxlength="500" placeholder="What is at these coordinates, in a sentence or two."></textarea>
-                        <div class="bbcode-coord-note">Not prefilled: your Nexus page describes the mod, and this describes the place. It is what a reviewer reads. <span id="submit-description-count">0</span>/500 characters.</div>
                         <p class="submit-field-error" id="submit-error-description" hidden></p>
+                        <div class="bbcode-coord-note">Prefilled from your mod's Nexus summary, the same text auto-discovery published. Edit it to describe the place rather than the mod: this is what a reviewer reads. <span id="submit-description-count">0</span>/500 characters.</div>
                     </div>
                     <div class="bbcode-field-row">
                         <label class="bbcode-label">CET Coordinates</label>
@@ -562,8 +562,8 @@
                                 <input type="number" id="bbcode-coord-z" placeholder="e.g. 42.5" step="any">
                             </div>
                         </div>
-                        <div class="bbcode-coord-note">Paste the three values from the CET output above, in the same order. Z is the height, so do not swap it with Y. Coordinates can be negative: include the minus sign if there is one (e.g. <code>-1234.56</code>). Night City sits within about ±4000 on X and Y and ±300 on Z; anything past ±8000, or past -1000 to 2000 on Z, is refused.</div>
                         <p class="submit-field-error" id="submit-error-coordinates" hidden></p>
+                        <div class="bbcode-coord-note">Paste the three values from the CET output above, in the same order. Z is the height, so do not swap it with Y. Coordinates can be negative: include the minus sign if there is one (e.g. <code>-1234.56</code>). Night City sits within about ±4000 on X and Y and ±300 on Z; anything past ±8000, or past -1000 to 2000 on Z, is refused.</div>
                     </div>
                     <div class="bbcode-field-row">
                         <label class="bbcode-label" for="bbcode-yaw">Yaw <span class="bbcode-optional">(optional: player facing direction in degrees, useful for teleport)</span></label>
@@ -589,6 +589,7 @@
                         <label class="bbcode-label" for="bbcode-authors">Authors <span class="bbcode-optional">(comma-separated)</span></label>
                         <input type="text" id="bbcode-authors" class="bbcode-input" placeholder="e.g. Author1, Author2">
                         <p class="submit-field-error" id="submit-error-authors" hidden></p>
+                        <div class="bbcode-coord-note">Prefilled with the mod's Nexus uploader once you pick it above. Add anyone else who worked on the location, separated by commas.</div>
                     </div>
                     <div class="bbcode-field-row">
                         <label class="bbcode-label" for="bbcode-credits">Credits <span class="bbcode-optional">(optional)</span></label>
@@ -602,8 +603,8 @@
                     <div class="bbcode-field-row">
                         <label class="bbcode-label" for="submit-contact">Contact <span class="bbcode-optional">(optional)</span></label>
                         <input type="text" id="submit-contact" class="bbcode-input" maxlength="200" placeholder="e.g. Discord handle">
-                        <div class="bbcode-coord-note">Only so a reviewer can ask you a question about this submission. Nothing else reads it, and leaving it blank does not affect the outcome. See the <a href="https://github.com/nczoning/nc-zoning-board/blob/main/docs/privacy.md" target="_blank" rel="noopener" class="terminal-link">privacy note</a> for what is stored and for how long.</div>
                         <p class="submit-field-error" id="submit-error-contact" hidden></p>
+                        <div class="bbcode-coord-note">Only so a reviewer can ask you a question about this submission. Nothing else reads it, and leaving it blank does not affect the outcome. See the <a href="https://github.com/nczoning/nc-zoning-board/blob/main/docs/privacy.md" target="_blank" rel="noopener" class="terminal-link">privacy note</a> for what is stored and for how long.</div>
                     </div>
                     <div class="bbcode-field-row">
                         <div id="submit-turnstile" class="submit-turnstile"></div>

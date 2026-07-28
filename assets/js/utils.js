@@ -435,6 +435,62 @@ NCZ.parseNexusRef = function (input) {
   return { error: "Enter the mod's Nexus page URL, or its numeric id." };
 };
 
+// Which of the three coordinate values are unusable, and the one message that
+// covers them.
+//
+// Split out because the row is a single control in the form and three boxes on
+// the screen: the message belongs to the row, the red border belongs to the box
+// that is wrong. It takes the three values rather than a whole form, so the
+// live check can call it on every keystroke.
+//
+// @returns {{axes: string[], message: string|null}}
+NCZ.coordinateProblems = function (x, y, z) {
+  const parse = (v) => parseFloat(String(v ?? "").trim());
+  const values = { x: parse(x), y: parse(y), z: parse(z) };
+  const failed = new Set();
+  const messages = [];
+
+  // Every problem in the row, not the first one. Returning early on the X/Y
+  // check hides a bad Z until X is fixed, so a submitter corrects one number,
+  // sends, and meets the next complaint.
+  const missing = ["x", "y", "z"].filter((axis) => !Number.isFinite(values[axis]));
+  if (missing.length) {
+    missing.forEach((axis) => failed.add(axis));
+    messages.push("Enter X, Y and Z as numbers.");
+  }
+
+  const outside = ["x", "y"].filter((axis) => Number.isFinite(values[axis]) && (
+    axis === "x"
+      ? values.x < NCZ.TERRAIN_MIN_X || values.x > NCZ.TERRAIN_MAX_X
+      : values.y < NCZ.TERRAIN_MIN_Y || values.y > NCZ.TERRAIN_MAX_Y
+  ));
+  if (outside.length) {
+    outside.forEach((axis) => failed.add(axis));
+    messages.push(`X and Y must be between ${NCZ.TERRAIN_MIN_X} and ${NCZ.TERRAIN_MAX_X}.`);
+  }
+
+  if (Number.isFinite(values.z) && (values.z < NCZ.COORD_Z_MIN || values.z > NCZ.COORD_Z_MAX)) {
+    failed.add("z");
+    messages.push(`Z must be between ${NCZ.COORD_Z_MIN} and ${NCZ.COORD_Z_MAX}.`);
+  }
+
+  return {
+    axes: ["x", "y", "z"].filter((axis) => failed.has(axis)),
+    message: messages.length ? `${messages.join(" ")} Check the values against the CET output.` : null,
+  };
+};
+
+// A Nexus summary as a starting description.
+//
+// The same truncation merge.js applies when it builds an auto-discovered
+// record's description from the summary, so a submitter sees what that path
+// would have published, and can edit it.
+NCZ.summaryToDescription = function (summary) {
+  const text = String(summary ?? "").trim();
+  if (text.length <= NCZ.DESCRIPTION_MAX_LENGTH) return text;
+  return `${text.slice(0, NCZ.DESCRIPTION_MAX_LENGTH - 3)}...`;
+};
+
 // Read and validate the location fields both submission modals collect.
 //
 // Pure: the caller passes raw strings and gets back the payload POST
@@ -473,16 +529,9 @@ NCZ.collectLocationForm = function (raw, { knownTags } = {}) {
     errors.description = `Keep the description to ${NCZ.DESCRIPTION_MAX_LENGTH} characters or fewer.`;
   }
 
-  // One message for the coordinate row, which is one control in the form.
   const nums = ["x", "y", "z"].map((k) => parseFloat(text(raw[k])));
-  const [x, y, z] = nums;
-  if (!nums.every(Number.isFinite)) {
-    errors.coordinates = "Enter all three coordinates, X, Y and Z, as numbers.";
-  } else if (x < NCZ.TERRAIN_MIN_X || x > NCZ.TERRAIN_MAX_X || y < NCZ.TERRAIN_MIN_Y || y > NCZ.TERRAIN_MAX_Y) {
-    errors.coordinates = `X and Y must be between ${NCZ.TERRAIN_MIN_X} and ${NCZ.TERRAIN_MAX_X}. Check the values against the CET output.`;
-  } else if (z < NCZ.COORD_Z_MIN || z > NCZ.COORD_Z_MAX) {
-    errors.coordinates = `Z must be between ${NCZ.COORD_Z_MIN} and ${NCZ.COORD_Z_MAX}. Check the values against the CET output.`;
-  }
+  const coordinates = NCZ.coordinateProblems(raw.x, raw.y, raw.z);
+  if (coordinates.message) errors.coordinates = coordinates.message;
 
   const yawText = text(raw.yaw);
   let yaw = null;
@@ -509,7 +558,7 @@ NCZ.collectLocationForm = function (raw, { knownTags } = {}) {
     name,
     authors,
     description,
-    coordinates: nums.every(Number.isFinite) ? [x, y, z] : [],
+    coordinates: nums.every(Number.isFinite) ? nums : [],
     yaw,
     category,
     tags,

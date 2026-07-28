@@ -136,6 +136,102 @@ test('one mod supplying two locations is still one cache row and not a candidate
     'a mod with two locations is still already on the map');
 });
 
+// ------------------------------------------------------------------ prefill ---
+// The submit form prefills its description and author from these, the way
+// merge.js builds those two fields of an auto-discovered record. The columns
+// exist so that prefill survives auto-discovery being replaced by the queue.
+
+test('a candidate carries the mod summary, so the form can prefill a description', async () => {
+  const env = { DB: sqliteD1() };
+  await refreshNexusCache(env, {
+    fetchImpl: fakeNexus({ tagged: [node('100', { summary: 'A rooftop bar above Kabuki.' })] }),
+    nowIso: NOW,
+  });
+
+  const [candidate] = await readCandidates(env);
+  assert.equal(candidate.summary, 'A rooftop bar above Kabuki.');
+});
+
+test('a candidate carries the uploader, which is the first author on the record', async () => {
+  // merge.js:73 builds authors as [uploader.name, ...names from the block], so
+  // the uploader is the one author the mod page itself supplies.
+  const env = { DB: sqliteD1() };
+  await refreshNexusCache(env, {
+    fetchImpl: fakeNexus({ tagged: [node('100', { uploader: { name: 'Spuddeh' } })] }),
+    nowIso: NOW,
+  });
+
+  const [candidate] = await readCandidates(env);
+  assert.equal(candidate.uploader, 'Spuddeh');
+});
+
+test('a changed uploader is written on a later sweep', async () => {
+  // Mod ownership does move on Nexus. Without this the first write would be the
+  // only one, and the form would prefill the previous owner forever.
+  const env = { DB: sqliteD1() };
+  const before = fakeNexus({ tagged: [node('100', { uploader: { name: 'Before' } })] });
+  await refreshNexusCache(env, { fetchImpl: before, nowIso: NOW });
+
+  const unchanged = await refreshNexusCache(env, { fetchImpl: before, nowIso: NOW });
+  assert.equal(unchanged.written, 0, 'an unchanged uploader must not cost a write on every tick');
+
+  const after = fakeNexus({ tagged: [node('100', { uploader: { name: 'After' } })] });
+  const r = await refreshNexusCache(env, { fetchImpl: after, nowIso: NOW });
+  assert.equal(r.written, 1);
+  assert.equal((await readCandidates(env))[0].uploader, 'After');
+});
+
+test('a node with no uploader yields null rather than a broken read', async () => {
+  const env = { DB: sqliteD1() };
+  await refreshNexusCache(env, { fetchImpl: fakeNexus({ tagged: [node('100', { uploader: null })] }), nowIso: NOW });
+
+  const [candidate] = await readCandidates(env);
+  assert.ok('uploader' in candidate);
+  assert.equal(candidate.uploader, null);
+});
+
+test('a mod with no summary is a candidate with a null one, not a missing key', async () => {
+  // The form reads the field on every candidate. An absent key and an empty
+  // summary must not be two different shapes to it.
+  const env = { DB: sqliteD1() };
+  await refreshNexusCache(env, { fetchImpl: fakeNexus({ tagged: [node('100', { summary: null })] }), nowIso: NOW });
+
+  const [candidate] = await readCandidates(env);
+  assert.ok('summary' in candidate);
+  assert.equal(candidate.summary, null);
+});
+
+test('an edited summary is written, and the write gate still holds when it is not', async () => {
+  const env = { DB: sqliteD1() };
+  const first = fakeNexus({ tagged: [node('100', { summary: 'Before' })] });
+  await refreshNexusCache(env, { fetchImpl: first, nowIso: NOW });
+
+  const unchanged = await refreshNexusCache(env, { fetchImpl: first, nowIso: NOW });
+  assert.equal(unchanged.written, 0, 'an unchanged summary must not cost a write on every tick');
+
+  const edited = fakeNexus({ tagged: [node('100', { summary: 'After' })] });
+  const r = await refreshNexusCache(env, { fetchImpl: edited, nowIso: NOW });
+  assert.equal(r.written, 1);
+  assert.equal((await readCandidates(env))[0].summary, 'After');
+});
+
+test('an archives-only write leaves the summary alone', async () => {
+  // refreshArchives builds rows with no summary key at all. Without the
+  // COALESCE on the upsert, an archive refresh would blank it.
+  const env = { DB: sqliteD1() };
+  await refreshNexusCache(env, {
+    fetchImpl: fakeNexus({ tagged: [node('100', { summary: 'Kept' })] }),
+    nowIso: NOW,
+  });
+
+  const index = await readNexusIndex(env);
+  await refreshArchives(env, fakeArchiveFetch(), {
+    records: [record('100')], index, nowIso: NOW,
+  });
+
+  assert.equal((await readCandidates(env))[0].summary, 'Kept');
+});
+
 // ------------------------------------------------------------------- limits ---
 
 test('a sweep of 300 mods stays inside D1 bound parameter limits', async () => {
