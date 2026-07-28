@@ -8,7 +8,7 @@
     "validate": "node scripts/validate_tags.js",
     "encode-meshopt": "node scripts/encode_glbs_meshopt.js",
     "build-lut": "node scripts/build_lut.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test \"test/**/*.test.js\""
   },
   "repository": {
     "type": "git",

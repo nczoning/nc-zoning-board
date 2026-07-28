@@ -2340,23 +2340,6 @@ body::before {
     }
 }
 
-.coord-help-btn {
-    background: transparent;
-    border: var(--ui-border-thin) solid var(--gray);
-    color: var(--gray);
-    font-family: var(--font-heading);
-    font-size: var(--text-2xs);
-    padding: var(--space-2xs) var(--space-sm);
-    cursor: help;
-    transition: var(--transition-fast);
-    flex-shrink: 0;
-
-    &:hover {
-        border-color: var(--secondary);
-        color: var(--secondary);
-    }
-}
-
 .bbcode-tag-grid {
     display: flex;
     flex-wrap: wrap;
@@ -2411,30 +2394,6 @@ body::before {
     }
 }
 
-.bbcode-output {
-    width: 100%;
-    background: var(--black-50);
-    border: var(--ui-border-thin) solid var(--dark-accent);
-    color: var(--secondary);
-    padding: var(--space-md);
-    font-family: monospace;
-    font-size: var(--text-sm);
-    resize: vertical;
-    margin-top: var(--space-xs);
-    line-height: var(--lh-relaxed);
-}
-
-.bbcode-copy-btn {
-    margin-top: var(--space-xs) !important;
-    border-color: var(--tertiary) !important;
-    color: var(--tertiary) !important;
-
-    &:hover {
-        background: var(--tertiary) !important;
-        color: var(--primary) !important;
-    }
-}
-
 .bbcode-cet-command-block {
     display: flex;
     gap: var(--space-sm);
@@ -2458,13 +2417,7 @@ body::before {
 }
 
 
-/* ── BBCode Steps & Notes ────────────────────────────────────────── */
-.bbcode-doc-link {
-    font-size: var(--text-sm);
-    margin-bottom: var(--space-md);
-    display: inline-block;
-}
-
+/* ── Steps & Notes ───────────────────────────────────────────────── */
 .bbcode-steps {
     list-style: none;
     counter-reset: step;
@@ -2508,6 +2461,172 @@ body::before {
     color: var(--gray);
     font-style: italic;
     margin-bottom: var(--space-lg);
+}
+
+/* ── Submit a Location ───────────────────────────────────────────────── */
+/* Layered on the .bbcode-* rules above rather than parallel to them: the two
+   share every field, and only the send path is new. */
+
+/* .terminal-link is a block, sized for the sidebar. Inside a sentence it has to
+   be a word. */
+.bbcode-coord-note .terminal-link {
+    display: inline;
+    padding: 0;
+    border-left: none;
+    font-size: inherit;
+
+    &:hover {
+        background: transparent;
+    }
+}
+
+.submit-subfield {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    margin-top: var(--space-xs);
+}
+
+.submit-mod-card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    border: var(--ui-border-thin) solid var(--border-subtle);
+    background: var(--black-50);
+    color: var(--white);
+    font-size: var(--text-sm);
+}
+
+.submit-mod-thumb {
+    width: 64px;
+    height: 36px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.submit-field-error {
+    color: var(--status-critical);
+    font-size: var(--text-sm);
+    margin: var(--space-2xs) 0 0 0;
+}
+
+/* The refused control itself, keyed off the attribute the script sets rather
+   than a parallel class, so what a screen reader announces and what the eye
+   sees cannot drift apart.
+
+   The element is named in the selector to beat the base control rule
+   (`input:not([type="checkbox"]):not([type="radio"]), select, textarea`), whose
+   two :not() arguments carry the specificity of an attribute selector each. A
+   class plus a bare attribute loses to it and the border stays grey. Held
+   through :focus, or it reverts the moment the box being complained about is
+   clicked. */
+.bbcode-modal-body .bbcode-form input[aria-invalid="true"],
+.bbcode-modal-body .bbcode-form select[aria-invalid="true"],
+.bbcode-modal-body .bbcode-form textarea[aria-invalid="true"] {
+    border-color: var(--status-critical);
+    background: var(--status-critical-10);
+
+    &:focus {
+        border-color: var(--status-critical);
+    }
+}
+
+.submit-form-error {
+    color: var(--status-critical);
+    font-size: var(--text-sm);
+    padding: var(--space-sm);
+    border: var(--ui-border-thin) solid var(--status-critical);
+    background: var(--status-critical-10);
+    margin: 0 0 var(--space-md) 0;
+}
+
+/* A rate limit is not a validation failure, so it does not borrow the shape
+   the field errors use. */
+.submit-form-error-notice {
+    color: var(--gray);
+    border-style: solid;
+    border-color: var(--border-subtle);
+    background: var(--black-50);
+}
+
+.submit-turnstile {
+    min-height: 65px;
+}
+
+.submit-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.submit-send-btn {
+    flex: 3;
+}
+
+.submit-reset-btn {
+    flex: 1;
+    border-color: var(--gray);
+    color: var(--gray);
+}
+
+/* The submitted state replaces the form rather than sitting under it: the
+   submission cannot be edited after sending, so leaving the fields live would
+   invite an edit that goes nowhere. */
+.bbcode-form.is-submitted > *:not(#submit-done) {
+    display: none;
+}
+
+/* The steps and the note describe filling the form in, so they leave with it. */
+.bbcode-modal-body.is-submitted {
+    .bbcode-steps,
+    > .bbcode-note {
+        display: none;
+    }
+}
+
+.submit-done {
+    border: var(--ui-border-thin) solid var(--secondary);
+    background: var(--black-50);
+    padding: var(--space-md);
+}
+
+.submit-done-title {
+    font-family: var(--font-heading);
+    color: var(--secondary);
+    font-size: var(--text-md);
+    letter-spacing: 1px;
+    margin: 0 0 var(--space-sm) 0;
+}
+
+.submit-done-body {
+    font-size: var(--text-sm);
+    color: var(--white);
+    margin: 0 0 var(--space-sm) 0;
+}
+
+.submit-done-id {
+    font-family: monospace;
+    color: var(--tertiary);
+}
+
+/* Submitting a location is plausibly a phone task, with the game running
+   somewhere else. The fixed-width coordinate inputs are the only rule in the
+   modal that cannot reflow on its own. */
+@media (max-width: 768px) {
+    .bbcode-coord-inputs {
+        input[type="number"] {
+            width: 100%;
+        }
+    }
+
+    .coord-input-group {
+        flex: 1 1 45%;
+    }
+
+    .submit-actions {
+        flex-direction: column;
+    }
 }
 
 /* ── MarkerCluster style ────────────────────────────────────────── */

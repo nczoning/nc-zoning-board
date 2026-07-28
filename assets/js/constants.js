@@ -143,6 +143,44 @@ NCZ.DESCRIPTION_MAX_LENGTH = 500;
 NCZ.COPY_FEEDBACK_MS = 2000;
 NCZ.SEARCH_DEBOUNCE_MS = 200;
 
+// ── Submissions (POST /submissions) ──────────────────────────────────────────
+
+// Turnstile widget site key. Public by design: it names the widget in the
+// markup, and the secret it pairs with is a Worker secret.
+//
+// The widget's allowed-hostnames list must cover every origin that renders the
+// form, dev.nczoning.net and localhost included, or Turnstile refuses to draw
+// and the form cannot be submitted from there.
+NCZ.TURNSTILE_SITE_KEY = "0x4AAAAAAD_ZV_WBiAX688lD";
+
+// Field limits the Worker enforces on a submission. Mirrored here so a
+// submitter is told before sending rather than by a 400 afterwards.
+// Sources: NOTE_MAX and CONTACT_MAX in worker/src/submissions.js,
+// DESCRIPTION_MAX in worker/src/validate.js.
+NCZ.SUBMISSION_NOTE_MAX = 1000;
+NCZ.SUBMISSION_CONTACT_MAX = 200;
+NCZ.NAME_MIN_LENGTH = 3;
+
+// Coordinate bounds for the write path, mirroring TERRAIN_* and COORD_Z_* in
+// worker/src/config.js. The server is the enforcement point; these exist so the
+// form can refuse the same values inline.
+//
+// DELIBERATELY NOT NCZ.WORLD_MIN_X and friends above, which describe the
+// satellite tile projection and are tighter than the terrain in every
+// direction: they would refuse a location standing on rendered ground.
+NCZ.TERRAIN_MIN_X = -8000;
+NCZ.TERRAIN_MAX_X = 8000;
+NCZ.TERRAIN_MIN_Y = -8000;
+NCZ.TERRAIN_MAX_Y = 8000;
+NCZ.COORD_Z_MIN = -1000;
+NCZ.COORD_Z_MAX = 2000;
+
+// Advisory, not the limit: where Night City coordinates usually land. Quoted in
+// the form as guidance so a value inside the terrain bounds but far outside the
+// city reads as worth checking.
+NCZ.COORD_TYPICAL_XY = 4000;
+NCZ.COORD_TYPICAL_Z = 300;
+
 // Deep-linking / URL sharing
 NCZ.SITE_URL      = "https://nczoning.net";
 NCZ.URL_PARAM_MOD = "mod";

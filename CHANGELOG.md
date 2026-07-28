@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The cron keeps a Nexus mod index in D1, covering every tagged mod and every mod the map serves. It backs the submissions candidate list without a live Nexus call, and it is where the four Nexus-derived fields on each location now come from.
 - The parity gate covers all 18 served fields, including the thumbnails, pictures, update times and archive listings it could not rebuild before.
-- `POST /submissions` queues a new location, an edit or a removal request for review. Anonymous, behind a Turnstile check and a limit of 5 per address per hour, and nothing it accepts reaches the map without a reviewer approving it. The map's own submit form still goes through GitHub until the modal is rebuilt.
+- `POST /submissions` queues a new location, an edit or a removal request for review. Anonymous, behind a Turnstile check and a limit of 5 per address per hour, and nothing it accepts reaches the map without a reviewer approving it.
 - A privacy note at [docs/privacy.md](docs/privacy.md). Submissions are the first personal data the site collects: a salted one-way hash of the submitter's address, kept 90 days and then cleared automatically.
 - A review queue in the dashboard: pending submissions with a rendered diff of what each one changes and a mini-map of the proposed pin, and approve, reject or hold each one. Approving writes the location and rebuilds the map's data. Nothing is sent to the submitter: a review note is an internal record, and the queue says so.
 - Rebuild in the dashboard now also re-reads the page's own data, so a registry that changed underneath an open tab stops showing the copy it loaded with. A record open in the detail pane that no longer exists is closed rather than left on screen.
@@ -33,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nexus IDs are links to the mod page wherever the dashboard shows one, including a live one under the ID field in the editor. `WIP` and `Dummy` stay plain text, since they have no page to open.
 - A new-pin submission for a mod already on the map shows the records it would sit alongside, and how far away they are. One mod can legitimately supply several locations, so this is context rather than a warning; where the existing record is hidden, the queue offers to restore that one instead of creating a second.
 - A candidates tab listing NCZoning-tagged Nexus mods with no pin yet. Add one to the map with the editor prefilled, or dismiss it with a reason. Dismissals are reversible, which the Discord alert this replaces was not.
+- The submit form sends a location to the review queue. It starts from your mod (picked from the tagged list, or a Nexus link) and now collects the name and description the registry requires, which the block never carried.
+- Picking a tagged mod prefills its title, short description and uploader, the same three things auto-discovery took from the Nexus page. All three stay editable.
+- The coordinate boxes are checked as you type. The box that is wrong goes red, and every problem in the row is named at once rather than one per attempt.
 
 ### Fixed
 
@@ -45,6 +48,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **API `0.3.0` → `0.4.0`.** `/v1/tags` now returns an array of `{slug, name, description, sort_order}` instead of a `{tag: description}` map, matching `/v1/locations` and the shape the in-game parser maps most easily. `name` falls back to the slug, so nothing renders differently. Breaking, and taken now while the pre-1.0 window makes it free.
 - Tags are registry data in D1 rather than `data/tags.json`, so they can be edited in the dashboard instead of by pull request, and a mistyped tag is rejected on write rather than caught in CI afterwards. The site reads `/v1/tags`, falling back to the static file only if the API is unreachable.
+- The submit form reports every problem at once, beside the field, instead of one alert at a time. Its coordinate limits are the ones the server enforces; the older, tighter numbers would have refused four locations already on the map.
+
+### Removed
+
+- The BBCode generator. Nothing is pasted into a Nexus description any more: the `NCZoning` tag now only puts a mod in the submit form's picker, with its name and image ready to use. The block had to be placed and formatted by hand, most attempts needed correcting, and it published a pin with no review step.
 
 ## [1.7.2] - 2026-07-26
 

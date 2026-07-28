@@ -38,6 +38,12 @@
  * "Cliffside Abode Player Home". Serving this column would undo that. It exists
  * so a rename can be detected by diffing it against locations.name.
  *
+ * `summary` and `uploader` are the opposite: they exist to be handed out. The
+ * candidates list serves them so the submit form can prefill a description and
+ * an author, which is exactly what merge.js builds those two fields of an
+ * auto-discovered record from. They are starting points for a submitter to
+ * edit, never published values.
+ *
  * ## Archives live here too, and cost the most to fetch
  *
  * The `.archive` file names a mod ships (installed-mod detection) are a
@@ -67,8 +73,8 @@ import { readArchives } from './store.js';
 
 /** Columns compared to decide whether a row needs writing. */
 const TRACKED = [
-  'name', 'updated_at', 'thumbnail_url', 'picture_url', 'archives', 'archives_at',
-  'nczoning_tagged',
+  'name', 'summary', 'uploader', 'updated_at', 'thumbnail_url', 'picture_url',
+  'archives', 'archives_at', 'nczoning_tagged',
 ];
 
 // Per-tick archive budgets, carried over from refresh.js unchanged. Archives are
@@ -94,6 +100,10 @@ function nodeToRow(node, tagged) {
   return {
     nexus_id: String(node.modId),
     name: node.name ?? null,
+    // The two fields merge.js builds an auto-discovered record's description
+    // and first author from, kept so the submit form can prefill the same way.
+    summary: node.summary ?? null,
+    uploader: node.uploader?.name ?? null,
     updated_at: node.updatedAt ?? null,
     thumbnail_url: node.thumbnailUrl ?? null,
     picture_url: node.pictureUrl ?? null,
@@ -104,8 +114,8 @@ function nodeToRow(node, tagged) {
 /** Existing rows, keyed by nexus_id. One query, no bound parameters. */
 export async function readNexusCache(env) {
   const { results } = await env.DB.prepare(
-    `SELECT nexus_id, name, updated_at, thumbnail_url, picture_url, archives,
-            archives_at, nczoning_tagged, fetched_at
+    `SELECT nexus_id, name, summary, uploader, updated_at, thumbnail_url,
+            picture_url, archives, archives_at, nczoning_tagged, fetched_at
        FROM nexus_cache`,
   ).all();
   const map = new Map();
@@ -174,7 +184,7 @@ export async function readNexusIndex(env) {
  */
 export async function readCandidates(env) {
   const { results } = await env.DB.prepare(
-    `SELECT nexus_id, name, thumbnail_url, picture_url, updated_at
+    `SELECT nexus_id, name, summary, uploader, thumbnail_url, picture_url, updated_at
        FROM nexus_cache
       WHERE nczoning_tagged = 1
         AND nexus_id NOT IN (SELECT nexus_id FROM locations WHERE nexus_id IS NOT NULL)
@@ -184,6 +194,8 @@ export async function readCandidates(env) {
   return (results ?? []).map((r) => ({
     nexus_id: String(r.nexus_id),
     name: r.name ?? 'Unknown Mod',
+    summary: r.summary ?? null,
+    uploader: r.uploader ?? null,
     thumbnail_url: r.thumbnail_url ?? null,
     picture_url: r.picture_url ?? null,
     updated_at: r.updated_at ?? null,
@@ -226,11 +238,13 @@ async function writeRows(env, rows, nowIso) {
   if (!rows.length) return 0;
   const stmt = env.DB.prepare(
     `INSERT INTO nexus_cache
-       (nexus_id, name, updated_at, thumbnail_url, picture_url, archives,
-        archives_at, nczoning_tagged, fetched_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (nexus_id, name, summary, uploader, updated_at, thumbnail_url, picture_url,
+        archives, archives_at, nczoning_tagged, fetched_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(nexus_id) DO UPDATE SET
        name            = COALESCE(excluded.name, nexus_cache.name),
+       summary         = COALESCE(excluded.summary, nexus_cache.summary),
+       uploader        = COALESCE(excluded.uploader, nexus_cache.uploader),
        updated_at      = COALESCE(excluded.updated_at, nexus_cache.updated_at),
        thumbnail_url   = COALESCE(excluded.thumbnail_url, nexus_cache.thumbnail_url),
        picture_url     = COALESCE(excluded.picture_url, nexus_cache.picture_url),
@@ -242,6 +256,8 @@ async function writeRows(env, rows, nowIso) {
   await env.DB.batch(rows.map((r) => stmt.bind(
     String(r.nexus_id),
     r.name ?? null,
+    r.summary ?? null,
+    r.uploader ?? null,
     r.updated_at ?? null,
     r.thumbnail_url ?? null,
     r.picture_url ?? null,

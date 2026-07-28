@@ -198,17 +198,323 @@ document.addEventListener("DOMContentLoaded", () => {
     applyThemeById(initialThemeId, { persist: false });
   }
 
-  // BBCode Generator Modal Logic
+  // Submit a Location Modal
   const bbcodeBtn = document.getElementById("bbcode-btn");
   const bbcodeModal = document.getElementById("bbcode-modal");
   const closeBbcodeModalBtn = document.getElementById("close-bbcode-modal");
+  const submitForm = bbcodeModal?.querySelector(".bbcode-form");
+  const modSelect = document.getElementById("submit-mod-select");
+  const modManualRow = document.getElementById("submit-mod-manual");
+  const modCard = document.getElementById("submit-mod-card");
+  const modCardName = document.getElementById("submit-mod-card-name");
+  const modThumb = document.getElementById("submit-mod-thumb");
+  const nameInput = document.getElementById("submit-name");
+  const authorsInput = document.getElementById("bbcode-authors");
+  const descriptionInput = document.getElementById("submit-description");
+  const descriptionCount = document.getElementById("submit-description-count");
+  const sendBtn = document.getElementById("submit-send-btn");
+  const donePanel = document.getElementById("submit-done");
+  const formErrorEl = document.getElementById("submit-form-error");
+
+  const MANUAL_MOD_VALUE = "__manual__";
+  const ERROR_FIELDS = [
+    "nexus_id", "name", "description", "coordinates", "yaw", "category",
+    "tags", "authors", "note", "contact", "turnstile",
+  ];
+  // The control to focus when a field is refused, in the order the form reads.
+  const FIELD_CONTROL = {
+    nexus_id: "submit-nexus-ref",
+    name: "submit-name",
+    description: "submit-description",
+    coordinates: "bbcode-coord-x",
+    yaw: "bbcode-yaw",
+    category: "bbcode-category",
+    authors: "bbcode-authors",
+    note: "submit-note",
+    contact: "submit-contact",
+  };
+
+  let candidates = [];
+  let candidatesState = "idle";
+  // A prefilled value is replaced when the mod changes; a typed one is not.
+  let nameIsPrefilled = true;
+  let descriptionIsPrefilled = true;
+  let authorsIsPrefilled = true;
 
   function openBbcodeModal() {
     bbcodeModal.classList.remove("hidden");
+    loadCandidates();
+    mountTurnstile();
   }
   function closeBbcodeModal() {
     bbcodeModal.classList.add("hidden");
   }
+
+  // ── Turnstile ──────────────────────────────────────────────────────────────
+  // Loaded when the modal first opens rather than on page load: it is a
+  // third-party script every visitor would otherwise fetch to render a map.
+
+  const TURNSTILE_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+  let turnstileScript = null;
+  let turnstileWidget = null;
+
+  function loadTurnstileScript() {
+    if (turnstileScript) return turnstileScript;
+    turnstileScript = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = TURNSTILE_SRC;
+      script.async = true;
+      script.defer = true;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error("Turnstile script failed to load"));
+      document.head.appendChild(script);
+    });
+    return turnstileScript;
+  }
+
+  async function mountTurnstile() {
+    if (turnstileWidget !== null) return;
+    if (!NCZ.TURNSTILE_SITE_KEY) {
+      setFieldError("turnstile", "The bot check is not configured on this site, so the form cannot be sent. Report this to the maintainers.");
+      if (sendBtn) sendBtn.disabled = true;
+      return;
+    }
+    try {
+      await loadTurnstileScript();
+      turnstileWidget = window.turnstile.render("#submit-turnstile", {
+        sitekey: NCZ.TURNSTILE_SITE_KEY,
+        // Every theme on this site is dark, so the widget's own auto mode
+        // (which follows the operating system) gets it wrong half the time.
+        theme: "dark",
+        callback: () => setFieldError("turnstile", null),
+      });
+    } catch {
+      // A blocked or failed widget script leaves no way to obtain a token, and
+      // the server refuses a submission without one, so say that rather than
+      // letting the submitter fill the form and lose it at the send.
+      setFieldError("turnstile", "The bot check could not load. A content blocker or network filter is the usual cause.");
+      if (sendBtn) sendBtn.disabled = true;
+    }
+  }
+
+  function turnstileToken() {
+    if (turnstileWidget === null) return "";
+    return window.turnstile?.getResponse(turnstileWidget) ?? "";
+  }
+
+  // Tokens are single-use and expire after five minutes, so every refusal path
+  // that consumed one has to hand back a fresh widget.
+  function resetTurnstile() {
+    if (turnstileWidget !== null) window.turnstile?.reset(turnstileWidget);
+  }
+
+  // ── Field errors ───────────────────────────────────────────────────────────
+
+  function setFieldError(field, message) {
+    const el = document.getElementById(`submit-error-${field}`);
+    if (!el) return;
+    el.textContent = message ?? "";
+    el.hidden = !message;
+    const control = document.getElementById(FIELD_CONTROL[field]);
+    if (control) control.setAttribute("aria-invalid", message ? "true" : "false");
+  }
+
+  // The coordinate row is one message and three boxes, so the message alone
+  // cannot say which number is wrong. aria-invalid carries it, and the styling
+  // hangs off that attribute rather than a class, so the marking a screen
+  // reader announces and the red border are the same fact.
+  function markCoordinateAxes(axes) {
+    ["x", "y", "z"].forEach((axis) => {
+      const box = document.getElementById(`bbcode-coord-${axis}`);
+      box?.setAttribute("aria-invalid", axes.includes(axis) ? "true" : "false");
+    });
+  }
+
+  function setFormError(message, { tone = "error" } = {}) {
+    if (!formErrorEl) return;
+    formErrorEl.textContent = message ?? "";
+    formErrorEl.hidden = !message;
+    formErrorEl.classList.toggle("submit-form-error-notice", tone === "notice");
+  }
+
+  function clearErrors() {
+    ERROR_FIELDS.forEach((field) => setFieldError(field, null));
+    markCoordinateAxes([]);
+    setFormError(null);
+  }
+
+  function showErrors(errors) {
+    Object.entries(errors).forEach(([field, message]) => setFieldError(field, message));
+    const raw = readForm();
+    markCoordinateAxes(errors.coordinates ? NCZ.coordinateProblems(raw.x, raw.y, raw.z).axes : []);
+    const first = ERROR_FIELDS.find((field) => errors[field]);
+    const control = document.getElementById(FIELD_CONTROL[first]);
+    if (control) control.focus();
+  }
+
+  // ── Mod selection ──────────────────────────────────────────────────────────
+
+  function renderCandidateOptions() {
+    if (!modSelect) return;
+    modSelect.innerHTML = "";
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = candidatesState === "failed"
+      ? "Tagged mod list unavailable"
+      : "Select your mod";
+    modSelect.appendChild(placeholder);
+
+    candidates.forEach((candidate) => {
+      const option = document.createElement("option");
+      option.value = candidate.nexus_id;
+      option.textContent = candidate.name;
+      modSelect.appendChild(option);
+    });
+
+    const manual = document.createElement("option");
+    manual.value = MANUAL_MOD_VALUE;
+    manual.textContent = candidates.length ? "My mod isn't listed" : "Enter my mod's Nexus link";
+    modSelect.appendChild(manual);
+
+    // Nothing to choose between: the manual path is the only one, so select it
+    // rather than making the submitter open a two-item list to find that out.
+    if (!candidates.length) {
+      modSelect.value = MANUAL_MOD_VALUE;
+      onModSelectionChange();
+    }
+  }
+
+  async function loadCandidates() {
+    if (candidatesState === "loading" || candidatesState === "loaded") return;
+    candidatesState = "loading";
+    try {
+      candidates = await NCZ.fetchSubmissionCandidates();
+      candidatesState = "loaded";
+    } catch {
+      candidates = [];
+      candidatesState = "failed";
+    }
+    renderCandidateOptions();
+  }
+
+  function selectedCandidate() {
+    return candidates.find((c) => c.nexus_id === modSelect?.value) ?? null;
+  }
+
+  function onModSelectionChange() {
+    if (!modSelect) return;
+    const manual = modSelect.value === MANUAL_MOD_VALUE;
+    modManualRow?.classList.toggle("hidden", !manual);
+
+    const candidate = selectedCandidate();
+    modCard?.classList.toggle("hidden", !candidate);
+    if (candidate) {
+      modCardName.textContent = candidate.name;
+      modThumb.hidden = !candidate.thumbnail_url;
+      if (candidate.thumbnail_url) {
+        modThumb.src = candidate.thumbnail_url;
+        modThumb.alt = "";
+      }
+      if (nameIsPrefilled && nameInput) nameInput.value = candidate.name;
+      // The mod's Nexus summary, truncated the way an auto-discovered record's
+      // description was built from it. A starting point to edit, not an answer.
+      if (descriptionIsPrefilled && descriptionInput) {
+        descriptionInput.value = NCZ.summaryToDescription(candidate.summary);
+        updateDescriptionCount();
+      }
+      // The uploader is the first author on an auto-discovered record, and a
+      // co-author is a name only the submitter knows, so the field stays a
+      // comma-separated list rather than becoming read-only.
+      if (authorsIsPrefilled && authorsInput) {
+        authorsInput.value = candidate.uploader ?? "";
+      }
+    }
+    setFieldError("nexus_id", null);
+  }
+
+  // The mod id the payload carries: the picked candidate, or whatever the
+  // manual field holds. collectLocationForm parses and refuses it, so this
+  // hands over the raw text rather than deciding here.
+  function nexusRefValue() {
+    if (!modSelect || modSelect.value === MANUAL_MOD_VALUE || !modSelect.value) {
+      return document.getElementById("submit-nexus-ref")?.value ?? "";
+    }
+    return modSelect.value;
+  }
+
+  function readForm() {
+    return {
+      name: nameInput?.value,
+      description: descriptionInput?.value,
+      x: document.getElementById("bbcode-coord-x").value,
+      y: document.getElementById("bbcode-coord-y").value,
+      z: document.getElementById("bbcode-coord-z").value,
+      yaw: document.getElementById("bbcode-yaw").value,
+      category: document.getElementById("bbcode-category").value,
+      authors: document.getElementById("bbcode-authors").value,
+      credits: document.getElementById("bbcode-credits").value,
+      nexusId: nexusRefValue(),
+      note: document.getElementById("submit-note")?.value,
+      contact: document.getElementById("submit-contact")?.value,
+      tags: Array.from(
+        document.querySelectorAll("#bbcode-tag-checkboxes input:checked"),
+      ).map((cb) => cb.value),
+    };
+  }
+
+  function knownTagSlugs() {
+    return Array.from(
+      document.querySelectorAll("#bbcode-tag-checkboxes input"),
+    ).map((cb) => cb.value);
+  }
+
+  if (modSelect) modSelect.addEventListener("change", onModSelectionChange);
+  if (nameInput) {
+    nameInput.addEventListener("input", () => { nameIsPrefilled = false; });
+  }
+  if (authorsInput) {
+    authorsInput.addEventListener("input", () => { authorsIsPrefilled = false; });
+  }
+  function updateDescriptionCount() {
+    if (descriptionCount && descriptionInput) {
+      descriptionCount.textContent = String(descriptionInput.value.length);
+    }
+  }
+
+  if (descriptionInput) {
+    descriptionInput.addEventListener("input", () => {
+      descriptionIsPrefilled = false;
+      updateDescriptionCount();
+    });
+  }
+
+  // The coordinates are the field most easily got wrong (a swapped axis, a
+  // dropped minus sign) and the only one a submitter cannot check against
+  // anything else on the page, so they are checked as they are typed.
+  //
+  // A blank stands in as 0, which is inside every bound: a half-filled row is
+  // unfinished rather than wrong, and saying so while someone is still typing
+  // the first number teaches them to ignore the message.
+  function validateCoordinatesLive() {
+    const raw = readForm();
+    const typed = ["x", "y", "z"].map((axis) => String(raw[axis] ?? "").trim());
+    if (typed.every((value) => !value)) {
+      setFieldError("coordinates", null);
+      markCoordinateAxes([]);
+      return;
+    }
+    const [x, y, z] = typed;
+    const problems = NCZ.coordinateProblems(x || "0", y || "0", z || "0");
+    setFieldError("coordinates", problems.message);
+    // Only the boxes with something in them: a blank stood in as 0 above, and
+    // reddening a box the submitter has not reached yet is a false accusation.
+    const filled = new Set(["x", "y", "z"].filter((_, i) => typed[i]));
+    markCoordinateAxes(problems.axes.filter((axis) => filled.has(axis)));
+  }
+
+  ["bbcode-coord-x", "bbcode-coord-y", "bbcode-coord-z"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("input", validateCoordinatesLive);
+  });
 
   if (aboutOpenBbcodeLink) {
     aboutOpenBbcodeLink.addEventListener("click", (event) => {
@@ -228,93 +534,132 @@ document.addEventListener("DOMContentLoaded", () => {
   if (bbcodeBtn) bbcodeBtn.addEventListener("click", openBbcodeModal);
   if (closeBbcodeModalBtn) closeBbcodeModalBtn.addEventListener("click", closeBbcodeModal);
 
-  const bbcodeGenerateBtn = document.getElementById("bbcode-generate-btn");
-  if (bbcodeGenerateBtn) {
-    bbcodeGenerateBtn.addEventListener("click", () => {
-      const x = document.getElementById("bbcode-coord-x").value.trim();
-      const y = document.getElementById("bbcode-coord-y").value.trim();
-      const z = document.getElementById("bbcode-coord-z").value.trim();
-      const yaw = document.getElementById("bbcode-yaw").value.trim();
-      const category = document.getElementById("bbcode-category").value;
-      const credits = document.getElementById("bbcode-credits").value.trim();
-      const authors = document.getElementById("bbcode-authors").value.trim();
-      const spoiler = document.getElementById("bbcode-spoiler").checked;
+  // \u2500\u2500 Send \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
-      const xNum = parseFloat(x);
-      const yNum = parseFloat(y);
-      const zNum = parseFloat(z);
-      if (!Number.isFinite(xNum) || !Number.isFinite(yNum)) {
-        alert("Please enter valid X and Y coordinates.");
+  // The refusals POST /submissions distinguishes. Each one says something
+  // different to a submitter, and collapsing them into "something went wrong"
+  // costs the two that are not their fault: an expired token and a rate limit.
+  function reportRefusal(result) {
+    switch (result.code) {
+      case "turnstile_expired":
+        resetTurnstile();
+        setFieldError("turnstile", "The check timed out, which happens when a form sits open for a few minutes. It has been reset: complete it again and send.");
+        break;
+      case "turnstile_missing":
+      case "turnstile_failed":
+        resetTurnstile();
+        setFieldError("turnstile", "The check did not pass. Complete it again and send.");
+        break;
+      case "rate_limited":
+        // Not a validation error, and must not read as one: the form is
+        // correct and the only fix is time.
+        setFormError("This connection has sent the most submissions an hour allows. Nothing is wrong with the form. Try again later, and the submissions already queued are unaffected.", { tone: "notice" });
+        break;
+      case "verification_unavailable":
+      case "submissions_unavailable":
+        resetTurnstile();
+        setFormError("Submissions are unavailable at the moment. This is a fault on the site, not in what you entered. Try again later.");
+        break;
+      case "invalid_submission":
+        // The browser validated with the same rules, so a refusal here means
+        // the two disagree. Show what the server said rather than paraphrasing.
+        setFormError(`The server refused this submission: ${result.errors.join("; ") || "no detail given"}`);
+        break;
+      case "network":
+        setFormError("The submission did not reach the server. Check your connection and try again.");
+        break;
+      default:
+        setFormError(`The server refused this submission (HTTP ${result.status}).`);
+    }
+  }
+
+  function showSubmitted(id) {
+    const idEl = document.getElementById("submit-done-id");
+    if (idEl) idEl.textContent = id === null || id === undefined ? "" : `#${id}`;
+    submitForm?.classList.add("is-submitted");
+    // The steps and the note sit outside the form and describe filling it in,
+    // down to "leave a contact below", so they go with it.
+    bbcodeModal?.querySelector(".bbcode-modal-body")?.classList.add("is-submitted");
+    donePanel?.classList.remove("hidden");
+    donePanel?.scrollIntoView({ block: "nearest" });
+  }
+
+  if (sendBtn) {
+    sendBtn.addEventListener("click", async () => {
+      clearErrors();
+      const raw = readForm();
+      const { values, errors } = NCZ.collectLocationForm(raw, { knownTags: knownTagSlugs() });
+      const meta = NCZ.collectSubmissionMeta(raw);
+      const token = turnstileToken();
+
+      const allErrors = { ...errors, ...meta.errors };
+      if (!token) {
+        allErrors.turnstile = "Complete the check above before submitting.";
+      }
+      if (Object.keys(allErrors).length) {
+        showErrors(allErrors);
         return;
       }
-      if (Math.abs(xNum) > 5000 || Math.abs(yNum) > 5000) {
-        alert("Coordinates appear out of range. Night City CET coords are typically within \u00b14000. Check your values.");
+
+      sendBtn.disabled = true;
+      sendBtn.textContent = "[ SENDING... ]";
+      const result = await NCZ.postSubmission({
+        kind: "create",
+        payload: values,
+        turnstile_token: token,
+        ...meta.values,
+      });
+      sendBtn.disabled = false;
+      sendBtn.textContent = "[ SUBMIT FOR REVIEW ]";
+
+      if (result.ok) {
+        showSubmitted(result.data?.id);
         return;
       }
-      if (!Number.isFinite(zNum)) {
-        alert("Please enter a valid Z coordinate.");
-        return;
-      }
-      if (Math.abs(zNum) > 1000) {
-        alert("Z coordinate appears out of range. Night City Z coords are typically within \u00b1300. Check your value.");
-        return;
-      }
-      if (!category) {
-        alert("Please select a category.");
-        return;
-      }
-
-      const selectedTags = Array.from(
-        document.querySelectorAll("#bbcode-tag-checkboxes input:checked"),
-      ).map((cb) => cb.value).join(",");
-
-      const lines = [`NCZoning:`, `coords=${x},${y},${z}`, `category=${category}`];
-      if (selectedTags) lines.push(`tags=${selectedTags}`);
-      if (yaw && Number.isFinite(parseFloat(yaw))) lines.push(`yaw=${yaw}`);
-      if (credits) lines.push(`credits=${credits}`);
-      if (authors) lines.push(`authors=${authors}`);
-
-      let block = `[code]\n${lines.join("\n")}\n[/code]`;
-      if (spoiler) block = `[spoiler]\n${block}\n[/spoiler]`;
-
-      document.getElementById("bbcode-output").value = block;
-      document.getElementById("bbcode-output-section").classList.remove("hidden");
+      reportRefusal(result);
     });
   }
 
-  const bbcodeCopyBtn = document.getElementById("bbcode-copy-btn");
-  if (bbcodeCopyBtn) {
-    bbcodeCopyBtn.addEventListener("click", () => {
-      const output = document.getElementById("bbcode-output").value;
-      navigator.clipboard.writeText(output).then(() => {
-        const original = bbcodeCopyBtn.textContent;
-        bbcodeCopyBtn.textContent = "[ COPIED! ]";
-        setTimeout(() => {
-          bbcodeCopyBtn.textContent = original;
-        }, NCZ.COPY_FEEDBACK_MS);
-      }).catch(() => {
-        bbcodeCopyBtn.textContent = "[ COPY FAILED ]";
-        setTimeout(() => {
-          bbcodeCopyBtn.textContent = "[ COPY TO CLIPBOARD ]";
-        }, NCZ.COPY_FEEDBACK_MS);
-      });
-    });
+  function resetSubmitForm() {
+    document.getElementById("bbcode-coord-x").value = "";
+    document.getElementById("bbcode-coord-y").value = "";
+    document.getElementById("bbcode-coord-z").value = "";
+    document.getElementById("bbcode-yaw").value = "";
+    document.getElementById("bbcode-category").value = "";
+    document.getElementById("bbcode-credits").value = "";
+    document.getElementById("bbcode-authors").value = "";
+    document.querySelectorAll("#bbcode-tag-checkboxes input:checked").forEach((cb) => (cb.checked = false));
+
+    if (nameInput) nameInput.value = "";
+    if (descriptionInput) descriptionInput.value = "";
+    if (descriptionCount) descriptionCount.textContent = "0";
+    const nexusRef = document.getElementById("submit-nexus-ref");
+    if (nexusRef) nexusRef.value = "";
+    const noteInput = document.getElementById("submit-note");
+    if (noteInput) noteInput.value = "";
+    const contactInput = document.getElementById("submit-contact");
+    if (contactInput) contactInput.value = "";
+    if (modSelect) modSelect.value = candidates.length ? "" : MANUAL_MOD_VALUE;
+    nameIsPrefilled = true;
+    descriptionIsPrefilled = true;
+    authorsIsPrefilled = true;
+    onModSelectionChange();
+
+    clearErrors();
+    resetTurnstile();
+    submitForm?.classList.remove("is-submitted");
+    bbcodeModal?.querySelector(".bbcode-modal-body")?.classList.remove("is-submitted");
+    donePanel?.classList.add("hidden");
   }
 
   const bbcodeResetBtn = document.getElementById("bbcode-reset-btn");
-  if (bbcodeResetBtn) {
-    bbcodeResetBtn.addEventListener("click", () => {
-      document.getElementById("bbcode-coord-x").value = "";
-      document.getElementById("bbcode-coord-y").value = "";
-      document.getElementById("bbcode-coord-z").value = "";
-      document.getElementById("bbcode-yaw").value = "";
-      document.getElementById("bbcode-category").value = "";
-      document.getElementById("bbcode-credits").value = "";
-      document.getElementById("bbcode-authors").value = "";
-      document.getElementById("bbcode-spoiler").checked = false;
-      document.querySelectorAll("#bbcode-tag-checkboxes input:checked").forEach((cb) => (cb.checked = false));
-      document.getElementById("bbcode-output-section").classList.add("hidden");
-      document.getElementById("bbcode-output").value = "";
+  if (bbcodeResetBtn) bbcodeResetBtn.addEventListener("click", resetSubmitForm);
+
+  const submitAnotherBtn = document.getElementById("submit-another-btn");
+  if (submitAnotherBtn) {
+    submitAnotherBtn.addEventListener("click", () => {
+      resetSubmitForm();
+      modSelect?.focus();
     });
   }
 
