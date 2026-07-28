@@ -36,8 +36,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const aboutBtn = document.getElementById("about-btn");
   const aboutModal = document.getElementById("about-modal");
   const closeAboutBtn = document.getElementById("close-about-modal");
-  const aboutOpenBbcodeLink = document.getElementById("about-open-bbcode-link");
-  const sidebarOpenBbcodeLink = document.getElementById("sidebar-open-bbcode-link");
+  const aboutOpenSubmitLink = document.getElementById("about-open-submit-link");
+  const sidebarOpenSubmitLink = document.getElementById("sidebar-open-submit-link");
 
   aboutBtn.addEventListener("click", () => {
     aboutModal.classList.remove("hidden");
@@ -199,17 +199,17 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // Submit a Location Modal
-  const bbcodeBtn = document.getElementById("bbcode-btn");
-  const bbcodeModal = document.getElementById("bbcode-modal");
-  const closeBbcodeModalBtn = document.getElementById("close-bbcode-modal");
-  const submitForm = bbcodeModal?.querySelector(".bbcode-form");
+  const submitOpenBtn = document.getElementById("submit-open-btn");
+  const submitModal = document.getElementById("submit-modal");
+  const closeSubmitModalBtn = document.getElementById("close-submit-modal");
+  const submitForm = submitModal?.querySelector(".submit-form");
   const modSelect = document.getElementById("submit-mod-select");
   const modManualRow = document.getElementById("submit-mod-manual");
   const modCard = document.getElementById("submit-mod-card");
   const modCardName = document.getElementById("submit-mod-card-name");
   const modThumb = document.getElementById("submit-mod-thumb");
   const nameInput = document.getElementById("submit-name");
-  const authorsInput = document.getElementById("bbcode-authors");
+  const authorsInput = document.getElementById("submit-authors");
   const descriptionInput = document.getElementById("submit-description");
   const descriptionCount = document.getElementById("submit-description-count");
   const sendBtn = document.getElementById("submit-send-btn");
@@ -226,10 +226,10 @@ document.addEventListener("DOMContentLoaded", () => {
     nexus_id: "submit-nexus-ref",
     name: "submit-name",
     description: "submit-description",
-    coordinates: "bbcode-coord-x",
-    yaw: "bbcode-yaw",
-    category: "bbcode-category",
-    authors: "bbcode-authors",
+    coordinates: "submit-coord-x",
+    yaw: "submit-yaw",
+    category: "submit-category",
+    authors: "submit-authors",
     note: "submit-note",
     contact: "submit-contact",
   };
@@ -241,13 +241,13 @@ document.addEventListener("DOMContentLoaded", () => {
   let descriptionIsPrefilled = true;
   let authorsIsPrefilled = true;
 
-  function openBbcodeModal() {
-    bbcodeModal.classList.remove("hidden");
+  function openSubmitModal() {
+    submitModal.classList.remove("hidden");
     loadCandidates();
     mountTurnstile();
   }
-  function closeBbcodeModal() {
-    bbcodeModal.classList.add("hidden");
+  function closeSubmitModal() {
+    submitModal.classList.add("hidden");
   }
 
   // ── Turnstile ──────────────────────────────────────────────────────────────
@@ -325,7 +325,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // reader announces and the red border are the same fact.
   function markCoordinateAxes(axes) {
     ["x", "y", "z"].forEach((axis) => {
-      const box = document.getElementById(`bbcode-coord-${axis}`);
+      const box = document.getElementById(`submit-coord-${axis}`);
       box?.setAttribute("aria-invalid", axes.includes(axis) ? "true" : "false");
     });
   }
@@ -446,25 +446,25 @@ document.addEventListener("DOMContentLoaded", () => {
     return {
       name: nameInput?.value,
       description: descriptionInput?.value,
-      x: document.getElementById("bbcode-coord-x").value,
-      y: document.getElementById("bbcode-coord-y").value,
-      z: document.getElementById("bbcode-coord-z").value,
-      yaw: document.getElementById("bbcode-yaw").value,
-      category: document.getElementById("bbcode-category").value,
-      authors: document.getElementById("bbcode-authors").value,
-      credits: document.getElementById("bbcode-credits").value,
+      x: document.getElementById("submit-coord-x").value,
+      y: document.getElementById("submit-coord-y").value,
+      z: document.getElementById("submit-coord-z").value,
+      yaw: document.getElementById("submit-yaw").value,
+      category: document.getElementById("submit-category").value,
+      authors: document.getElementById("submit-authors").value,
+      credits: document.getElementById("submit-credits").value,
       nexusId: nexusRefValue(),
       note: document.getElementById("submit-note")?.value,
       contact: document.getElementById("submit-contact")?.value,
       tags: Array.from(
-        document.querySelectorAll("#bbcode-tag-checkboxes input:checked"),
+        document.querySelectorAll("#submit-tag-checkboxes input:checked"),
       ).map((cb) => cb.value),
     };
   }
 
   function knownTagSlugs() {
     return Array.from(
-      document.querySelectorAll("#bbcode-tag-checkboxes input"),
+      document.querySelectorAll("#submit-tag-checkboxes input"),
     ).map((cb) => cb.value);
   }
 
@@ -512,27 +512,27 @@ document.addEventListener("DOMContentLoaded", () => {
     markCoordinateAxes(problems.axes.filter((axis) => filled.has(axis)));
   }
 
-  ["bbcode-coord-x", "bbcode-coord-y", "bbcode-coord-z"].forEach((id) => {
+  ["submit-coord-x", "submit-coord-y", "submit-coord-z"].forEach((id) => {
     document.getElementById(id)?.addEventListener("input", validateCoordinatesLive);
   });
 
-  if (aboutOpenBbcodeLink) {
-    aboutOpenBbcodeLink.addEventListener("click", (event) => {
+  if (aboutOpenSubmitLink) {
+    aboutOpenSubmitLink.addEventListener("click", (event) => {
       event.preventDefault();
       aboutModal.classList.add("hidden");
-      openBbcodeModal();
+      openSubmitModal();
     });
   }
 
-  if (sidebarOpenBbcodeLink) {
-    sidebarOpenBbcodeLink.addEventListener("click", (event) => {
+  if (sidebarOpenSubmitLink) {
+    sidebarOpenSubmitLink.addEventListener("click", (event) => {
       event.preventDefault();
-      openBbcodeModal();
+      openSubmitModal();
     });
   }
 
-  if (bbcodeBtn) bbcodeBtn.addEventListener("click", openBbcodeModal);
-  if (closeBbcodeModalBtn) closeBbcodeModalBtn.addEventListener("click", closeBbcodeModal);
+  if (submitOpenBtn) submitOpenBtn.addEventListener("click", openSubmitModal);
+  if (closeSubmitModalBtn) closeSubmitModalBtn.addEventListener("click", closeSubmitModal);
 
   // \u2500\u2500 Send \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
@@ -579,7 +579,7 @@ document.addEventListener("DOMContentLoaded", () => {
     submitForm?.classList.add("is-submitted");
     // The steps and the note sit outside the form and describe filling it in,
     // down to "leave a contact below", so they go with it.
-    bbcodeModal?.querySelector(".bbcode-modal-body")?.classList.add("is-submitted");
+    submitModal?.querySelector(".submit-modal-body")?.classList.add("is-submitted");
     donePanel?.classList.remove("hidden");
     donePanel?.scrollIntoView({ block: "nearest" });
   }
@@ -621,14 +621,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function resetSubmitForm() {
-    document.getElementById("bbcode-coord-x").value = "";
-    document.getElementById("bbcode-coord-y").value = "";
-    document.getElementById("bbcode-coord-z").value = "";
-    document.getElementById("bbcode-yaw").value = "";
-    document.getElementById("bbcode-category").value = "";
-    document.getElementById("bbcode-credits").value = "";
-    document.getElementById("bbcode-authors").value = "";
-    document.querySelectorAll("#bbcode-tag-checkboxes input:checked").forEach((cb) => (cb.checked = false));
+    document.getElementById("submit-coord-x").value = "";
+    document.getElementById("submit-coord-y").value = "";
+    document.getElementById("submit-coord-z").value = "";
+    document.getElementById("submit-yaw").value = "";
+    document.getElementById("submit-category").value = "";
+    document.getElementById("submit-credits").value = "";
+    document.getElementById("submit-authors").value = "";
+    document.querySelectorAll("#submit-tag-checkboxes input:checked").forEach((cb) => (cb.checked = false));
 
     if (nameInput) nameInput.value = "";
     if (descriptionInput) descriptionInput.value = "";
@@ -648,12 +648,12 @@ document.addEventListener("DOMContentLoaded", () => {
     clearErrors();
     resetTurnstile();
     submitForm?.classList.remove("is-submitted");
-    bbcodeModal?.querySelector(".bbcode-modal-body")?.classList.remove("is-submitted");
+    submitModal?.querySelector(".submit-modal-body")?.classList.remove("is-submitted");
     donePanel?.classList.add("hidden");
   }
 
-  const bbcodeResetBtn = document.getElementById("bbcode-reset-btn");
-  if (bbcodeResetBtn) bbcodeResetBtn.addEventListener("click", resetSubmitForm);
+  const submitResetBtn = document.getElementById("submit-reset-btn");
+  if (submitResetBtn) submitResetBtn.addEventListener("click", resetSubmitForm);
 
   const submitAnotherBtn = document.getElementById("submit-another-btn");
   if (submitAnotherBtn) {
@@ -663,20 +663,20 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const bbcodeCopyCetBtn = document.getElementById("bbcode-copy-cet-btn");
-  if (bbcodeCopyCetBtn) {
+  const copyCetBtn = document.getElementById("submit-copy-cet-btn");
+  if (copyCetBtn) {
     let cetCopyRevertTimer = null;
     const revertCetBtn = () => {
-      bbcodeCopyCetBtn.innerHTML = '<span class="ui-popup-action-link-icon" aria-hidden="true"></span>';
+      copyCetBtn.innerHTML = '<span class="ui-popup-action-link-icon" aria-hidden="true"></span>';
     };
-    bbcodeCopyCetBtn.addEventListener("click", () => {
-      const command = document.getElementById("bbcode-cet-command").textContent;
+    copyCetBtn.addEventListener("click", () => {
+      const command = document.getElementById("submit-cet-command").textContent;
       clearTimeout(cetCopyRevertTimer);
       navigator.clipboard.writeText(command).then(() => {
-        bbcodeCopyCetBtn.textContent = "Copied!";
+        copyCetBtn.textContent = "Copied!";
         cetCopyRevertTimer = setTimeout(revertCetBtn, NCZ.COPY_FEEDBACK_MS);
       }).catch(() => {
-        bbcodeCopyCetBtn.textContent = "Failed";
+        copyCetBtn.textContent = "Failed";
         cetCopyRevertTimer = setTimeout(revertCetBtn, NCZ.COPY_FEEDBACK_MS);
       });
     });
@@ -2748,17 +2748,17 @@ async function initMap() {
       });
     });
 
-    // 6. Populate BBCode generator tag checkboxes (requires tagsDict from this scope)
-    const bbcodeTagGrid = document.getElementById("bbcode-tag-checkboxes");
-    if (bbcodeTagGrid) {
+    // 6. Populate the submit form's tag checkboxes (requires tagsDict from this scope)
+    const submitTagGrid = document.getElementById("submit-tag-checkboxes");
+    if (submitTagGrid) {
       Object.keys(tagsDict)
         .sort()
         .forEach((tag) => {
           const label = document.createElement("label");
-          label.className = "bbcode-tag-checkbox";
+          label.className = "submit-tag-checkbox";
           label.title = tagsDict[tag] || "";
           label.innerHTML = `<input type="checkbox" value="${tag}"> ${tag}`;
-          bbcodeTagGrid.appendChild(label);
+          submitTagGrid.appendChild(label);
         });
     }
 

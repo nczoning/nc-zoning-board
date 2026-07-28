@@ -98,7 +98,7 @@ The core frontend JS is four files loaded via `<script>` tags (no ES modules, no
 | File | Role |
 | --- | --- |
 | `constants.js` | All config values: category styles, API endpoints, cache keys, UI sizing, 3D scene constants |
-| `utils.js` | Pure functions: `escapeHtml`, `cetToLeaflet`, `cetToThree`, positioning algorithm, BBCode parser |
+| `utils.js` | Pure functions: `escapeHtml`, `cetToLeaflet`, `cetToThree`, positioning algorithm, submit-form validation (`collectLocationForm`) |
 | `services.js` | Fetch functions: the `/v1` Data API loader (`fetchLocationsFromApi()`) |
 | `app.js` | DOM logic: map init, sidebar, cluster panel, modals, image gallery, view switching |
 

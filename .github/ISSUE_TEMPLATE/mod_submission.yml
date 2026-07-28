@@ -43,7 +43,7 @@ body:
         4. Note the **X**, **Y**, **Z**, and **Yaw** values from the output
 
         **Option 2 — Simple Location Manager:**
-        Install [Simple Location Manager](https://www.nexusmods.com/cyberpunk2077/mods/26454), save the location, then read the X, Y, Z from the saved entry. The BBCode Generator modal on the NC Zoning Board website also has this command ready to copy.
+        Install [Simple Location Manager](https://www.nexusmods.com/cyberpunk2077/mods/26454), save the location, then read the X, Y, Z from the saved entry. The submit form on the NC Zoning Board website also has this command ready to copy.
   - type: input
     id: coord_x
     attributes:
