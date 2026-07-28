@@ -773,7 +773,7 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 .badge.review-pending { border-color: var(--tertiary); color: var(--tertiary); }
 .badge.review-approved { border-color: var(--status-ok); color: var(--status-ok); }
 .badge.review-rejected { border-color: var(--status-critical); color: var(--status-critical); }
-.badge.review-changes_requested { border-color: var(--gray); color: var(--gray); }
+.badge.review-held { border-color: var(--gray); color: var(--gray); }
 
 #queue-review { overflow-y: auto; }
 

@@ -528,15 +528,21 @@ checks in two files is how one of them ends up weaker than the other.
 | `GET /admin/submissions/{id}` | one submission |
 | `POST /admin/submissions/{id}/approve` | applies the payload, then resolves; `reason` optional |
 | `POST /admin/submissions/{id}/reject` | `reason` **required** |
-| `POST /admin/submissions/{id}/changes` | `reason` **required** |
+| `POST /admin/submissions/{id}/hold` | park it, `reason` **required** |
 | `GET /admin/candidates` | `{candidates, dismissed}` in one response |
 | `POST /admin/candidates/{nexus_id}` | dismiss, `reason` optional |
 | `DELETE /admin/candidates/{nexus_id}` | restore a dismissed candidate |
 
 **The statuses are a convention this module owns.** `submissions.status` has no
 CHECK constraint; it defaults to `pending` and the resolved values are
-`approved`, `rejected` and `changes_requested`. They are exported from
-`review.js` so the tests assert the same strings the routes write.
+`approved`, `rejected` and `held`. They are exported from `review.js` so the
+tests assert the same strings the routes write.
+
+`held` means parked, pending a decision between reviewers. It was called
+`changes_requested` first, and that was wrong: nothing here delivers a request
+to anyone (see the note on review notes below), so the name described an
+interaction that does not happen. Renamed while both databases held zero
+submissions, which is the only moment it costs nothing.
 
 **Resolving is one-way, and that is a correctness rule.** Only a `pending`
 submission can be resolved, and the check is a `WHERE status = 'pending'` on the
@@ -588,8 +594,7 @@ abuse triage, it is purged at 90 days, and no part of reviewing needs it.
 **Nothing delivers a review note, and that is deliberate.** Submissions are
 anonymous. `submitter_contact` is optional free text that a person has to act
 on, and there is no route by which a submitter can read their own row, so
-`review_note` is an internal record and `changes_requested` reaches nobody on
-its own.
+`review_note` is an internal record and `held` reaches nobody on its own.
 
 **No submitter-facing status page is planned.** It would need a token on every
 row (`submissions.id` is `INTEGER PRIMARY KEY`, so a bare `/submissions/5`
@@ -607,10 +612,11 @@ personal data, and requiring it to make review notes deliverable would collect
 an identifier from every submitter to serve the rare case. See
 [docs/privacy.md](../docs/privacy.md).
 
-So the review pane says plainly that nothing is sent, and warns outright when no
-contact was given: "request changes" there is a parking state, not a reply.
-The Discord submission notification, when it lands, is staff-facing for the same
-reason: it says a submission arrived, and does not reach the submitter.
+So the review pane says plainly that nothing is sent, and says so differently
+depending on whether a contact was given: with one, asking for a change is
+something the reviewer does themselves; without one, Hold is simply a parking
+state. The Discord submission notification, when it lands, is staff-facing for
+the same reason: it says a submission arrived, and does not reach the submitter.
 
 Every mutation writes an audit row, and an approval writes **two**: the queue
 moved and so did the registry. Reading a location's history must not depend on

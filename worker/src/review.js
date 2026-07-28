@@ -12,14 +12,19 @@
  * `submissions.status` has no CHECK constraint. It defaults to 'pending' and
  * the rest are a convention this module owns:
  *
- *   pending | approved | rejected | changes_requested
+ *   pending | approved | rejected | held
  *
  * They are exported so the tests assert against the same strings the routes
  * write, rather than against a second copy that can drift.
  *
+ * `held` is what it says: parked, pending a decision between reviewers. It is
+ * NOT "changes requested", which was the first name and was wrong, because
+ * nothing here delivers a request to anyone. See the note on review notes
+ * below.
+ *
  * ## Resolving is one-way, and that is a correctness rule
  *
- * Only a PENDING submission can be approved, rejected or sent back. Without
+ * Only a PENDING submission can be approved, rejected or held. Without
  * that guard a double-clicked Approve on a `create` inserts the location twice,
  * with two ids, two pins and nothing to say they are the same submission. So
  * the status check is a WHERE clause on the resolving UPDATE and its row count
@@ -58,7 +63,7 @@ export const PENDING = 'pending';
 export const RESOLVED = {
   approve: 'approved',
   reject: 'rejected',
-  changes: 'changes_requested',
+  hold: 'held',
 };
 
 /** Matches submissions.review_note, and REASON_MAX in submissions.js. */
@@ -131,7 +136,7 @@ async function resolve(env, id, status, { actor, note, nowIso }) {
   return (result?.meta?.changes ?? 0) > 0;
 }
 
-/** A reason that a reviewer has to give, and the submitter will read. */
+/** The reviewer's reason. Stored on the row; nothing sends it anywhere. */
 function checkNote(value, { required }) {
   if (value === undefined || value === null || (typeof value === 'string' && !value.trim())) {
     return required ? ['reason is required'] : [];
@@ -265,7 +270,7 @@ async function applyApproval(env, submission, { actor, nowIso, restoreLocationId
 }
 
 /**
- * POST /admin/submissions/:id/(approve|reject|changes)
+ * POST /admin/submissions/:id/(approve|reject|hold)
  *
  * The registry write happens BEFORE the submission is resolved, so a failure to
  * apply leaves the submission pending and retryable. The other order would mark
@@ -351,7 +356,7 @@ async function act(request, env, ctx, { id, action, actor }) {
 
   await writeAudit(env, {
     actor,
-    action: `submission.${action === 'changes' ? 'changes_requested' : action}`,
+    action: `submission.${action}`,
     target: String(id),
     before: { status: PENDING },
     after: {
@@ -486,7 +491,7 @@ export async function handleReview({ request, env, ctx, actor, method, url }) {
     return json(request, { submissions: (results ?? []).map(rowToReview) });
   }
 
-  const actionMatch = path.match(/^\/admin\/submissions\/(\d+)\/(approve|reject|changes)$/);
+  const actionMatch = path.match(/^\/admin\/submissions\/(\d+)\/(approve|reject|hold)$/);
   if (actionMatch) {
     if (method !== 'POST') return json(request, { error: 'method_not_allowed' }, 405);
     return act(request, env, ctx, {

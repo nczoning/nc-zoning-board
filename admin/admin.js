@@ -1263,8 +1263,9 @@
           onclick: (e) => reviewAction(sub, 'approve', reason, e.currentTarget),
         }),
         h('button', {
-          class: 'btn secondary', type: 'button', text: 'Request changes',
-          onclick: (e) => reviewAction(sub, 'changes', reason, e.currentTarget),
+          class: 'btn secondary', type: 'button', text: 'Hold',
+          title: 'Park it, pending a decision between reviewers. Nothing is sent to the submitter.',
+          onclick: (e) => reviewAction(sub, 'hold', reason, e.currentTarget),
         }),
         h('span', { class: 'spacer' }),
         h('button', {
@@ -1294,7 +1295,7 @@
       miniMap(submissionPins(sub)),
 
       resolved ? null : field('Reason', reason,
-        'Required for reject and request-changes. Optional on approve, where it is kept as a note.'),
+        'Required to reject or hold. Optional on approve, where it is kept as a note.'),
       resolved ? null : reachability(sub),
       actions);
   }
@@ -1304,19 +1305,17 @@
    *
    * Nothing delivers a review note. Submissions are anonymous, there is no
    * route by which a submitter can read their own row, and `submitter_contact`
-   * is optional free text that a human has to act on. So "request changes" is
-   * a real dead letter when no contact was given, and the reviewer should know
-   * that BEFORE choosing it over approve or reject rather than after waiting a
-   * week for a revision that was never asked for.
+   * is optional free text that a human has to act on. Hold means parked, not
+   * "sent back", and the reviewer should know which of those they are getting.
    */
   function reachability(sub) {
     return sub.submitter_contact
       ? h('p', { class: 'muted' },
-        'Nothing is sent automatically. To ask for changes you have to contact ',
+        'Nothing is sent automatically. To ask for a change you have to contact ',
         h('strong', { text: sub.submitter_contact }), ' yourself.')
-      : h('p', { class: 'notice warn' },
+      : h('p', { class: 'muted' },
         'No contact was given, so nothing written here can reach the submitter. '
-        + 'The reason is kept on the record; requesting changes will not produce any.');
+        + 'The reason is kept on the record, and Hold parks it for the three of us to decide.');
   }
 
   function selectSubmission(id) {
@@ -1332,7 +1331,7 @@
     if (sub) renderSubmissionReview(sub);
   }
 
-  const REVIEW_VERB = { approve: 'Approved', reject: 'Rejected', changes: 'Sent back for changes' };
+  const REVIEW_VERB = { approve: 'Approved', reject: 'Rejected', hold: 'Put on hold' };
 
   /**
    * Approve, reject, or send back.

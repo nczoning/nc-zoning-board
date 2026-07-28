@@ -99,7 +99,7 @@ test('every review route is refused without a session', async () => {
     ['GET', '/admin/submissions/1'],
     ['POST', '/admin/submissions/1/approve'],
     ['POST', '/admin/submissions/1/reject'],
-    ['POST', '/admin/submissions/1/changes'],
+    ['POST', '/admin/submissions/1/hold'],
     ['GET', '/admin/candidates'],
     ['POST', '/admin/candidates/999'],
     ['DELETE', '/admin/candidates/999'],
@@ -422,13 +422,27 @@ test('a rejection records who, when and why', async () => {
   assert.deepEqual(actions(env), ['submission.reject']);
 });
 
-test('requesting changes is its own status, not a rejection', async () => {
+test('holding is its own status, not a rejection', async () => {
+  // Parked, pending a decision between reviewers. Deliberately not called
+  // "changes requested": nothing here delivers a request to anyone.
   const env = envFor({ submissions: [submission()] });
-  const res = await hit(env, 'POST', `/admin/submissions/${firstId(env)}/changes`,
-    { reason: 'please add a description' });
+  const res = await hit(env, 'POST', `/admin/submissions/${firstId(env)}/hold`,
+    { reason: 'wait for Kao to check it in game' });
   assert.equal(res.status, 200);
-  assert.equal(subRows(env)[0].status, 'changes_requested');
-  assert.deepEqual(actions(env), ['submission.changes_requested']);
+  assert.equal(subRows(env)[0].status, 'held');
+  assert.deepEqual(actions(env), ['submission.hold']);
+  assert.equal(locRows(env).length, 1, 'holding touches no location');
+});
+
+test('a held submission cannot then be approved', async () => {
+  // Held is a resolved status, so picking it back up is a deliberate act
+  // rather than a second reviewer approving something already parked.
+  const env = envFor({ submissions: [submission()] });
+  const id = firstId(env);
+  await hit(env, 'POST', `/admin/submissions/${id}/hold`, { reason: 'parked' });
+  const res = await hit(env, 'POST', `/admin/submissions/${id}/approve`);
+  assert.equal(res.status, 409);
+  assert.equal(locRows(env).length, 1);
 });
 
 test('an approval note is optional but is kept when given', async () => {
@@ -439,7 +453,7 @@ test('an approval note is optional but is kept when given', async () => {
 
 test('an unknown submission is a 404, not a silent success', async () => {
   const env = envFor();
-  for (const action of ['approve', 'reject', 'changes']) {
+  for (const action of ['approve', 'reject', 'hold']) {
     const res = await hit(env, 'POST', `/admin/submissions/999/${action}`, { reason: 'x' });
     assert.equal(res.status, 404, action);
   }
