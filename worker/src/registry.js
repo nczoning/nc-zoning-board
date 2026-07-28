@@ -2,16 +2,16 @@
  * Writes against the location registry, shared by the two routes that perform
  * them: the admin editor (admin.js) and the review queue (review.js).
  *
- * Extracted at Phase 5 rather than copied. Approving a submission has to
- * produce a record indistinguishable from one an admin typed in by hand: the
- * parity gate rebuilds all 18 served fields from D1, so a second INSERT with
- * its own idea of the defaults would show up there as a difference that
- * depends on which route happened to write the row.
+ * One definition, two callers, because approving a submission has to produce a
+ * record indistinguishable from one an admin typed in by hand. The parity gate
+ * rebuilds all 18 served fields from D1, so a second INSERT with its own idea
+ * of the defaults surfaces there as a difference that depends on which route
+ * wrote the row.
  *
  * The tag join is part of a write, not a follow-up to it. resolveTags treats
  * location_tags as authoritative, so an INSERT without syncLocationTags
- * materializes a record with no tags at all -- which is why both helpers here
- * own the join rather than leaving it to the caller to remember.
+ * materializes a record with no tags at all. Both helpers here own the join
+ * rather than leaving it to the caller to remember.
  */
 
 import { runRefresh } from './refresh.js';

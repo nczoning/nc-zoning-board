@@ -135,6 +135,51 @@
   const clear = (el) => { while (el.firstChild) el.removeChild(el.firstChild); return el; };
   const replace = (el, ...nodes) => { clear(el).append(...nodes.flat().filter(Boolean)); return el; };
 
+  // ------------------------------------------------------------- the clock --
+
+  /**
+   * Every timestamp the API returns is UTC. Every one rendered here is local
+   * AND CARRIES ITS ZONE NAME.
+   *
+   * The zone name is part of the format rather than an option, because
+   * `toLocaleString()` alone renders "28/07/2026, 15:00:00" with no marker at
+   * all. Collaborators are spread across AEST and the northern hemisphere, so
+   * one event reads as three different unmarked numbers ten hours apart.
+   *
+   * The canonical UTC value stays in `datetime` and on the `title`, where it
+   * can be copied into a query or matched against a log line.
+   *
+   * `dateStyle`/`timeStyle` are unusable here: ECMA-402 throws a TypeError when
+   * either is combined with `timeZoneName`, so the components are listed out.
+   */
+  const TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
+    year: 'numeric', month: 'short', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+    timeZoneName: 'short',
+  });
+
+  /** A UTC timestamp as a labelled local string. Unparseable input passes through. */
+  function formatTime(iso) {
+    const ms = Date.parse(iso);
+    if (!Number.isFinite(ms)) return String(iso ?? '');
+    return TIME_FORMAT.format(ms);
+  }
+
+  /**
+   * A `<time>` for a stored timestamp: local and labelled on screen, UTC in
+   * `datetime` and on hover.
+   */
+  function timeEl(iso, attrs = {}) {
+    const ms = Date.parse(iso);
+    if (!Number.isFinite(ms)) return h('span', { class: 'muted', text: 'unknown' });
+    return h('time', {
+      datetime: iso,
+      title: `${iso} (UTC, as stored)`,
+      text: formatTime(iso),
+      ...attrs,
+    });
+  }
+
   /**
    * A nexus id as a link to the mod page, wherever one is shown.
    *
@@ -601,7 +646,7 @@
 
     replace($('#loc-editor'),
       h('h2', { text: isNew ? 'New location' : `Editing: ${loc.name}` }),
-      isNew ? null : h('p', { class: 'muted', text: `id ${loc.id} · updated ${loc.updated_at}` }),
+      isNew ? null : h('p', { class: 'muted' }, `id ${loc.id} · updated `, timeEl(loc.updated_at)),
       form, actions);
 
     refreshDirty();
@@ -738,8 +783,8 @@
         // Internal, and never served on /v1. Worth showing plainly here.
         row('Admin notes', loc.admin_notes),
         row('ID', loc.id, 'mono'),
-        row('Created', loc.created_at, 'mono'),
-        row('Updated', loc.updated_at, 'mono'),
+        row('Created', timeEl(loc.created_at)),
+        row('Updated', timeEl(loc.updated_at)),
       )),
       h('div', { class: 'editor-actions' },
         h('button', {
@@ -1059,7 +1104,12 @@
   }
 
   /**
-   * A timestamp as "2h ago", with the exact value on hover.
+   * A timestamp as "2h ago", with both exact values on hover.
+   *
+   * Relative on screen because "2h ago" is what a reviewer is actually asking,
+   * and because an elapsed time is the one rendering of a timestamp that means
+   * the same thing in every timezone. The labelled local time and the stored
+   * UTC are both on the tooltip.
    *
    * A future timestamp reads as "just now" rather than "-2h ago". Submissions
    * are stamped by the Worker, so this only happens when the reviewer's own
@@ -1072,7 +1122,7 @@
     const seconds = (Date.now() - ms) / 1000;
     return h('time', {
       datetime: iso,
-      title: new Date(ms).toLocaleString(),
+      title: `${formatTime(iso)}\n${iso} (UTC, as stored)`,
       text: seconds < 0 ? 'just now' : describeAge(seconds),
     });
   }
@@ -1118,9 +1168,8 @@
    * What this submission would change, and nothing else.
    *
    * renderDiff drops keys whose value is unchanged, so a payload that repeats
-   * the record back at us renders as "no field changes" rather than as a wall
-   * of identical lines. That is the panel's whole job: a reviewer should read
-   * "yaw: 90 -> 45", not the record twice.
+   * the record back renders as "no field changes" rather than as a wall of
+   * identical lines. A reviewer reads "yaw: 90 -> 45", not the record twice.
    */
   function submissionDiff(sub) {
     if (sub.kind === 'create') return renderDiff(null, sub.payload);
@@ -1319,7 +1368,7 @@
     const actions = resolved
       ? h('p', { class: 'muted' },
         `${sub.status.replace(/_/g, ' ')} by ${sub.reviewed_by ?? 'unknown'}`,
-        sub.reviewed_at ? ` on ${new Date(sub.reviewed_at).toLocaleString()}` : '')
+        sub.reviewed_at ? [' on ', timeEl(sub.reviewed_at)] : '')
       : h('div', { class: 'editor-actions' },
         h('button', {
           class: 'btn', type: 'button', text: 'Approve',
@@ -1473,9 +1522,9 @@
       actions.append(
         h('button', {
           class: 'btn', type: 'button', text: 'Add to map',
-          // Straight into the editor with what we know: the name and the id.
-          // Coordinates are the part a person has to supply, and they are the
-          // part this tool cannot guess.
+          // Straight into the editor with the two fields a candidate carries:
+          // the name and the nexus id. Coordinates have to come from a person
+          // standing in the location, and are the part this cannot guess.
           onclick: () => selectLocation('', { name: entry.name || '', nexus_id: entry.nexus_id }),
         }),
         h('button', {
@@ -1855,7 +1904,11 @@
       rows.push(kvRow('api version', health.version ?? 'not reported'));
       rows.push(kvRow('last refresh', typeof age === 'number' ? describeAge(age) : 'unknown',
         stale ? 'warn' : 'ok'));
-      rows.push(kvRow('last refresh at', health.last_refresh_at ?? 'not reported', 'mono'));
+      rows.push(health.last_refresh_at
+        ? h('div', { class: 'kv-row' },
+          h('span', { class: 'k', text: 'last refresh at' }),
+          h('span', { class: 'v' }, timeEl(health.last_refresh_at)))
+        : kvRow('last refresh at', 'not reported'));
       // discovery_stale means the last cycle failed and last-known-good is being
       // served. Absent is not the same as false, so it is reported as unknown.
       const ds = health.discovery_stale;
@@ -1911,6 +1964,12 @@
     // Say which day and how far into it. The caps reset at UTC midnight, and
     // AEST runs ~10 hours ahead of that, so "1 of 1,000" early in the UTC day
     // is not the reassurance it looks like.
+    //
+    // THE ONE PANEL THAT STAYS IN UTC, deliberately. Everything else here is
+    // rendered in the reader's own zone, but this window is a property of
+    // Cloudflare's billing day rather than of anything the reader did, and
+    // showing it as "resets at 10am" for one collaborator and "resets at 1am"
+    // for another describes the same cap two ways. Do not "fix" it to local.
     $('#quota-note').textContent =
       `UTC day ${date}, ${hours}h elapsed of 24. Caps are per account, and reset at UTC midnight.`;
 
@@ -2086,7 +2145,7 @@
     replace($('#audit-list'), entries.length
       ? entries.map((e) => h('div', { class: 'audit-entry' },
         h('div', { class: 'audit-head' },
-          h('time', { datetime: e.at, text: new Date(e.at).toLocaleString() }),
+          timeEl(e.at),
           h('span', { class: 'who', text: e.actor === 'anonymous' ? 'a visitor' : e.actor }),
           h('span', { class: 'sentence' }, describeAudit(e).flat()),
           // The machine-readable pair, kept visible so the sentence above can

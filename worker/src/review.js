@@ -17,10 +17,9 @@
  * They are exported so the tests assert against the same strings the routes
  * write, rather than against a second copy that can drift.
  *
- * `held` is what it says: parked, pending a decision between reviewers. It is
- * NOT "changes requested", which was the first name and was wrong, because
- * nothing here delivers a request to anyone. See the note on review notes
- * below.
+ * `held` means parked, pending a decision between reviewers. It does not mean
+ * changes were requested of anyone: nothing here delivers a review note. See
+ * the note on review notes below.
  *
  * ## Resolving is one-way, and that is a correctness rule
  *
@@ -380,7 +379,7 @@ async function act(request, env, ctx, { id, action, actor }) {
   });
 }
 
-/** Every mod we have looked at and put aside, newest first. */
+/** Every mod a reviewer has put aside, newest first. */
 async function readDismissed(env) {
   const { results } = await env.DB.prepare(
     `SELECT d.nexus_id, d.reason, d.dismissed_by, d.dismissed_at, n.name, n.thumbnail_url
