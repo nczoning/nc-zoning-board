@@ -747,6 +747,124 @@ button.breakdown-row:hover .k { color: var(--secondary); }
     color: var(--text-subtle);
 }
 
+/* ------------------------------------------------------- queue + candidates -- */
+
+/* The count beside a tab label. Rendered only when it is non-zero (admin.js):
+   a "0" here is a standing invitation to check a queue with nothing in it. */
+.tab-count {
+    margin-left: var(--space-xs);
+    padding: 0 var(--space-2xs);
+    border-radius: var(--ui-radius-xs);
+    background: var(--tertiary);
+    color: var(--color-black);
+    font-size: var(--fs-micro);
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.tab-count:empty { display: none; }
+
+/* Shares the badge vocabulary with statuses rather than inventing a second
+   one: these sit in the same table cells and mean the same kind of thing. */
+.badge.kind-create { border-color: var(--status-ok); color: var(--status-ok); }
+.badge.kind-edit { border-color: var(--secondary); color: var(--secondary); }
+.badge.kind-remove { border-color: var(--status-critical); color: var(--status-critical); }
+
+.badge.review-pending { border-color: var(--tertiary); color: var(--tertiary); }
+.badge.review-approved { border-color: var(--status-ok); color: var(--status-ok); }
+.badge.review-rejected { border-color: var(--status-critical); color: var(--status-critical); }
+.badge.review-held { border-color: var(--gray); color: var(--gray); }
+
+#queue-review { overflow-y: auto; }
+
+/* Coordinates cannot be checked by eye. The mini-map is small on purpose: it
+   answers "roughly where", and the full map answers everything else.
+ *
+ * This element IS Leaflet's container, so `background` here is also what beats
+ * leaflet.css's `.leaflet-container { background: #ddd }`: same specificity,
+ * and this sheet loads second. Do not move it to a descendant selector. */
+.mini-map {
+    height: 18rem;
+    margin-bottom: var(--space-lg);
+    border: var(--ui-border-thin) solid var(--secondary-20);
+    border-radius: var(--ui-radius-xs);
+    background: var(--black-30);
+}
+
+/* Locations already on the map for the same mod.
+ *
+ * Neutral by default: nexus_id is one-to-many by design, so a second pin from
+ * one mod is a normal approval, and styling it as an alarm would train the
+ * reviewer to dismiss it. `.has-hidden` is the case that IS worth stopping
+ * for, and only that case gets the warning colour. */
+.sibling-panel {
+    margin: var(--space-md) 0 var(--space-lg);
+    padding: var(--space-sm) var(--space-md);
+    border-left: 3px solid var(--border-neutral);
+    background: var(--white-02);
+}
+
+.sibling-panel.has-hidden { border-left-color: var(--tertiary); background: var(--tertiary-05); }
+
+.sibling {
+    display: flex;
+    gap: var(--space-md);
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    padding: var(--space-sm) 0;
+    border-top: var(--ui-border-thin) solid var(--border-subtle);
+}
+
+.sibling p { margin: var(--space-2xs) 0 0; }
+
+.candidate-list { display: grid; gap: var(--space-sm); }
+
+.candidate {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: var(--space-md);
+    align-items: center;
+    padding: var(--space-sm);
+    border: var(--ui-border-thin) solid var(--border-subtle);
+    border-radius: var(--ui-radius-xs);
+}
+
+.candidate-thumb {
+    width: 6rem;
+    height: 3.5rem;
+    object-fit: cover;
+    border-radius: var(--ui-radius-xs);
+    background: var(--black-30);
+}
+
+.candidate-thumb.empty { border: var(--ui-border-thin) dashed var(--border-neutral); }
+
+.candidate-head {
+    display: flex;
+    gap: var(--space-md);
+    align-items: baseline;
+    flex-wrap: wrap;
+}
+
+.candidate-body p { margin: var(--space-2xs) 0 0; }
+
+.candidate-actions { display: flex; gap: var(--space-xs); flex-wrap: wrap; }
+
+/* Opened by the Dismiss button, and spans the card: a reason is worth more
+   room than the button that asked for it. */
+.dismiss-form {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: var(--space-xs);
+}
+
+.dismiss-form textarea { min-height: 4rem; }
+
+@media (max-width: 50rem) {
+    .candidate { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* ----------------------------------------------------------------- audit -- */
 
 .audit-entry {

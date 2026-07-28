@@ -16,6 +16,12 @@
 <!-- theme.css only: the custom properties, shared with the map. style.css is
      map layout (Leaflet panes, sidebar, clusters) and has nothing for this page. -->
 <link rel="stylesheet" href="../assets/css/theme.css">
+<!-- Leaflet, same pinned version as the map, for the queue's mini-map. The
+     review panel has to show WHERE a proposed pin lands: coordinates alone
+     cannot be checked by eye, and "is this in the bay" is the most common
+     thing wrong with a submission. -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <link rel="stylesheet" href="admin.css">
 </head>
 
@@ -33,6 +39,10 @@
   <nav class="tabs" role="tablist">
     <button type="button" role="tab" data-tab="overview" aria-selected="true">Overview</button>
     <button type="button" role="tab" data-tab="locations" aria-selected="false">Locations</button>
+    <!-- The count is filled in from the rows already fetched, not from a
+         server aggregate. See the note on the Overview panel. -->
+    <button type="button" role="tab" data-tab="queue" aria-selected="false">Queue<span class="tab-count" id="queue-count"></span></button>
+    <button type="button" role="tab" data-tab="candidates" aria-selected="false">Candidates<span class="tab-count" id="candidates-count"></span></button>
     <button type="button" role="tab" data-tab="tags" aria-selected="false">Tags</button>
     <button type="button" role="tab" data-tab="audit" aria-selected="false">Audit</button>
   </nav>
@@ -137,6 +147,66 @@
     </div>
   </section>
 
+  <!-- ---------------------------------------------------------- queue -- -->
+  <!--
+    Public submissions awaiting a decision. The review pane renders a DIFF, not
+    a restatement of the record: a reviewer needs to see "yaw changed", and a
+    full field dump makes the one changed line the hardest thing to find.
+  -->
+  <section id="tab-queue" class="split" hidden>
+    <div class="panel">
+      <div class="toolbar">
+        <select id="queue-status" aria-label="Filter by review status">
+          <option value="pending" selected>Pending</option>
+          <option value="">All</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+          <option value="held">On hold</option>
+        </select>
+        <span class="spacer" style="flex:1"></span>
+        <button type="button" class="btn secondary" id="queue-refresh">Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Submitted</th><th>Kind</th><th>What</th><th>Status</th></tr>
+          </thead>
+          <tbody id="queue-rows"></tbody>
+        </table>
+      </div>
+      <p class="muted" id="queue-summary"></p>
+    </div>
+
+    <div class="panel" id="queue-review">
+      <p class="muted">Select a submission to review it.</p>
+    </div>
+  </section>
+
+  <!-- ----------------------------------------------------- candidates -- -->
+  <!--
+    NCZoning-tagged Nexus mods that are neither a location nor dismissed. An
+    EMPTY list here is a real answer, not a broken query: every tagged mod
+    already has a pin. The counts below say so explicitly rather than leaving a
+    blank panel to be read as a failure.
+  -->
+  <section id="tab-candidates" hidden>
+    <div class="panel">
+      <div class="toolbar">
+        <span class="muted">Tagged on Nexus, no pin on the map yet.</span>
+        <span class="spacer" style="flex:1"></span>
+        <button type="button" class="btn secondary" id="candidates-refresh">Refresh</button>
+      </div>
+      <p class="muted" id="candidates-note"></p>
+      <div id="candidate-list" class="candidate-list"></div>
+    </div>
+
+    <div class="panel" style="margin-top: var(--space-lg)">
+      <h2>Dismissed</h2>
+      <p class="muted">Put aside rather than mapped. Restoring one puts it back in the list above.</p>
+      <div id="dismissed-list" class="candidate-list"></div>
+    </div>
+  </section>
+
   <!-- ----------------------------------------------------------- tags -- -->
   <section id="tab-tags" class="split" hidden>
     <div class="panel">
@@ -182,6 +252,15 @@
   </section>
 </main>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<!-- The map's own constants and pure helpers, for cetToLeaflet. Loading them
+     is the point: a second copy of the CET transform in this file is a second
+     thing to update when the world extent is recalibrated, and a mini-map that
+     disagrees with the map by a few hundred metres is worse than none. Neither
+     file touches the DOM or fetches at load. -->
+<script src="../assets/js/constants.js"></script>
+<script src="../assets/js/utils.js"></script>
 <script src="admin.js"></script>
 </body>
 </html>

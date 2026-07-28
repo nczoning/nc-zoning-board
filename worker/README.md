@@ -516,6 +516,124 @@ rather than paperwork: this is the first personal data the site collects.
 following `/auth/` and `/admin/`. The spec documents the `/v1` data contract
 that in-game consumers read, and this route is not part of it.
 
+## The review queue (`worker/src/review.js`)
+
+Reached through `handleAdmin`, so every route below has already passed the
+collaborator gate. There is deliberately no second gate in `review.js`: two
+checks in two files is how one of them ends up weaker than the other.
+
+| Route | Does |
+| --- | --- |
+| `GET /admin/submissions` | every submission, newest first (`?limit=`, default 200) |
+| `GET /admin/submissions/{id}` | one submission |
+| `POST /admin/submissions/{id}/approve` | applies the payload, then resolves; `reason` optional |
+| `POST /admin/submissions/{id}/reject` | `reason` **required** |
+| `POST /admin/submissions/{id}/hold` | park it, `reason` **required** |
+| `GET /admin/candidates` | `{candidates, dismissed}` in one response |
+| `POST /admin/candidates/{nexus_id}` | dismiss, `reason` optional |
+| `DELETE /admin/candidates/{nexus_id}` | restore a dismissed candidate |
+
+**The statuses are a convention this module owns.** `submissions.status` has no
+CHECK constraint; it defaults to `pending` and the resolved values are
+`approved`, `rejected` and `held`. They are exported from `review.js` so the
+tests assert the same strings the routes write.
+
+`held` means parked, pending a decision between reviewers. It was called
+`changes_requested` first, and that was wrong: nothing here delivers a request
+to anyone (see the note on review notes below), so the name described an
+interaction that does not happen. Renamed while both databases held zero
+submissions, which is the only moment it costs nothing.
+
+**Resolving is one-way, and that is a correctness rule.** Only a `pending`
+submission can be resolved, and the check is a `WHERE status = 'pending'` on the
+resolving `UPDATE` rather than a read followed by a write: two reviewers
+clicking Approve at the same moment both pass a read-then-check, and only one
+can win a conditional update. Without it a double-clicked Approve on a `create`
+inserts the location twice, with two ids and two pins.
+
+**The registry write happens before the resolve.** A payload that can no longer
+be applied (a tag deleted since the submission arrived, a location deleted since
+the edit was proposed) leaves the submission `pending` and retryable. Marking it
+approved first and discovering afterwards that it could not be applied reads as
+done, and is not.
+
+**Approval revalidates**, against the tag registry as it stands now rather than
+as it stood when the submission was queued.
+
+**Approving a `remove` sets `status = 'hidden'`, it does not delete.** That is
+what `hidden` already means here: the pin comes off the map and the record
+stays. `DELETE` is for records that should never have existed, which is not a
+call a member of the public gets to make.
+
+**Resubmission, and `restore_location_id`.** Nothing stops a `create` for a mod
+that is already on the map, and nothing should: `nexus_id` is deliberately
+one-to-many (mod 23896 supplies two tattoo shops), so a second pin from one mod
+is a normal thing to approve. The case that needs help is a match whose record
+is **hidden**, which usually means a removal was approved and the mod has been
+submitted again. Approving that create normally leaves two rows for one pin.
+
+So approve takes an optional `restore_location_id`: the named record goes back
+to `published` and no new row is inserted, and the submission still resolves as
+`approved`, because the request was granted. The response carries
+`restored: true` and the audit records `granted_by: 'restore'` rather than
+`'apply'`, so an approval that inserted nothing is distinguishable from one that
+inserted a record.
+
+It **restores the record as it stands**. The submitted coordinates and
+description are not applied: the stored record is curated (34 of 295 names
+differ from their Nexus title on purpose), and overwriting that from an
+anonymous payload is not a restore. Three refusals, all `409`, all distinct
+because each means the reviewer pointed at a different wrong thing:
+`location_missing`, `not_hidden`, and `nexus_id_mismatch`. The field is refused
+outright (`400`) on anything but approving a `create`, since an edit and a
+removal already name the record they act on.
+
+**`submitter_ip_hash` is never in a response.** It exists for the rate limit and
+abuse triage, it is purged at 90 days, and no part of reviewing needs it.
+
+**Nothing delivers a review note, and that is deliberate.** Submissions are
+anonymous. `submitter_contact` is optional free text that a person has to act
+on, and there is no route by which a submitter can read their own row, so
+`review_note` is an internal record and `held` reaches nobody on its own.
+
+**No submitter-facing status page is planned.** It would need a token on every
+row (`submissions.id` is `INTEGER PRIMARY KEY`, so a bare `/submissions/5`
+would let anyone walk the queue including everyone's `submitter_contact`), and
+it would build a correspondence channel for a queue three people review. The
+cases it would serve are rare enough to handle between reviewers, out of band.
+If the volume ever justifies one, the site will have grown enough that better
+options exist. Do not add one because this section looks like a gap.
+
+The forms are what keep this cheap: `validateLocationInput` requires `name`,
+`authors`, `coordinates`, `nexus_id`, `description`, `category` and `tags` on
+every `create`, so a submission cannot arrive missing the basics and need a
+round trip to complete. `submitter_contact` stays **optional** on purpose. It is
+personal data, and requiring it to make review notes deliverable would collect
+an identifier from every submitter to serve the rare case. See
+[docs/privacy.md](../docs/privacy.md).
+
+So the review pane says plainly that nothing is sent, and says so differently
+depending on whether a contact was given: with one, asking for a change is
+something the reviewer does themselves; without one, Hold is simply a parking
+state. The Discord submission notification, when it lands, is staff-facing for
+the same reason: it says a submission arrived, and does not reach the submitter.
+
+Every mutation writes an audit row, and an approval writes **two**: the queue
+moved and so did the registry. Reading a location's history must not depend on
+knowing which route created it.
+
+Approvals rebuild the read path through the same `DATA_SOURCE`-gated
+`materializeAfterWrite` as every other admin write. A rejection rebuilds
+nothing: no record changed, and a KV write with nothing to write is a wasted
+unit of the daily free-tier cap.
+
+`insertLocation` and `patchLocation` live in `worker/src/registry.js` and are
+shared with the admin editor rather than reimplemented here, so an approved
+submission produces a record indistinguishable from one an admin typed in. The
+parity gate rebuilds all 18 served fields, and a second `INSERT` with its own
+idea of the defaults would surface there as a difference that depends on which
+route wrote the row.
+
 ## Versioning
 
 `API_VERSION` (served as `version` on `/v1/health`) is SemVer for the API
