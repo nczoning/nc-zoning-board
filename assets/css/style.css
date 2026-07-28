@@ -2278,6 +2278,13 @@ body::before {
     flex-direction: column;
     gap: var(--space-xs);
     margin-bottom: 14px;
+
+    /* An author `display` beats the user agent's [hidden] rule, so a row the
+       script hides would otherwise stay on screen with its hidden property
+       reading true. */
+    &[hidden] {
+        display: none;
+    }
 }
 
 .submit-label {
@@ -2472,6 +2479,75 @@ body::before {
 
     &:hover {
         background: transparent;
+    }
+}
+
+/* Edit and report run the same form against a record the map already holds, so
+   the parts that only make sense for a new pin are hidden rather than rebuilt
+   in a second modal. */
+.submit-target {
+    border-left: 2px solid var(--secondary);
+    padding: var(--space-xs) var(--space-md);
+    margin-bottom: var(--space-md);
+    color: var(--gray);
+    font-size: var(--text-md);
+}
+
+.submit-target-name {
+    color: var(--secondary);
+}
+
+.submit-form.is-edit .submit-create-only,
+.submit-form.is-report .submit-create-only,
+.submit-form.is-report #submit-location-fields {
+    display: none;
+}
+
+/* The intent choice only exists against an existing pin: a new one cannot be
+   asking for a removal. */
+.submit-form:not(.is-edit):not(.is-report) .submit-edit-only {
+    display: none;
+}
+
+/* Built on .submit-tag-checkbox, the same bordered pill the tag row uses, so
+   the two choices read as controls of this form rather than as browser
+   defaults. The selected one takes the accent, since it decides what the whole
+   form is asking for. */
+.submit-intent-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+}
+
+.submit-intent-option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    border: var(--ui-border-thin) solid var(--border-subtle);
+    border-radius: var(--ui-radius-sm);
+    color: var(--gray);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+
+    input[type="radio"] {
+        accent-color: var(--secondary);
+        width: 14px;
+        height: 14px;
+        margin: 0;
+    }
+
+    &:hover {
+        border-color: var(--tertiary);
+        color: var(--tertiary);
+    }
+
+    &:has(input:checked) {
+        border-color: var(--secondary);
+        background: var(--secondary-05);
+        color: var(--white);
     }
 }
 
