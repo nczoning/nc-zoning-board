@@ -1071,6 +1071,104 @@
     return renderDiff(before, sub.payload);
   }
 
+  /**
+   * Locations already on the registry for the same mod.
+   *
+   * A match is NOT a duplicate. One Nexus mod supplies more than one location
+   * (23896 supplies two tattoo shops), so `nexus_id` is deliberately not unique
+   * and a second pin from the same mod is a normal thing to approve. This is
+   * context for that decision, not a warning about it.
+   *
+   * The distance is the part that decides it: 30m from an existing pin is
+   * almost certainly the same place submitted twice, 2km is a second location.
+   */
+  function siblingLocations(sub) {
+    const nexusId = sub.payload?.nexus_id;
+    if (sub.kind !== 'create' || !nexusId) return [];
+    const proposed = sub.payload?.coordinates;
+    return state.locations
+      .filter((l) => String(l.nexus_id) === String(nexusId))
+      .map((l) => ({
+        location: l,
+        // CET units, and NCZ.CET_UNITS_PER_METER is 1, so this is metres. Z is
+        // left out on purpose: two pins on different floors of one building are
+        // the same place for the question being asked here.
+        metres: proposed && l.coordinates
+          ? Math.hypot(proposed[0] - l.coordinates[0], proposed[1] - l.coordinates[1])
+          : null,
+      }))
+      .sort((a, b) => (a.metres ?? Infinity) - (b.metres ?? Infinity));
+  }
+
+  /**
+   * The panel that says "this mod is already on the map", and what to do about
+   * it when the record it finds is HIDDEN.
+   *
+   * A hidden match is the resubmission case: a removal was approved, the record
+   * went hidden, and now the same mod is back. Approving normally would leave
+   * two rows for one pin. Restoring puts the curated record back instead, and
+   * still resolves the submission as approved, because the request was granted.
+   */
+  function siblingPanel(sub) {
+    const siblings = siblingLocations(sub);
+    if (!siblings.length) return null;
+
+    const hidden = siblings.filter((s) => s.location.status === 'hidden');
+    const rows = siblings.map(({ location, metres }) => h('div', { class: 'sibling' },
+      h('div', {},
+        h('strong', { text: location.name }), ' ',
+        h('span', { class: `badge status-${location.status}`, text: location.status }),
+        h('p', { class: 'muted', text: metres === null
+          ? 'no coordinates to compare'
+          : `${Math.round(metres).toLocaleString()} m from the proposed pin` })),
+      h('div', { class: 'candidate-actions' },
+        location.status === 'hidden'
+          ? h('button', {
+            class: 'btn', type: 'button', text: 'Restore this instead',
+            title: 'Puts this record back on the map as it stands, and marks the submission approved. The submitted coordinates are not applied.',
+            onclick: (e) => approveByRestoring(sub, location, e.currentTarget),
+          })
+          : h('button', {
+            class: 'btn secondary', type: 'button', text: 'Open it',
+            onclick: () => selectLocation(location.id),
+          }))));
+
+    return h('div', { class: `sibling-panel${hidden.length ? ' has-hidden' : ''}` },
+      h('p', { class: 'muted', text: hidden.length
+        ? `This mod already has a HIDDEN record. That usually means a removal was approved and the mod has been submitted again: restoring keeps one record instead of creating a second.`
+        : `This mod already supplies ${siblings.length} location(s). That is allowed, and normal. Check the distances before approving a second pin.` }),
+      rows);
+  }
+
+  /** Grant a create by putting an existing hidden record back on the map. */
+  async function approveByRestoring(sub, location, button) {
+    const ok = confirm(
+      `Restore "${location.name}" and approve this submission?\n\n`
+      + 'The record goes back on the map exactly as it is stored. The submitted '
+      + 'coordinates and description are NOT applied, and no second record is created.',
+    );
+    if (!ok) return;
+
+    button.disabled = true;
+    const res = await api(`/admin/submissions/${sub.id}/approve`, {
+      method: 'POST',
+      body: { restore_location_id: location.id },
+    });
+    button.disabled = false;
+
+    if (!res.ok) {
+      const [kind, message] = describeFailure(res);
+      banner(kind, message);
+      if (res.status === 409) await Promise.all([loadQueue(), loadLocations()]);
+      return;
+    }
+
+    await loadLocations();
+    await loadQueue();
+    selectSubmission(sub.id);
+    banner('ok', `Restored "${res.body.location.name}" and approved the submission. No second record was created.`);
+  }
+
   /** The coordinates a submission wants, and the ones it moves away from. */
   function submissionPins(sub) {
     const loc = subjectOf(sub);
@@ -1187,6 +1285,10 @@
 
       h('h2', { text: 'What it changes' }),
       submissionDiff(sub),
+
+      // Only for a create, and only when the mod is already on the map. Sits
+      // above the actions because it can change which action is right.
+      resolved ? null : siblingPanel(sub),
 
       h('h2', { text: 'Where' }),
       miniMap(submissionPins(sub)),

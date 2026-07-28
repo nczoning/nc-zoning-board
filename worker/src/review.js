@@ -142,6 +142,56 @@ function checkNote(value, { required }) {
 }
 
 /**
+ * Grant a `create` by putting a hidden record back on the map, instead of
+ * inserting a second one.
+ *
+ * The case this exists for: a removal was approved, the record went `hidden`,
+ * and later someone submits the same mod again. Approving that create normally
+ * would leave two rows for one pin, one hidden and one published.
+ *
+ * It restores the record AS IT STANDS. The submitted coordinates and
+ * description are NOT applied: the stored record is curated (34 of 295 names
+ * differ from their Nexus title deliberately), and quietly overwriting that
+ * from an anonymous payload is not a restore. A reviewer who does want the new
+ * values makes that edit deliberately afterwards.
+ *
+ * Three checks, three distinct refusals, because each one means the reviewer
+ * pointed at the wrong record and they are wrong in different ways.
+ */
+async function restoreInstead(env, submission, locationId, { actor, nowIso }) {
+  const row = await getRow(env, locationId);
+  if (!row) {
+    return { error: 'location_missing', detail: 'that location does not exist', status: 409 };
+  }
+  if (row.status !== 'hidden') {
+    return {
+      error: 'not_hidden',
+      detail: `"${row.name}" is ${row.status}, not hidden, so there is nothing to restore`,
+      status: 409,
+    };
+  }
+
+  // A mod supplies more than one location (23896 supplies two tattoo shops), so
+  // matching on nexus_id does NOT prove this is the right record. It does prove
+  // it is the right MOD, which is the part a reviewer can pick wrong by
+  // clicking the row above the one they meant.
+  const payload = parsePayload(submission.payload);
+  if (String(row.nexus_id ?? '') !== String(payload.nexus_id ?? '')) {
+    return {
+      error: 'nexus_id_mismatch',
+      detail: `"${row.name}" is mod ${row.nexus_id}, and this submission is for mod ${payload.nexus_id}`,
+      status: 409,
+    };
+  }
+
+  const before = await loadAdminRecord(env, row);
+  await patchLocation(env, locationId, { status: 'published' }, nowIso);
+  const after = await loadAdminRecordById(env, locationId);
+  await writeAudit(env, { actor, action: 'location.update', target: locationId, before, after });
+  return { location: after, restored: true };
+}
+
+/**
  * Apply an approved submission to the registry.
  *
  * The payload is REVALIDATED here, against the tag registry as it stands now
@@ -153,10 +203,16 @@ function checkNote(value, { required }) {
  * submission pending: a submission that could not be applied has not been
  * reviewed, and marking it approved anyway would lose it.
  */
-async function applyApproval(env, submission, { actor, nowIso }) {
+async function applyApproval(env, submission, { actor, nowIso, restoreLocationId }) {
   const payload = parsePayload(submission.payload);
 
   if (submission.kind === 'create') {
+    // The reviewer chose to grant this by restoring an existing record rather
+    // than by inserting a new one. Still an approval: the request was granted.
+    if (restoreLocationId) {
+      return restoreInstead(env, submission, restoreLocationId, { actor, nowIso });
+    }
+
     const v = validateLocationInput(payload, { tagNames: await readTagSlugs(env) });
     if (!v.ok) return { error: 'validation_failed', errors: v.errors, status: 422 };
 
@@ -229,10 +285,23 @@ async function act(request, env, ctx, { id, action, actor }) {
   // owed an explanation for, so the reason is required on both. Approval needs
   // no defending, and its note is optional.
   const errors = checkNote(body.reason, { required: action !== 'approve' });
+  if (body.restore_location_id !== undefined && typeof body.restore_location_id !== 'string') {
+    errors.push('restore_location_id must be a string');
+  }
   if (errors.length) return json(request, { error: 'invalid_review', errors }, 400);
 
   const row = await readSubmission(env, id);
   if (!row) return json(request, { error: 'not_found' }, 404);
+
+  // Restoring instead of inserting is a `create` idea. An edit and a removal
+  // already name the record they act on, and honouring a second id here would
+  // let a reviewer resolve one submission by changing an unrelated location.
+  if (body.restore_location_id && !(action === 'approve' && row.kind === 'create')) {
+    return json(request, {
+      error: 'invalid_review',
+      errors: ['restore_location_id applies only to approving a create'],
+    }, 400);
+  }
   if (row.status !== PENDING) {
     return json(request, {
       error: 'already_resolved',
@@ -245,7 +314,9 @@ async function act(request, env, ctx, { id, action, actor }) {
   const nowIso = new Date().toISOString();
   let applied = null;
   if (action === 'approve') {
-    applied = await applyApproval(env, row, { actor, nowIso });
+    applied = await applyApproval(env, row, {
+      actor, nowIso, restoreLocationId: body.restore_location_id ?? null,
+    });
     if (applied.error) {
       return json(request, {
         error: applied.error,
@@ -275,13 +346,25 @@ async function act(request, env, ctx, { id, action, actor }) {
     action: `submission.${action === 'changes' ? 'changes_requested' : action}`,
     target: String(id),
     before: { status: PENDING },
-    after: { status, review_note: body.reason ?? null, location_id: applied?.location?.id ?? row.location_id },
+    after: {
+      status,
+      review_note: body.reason ?? null,
+      location_id: applied?.location?.id ?? row.location_id,
+      // How the request was granted, not just that it was. An approval that
+      // inserted nothing and an approval that inserted a record are different
+      // events, and the log is the only place that distinction survives.
+      granted_by: applied ? (applied.restored ? 'restore' : 'apply') : null,
+    },
   });
 
   if (applied) materializeAfterWrite(env, ctx);
 
   const submission = rowToReview(await readSubmission(env, id));
-  return json(request, { submission, location: applied?.location ?? null });
+  return json(request, {
+    submission,
+    location: applied?.location ?? null,
+    restored: applied?.restored === true,
+  });
 }
 
 /** Every mod we have looked at and put aside, newest first. */

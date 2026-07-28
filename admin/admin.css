@@ -791,6 +791,33 @@ button.breakdown-row:hover .k { color: var(--secondary); }
     background: var(--black-30);
 }
 
+/* Locations already on the map for the same mod.
+ *
+ * Neutral by default: nexus_id is one-to-many by design, so a second pin from
+ * one mod is a normal approval, and styling it as an alarm would train the
+ * reviewer to dismiss it. `.has-hidden` is the case that IS worth stopping
+ * for, and only that case gets the warning colour. */
+.sibling-panel {
+    margin: var(--space-md) 0 var(--space-lg);
+    padding: var(--space-sm) var(--space-md);
+    border-left: 3px solid var(--border-neutral);
+    background: var(--white-02);
+}
+
+.sibling-panel.has-hidden { border-left-color: var(--tertiary); background: var(--tertiary-05); }
+
+.sibling {
+    display: flex;
+    gap: var(--space-md);
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    padding: var(--space-sm) 0;
+    border-top: var(--ui-border-thin) solid var(--border-subtle);
+}
+
+.sibling p { margin: var(--space-2xs) 0 0; }
+
 .candidate-list { display: grid; gap: var(--space-sm); }
 
 .candidate {

@@ -276,6 +276,125 @@ test('approving an edit whose location has since been deleted refuses and stays 
   assert.equal(subRows(env)[0].status, 'pending');
 });
 
+// ------------------------------------------- approving by restoring instead ---
+
+/** The resubmission case: the mod's record exists, hidden by an earlier removal. */
+const HIDDEN = {
+  ...LOCATION, id: 'loc-hidden', name: 'Pulled Loft', nexus_id: '54321', status: 'hidden',
+};
+
+const resubmission = () => submission({ payload: JSON.stringify(VALID) });
+
+test('a create for a mod that already has a hidden record can restore it instead', async () => {
+  // Approving normally would leave two rows for one pin, one hidden and one
+  // published. nexus_id is deliberately one-to-many, so this cannot be refused
+  // outright; it is the reviewer's call, and this is the other option.
+  const env = envFor({ locations: [LOCATION, HIDDEN], submissions: [resubmission()] });
+  const res = await hit(env, 'POST', `/admin/submissions/${firstId(env)}/approve`,
+    { restore_location_id: 'loc-hidden' });
+  assert.equal(res.status, 200);
+
+  const body = await res.json();
+  assert.equal(body.restored, true, 'the caller has to be able to tell the two grants apart');
+  assert.equal(body.submission.status, 'approved', 'the request was granted, so it is approved');
+
+  const rows = locRows(env);
+  assert.equal(rows.length, 2, 'no second record may be created');
+  assert.equal(rows.find((r) => r.id === 'loc-hidden').status, 'published');
+  assert.equal(rows.filter((r) => r.name === 'Rooftop Bar').length, 0);
+});
+
+test('restoring keeps the stored record, it does not apply the submitted payload', async () => {
+  // The stored record is curated. Overwriting its name and coordinates from an
+  // anonymous payload is not a restore.
+  const env = envFor({ locations: [LOCATION, HIDDEN], submissions: [resubmission()] });
+  await hit(env, 'POST', `/admin/submissions/${firstId(env)}/approve`,
+    { restore_location_id: 'loc-hidden' });
+
+  const row = locRows(env).find((r) => r.id === 'loc-hidden');
+  assert.equal(row.name, 'Pulled Loft', 'the curated name must survive');
+  assert.equal(row.x, LOCATION.x, 'and so must the stored coordinates');
+});
+
+test('the audit says how the request was granted, not just that it was', async () => {
+  const env = envFor({ locations: [LOCATION, HIDDEN], submissions: [resubmission()] });
+  await hit(env, 'POST', `/admin/submissions/${firstId(env)}/approve`,
+    { restore_location_id: 'loc-hidden' });
+
+  const log = auditRows(env);
+  assert.deepEqual(log.map((r) => r.action), ['location.update', 'submission.approve']);
+  const after = JSON.parse(log.at(-1).after);
+  assert.equal(after.granted_by, 'restore');
+  assert.equal(after.location_id, 'loc-hidden');
+});
+
+test('restoring a record that is not hidden is refused', async () => {
+  // A published record needs no restoring, and calling it one would report a
+  // grant that changed nothing.
+  const env = envFor({ locations: [LOCATION], submissions: [resubmission()] });
+  const res = await hit(env, 'POST', `/admin/submissions/${firstId(env)}/approve`,
+    { restore_location_id: 'loc-1' });
+  assert.equal(res.status, 409);
+  assert.equal((await res.json()).error, 'not_hidden');
+  assert.equal(subRows(env)[0].status, 'pending');
+});
+
+test('restoring a record belonging to a different mod is refused', async () => {
+  // Matching nexus_id does not prove the right RECORD (one mod, many
+  // locations). A mismatch does prove the wrong mod, which is the mistake a
+  // reviewer makes by clicking the row above the one they meant.
+  const wrongMod = { ...HIDDEN, id: 'loc-other', name: 'Other Mod', nexus_id: '11111' };
+  const env = envFor({ locations: [LOCATION, wrongMod], submissions: [resubmission()] });
+  const res = await hit(env, 'POST', `/admin/submissions/${firstId(env)}/approve`,
+    { restore_location_id: 'loc-other' });
+  assert.equal(res.status, 409);
+  assert.equal((await res.json()).error, 'nexus_id_mismatch');
+  assert.equal(locRows(env).find((r) => r.id === 'loc-other').status, 'hidden');
+});
+
+test('restoring an unknown location is refused and nothing is created', async () => {
+  const env = envFor({ submissions: [resubmission()] });
+  const res = await hit(env, 'POST', `/admin/submissions/${firstId(env)}/approve`,
+    { restore_location_id: 'nope' });
+  assert.equal(res.status, 409);
+  assert.equal(locRows(env).length, 1);
+  assert.equal(subRows(env)[0].status, 'pending');
+});
+
+test('restore_location_id is refused on anything but approving a create', async () => {
+  // An edit and a removal already name the record they act on. Honouring a
+  // second id would let one submission resolve by changing another location.
+  const env = envFor({
+    locations: [LOCATION, HIDDEN],
+    submissions: [
+      submission({ kind: 'edit', location_id: 'loc-1', payload: JSON.stringify({ yaw: 45 }) }),
+      resubmission(),
+    ],
+  });
+  const [edit, create] = subRows(env);
+
+  const onEdit = await hit(env, 'POST', `/admin/submissions/${edit.id}/approve`,
+    { restore_location_id: 'loc-hidden' });
+  assert.equal(onEdit.status, 400);
+
+  const onReject = await hit(env, 'POST', `/admin/submissions/${create.id}/reject`,
+    { reason: 'no', restore_location_id: 'loc-hidden' });
+  assert.equal(onReject.status, 400);
+
+  assert.equal(locRows(env).find((r) => r.id === 'loc-hidden').status, 'hidden');
+  assert.equal(subRows(env).filter((r) => r.status === 'pending').length, 2);
+});
+
+test('a restore materializes, because a record did change', async () => {
+  const env = envFor({
+    dataSource: 'd1', locations: [LOCATION, HIDDEN], submissions: [resubmission()],
+  });
+  const waited = [];
+  await hit(env, 'POST', `/admin/submissions/${firstId(env)}/approve`,
+    { restore_location_id: 'loc-hidden' }, { waitUntil: (p) => waited.push(p) });
+  assert.equal(waited.length, 1);
+});
+
 // ------------------------------------------------- reject / request changes ---
 
 test('a rejection without a reason is refused, and changes nothing', async () => {

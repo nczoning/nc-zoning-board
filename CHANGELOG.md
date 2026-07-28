@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `POST /submissions` queues a new location, an edit or a removal request for review. Anonymous, behind a Turnstile check and a limit of 5 per address per hour, and nothing it accepts reaches the map without a reviewer approving it. The map's own submit form still goes through GitHub until the modal is rebuilt.
 - A privacy note at [docs/privacy.md](docs/privacy.md). Submissions are the first personal data the site collects: a salted one-way hash of the submitter's address, kept 90 days and then cleared automatically.
 - A review queue in the dashboard: pending submissions with a rendered diff of what each one changes and a mini-map of the proposed pin, and approve, reject or request-changes on each. Approving writes the location and rebuilds the map's data.
+- A new-pin submission for a mod already on the map shows the records it would sit alongside, and how far away they are. One mod can legitimately supply several locations, so this is context rather than a warning; where the existing record is hidden, the queue offers to restore that one instead of creating a second.
 - A candidates tab listing NCZoning-tagged Nexus mods with no pin yet. Add one to the map with the editor prefilled, or dismiss it with a reason. Dismissals are reversible, which the Discord alert this replaces was not.
 
 ### Fixed

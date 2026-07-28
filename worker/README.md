@@ -559,6 +559,29 @@ what `hidden` already means here: the pin comes off the map and the record
 stays. `DELETE` is for records that should never have existed, which is not a
 call a member of the public gets to make.
 
+**Resubmission, and `restore_location_id`.** Nothing stops a `create` for a mod
+that is already on the map, and nothing should: `nexus_id` is deliberately
+one-to-many (mod 23896 supplies two tattoo shops), so a second pin from one mod
+is a normal thing to approve. The case that needs help is a match whose record
+is **hidden**, which usually means a removal was approved and the mod has been
+submitted again. Approving that create normally leaves two rows for one pin.
+
+So approve takes an optional `restore_location_id`: the named record goes back
+to `published` and no new row is inserted, and the submission still resolves as
+`approved`, because the request was granted. The response carries
+`restored: true` and the audit records `granted_by: 'restore'` rather than
+`'apply'`, so an approval that inserted nothing is distinguishable from one that
+inserted a record.
+
+It **restores the record as it stands**. The submitted coordinates and
+description are not applied: the stored record is curated (34 of 295 names
+differ from their Nexus title on purpose), and overwriting that from an
+anonymous payload is not a restore. Three refusals, all `409`, all distinct
+because each means the reviewer pointed at a different wrong thing:
+`location_missing`, `not_hidden`, and `nexus_id_mismatch`. The field is refused
+outright (`400`) on anything but approving a `create`, since an edit and a
+removal already name the record they act on.
+
 **`submitter_ip_hash` is never in a response.** It exists for the rate limit and
 abuse triage, it is purged at 90 days, and no part of reviewing needs it.
 
