@@ -421,15 +421,17 @@
     renderChips();
   }
 
+  /** @returns {Promise<boolean>} whether the read succeeded. See refreshAll. */
   async function loadLocations() {
     const res = await api('/admin/locations');
     if (!res.ok) {
       const [kind, message] = describeFailure(res);
       banner(kind, message);
-      return;
+      return false;
     }
     state.locations = res.body.locations || [];
     renderLocations();
+    return true;
   }
 
   // -------------------------------------------------------- record editor --
@@ -801,10 +803,11 @@
     if (!res.ok) {
       const [kind, message] = describeFailure(res);
       banner(kind, message);
-      return;
+      return false;
     }
     state.tags = res.body.tags || [];
     renderTags();
+    return true;
   }
 
   const BLANK_TAG = { slug: '', name: null, description: '', sort_order: null, usage_count: 0 };
@@ -1104,10 +1107,11 @@
     if (!res.ok) {
       const [kind, message] = describeFailure(res);
       banner(kind, message);
-      return;
+      return false;
     }
     state.submissions = res.body.submissions || [];
     renderQueue();
+    return true;
   }
 
   /**
@@ -1561,11 +1565,12 @@
       // empty list, which is the most reassuring thing this panel could say.
       $('#candidates-note').textContent = 'Could not read the candidates list.';
       banner(kind, message);
-      return;
+      return false;
     }
     state.candidates = res.body.candidates || [];
     state.dismissed = res.body.dismissed || [];
     renderCandidates();
+    return true;
   }
 
   // ----------------------------------------------------------- freshness --
@@ -1613,6 +1618,45 @@
       : 'The served dataset is current.';
   }
 
+  /**
+   * Re-read every collection the dashboard holds, and repaint what is showing.
+   *
+   * The page loads each collection ONCE and keeps it in `state`. That is right
+   * for a dashboard one person is driving, and wrong the moment the registry
+   * moves underneath it: another reviewer's approval, a sync script, a hand-run
+   * SQL statement. The stale copy looks identical to current data, which is the
+   * whole problem with it.
+   *
+   * `Promise.all` because they are independent reads, and tags must not gate
+   * locations here: this is a resync, not the boot sequence that builds the
+   * editor's tag picker.
+   *
+   * @returns {Promise<boolean>} false when any read failed, so the caller does
+   *   not paint a success banner over the failure's own message.
+   */
+  async function refreshAll() {
+    const results = await Promise.all([
+      loadTags(), loadLocations(), loadQueue(), loadCandidates(),
+    ]);
+
+    // A record open in the detail pane can have gone away in the meantime.
+    // Leaving it on screen renders a deleted location as though it were still
+    // there, editable, with a Save button that would 404.
+    if (state.selectedLocation && !state.locations.some((l) => l.id === state.selectedLocation)) {
+      selectLocation(null);
+    }
+    if (state.selectedSubmission
+      && !state.submissions.some((s) => s.id === state.selectedSubmission)) {
+      selectSubmission(null);
+    }
+
+    await refreshFreshness();
+    // Recomputed rather than left: its numbers are derived from what was just
+    // replaced, and the drift row exists to report exactly this comparison.
+    if (!$('#tab-overview').hidden) await renderOverview();
+    return results.every(Boolean);
+  }
+
   /** Rebuild the served dataset from whatever DATA_SOURCE says. */
   async function rebuildDataset(button) {
     button.disabled = true;
@@ -1628,17 +1672,21 @@
       await refreshFreshness();
       return banner(kind, message);
     }
+
+    // Re-read the registry too, not just the age indicator. Rebuild says
+    // "make this current" to the person clicking it, and a page that rebuilt
+    // the served dataset while still showing its load-time copy of the
+    // registry is telling them it did nothing. Runs BEFORE the banner, because
+    // selectLocation/selectSubmission clear it.
+    const ok = await refreshAll();
+    if (!ok) return;
+
     // "Nothing changed" is a real outcome, not a nicer way of saying "done".
     // If the admin just edited a record and the rebuild reports no change,
     // that is worth knowing rather than smoothing over.
     banner('ok', res.body.changed
-      ? `Rebuilt from ${res.body.source}. New dataset version ${res.body.dataset_version}.`
-      : `Rebuilt from ${res.body.source}. The content hash was unchanged, so nothing was rewritten.`);
-    await refreshFreshness();
-    // A rebuild is precisely what resolves registry-vs-served drift, so the
-    // panel that reports it has to be recomputed or it keeps showing the gap
-    // it just closed.
-    if (!$('#tab-overview').hidden) await renderOverview();
+      ? `Rebuilt from ${res.body.source}, and reloaded this page's data. New dataset version ${res.body.dataset_version}.`
+      : `Rebuilt from ${res.body.source}, and reloaded this page's data. The content hash was unchanged, so nothing was rewritten.`);
   }
 
   // ------------------------------------------------------------ overview --
