@@ -2155,7 +2155,7 @@ body::before {
     display: none !important;
 }
 
-/* ── BBCode Header Button ─────────────────────────────────────────── */
+/* ── Submit Header Button ─────────────────────────────────────────── */
 .parameters-modal-content,
 .showcase-modal-content {
     max-width: 420px;
@@ -2257,30 +2257,30 @@ body::before {
     background-size: contain;
 }
 
-/* ── BBCode Generator Modal ───────────────────────────────────────── */
-.bbcode-modal-content {
+/* ── Submit a Location Modal ──────────────────────────────────────── */
+.submit-modal-content {
     max-width: 560px;
     width: 95%;
 }
 
-.bbcode-modal-body {
+.submit-modal-body {
     max-height: 80svh;
     overflow-y: auto;
 }
 
-.bbcode-form {
+.submit-form {
     display: flex;
     flex-direction: column;
 }
 
-.bbcode-field-row {
+.submit-field-row {
     display: flex;
     flex-direction: column;
     gap: var(--space-xs);
     margin-bottom: 14px;
 }
 
-.bbcode-label {
+.submit-label {
     font-family: var(--font-heading);
     font-size: var(--text-2xs);
     color: var(--secondary);
@@ -2288,7 +2288,7 @@ body::before {
     letter-spacing: 1px;
 }
 
-.bbcode-optional {
+.submit-optional {
     color: var(--gray);
     font-family: var(--font-body);
     text-transform: none;
@@ -2296,7 +2296,7 @@ body::before {
     font-size: var(--text-xs);
 }
 
-.bbcode-coord-inputs {
+.submit-coord-inputs {
     display: flex;
     gap: var(--space-sm);
     align-items: center;
@@ -2316,17 +2316,17 @@ body::before {
     min-width: var(--space-md);
 }
 
-.bbcode-coord-note {
+.submit-hint {
     font-size: var(--text-xs);
     color: var(--tertiary);
     margin-top: 0.25rem;
     font-family: var(--font-body);
 }
 
-.bbcode-coord-inputs input[type="number"],
-.bbcode-input,
-.bbcode-select,
-.bbcode-textarea {
+.submit-coord-inputs input[type="number"],
+.submit-input,
+.ui-select,
+.submit-textarea {
     transition: border-color 0.2s ease;
 
     &:focus {
@@ -2334,19 +2334,19 @@ body::before {
     }
 }
 
-.bbcode-coord-inputs {
+.submit-coord-inputs {
     input[type="number"] {
         width: 140px;
     }
 }
 
-.bbcode-tag-grid {
+.submit-tag-grid {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-xs);
 }
 
-.bbcode-tag-checkbox {
+.submit-tag-checkbox {
     display: flex;
     align-items: center;
     gap: var(--space-2xs);
@@ -2369,12 +2369,7 @@ body::before {
     }
 }
 
-.bbcode-checkbox-row {
-    flex-direction: row;
-    align-items: center;
-}
-
-.bbcode-checkbox-label {
+.ui-checkbox-label {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
@@ -2394,7 +2389,7 @@ body::before {
     }
 }
 
-.bbcode-cet-command-block {
+.submit-cet-command-block {
     display: flex;
     gap: var(--space-sm);
     align-items: flex-start;
@@ -2418,7 +2413,7 @@ body::before {
 
 
 /* ── Steps & Notes ───────────────────────────────────────────────── */
-.bbcode-steps {
+.submit-steps {
     list-style: none;
     counter-reset: step;
     padding: 0;
@@ -2456,7 +2451,7 @@ body::before {
     }
 }
 
-.bbcode-note {
+.submit-intro {
     font-size: var(--text-sm);
     color: var(--gray);
     font-style: italic;
@@ -2464,12 +2459,12 @@ body::before {
 }
 
 /* ── Submit a Location ───────────────────────────────────────────────── */
-/* Layered on the .bbcode-* rules above rather than parallel to them: the two
+/* Layered on the form rules above rather than parallel to them: the two
    share every field, and only the send path is new. */
 
 /* .terminal-link is a block, sized for the sidebar. Inside a sentence it has to
    be a word. */
-.bbcode-coord-note .terminal-link {
+.submit-hint .terminal-link {
     display: inline;
     padding: 0;
     border-left: none;
@@ -2522,9 +2517,9 @@ body::before {
    class plus a bare attribute loses to it and the border stays grey. Held
    through :focus, or it reverts the moment the box being complained about is
    clicked. */
-.bbcode-modal-body .bbcode-form input[aria-invalid="true"],
-.bbcode-modal-body .bbcode-form select[aria-invalid="true"],
-.bbcode-modal-body .bbcode-form textarea[aria-invalid="true"] {
+.submit-modal-body .submit-form input[aria-invalid="true"],
+.submit-modal-body .submit-form select[aria-invalid="true"],
+.submit-modal-body .submit-form textarea[aria-invalid="true"] {
     border-color: var(--status-critical);
     background: var(--status-critical-10);
 
@@ -2573,14 +2568,14 @@ body::before {
 /* The submitted state replaces the form rather than sitting under it: the
    submission cannot be edited after sending, so leaving the fields live would
    invite an edit that goes nowhere. */
-.bbcode-form.is-submitted > *:not(#submit-done) {
+.submit-form.is-submitted > *:not(#submit-done) {
     display: none;
 }
 
 /* The steps and the note describe filling the form in, so they leave with it. */
-.bbcode-modal-body.is-submitted {
-    .bbcode-steps,
-    > .bbcode-note {
+.submit-modal-body.is-submitted {
+    .submit-steps,
+    > .submit-intro {
         display: none;
     }
 }
@@ -2614,7 +2609,7 @@ body::before {
    somewhere else. The fixed-width coordinate inputs are the only rule in the
    modal that cannot reflow on its own. */
 @media (max-width: 768px) {
-    .bbcode-coord-inputs {
+    .submit-coord-inputs {
         input[type="number"] {
             width: 100%;
         }

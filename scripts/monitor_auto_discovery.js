@@ -41,10 +41,10 @@ async function postDiscord(skipped) {
         title: `⚠️ Auto-discovery: ${n} NCZoning mod${n === 1 ? "" : "s"} tagged but not on the map`,
         description:
           `${n} mod${n === 1 ? " is" : "s are"} tagged **NCZoning** on Nexus but the ` +
-          `Data API skipped ${n === 1 ? "it" : "them"} — the metadata block is missing or ` +
-          `didn't parse. **Action:** ask the author to regenerate the block with the in-app ` +
-          `BBCode Generator, add a manual registry entry if it belongs on the map, or add the ` +
-          `id to \`data/excluded_mods.json\` to stop this alert.\n\n` +
+          `Data API skipped ${n === 1 ? "it" : "them"}: the metadata block is missing or ` +
+          `didn't parse. **Action:** ask the author to submit the location through the form ` +
+          `on the site, add a registry entry if it belongs on the map, or add the id to ` +
+          `\`data/excluded_mods.json\` to stop this alert.\n\n` +
           lines.join("\n"),
         color: 15105570, // amber/orange: warning, not error
         footer: { text: "NC Zoning Board • source: /v1/meta.skipped" },
