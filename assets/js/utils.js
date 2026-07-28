@@ -285,12 +285,16 @@ NCZ.modLinkId = function (mod) {
  * The pin popup, for both views: Leaflet binds this string and the Three.js
  * layer puts it in a CSS2DObject card.
  *
- * The edit and report actions are BUTTONS carrying the location id, not links,
- * and nothing here binds a handler. One delegated listener in app.js serves
- * every pin in both views; a per-popup listener would have to be attached twice,
- * once in each view's popup-open path, and the two would drift.
+ * The fix action is a BUTTON carrying the location id, not a link, and nothing
+ * here binds a handler. One delegated listener in app.js serves every pin in
+ * both views; a per-popup listener would have to be attached twice, once in
+ * each view's popup-open path, and the two would drift.
  *
- * Both actions render on every record. The edit link they replace was hidden on
+ * ONE action, not two. Asking for a pin to be taken down is a kind of
+ * correction, chosen inside the form, rather than a second button beside it:
+ * everything a separate report could say, the form already asks for.
+ *
+ * It renders on every record. The edit link it replaces was hidden on
  * auto-discovered pins, which made sense when the only way to correct one was to
  * edit a Nexus description. A submission goes to the same queue whatever the
  * record's provenance.
@@ -356,8 +360,7 @@ NCZ.buildPopupHtml = function (mod, catStyle, nexusThumbs, tagsDict) {
         <div class="popup-actions">
           <a href="${NCZ.escapeHtml(nexusUrl)}" target="_blank" class="ui-popup-action-link ui-popup-action-link-nexus">${NCZ.escapeHtml(nexusLabel)}</a>
           <button type="button" class="ui-popup-action-link ui-popup-action-link-copy-link tertiary" data-copy-url="${NCZ.escapeHtml(copyLinkUrl)}" aria-label="Copy link to this pin" title="Copy link"><span class="ui-popup-action-link-icon" aria-hidden="true"></span></button>
-          <button type="button" class="ui-popup-action-link ui-popup-action-link-edit tertiary" data-edit-location="${NCZ.escapeHtml(String(mod.id))}" aria-label="Suggest an edit" title="Suggest an edit"><span class="ui-popup-action-link-icon" aria-hidden="true"></span></button>
-          <button type="button" class="ui-popup-action-link ui-popup-action-link-report tertiary" data-report-location="${NCZ.escapeHtml(String(mod.id))}" aria-label="Report a problem" title="Report a problem"><span class="ui-popup-action-link-icon" aria-hidden="true"></span></button>
+          <button type="button" class="ui-popup-action-link ui-popup-action-link-edit tertiary" data-edit-location="${NCZ.escapeHtml(String(mod.id))}" title="Suggest a correction to this pin, or ask for it to be taken down. A reviewer decides."><span class="ui-popup-action-link-icon" aria-hidden="true"></span>Suggest a fix</button>
         </div>
       </div>
     </div>

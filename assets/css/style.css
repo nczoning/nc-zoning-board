@@ -1395,10 +1395,18 @@ body.cluster-panel-resizing * {
     mask-image: url("../img/icon/edit.svg");
 }
 
-.ui-popup-action-link-report .ui-popup-action-link-icon {
-    background-color: currentColor;
-    -webkit-mask-image: url("../img/icon/flag.svg");
-    mask-image: url("../img/icon/flag.svg");
+/* Carries a word as well as a glyph: a pencil alone reads as "edit what?", and
+   this one also covers asking for the pin to be removed. */
+.ui-popup-action-link-edit {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2xs);
+    white-space: nowrap;
+
+    .ui-popup-action-link-icon {
+        width: 1rem;
+        height: 1rem;
+    }
 }
 
 .ui-popup-action-link-copy-link .ui-popup-action-link-icon {
@@ -2499,6 +2507,12 @@ body::before {
 .submit-form.is-edit .submit-create-only,
 .submit-form.is-report .submit-create-only,
 .submit-form.is-report #submit-location-fields {
+    display: none;
+}
+
+/* The intent choice only exists against an existing pin: a new one cannot be
+   asking for a removal. */
+.submit-form:not(.is-edit):not(.is-report) .submit-edit-only {
     display: none;
 }
 

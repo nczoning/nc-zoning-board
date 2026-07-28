@@ -271,9 +271,9 @@ document.addEventListener("DOMContentLoaded", () => {
       doneBody: "is in the review queue. The pin on the map is unchanged until a reviewer approves the edit.",
     },
     remove: {
-      title: "REPORT A PROBLEM",
-      send: "[ SEND THE REPORT ]",
-      done: "REPORT QUEUED",
+      title: "REQUEST A REMOVAL",
+      send: "[ SEND THE REQUEST ]",
+      done: "REMOVAL REQUESTED",
       doneBody: "is in the review queue. The pin stays on the map until a reviewer decides.",
     },
   };
@@ -300,6 +300,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     submitForm?.classList.toggle("is-edit", mode === "edit");
     submitForm?.classList.toggle("is-report", mode === "remove");
+    // Kept in step whether the mode came from the radios or from opening the
+    // modal, so the form never describes one intent and post another.
+    submitModal?.querySelectorAll("input[name='submit-intent']").forEach((radio) => {
+      radio.checked = radio.value === (mode === "remove" ? "remove" : "edit");
+    });
     submitModal?.querySelectorAll(".submit-report-only").forEach((el) => {
       el.hidden = mode !== "remove";
     });
@@ -311,7 +316,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (targetBanner) {
       targetBanner.classList.toggle("hidden", !record);
       if (record) {
-        const verb = mode === "remove" ? "Reporting" : "Editing";
+        const verb = mode === "remove" ? "Asking to remove" : "Editing";
         targetBanner.innerHTML = `${verb} <span class="submit-target-name"></span>`;
         targetBanner.querySelector(".submit-target-name").textContent = record.name;
       }
@@ -862,20 +867,28 @@ document.addEventListener("DOMContentLoaded", () => {
   // files, that have to be kept in step. The buttons carry the location id and
   // this reads it wherever the click lands.
   document.addEventListener("click", (event) => {
-    const editBtn = event.target.closest("[data-edit-location]");
-    const reportBtn = event.target.closest("[data-report-location]");
-    if (!editBtn && !reportBtn) return;
+    const fixBtn = event.target.closest("[data-edit-location]");
+    if (!fixBtn) return;
 
-    const id = (editBtn ?? reportBtn).dataset.editLocation
-      ?? (editBtn ?? reportBtn).dataset.reportLocation;
-    const record = NCZ.locationsById?.get(id);
+    const record = NCZ.locationsById?.get(fixBtn.dataset.editLocation);
     if (!record) {
       // The dataset moved under an open popup, which the passive update check
       // makes possible. Saying so beats opening a form against nothing.
       alert("That pin is no longer in the loaded map data. Refresh and try again.");
       return;
     }
-    openSubmitModal(editBtn ? "edit" : "remove", record);
+    openSubmitModal("edit", record);
+  });
+
+  // The intent radios switch between proposing changes and asking for the pin
+  // to come off. Same record, same open form: only the shape of what gets sent
+  // changes, so this re-applies the mode rather than reopening anything.
+  submitModal?.querySelectorAll("input[name='submit-intent']").forEach((radio) => {
+    radio.addEventListener("change", () => {
+      if (!radio.checked || !editTarget) return;
+      clearErrors();
+      applyMode(radio.value === "remove" ? "remove" : "edit", editTarget);
+    });
   });
 
   const copyCetBtn = document.getElementById("submit-copy-cet-btn");
