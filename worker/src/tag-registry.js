@@ -115,7 +115,7 @@ export async function readTagSlugs(env) {
 /**
  * Every tag with the number of locations carrying it.
  *
- * The count is the whole point of the admin view: it is what turns "delete this
+ * The count is what the admin view exists for: it turns "delete this
  * tag" from a guess into a decision, and it is what the 409 on delete reports.
  */
 export async function readTagsWithUsage(env) {

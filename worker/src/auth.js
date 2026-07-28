@@ -177,7 +177,7 @@ export async function callback(request, env) {
  * Resolve the caller's session, re-checking collaborator status when the
  * cached verdict has aged out. Returns null when unauthenticated.
  *
- * This is the function every future /admin/* route gates on, which is why it
+ * This is the function every future /admin/* route gates on, so it
  * re-checks rather than trusting the session cookie's own `collaborator: true`:
  * the cookie lives 8 hours, and removing someone from the repo has to take
  * effect sooner than that.

@@ -63,7 +63,7 @@ async function appJwt(env, nowMs = Date.now()) {
   const now = Math.floor(nowMs / 1000);
   const header = b64url(enc.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
   const claims = b64url(enc.encode(JSON.stringify({
-    iat: now - 60,        // tolerate GitHub's clock running behind ours
+    iat: now - 60,        // tolerate GitHub's clock running behind the Worker's
     exp: now + 9 * 60,    // under GitHub's 10-minute ceiling
     iss: env.GITHUB_APP_ID,
   })));

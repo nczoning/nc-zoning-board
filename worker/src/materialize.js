@@ -7,7 +7,7 @@
  *
  * WHAT CHANGES vs merge.js, and why the shape does not:
  * - Locations no longer come from mods.json + parsed Nexus blocks. They all
- *   come from D1, including the 9 records that originally arrived via
+ *   come from D1, including the 9 records that arrived via
  *   auto-discovery (imported at Phase 1, `source='auto'` preserved).
  * - Nothing auto-publishes any more. A tagged Nexus mod with a valid block is
  *   a *candidate*, not a location. So the Nexus loop here only ever backfills

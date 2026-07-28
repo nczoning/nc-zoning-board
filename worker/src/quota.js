@@ -69,7 +69,7 @@ export async function cfGraphQL(env, query, variables = {}, fetchImpl = fetch) {
 /**
  * Free-tier caps, per ACCOUNT per UTC day.
  *
- * The caps reset at UTC midnight, not local midnight, which is why the panel
+ * The caps reset at UTC midnight, not local midnight, so the panel
  * says UTC on the date: a burn-down measured against the wrong day boundary
  * reads as "plenty left" for the ~10 hours AEST runs ahead of UTC.
  *

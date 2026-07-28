@@ -191,7 +191,7 @@ test('archives: unions .archive names across current files, deduped + sorted', a
 
 test('archives: fetches UUID-path files from the file-manifests host (flat manifest)', async () => {
   // New-scheme files (uri is a UUID storage path) have a flat manifest at the
-  // file-manifests host — we take the .archive basename from file_path.
+  // file-manifests host: the .archive basename comes from file_path.
   const impl = archiveFetch({
     modFiles: [{ uri: 'ab/cd/ef/uuid-1', category: 'MAIN' }],
     manifests: { 'ab/cd/ef/uuid-1': manifest('New.archive', 'thing.xl') },

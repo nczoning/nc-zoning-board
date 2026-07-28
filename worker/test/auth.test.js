@@ -366,7 +366,7 @@ test('/auth/me is 401 with no cookie, 503 when the check is unavailable', async 
   const res = await me(new Request('https://api.nczoning.net/auth/me', {
     headers: { Cookie: `${SESSION_COOKIE}=${token}` },
   }), env);
-  // 503, not 403 — "we cannot tell" is not "you are not allowed".
+  // 503, not 403: "cannot tell" is not "you are not allowed".
   assert.equal(res.status, 503);
   assert.equal((await res.json()).error, 'check_unavailable');
 });

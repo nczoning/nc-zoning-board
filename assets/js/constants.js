@@ -122,7 +122,7 @@ NCZ.API_LOCATIONS_CACHE_KEY = "nc_api_locations";
 NCZ.DATASET_POLL_MS = 60 * 1000;
 
 // The tag registry now comes from /v1/tags alongside the locations: one origin,
-// one contract. It used to be a same-origin fetch of data/tags.json, which was
+// one contract, rather than a same-origin fetch of data/tags.json, which was
 // fine while the file was the source of truth — from Phase 4 the D1 `tags`
 // table is, edited in the dashboard rather than by pull request.
 //

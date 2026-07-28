@@ -34,7 +34,7 @@ export async function readLocationRows(env) {
   return results;
 }
 
-/** nexus_ids we have looked at and decided to keep off the map. */
+/** nexus_ids a reviewer has decided to keep off the map. */
 export async function readDismissedIds(env) {
   const { results } = await env.DB.prepare('SELECT nexus_id FROM dismissed_candidates').all();
   return new Set((results ?? []).map((r) => String(r.nexus_id)));
@@ -43,7 +43,7 @@ export async function readDismissedIds(env) {
 /**
  * The tag registry, in display order. This is the /v1/tags payload shape:
  * an array of records, matching /v1/locations and the per-record philosophy,
- * rather than the arbitrarily-keyed map it used to be (which is also awkward
+ * rather than an arbitrarily-keyed map (which is also awkward
  * for the in-game RedData `FromJson`).
  *
  * `name` falls back to the slug when NULL, which is exactly today's rendering —

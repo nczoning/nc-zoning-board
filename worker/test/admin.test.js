@@ -336,9 +336,9 @@ test('create attaches the join rows too', async () => {
 });
 
 test('tag validation reads the tags TABLE, so a just-created tag is usable at once', async () => {
-  // Phase 4a validated against the KV snapshot the cron maintains. Once tags
-  // became editable that was wrong: creating a tag then using it would 422
-  // until the next materialize.
+  // Validation reads the table, not the KV snapshot the cron maintains.
+  // Against the snapshot, creating a tag and then using it 422s until the
+  // next materialize.
   const env = envFor();
   const created = await hit(env, 'POST', '/admin/tags', {
     slug: 'rooftop', description: 'Up top.',

@@ -239,7 +239,7 @@ textarea { resize: vertical; min-height: 6rem; line-height: var(--lh-body); }
 }
 
 /* Three states, three colours, and they are NOT interchangeable.
-   `.warn` is "we could not tell" (503). `.error` is "no" (403, 422, 409).
+   `.warn` is "could not tell" (503). `.error` is "no" (403, 422, 409).
    Rendering an indeterminate check in the refusal colour tells an admin they
    lack access when the truth is that GitHub was unreachable. */
 .notice.error { border-left-color: var(--status-critical); background: rgb(255 0 0 / 0.08); }
@@ -478,8 +478,9 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 /* ---------------------------------------------------------------- detail -- */
 
 /* Read-first. Opening a record shows it; changing it is a separate, deliberate
-   act. Clicking a row used to drop straight into a live form, which made every
-   browse a potential edit. */
+   act. A row click that opened a live form would make every browse a potential
+   edit, where one stray keystroke marks a record dirty that was only being
+   read. */
 .detail dl {
     display: grid;
     grid-template-columns: minmax(6rem, 9rem) 1fr;

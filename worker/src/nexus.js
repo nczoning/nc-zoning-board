@@ -194,7 +194,7 @@ export async function fetchModsByUidThumbs(fetchImpl = fetch, numericIds = []) {
 // `[]` means WIP/Dummy (no Nexus page), a loose-file mod with no `.archive`, or
 // not-yet-fetched — never "ships no archives".
 
-// Download-file categories that represent the mod's *current* files. We prefer
+// Download-file categories that represent the mod's *current* files. Prefer
 // these; ARCHIVED/OLD_VERSION are superseded and only used as a fallback when a
 // mod has no current file (keeps the archive names current and the per-mod
 // subrequest count low).
@@ -244,7 +244,7 @@ function collectArchiveNames(node, out) {
 /**
  * Collect detectable install file names from a new-scheme manifest: a FLAT array
  * of { file_path, file_size, file_hashes }, where file_path is the full
- * in-archive path (`archive/pc/mod/Foo.archive`). We take each match's basename.
+ * in-archive path (`archive/pc/mod/Foo.archive`). Each match's basename is taken.
  */
 function collectArchiveNamesFromManifest(entries, out) {
   if (!Array.isArray(entries)) return;
@@ -260,7 +260,7 @@ function collectArchiveNamesFromManifest(entries, out) {
  * List a mod's downloadable files (uri + category) via the api-router modFiles
  * query. Returns { files, ok }: ok is false on any HTTP/GraphQL/parse failure,
  * so the caller can distinguish "genuinely no files" (ok:true, files:[]) from
- * "we couldn't tell" (ok:false) and avoid caching a transient failure as truth.
+ * "could not tell" (ok:false) and avoid caching a transient failure as truth.
  *
  * @param {typeof fetch} fetchImpl injectable for tests
  * @param {string|number} modId numeric Nexus mod id

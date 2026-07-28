@@ -256,7 +256,7 @@ NCZ.pointInPolygon = function (point, ring) {
  * and the legacy { slug: description } dictionary. Not defensive coding for its
  * own sake — the site and the Worker deploy independently, and the dev site
  * reads the PRODUCTION API by default, so during the migration a new site can
- * legitimately be talking to an API still serving the old shape. Tolerating
+ * legitimately be talking to an API still serving the pre-0.4.0 shape. Tolerating
  * both means the two can ship in either order with no flag day.
  *
  * Delete the dictionary branch once every environment serves the array.

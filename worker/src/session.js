@@ -56,7 +56,7 @@ export async function signSession(secret, payload, ttlSeconds = SESSION_TTL_S, n
  * wrong algorithm, bad signature, expired. Callers get one answer to one
  * question, so there is no way to accidentally treat "malformed" as "valid".
  *
- * crypto.subtle.verify is constant-time, which is why the comparison is done
+ * crypto.subtle.verify is constant-time, so the comparison is done
  * there rather than by re-signing and string-comparing.
  */
 export async function verifySession(secret, token, nowMs = Date.now()) {

@@ -12,7 +12,7 @@
  * Two behaviours matter and are asserted by the tests that use this:
  * - `PRAGMA foreign_keys = ON`. SQLite defaults it OFF, D1 defaults it ON. With
  *   it off, ON UPDATE CASCADE silently does nothing and every rename orphans
- *   its links, which is why admin.js re-counts after a rename rather than
+ *   its links, so admin.js re-counts after a rename rather than
  *   trusting the cascade.
  * - `batch()` runs inside a transaction, as D1's does.
  */

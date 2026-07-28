@@ -35,7 +35,7 @@ const json = (request, body, status = 200) => new Response(JSON.stringify(body),
 /**
  * Gate. Returns the session, or a Response to return immediately.
  *
- * 503 for an indeterminate check, never 403: "we cannot tell" is not "you are
+ * 503 for an indeterminate check, never 403: "cannot tell" is not "you are
  * not allowed", and an admin locked out by a transient GitHub blip should be
  * told which of those happened. See github-app.js.
  */
@@ -327,7 +327,7 @@ async function handleTags({ request, env, ctx, actor, method, tagListMatch, tagO
     // A slug change propagates to location_tags through ON UPDATE CASCADE,
     // which only fires with foreign keys enforced. D1 enforces them by default;
     // if that ever stops being true the rename silently orphans every link,
-    // which is why the count is re-read below and compared.
+    // so the count is re-read below and compared.
     const usedBefore = (await env.DB.prepare(
       'SELECT COUNT(*) AS n FROM location_tags WHERE tag_slug = ?',
     ).bind(slug).first())?.n ?? 0;
@@ -371,7 +371,7 @@ async function handleTags({ request, env, ctx, actor, method, tagListMatch, tagO
     // so a bare delete would fail on the foreign key with an opaque error; and
     // a cascade would strip the tag from every record as a side effect of one
     // click, with a single audit row to show for it. The count and the affected
-    // records come back so the caller can decide, which is the whole point.
+    // records come back so the caller can decide.
     const users = await readTagUsers(env, slug);
     if (users.length) {
       const total = (await env.DB.prepare(
