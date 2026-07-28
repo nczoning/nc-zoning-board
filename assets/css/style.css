@@ -1395,6 +1395,12 @@ body.cluster-panel-resizing * {
     mask-image: url("../img/icon/edit.svg");
 }
 
+.ui-popup-action-link-report .ui-popup-action-link-icon {
+    background-color: currentColor;
+    -webkit-mask-image: url("../img/icon/flag.svg");
+    mask-image: url("../img/icon/flag.svg");
+}
+
 .ui-popup-action-link-copy-link .ui-popup-action-link-icon {
     background-color: currentColor;
     -webkit-mask-image: url("../img/icon/link.svg");
@@ -2473,6 +2479,27 @@ body::before {
     &:hover {
         background: transparent;
     }
+}
+
+/* Edit and report run the same form against a record the map already holds, so
+   the parts that only make sense for a new pin are hidden rather than rebuilt
+   in a second modal. */
+.submit-target {
+    border-left: 2px solid var(--secondary);
+    padding: var(--space-xs) var(--space-md);
+    margin-bottom: var(--space-md);
+    color: var(--gray);
+    font-size: var(--text-md);
+}
+
+.submit-target-name {
+    color: var(--secondary);
+}
+
+.submit-form.is-edit .submit-create-only,
+.submit-form.is-report .submit-create-only,
+.submit-form.is-report #submit-location-fields {
+    display: none;
 }
 
 .submit-subfield {

@@ -216,10 +216,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const donePanel = document.getElementById("submit-done");
   const formErrorEl = document.getElementById("submit-form-error");
 
+  const reasonInput = document.getElementById("submit-reason");
+  const targetBanner = document.getElementById("submit-target");
+  const stepsList = document.getElementById("submit-steps");
+  const introLine = document.getElementById("submit-intro");
+
   const MANUAL_MOD_VALUE = "__manual__";
   const ERROR_FIELDS = [
     "nexus_id", "name", "description", "coordinates", "yaw", "category",
-    "tags", "authors", "note", "contact", "turnstile",
+    "tags", "authors", "reason", "note", "contact", "turnstile",
   ];
   // The control to focus when a field is refused, in the order the form reads.
   const FIELD_CONTROL = {
@@ -230,6 +235,7 @@ document.addEventListener("DOMContentLoaded", () => {
     yaw: "submit-yaw",
     category: "submit-category",
     authors: "submit-authors",
+    reason: "submit-reason",
     note: "submit-note",
     contact: "submit-contact",
   };
@@ -241,13 +247,115 @@ document.addEventListener("DOMContentLoaded", () => {
   let descriptionIsPrefilled = true;
   let authorsIsPrefilled = true;
 
-  function openSubmitModal() {
+  // ── Modes ──────────────────────────────────────────────────────────────────
+  //
+  // One modal, three jobs: propose a new pin, propose a change to one, or ask
+  // for one to be taken down. They post the same three shapes to the same route
+  // and share every field, so a second modal would be the same form twice with
+  // two sets of validation to keep in step.
+  //
+  // `create` is the only mode that picks a mod; `remove` carries a reason and no
+  // location fields at all, because there is nothing for a reviewer to apply.
+
+  const MODES = {
+    create: {
+      title: "SUBMIT A LOCATION",
+      send: "[ SUBMIT FOR REVIEW ]",
+      done: "QUEUED FOR REVIEW",
+      doneBody: "is in the review queue. A reviewer checks the coordinates before anything is published, and nothing appears on the map until one approves it.",
+    },
+    edit: {
+      title: "SUGGEST AN EDIT",
+      send: "[ SEND THE CHANGES ]",
+      done: "CHANGES QUEUED",
+      doneBody: "is in the review queue. The pin on the map is unchanged until a reviewer approves the edit.",
+    },
+    remove: {
+      title: "REPORT A PROBLEM",
+      send: "[ SEND THE REPORT ]",
+      done: "REPORT QUEUED",
+      doneBody: "is in the review queue. The pin stays on the map until a reviewer decides.",
+    },
+  };
+
+  let formMode = "create";
+  // The record an edit or a report is against, held so the diff has something to
+  // compare with. Null in create mode.
+  let editTarget = null;
+
+  // The modal header is rebuilt from data-modal-title on every theme change, so
+  // the mode has to write the attribute rather than the text.
+  function setSubmitModalTitle(title) {
+    const label = submitModal?.querySelector(".terminal-header-theme-label[data-modal-title]");
+    if (!label) return;
+    label.dataset.modalTitle = title;
+    const prefix = label.textContent.split("//")[0].trim();
+    label.textContent = `${prefix} // ${title}`;
+  }
+
+  function applyMode(mode, record) {
+    formMode = mode;
+    editTarget = record ?? null;
+    const config = MODES[mode];
+
+    submitForm?.classList.toggle("is-edit", mode === "edit");
+    submitForm?.classList.toggle("is-report", mode === "remove");
+    submitModal?.querySelectorAll(".submit-report-only").forEach((el) => {
+      el.hidden = mode !== "remove";
+    });
+
+    // The steps describe finding coordinates for a pin that does not exist yet.
+    if (stepsList) stepsList.hidden = mode !== "create";
+    if (introLine) introLine.hidden = mode !== "create";
+
+    if (targetBanner) {
+      targetBanner.classList.toggle("hidden", !record);
+      if (record) {
+        const verb = mode === "remove" ? "Reporting" : "Editing";
+        targetBanner.innerHTML = `${verb} <span class="submit-target-name"></span>`;
+        targetBanner.querySelector(".submit-target-name").textContent = record.name;
+      }
+    }
+
+    setSubmitModalTitle(config.title);
+    if (sendBtn) sendBtn.textContent = config.send;
+  }
+
+  function openSubmitModal(mode = "create", record = null) {
+    resetSubmitForm({ keepMode: true });
+    applyMode(mode, record);
+    if (record && mode === "edit") prefillFromRecord(record);
     submitModal.classList.remove("hidden");
-    loadCandidates();
+    submitModal.querySelector(".submit-modal-body").scrollTop = 0;
+    if (mode === "create") loadCandidates();
     mountTurnstile();
   }
+
   function closeSubmitModal() {
     submitModal.classList.add("hidden");
+  }
+
+  // Fill the form from a record the map is already holding. No fetch: an edit is
+  // proposed against exactly the copy the submitter is looking at.
+  function prefillFromRecord(record) {
+    const [x, y, z] = record.coordinates ?? [];
+    const set = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.value = value ?? "";
+    };
+    set("submit-name", record.name);
+    set("submit-description", record.description);
+    set("submit-coord-x", x);
+    set("submit-coord-y", y);
+    set("submit-coord-z", z);
+    set("submit-yaw", record.yaw);
+    set("submit-category", record.category);
+    set("submit-authors", (record.authors ?? []).join(", "));
+    set("submit-credits", record.credits);
+    document.querySelectorAll("#submit-tag-checkboxes input").forEach((cb) => {
+      cb.checked = (record.tags ?? []).includes(cb.value);
+    });
+    updateDescriptionCount();
   }
 
   // ── Turnstile ──────────────────────────────────────────────────────────────
@@ -456,6 +564,7 @@ document.addEventListener("DOMContentLoaded", () => {
       nexusId: nexusRefValue(),
       note: document.getElementById("submit-note")?.value,
       contact: document.getElementById("submit-contact")?.value,
+      reason: reasonInput?.value,
       tags: Array.from(
         document.querySelectorAll("#submit-tag-checkboxes input:checked"),
       ).map((cb) => cb.value),
@@ -531,7 +640,9 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  if (submitOpenBtn) submitOpenBtn.addEventListener("click", openSubmitModal);
+  // Wrapped, not passed directly: openSubmitModal's first parameter is the mode,
+  // and addEventListener would hand it a MouseEvent.
+  if (submitOpenBtn) submitOpenBtn.addEventListener("click", () => openSubmitModal());
   if (closeSubmitModalBtn) closeSubmitModalBtn.addEventListener("click", closeSubmitModal);
 
   // \u2500\u2500 Send \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -574,8 +685,16 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function showSubmitted(id) {
+    const config = MODES[formMode];
     const idEl = document.getElementById("submit-done-id");
     if (idEl) idEl.textContent = id === null || id === undefined ? "" : `#${id}`;
+
+    const title = donePanel?.querySelector(".submit-done-title");
+    if (title) title.textContent = config.done;
+    const detail = document.getElementById("submit-done-detail");
+    if (detail) detail.textContent = config.doneBody;
+    const againBtn = document.getElementById("submit-another-btn");
+    if (againBtn) againBtn.textContent = formMode === "create" ? "[ SUBMIT ANOTHER ]" : "[ CLOSE ]";
     submitForm?.classList.add("is-submitted");
     // The steps and the note sit outside the form and describe filling it in,
     // down to "leave a contact below", so they go with it.
@@ -584,33 +703,91 @@ document.addEventListener("DOMContentLoaded", () => {
     donePanel?.scrollIntoView({ block: "nearest" });
   }
 
+  // The submission this form is currently describing, or the errors stopping it.
+  //
+  // A removal deliberately never reads the location fields: they are hidden in
+  // that mode, and the server refuses a payload on `kind: 'remove'` because
+  // there is nothing for a reviewer to apply.
+  function buildSubmission(raw, token) {
+    const meta = NCZ.collectSubmissionMeta(raw);
+    const errors = { ...meta.errors };
+    if (!token) errors.turnstile = "Complete the check above before submitting.";
+
+    if (formMode === "remove") {
+      const reason = String(raw.reason ?? "").trim();
+      if (!reason) {
+        errors.reason = "Say what is wrong with this pin, so a reviewer can act on it.";
+      } else if (reason.length > NCZ.SUBMISSION_NOTE_MAX) {
+        errors.reason = `Keep this to ${NCZ.SUBMISSION_NOTE_MAX} characters or fewer.`;
+      }
+      return {
+        errors,
+        body: {
+          kind: "remove",
+          location_id: editTarget?.id,
+          reason,
+          turnstile_token: token,
+          ...meta.values,
+        },
+      };
+    }
+
+    const collected = NCZ.collectLocationForm(raw, {
+      knownTags: knownTagSlugs(),
+      // An edit never asks which mod this is: the record answers that, and its
+      // id may be one the new-pin path would refuse.
+      fixedNexusId: formMode === "edit" ? editTarget?.nexus_id : undefined,
+    });
+    Object.assign(errors, collected.errors);
+
+    if (formMode === "edit") {
+      const changed = NCZ.diffLocation(editTarget, collected.values);
+      return {
+        errors,
+        empty: Object.keys(changed).length === 0,
+        body: {
+          kind: "edit",
+          location_id: editTarget?.id,
+          payload: changed,
+          turnstile_token: token,
+          ...meta.values,
+        },
+      };
+    }
+
+    return {
+      errors,
+      body: {
+        kind: "create",
+        payload: collected.values,
+        turnstile_token: token,
+        ...meta.values,
+      },
+    };
+  }
+
   if (sendBtn) {
     sendBtn.addEventListener("click", async () => {
       clearErrors();
       const raw = readForm();
-      const { values, errors } = NCZ.collectLocationForm(raw, { knownTags: knownTagSlugs() });
-      const meta = NCZ.collectSubmissionMeta(raw);
-      const token = turnstileToken();
+      const { body, errors, empty } = buildSubmission(raw, turnstileToken());
 
-      const allErrors = { ...errors, ...meta.errors };
-      if (!token) {
-        allErrors.turnstile = "Complete the check above before submitting.";
+      if (Object.keys(errors).length) {
+        showErrors(errors);
+        return;
       }
-      if (Object.keys(allErrors).length) {
-        showErrors(allErrors);
+      if (empty) {
+        // Not a validation failure: everything here is valid, there is just
+        // nothing to review. The server would refuse it for the same reason.
+        setFormError("Nothing has changed yet. Edit a field, then send.", { tone: "notice" });
         return;
       }
 
       sendBtn.disabled = true;
       sendBtn.textContent = "[ SENDING... ]";
-      const result = await NCZ.postSubmission({
-        kind: "create",
-        payload: values,
-        turnstile_token: token,
-        ...meta.values,
-      });
+      const result = await NCZ.postSubmission(body);
       sendBtn.disabled = false;
-      sendBtn.textContent = "[ SUBMIT FOR REVIEW ]";
+      sendBtn.textContent = MODES[formMode].send;
 
       if (result.ok) {
         showSubmitted(result.data?.id);
@@ -620,7 +797,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  function resetSubmitForm() {
+  function resetSubmitForm({ keepMode = false } = {}) {
     document.getElementById("submit-coord-x").value = "";
     document.getElementById("submit-coord-y").value = "";
     document.getElementById("submit-coord-z").value = "";
@@ -645,11 +822,18 @@ document.addEventListener("DOMContentLoaded", () => {
     authorsIsPrefilled = true;
     onModSelectionChange();
 
+    if (reasonInput) reasonInput.value = "";
+
     clearErrors();
     resetTurnstile();
     submitForm?.classList.remove("is-submitted");
     submitModal?.querySelector(".submit-modal-body")?.classList.remove("is-submitted");
     donePanel?.classList.add("hidden");
+
+    // Reset lands back on `create` unless the caller is about to set a mode
+    // itself, so the Reset button inside an edit does not silently turn it into
+    // a new-pin submission carrying that pin's values.
+    if (!keepMode && formMode !== "create") applyMode("create", null);
   }
 
   const submitResetBtn = document.getElementById("submit-reset-btn");
@@ -658,10 +842,41 @@ document.addEventListener("DOMContentLoaded", () => {
   const submitAnotherBtn = document.getElementById("submit-another-btn");
   if (submitAnotherBtn) {
     submitAnotherBtn.addEventListener("click", () => {
+      // After an edit or a report there is nothing to do again: the pin it was
+      // about is the one the submitter just finished with.
+      if (formMode !== "create") {
+        closeSubmitModal();
+        resetSubmitForm();
+        return;
+      }
       resetSubmitForm();
       modSelect?.focus();
     });
   }
+
+  // ── The popup actions, for both views ──────────────────────────────────────
+  //
+  // One delegated listener rather than a handler bound per popup. Leaflet
+  // rebuilds a popup's DOM every time it opens and the Three.js layer builds a
+  // CSS2DObject card per pin, so binding at open time means two wirings, in two
+  // files, that have to be kept in step. The buttons carry the location id and
+  // this reads it wherever the click lands.
+  document.addEventListener("click", (event) => {
+    const editBtn = event.target.closest("[data-edit-location]");
+    const reportBtn = event.target.closest("[data-report-location]");
+    if (!editBtn && !reportBtn) return;
+
+    const id = (editBtn ?? reportBtn).dataset.editLocation
+      ?? (editBtn ?? reportBtn).dataset.reportLocation;
+    const record = NCZ.locationsById?.get(id);
+    if (!record) {
+      // The dataset moved under an open popup, which the passive update check
+      // makes possible. Saying so beats opening a form against nothing.
+      alert("That pin is no longer in the loaded map data. Refresh and try again.");
+      return;
+    }
+    openSubmitModal(editBtn ? "edit" : "remove", record);
+  });
 
   const copyCetBtn = document.getElementById("submit-copy-cet-btn");
   if (copyCetBtn) {
@@ -2190,6 +2405,12 @@ async function initMap() {
     modCountEl.textContent = `(${mods.length})`;
 
     const sortedMods = mods.sort(NCZ.sortModsByUpdated);
+    // The popup's edit and report actions carry a location id and nothing else,
+    // so the delegated handler needs one place to resolve it. Built from the
+    // same array the pins and the 3D layer are built from, and the passive
+    // update check announces rather than re-renders, so this cannot describe a
+    // different data set from the one on screen.
+    NCZ.locationsById = new Map(sortedMods.map((mod) => [String(mod.id), mod]));
     // Hand the same data set to the 3D pin layer; pins won't appear until ThreeScene
     // is initialised (first switch to SCHEMA), but the call is safe before that and the
     // data is held internally so the layer can build pins on attach.

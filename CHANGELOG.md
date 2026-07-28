@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The submit form sends a location to the review queue. It starts from your mod (picked from the tagged list, or a Nexus link) and now collects the name and description the registry requires, which the block never carried.
 - Picking a tagged mod prefills its title, short description and uploader, the same three things auto-discovery took from the Nexus page. All three stay editable.
 - The coordinate boxes are checked as you type. The box that is wrong goes red, and every problem in the row is named at once rather than one per attempt.
+- Every pin can be corrected from its own popup. Suggest an edit opens the form filled in from the record and sends only the fields you change; report a problem asks for a reason and sends a removal request. Both go to the same review queue, and the pin is unchanged until a reviewer decides.
 
 ### Fixed
 

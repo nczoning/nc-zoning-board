@@ -318,6 +318,15 @@ test('a blank reference is refused', () => {
   assert.ok(NCZ.collectLocationForm({ ...complete(), nexusId: '' }).errors.nexus_id);
 });
 
+test('an edit takes the mod id from the record, including a WIP one', () => {
+  // The edit modal hides the mod picker: the record answers which mod this is.
+  // Without the override the form would refuse every edit for a missing Nexus
+  // reference, and refuse the WIP records outright.
+  const wip = NCZ.collectLocationForm({ ...complete(), nexusId: '' }, { fixedNexusId: 'WIP' });
+  assert.equal(wip.errors.nexus_id, undefined);
+  assert.equal(wip.values.nexus_id, 'WIP');
+});
+
 test('WIP is refused from the form, though the server allows it', () => {
   // Stricter on purpose: "WIP" and "Dummy" are reviewer calls. A submitter
   // cannot evidence a mod that has no page.
@@ -332,6 +341,81 @@ test('blank credits are null, not an empty string', () => {
   // means in the stored record.
   const { values } = NCZ.collectLocationForm({ ...complete(), credits: '   ' });
   assert.equal(values.credits, null);
+});
+
+// ── the edit diff ─────────────────────────────────────────────────────────────
+// An edit sends only what moved. The queue renders a diff, and a payload
+// carrying every field would make each proposal read as a rewrite.
+
+/** A stored record, in the shape /v1 serves. */
+const record = () => ({
+  id: 'abc-123',
+  name: 'Cliffside Abode Player Home',
+  authors: ['Spuddeh', 'Akiway'],
+  description: 'A player home on the cliffs north of the city.',
+  coordinates: [-1234.56, 789.01, 42.5],
+  yaw: 180,
+  category: 'new-location',
+  tags: ['player-home'],
+  nexus_id: '12345',
+  credits: 'Original texture by XYZ',
+});
+
+test('an untouched form produces no changes at all', () => {
+  const { values } = NCZ.collectLocationForm(complete());
+  assert.deepEqual(NCZ.diffLocation(record(), values), {});
+});
+
+test('only the field that moved is sent', () => {
+  const { values } = NCZ.collectLocationForm({ ...complete(), yaw: '90' });
+  assert.deepEqual(NCZ.diffLocation(record(), values), { yaw: 90 });
+});
+
+test('a coordinate change sends the whole triple, because the server takes it whole', () => {
+  const { values } = NCZ.collectLocationForm({ ...complete(), z: '43' });
+  assert.deepEqual(NCZ.diffLocation(record(), values), { coordinates: [-1234.56, 789.01, 43] });
+});
+
+test('arrays compare by content, not by identity', () => {
+  // tags and authors are rebuilt from the form on every read, so a reference
+  // test would report both as changed on every single edit.
+  const { values } = NCZ.collectLocationForm(complete());
+  assert.equal('tags' in NCZ.diffLocation(record(), values), false);
+  assert.equal('authors' in NCZ.diffLocation(record(), values), false);
+
+  const reordered = NCZ.collectLocationForm({ ...complete(), authors: 'Akiway, Spuddeh' });
+  assert.deepEqual(NCZ.diffLocation(record(), reordered.values).authors, ['Akiway', 'Spuddeh'],
+    'order is content: the first author is the one the map shows');
+});
+
+test('a tag added and a tag removed are both a change', () => {
+  const added = NCZ.collectLocationForm({ ...complete(), tags: ['player-home', 'interior'] });
+  assert.deepEqual(NCZ.diffLocation(record(), added.values).tags, ['player-home', 'interior']);
+
+  const removed = NCZ.collectLocationForm({ ...complete(), tags: [] });
+  assert.deepEqual(NCZ.diffLocation(record(), removed.values).tags, []);
+});
+
+test('clearing a field that was already empty is not a change', () => {
+  // The record stores "none" as null OR as an empty string, and the form only
+  // ever produces null, so a strict compare would propose an edit to every
+  // record holding "" for a field nobody touched.
+  const stored = { ...record(), credits: '' };
+  const { values } = NCZ.collectLocationForm({ ...complete(), credits: '' });
+  assert.equal(values.credits, null);
+  assert.equal('credits' in NCZ.diffLocation(stored, values), false);
+});
+
+test('clearing a field that had a value IS a change', () => {
+  const { values } = NCZ.collectLocationForm({ ...complete(), credits: '' });
+  assert.deepEqual(NCZ.diffLocation(record(), values), { credits: null });
+});
+
+test('a record missing a key is a change rather than a match', () => {
+  const stored = { ...record() };
+  delete stored.yaw;
+  const { values } = NCZ.collectLocationForm(complete());
+  assert.equal(NCZ.diffLocation(stored, values).yaw, 180);
 });
 
 // ── the submission envelope ───────────────────────────────────────────────────

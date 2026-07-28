@@ -503,7 +503,8 @@
                 </button>
             </div>
             <div class="terminal-body submit-modal-body">
-                <ol class="submit-steps">
+                <div id="submit-target" class="submit-target hidden"></div>
+                <ol id="submit-steps" class="submit-steps">
                     <li><strong>TAG YOUR MOD</strong>: add the <code>NCZoning</code> tag to your mod on Nexus Mods. That is all the tag does now: it puts your mod in the list below, with its title, short description and uploader ready to edit. It is optional, and a mod submitted by link is treated exactly the same.</li>
                     <li><strong>ACQUIRE COORDINATES</strong>: open CET in-game, run the command below in the console. Copy the output and paste the values below:
                         <div class="submit-cet-command-block">
@@ -515,9 +516,9 @@
                     <li><strong>SUBMIT FOR REVIEW</strong>: complete the check at the bottom of the form and send it</li>
                     <li><strong>A REVIEWER DECIDES</strong>: nothing reaches the map until a reviewer approves it</li>
                 </ol>
-                <div class="submit-intro">Submissions are anonymous, so nothing is sent back to you. Watch the map for your pin, or leave a contact below if you are happy to be asked a question about it.</div>
+                <div id="submit-intro" class="submit-intro">Submissions are anonymous, so nothing is sent back to you. Watch the map for your pin, or leave a contact below if you are happy to be asked a question about it.</div>
                 <div class="submit-form">
-                    <div class="submit-field-row">
+                    <div class="submit-field-row submit-create-only">
                         <label class="submit-label" for="submit-mod-select">Your mod</label>
                         <select id="submit-mod-select" class="ui-select">
                             <option value="">Loading tagged mods...</option>
@@ -534,17 +535,18 @@
                             <span id="submit-mod-card-name"></span>
                         </div>
                     </div>
+                    <div id="submit-location-fields">
                     <div class="submit-field-row">
                         <label class="submit-label" for="submit-name">Location name</label>
                         <input type="text" id="submit-name" class="submit-input" placeholder="e.g. Cliffside Abode Player Home">
                         <p class="submit-field-error" id="submit-error-name" hidden></p>
-                        <div class="submit-hint">Prefilled from your mod's Nexus title once you pick it above. Edit it to name the location itself, not the mod page.</div>
+                        <div class="submit-hint"><span class="submit-create-only">Prefilled from your mod's Nexus title once you pick it above.</span> Name the location itself, not the mod page.</div>
                     </div>
                     <div class="submit-field-row">
                         <label class="submit-label" for="submit-description">Description</label>
                         <textarea id="submit-description" class="submit-textarea" rows="3" maxlength="500" placeholder="What is at these coordinates, in a sentence or two."></textarea>
                         <p class="submit-field-error" id="submit-error-description" hidden></p>
-                        <div class="submit-hint">Prefilled from your mod's Nexus summary, the same text auto-discovery published. Edit it to describe the place rather than the mod: this is what a reviewer reads. <span id="submit-description-count">0</span>/500 characters.</div>
+                        <div class="submit-hint"><span class="submit-create-only">Prefilled from your mod's Nexus summary, the same text auto-discovery published.</span> Describe the place rather than the mod: this is what a reviewer reads. <span id="submit-description-count">0</span>/500 characters.</div>
                     </div>
                     <div class="submit-field-row">
                         <label class="submit-label">CET Coordinates</label>
@@ -589,11 +591,18 @@
                         <label class="submit-label" for="submit-authors">Authors <span class="submit-optional">(comma-separated)</span></label>
                         <input type="text" id="submit-authors" class="submit-input" placeholder="e.g. Author1, Author2">
                         <p class="submit-field-error" id="submit-error-authors" hidden></p>
-                        <div class="submit-hint">Prefilled with the mod's Nexus uploader once you pick it above. Add anyone else who worked on the location, separated by commas.</div>
+                        <div class="submit-hint"><span class="submit-create-only">Prefilled with the mod's Nexus uploader once you pick it above.</span> Everyone who worked on the location, separated by commas.</div>
                     </div>
                     <div class="submit-field-row">
                         <label class="submit-label" for="submit-credits">Credits <span class="submit-optional">(optional)</span></label>
                         <textarea id="submit-credits" class="submit-textarea" placeholder="e.g. Original map texture by XYZ" rows="2"></textarea>
+                    </div>
+                    </div>
+                    <div class="submit-field-row submit-report-only" hidden>
+                        <label class="submit-label" for="submit-reason">What is wrong with this pin?</label>
+                        <textarea id="submit-reason" class="submit-textarea" rows="3" maxlength="1000" placeholder="e.g. the mod was taken down, or this pin is in the wrong place and I am not the author."></textarea>
+                        <p class="submit-field-error" id="submit-error-reason" hidden></p>
+                        <div class="submit-hint">A reviewer reads this and decides. Removing a pin takes it off the map and keeps the record, so a mistake here is reversible.</div>
                     </div>
                     <div class="submit-field-row">
                         <label class="submit-label" for="submit-note">Note for the reviewer <span class="submit-optional">(optional)</span></label>
@@ -617,7 +626,7 @@
                     </div>
                     <div id="submit-done" class="submit-done hidden" role="status">
                         <h3 class="submit-done-title">QUEUED FOR REVIEW</h3>
-                        <p class="submit-done-body">Submission <span id="submit-done-id" class="submit-done-id"></span> is in the review queue. A reviewer checks the coordinates before anything is published, and nothing appears on the map until one approves it.</p>
+                        <p class="submit-done-body">Submission <span id="submit-done-id" class="submit-done-id"></span> <span id="submit-done-detail"></span></p>
                         <p class="submit-done-body">Submissions are anonymous, so there is no reply to wait for and no status page to check. Watch the map.</p>
                         <button id="submit-another-btn" class="terminal-btn">[ SUBMIT ANOTHER ]</button>
                     </div>
