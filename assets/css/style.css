@@ -1395,20 +1395,6 @@ body.cluster-panel-resizing * {
     mask-image: url("../img/icon/edit.svg");
 }
 
-/* Carries a word as well as a glyph: a pencil alone reads as "edit what?", and
-   this one also covers asking for the pin to be removed. */
-.ui-popup-action-link-edit {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2xs);
-    white-space: nowrap;
-
-    .ui-popup-action-link-icon {
-        width: 1rem;
-        height: 1rem;
-    }
-}
-
 .ui-popup-action-link-copy-link .ui-popup-action-link-icon {
     background-color: currentColor;
     -webkit-mask-image: url("../img/icon/link.svg");
@@ -2292,6 +2278,13 @@ body::before {
     flex-direction: column;
     gap: var(--space-xs);
     margin-bottom: 14px;
+
+    /* An author `display` beats the user agent's [hidden] rule, so a row the
+       script hides would otherwise stay on screen with its hidden property
+       reading true. */
+    &[hidden] {
+        display: none;
+    }
 }
 
 .submit-label {
@@ -2514,6 +2507,48 @@ body::before {
    asking for a removal. */
 .submit-form:not(.is-edit):not(.is-report) .submit-edit-only {
     display: none;
+}
+
+/* Built on .submit-tag-checkbox, the same bordered pill the tag row uses, so
+   the two choices read as controls of this form rather than as browser
+   defaults. The selected one takes the accent, since it decides what the whole
+   form is asking for. */
+.submit-intent-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+}
+
+.submit-intent-option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    border: var(--ui-border-thin) solid var(--border-subtle);
+    border-radius: var(--ui-radius-sm);
+    color: var(--gray);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+
+    input[type="radio"] {
+        accent-color: var(--secondary);
+        width: 14px;
+        height: 14px;
+        margin: 0;
+    }
+
+    &:hover {
+        border-color: var(--tertiary);
+        color: var(--tertiary);
+    }
+
+    &:has(input:checked) {
+        border-color: var(--secondary);
+        background: var(--secondary-05);
+        color: var(--white);
+    }
 }
 
 .submit-subfield {

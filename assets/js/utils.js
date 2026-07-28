@@ -360,7 +360,7 @@ NCZ.buildPopupHtml = function (mod, catStyle, nexusThumbs, tagsDict) {
         <div class="popup-actions">
           <a href="${NCZ.escapeHtml(nexusUrl)}" target="_blank" class="ui-popup-action-link ui-popup-action-link-nexus">${NCZ.escapeHtml(nexusLabel)}</a>
           <button type="button" class="ui-popup-action-link ui-popup-action-link-copy-link tertiary" data-copy-url="${NCZ.escapeHtml(copyLinkUrl)}" aria-label="Copy link to this pin" title="Copy link"><span class="ui-popup-action-link-icon" aria-hidden="true"></span></button>
-          <button type="button" class="ui-popup-action-link ui-popup-action-link-edit tertiary" data-edit-location="${NCZ.escapeHtml(String(mod.id))}" title="Suggest a correction to this pin, or ask for it to be taken down. A reviewer decides."><span class="ui-popup-action-link-icon" aria-hidden="true"></span>Suggest a fix</button>
+          <button type="button" class="ui-popup-action-link ui-popup-action-link-edit tertiary" data-edit-location="${NCZ.escapeHtml(String(mod.id))}" aria-label="Suggest a fix" title="Suggest a correction to this pin, or ask for it to be taken down. A reviewer decides."><span class="ui-popup-action-link-icon" aria-hidden="true"></span></button>
         </div>
       </div>
     </div>
