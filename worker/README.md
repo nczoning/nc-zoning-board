@@ -585,24 +585,32 @@ removal already name the record they act on.
 **`submitter_ip_hash` is never in a response.** It exists for the rate limit and
 abuse triage, it is purged at 90 days, and no part of reviewing needs it.
 
-**Nothing delivers a review note, and the dashboard says so.** Submissions are
+**Nothing delivers a review note, and that is deliberate.** Submissions are
 anonymous. `submitter_contact` is optional free text that a person has to act
 on, and there is no route by which a submitter can read their own row, so
 `review_note` is an internal record and `changes_requested` reaches nobody on
-its own. The review pane states this at the point of decision, and warns
-outright when no contact was given, because otherwise "request changes" is a
-dead letter that looks like a reply.
+its own.
 
-Two ways out, neither in this PR:
+**No submitter-facing status page is planned.** It would need a token on every
+row (`submissions.id` is `INTEGER PRIMARY KEY`, so a bare `/submissions/5`
+would let anyone walk the queue including everyone's `submitter_contact`), and
+it would build a correspondence channel for a queue three people review. The
+cases it would serve are rare enough to handle between reviewers, out of band.
+If the volume ever justifies one, the site will have grown enough that better
+options exist. Do not add one because this section looks like a gap.
 
-- **A submitter-facing status page.** `POST /submissions` already returns the
-  id, but `submissions.id` is `INTEGER PRIMARY KEY`, so a bare `/submissions/5`
-  would let anyone walk the whole queue including `submitter_contact`. It needs
-  an unguessable token stored on the row and handed back once at submission.
-  That belongs with PR C, which is what would show the submitter the link.
-- **The Discord notification**, which is the mechanism this reuses later. Note
-  it is staff-facing: it tells the team a submission arrived, and does not
-  reach the submitter either.
+The forms are what keep this cheap: `validateLocationInput` requires `name`,
+`authors`, `coordinates`, `nexus_id`, `description`, `category` and `tags` on
+every `create`, so a submission cannot arrive missing the basics and need a
+round trip to complete. `submitter_contact` stays **optional** on purpose. It is
+personal data, and requiring it to make review notes deliverable would collect
+an identifier from every submitter to serve the rare case. See
+[docs/privacy.md](../docs/privacy.md).
+
+So the review pane says plainly that nothing is sent, and warns outright when no
+contact was given: "request changes" there is a parking state, not a reply.
+The Discord submission notification, when it lands, is staff-facing for the same
+reason: it says a submission arrived, and does not reach the submitter.
 
 Every mutation writes an audit row, and an approval writes **two**: the queue
 moved and so did the registry. Reading a location's history must not depend on
