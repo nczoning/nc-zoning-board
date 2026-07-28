@@ -66,8 +66,17 @@
     login: null,
     locations: [],
     tags: [],
+    submissions: [],
+    candidates: [],
+    dismissed: [],
     selectedLocation: null,   // id, or '' for a new record
     selectedTag: null,        // slug, or '' for a new tag
+    selectedSubmission: null, // submission id
+    queueStatus: 'pending',   // '' for every status
+    // The queue's mini-map, held so it can be torn down before its container
+    // is replaced. A Leaflet map on a removed node keeps its resize and zoom
+    // handlers, and every review opened would leave another one behind.
+    reviewMap: null,
     editing: false,           // detail view vs. the form; see selectLocation
     // District is computed by the materializer, not stored on the record, so it
     // is learned from /v1/locations when the Overview loads. Published records
@@ -174,9 +183,13 @@
       case 404:
         return ['error', 'Not found. It may have been deleted in another tab.'];
       case 409:
+        // `detail` where the server sent one: the review routes use 409 for
+        // several distinct conflicts, and one of them (another reviewer won the
+        // race after this request had already written the location) is
+        // specifically NOT "nothing was changed".
         return ['error', res.body?.error === 'tag_exists'
           ? `A tag with the slug "${res.body.slug}" already exists.`
-          : 'Conflict. Nothing was changed.'];
+          : res.body?.detail || 'Conflict. Nothing was changed.'];
       case 422:
         return ['error', 'The server rejected this: ' + (res.body?.errors || ['validation failed']).join('; ')];
       case 400:
@@ -695,7 +708,15 @@
         })));
   }
 
-  function selectLocation(id) {
+  /**
+   * @param {string|null} id  a location id, '' for a new record, null for none
+   * @param {object} [prefill]  fields a new record starts with. The Candidates
+   *   tab passes the mod's name and nexus id, which is everything that is known
+   *   without a person standing in the location with CET open. Ignored for an
+   *   existing record: prefilling over stored values would be an edit disguised
+   *   as a navigation.
+   */
+  function selectLocation(id, prefill) {
     state.selectedLocation = id;
     state.editing = id === '';   // a new record has nothing to view
     clearBanner();
@@ -704,8 +725,11 @@
       return replace($('#loc-editor'),
         h('p', { class: 'muted', text: 'Select a location to view it, or create a new one.' }));
     }
+    if (id === '') switchTab('locations');
     renderLocations();
-    const loc = id === '' ? { ...BLANK_LOCATION } : state.locations.find((l) => l.id === id);
+    const loc = id === ''
+      ? { ...BLANK_LOCATION, ...(prefill || {}) }
+      : state.locations.find((l) => l.id === id);
     if (!loc) return;
     if (state.editing) renderLocationEditor(loc);
     else renderLocationDetail(loc);
@@ -943,6 +967,426 @@
     else renderTagDetail(tag);
   }
 
+  // --------------------------------------------------------------- queue --
+
+  /**
+   * The review queue.
+   *
+   * Every count on this page is derived here from the rows already fetched, and
+   * the API has no aggregate to ask for. `decisions/api-per-location-records`
+   * removed server-side aggregates because several consumers computing the same
+   * counts independently produced bug #823, and a "3 pending" badge that
+   * disagrees with a three-row list is exactly that bug wearing a new hat.
+   */
+  const pendingSubmissions = () => state.submissions.filter((s) => s.status === 'pending');
+
+  const KIND_LABEL = { create: 'new pin', edit: 'edit', remove: 'removal' };
+
+  /** The location a submission refers to, or null for a create. */
+  const subjectOf = (sub) => (sub.location_id
+    ? state.locations.find((l) => l.id === sub.location_id) ?? null
+    : null);
+
+  /** What the row says this submission is about. */
+  function subjectLabel(sub) {
+    if (sub.kind === 'create') return sub.payload?.name || '(unnamed)';
+    const loc = subjectOf(sub);
+    // A submission can outlive its location. Saying so beats rendering a blank
+    // cell, which reads as a submission about nothing.
+    return loc ? loc.name : `${sub.location_id} (deleted)`;
+  }
+
+  /**
+   * A timestamp as "2h ago", with the exact value on hover.
+   *
+   * A future timestamp reads as "just now" rather than "-2h ago". Submissions
+   * are stamped by the Worker, so this only happens when the reviewer's own
+   * clock is behind, and a negative age puts that skew on screen as though it
+   * were a property of the submission.
+   */
+  function whenCell(iso) {
+    const ms = Date.parse(iso);
+    if (!Number.isFinite(ms)) return h('span', { class: 'muted', text: 'unknown' });
+    const seconds = (Date.now() - ms) / 1000;
+    return h('time', {
+      datetime: iso,
+      title: new Date(ms).toLocaleString(),
+      text: seconds < 0 ? 'just now' : describeAge(seconds),
+    });
+  }
+
+  function renderQueue() {
+    const shown = state.queueStatus
+      ? state.submissions.filter((s) => s.status === state.queueStatus)
+      : state.submissions;
+
+    replace($('#queue-rows'), shown.map((sub) => h('tr', {
+      'aria-selected': sub.id === state.selectedSubmission ? 'true' : 'false',
+      onclick: () => selectSubmission(sub.id),
+      style: 'cursor:pointer',
+    },
+    h('td', {}, whenCell(sub.created_at)),
+    h('td', {}, h('span', { class: `badge kind-${sub.kind}`, text: KIND_LABEL[sub.kind] ?? sub.kind })),
+    h('td', {}, subjectLabel(sub)),
+    h('td', {}, h('span', { class: `badge review-${sub.status}`, text: sub.status.replace(/_/g, ' ') })))));
+
+    const pending = pendingSubmissions().length;
+    $('#queue-summary').textContent = state.submissions.length === 0
+      ? 'Nothing has ever been submitted.'
+      : `${shown.length} shown, ${pending} pending of ${state.submissions.length} total.`;
+
+    // Only a non-zero count earns a badge: a "0" beside the tab is a standing
+    // invitation to check a queue that has nothing in it.
+    $('#queue-count').textContent = pending ? String(pending) : '';
+  }
+
+  async function loadQueue() {
+    const res = await api('/admin/submissions');
+    if (!res.ok) {
+      const [kind, message] = describeFailure(res);
+      banner(kind, message);
+      return;
+    }
+    state.submissions = res.body.submissions || [];
+    renderQueue();
+  }
+
+  /**
+   * What this submission would change, and nothing else.
+   *
+   * renderDiff drops keys whose value is unchanged, so a payload that repeats
+   * the record back at us renders as "no field changes" rather than as a wall
+   * of identical lines. That is the panel's whole job: a reviewer should read
+   * "yaw: 90 -> 45", not the record twice.
+   */
+  function submissionDiff(sub) {
+    if (sub.kind === 'create') return renderDiff(null, sub.payload);
+    if (sub.kind === 'remove') {
+      return h('p', { class: 'muted', text: 'A removal changes no field. It asks for the pin to come off the map.' });
+    }
+    const loc = subjectOf(sub);
+    if (!loc) return h('p', { class: 'notice error', text: 'The location this edit refers to no longer exists, so there is nothing to compare against. Approving it will be refused.' });
+    const before = {};
+    for (const key of Object.keys(sub.payload)) before[key] = loc[key];
+    return renderDiff(before, sub.payload);
+  }
+
+  /** The coordinates a submission wants, and the ones it moves away from. */
+  function submissionPins(sub) {
+    const loc = subjectOf(sub);
+    const proposed = sub.payload?.coordinates ?? (sub.kind === 'create' ? null : loc?.coordinates);
+    const pins = [];
+    // Current first, so the proposed pin draws on top of it when they overlap.
+    if (loc && loc.coordinates && !sameValue(loc.coordinates, proposed)) {
+      pins.push({ coords: loc.coordinates, kind: 'current', label: 'current' });
+    }
+    if (proposed) pins.push({ coords: proposed, kind: 'proposed', label: 'proposed' });
+    return pins;
+  }
+
+  /**
+   * An inline map of the proposed pin.
+   *
+   * Coordinates cannot be checked by eye, and "this is in the bay" or "this is
+   * 4km from the mod it belongs to" is the most common thing wrong with a
+   * submission. Reuses NCZ.cetToLeaflet from the map's own utils.js rather than
+   * carrying a second copy of the transform.
+   *
+   * The Leaflet instance is created AFTER the element is in the document: a map
+   * built against a detached node measures a zero-sized container and renders a
+   * single tile in the corner.
+   */
+  function miniMap(pins) {
+    const el = h('div', { class: 'mini-map' });
+    if (!pins.length || typeof L === 'undefined') return el;
+
+    requestAnimationFrame(() => {
+      if (!el.isConnected) return;
+      const map = L.map(el, {
+        crs: L.CRS.Simple,
+        minZoom: 0,
+        maxZoom: 6,
+        attributionControl: false,
+        zoomControl: false,
+      });
+      // Same projection the map uses: the tile set is 16384px square at z6.
+      const bounds = L.latLngBounds(map.unproject([0, 16384], 6), map.unproject([16384, 0], 6));
+      L.tileLayer('../assets/tiles/{z}/{x}/{y}.webp?v=1', {
+        minZoom: 0, maxNativeZoom: 6, maxZoom: 6, tileSize: 256, noWrap: true, bounds,
+      }).addTo(map);
+
+      const latlngs = pins.map((pin) => {
+        const [x, y] = pin.coords;
+        const at = NCZ.cetToLeaflet(x, y);
+        L.circleMarker(at, {
+          radius: pin.kind === 'proposed' ? 7 : 5,
+          color: pin.kind === 'proposed' ? '#00f0ff' : '#ffb300',
+          weight: 2,
+          fillOpacity: pin.kind === 'proposed' ? 0.6 : 0.2,
+        }).addTo(map).bindTooltip(`${pin.label}: ${x}, ${y}`);
+        return at;
+      });
+
+      if (latlngs.length > 1) map.fitBounds(L.latLngBounds(latlngs).pad(0.6));
+      else map.setView(latlngs[0], 4);
+      // The pane is display:none until its tab is shown, so a map built while
+      // hidden has measured nothing. Cheap, and wrong-sized otherwise.
+      state.reviewMap = map;
+      map.invalidateSize();
+    });
+    return el;
+  }
+
+  /** Drop the current mini-map before its container goes away. */
+  function releaseReviewMap() {
+    state.reviewMap?.remove?.();
+    state.reviewMap = null;
+  }
+
+  function renderSubmissionReview(sub) {
+    releaseReviewMap();
+    const resolved = sub.status !== 'pending';
+    const reason = h('textarea', {
+      placeholder: resolved ? '' : 'Required to reject or request changes. The submitter reads this.',
+      maxlength: '1000',
+    });
+
+    const detail = (label, value) => (value
+      ? [h('dt', { text: label }), h('dd', {}, value)]
+      : []);
+
+    const actions = resolved
+      ? h('p', { class: 'muted' },
+        `${sub.status.replace(/_/g, ' ')} by ${sub.reviewed_by ?? 'unknown'}`,
+        sub.reviewed_at ? ` on ${new Date(sub.reviewed_at).toLocaleString()}` : '')
+      : h('div', { class: 'editor-actions' },
+        h('button', {
+          class: 'btn', type: 'button', text: 'Approve',
+          onclick: (e) => reviewAction(sub, 'approve', reason, e.currentTarget),
+        }),
+        h('button', {
+          class: 'btn secondary', type: 'button', text: 'Request changes',
+          onclick: (e) => reviewAction(sub, 'changes', reason, e.currentTarget),
+        }),
+        h('span', { class: 'spacer' }),
+        h('button', {
+          class: 'btn danger', type: 'button', text: 'Reject',
+          onclick: (e) => reviewAction(sub, 'reject', reason, e.currentTarget),
+        }));
+
+    replace($('#queue-review'),
+      h('h2', { text: `${KIND_LABEL[sub.kind] ?? sub.kind}: ${subjectLabel(sub)}` }),
+      h('p', { class: 'muted' }, `submission ${sub.id} · `, whenCell(sub.created_at)),
+
+      h('div', { class: 'detail' }, h('dl', {},
+        ...detail('From the submitter', sub.submitter_note),
+        // Optional, and only ever for asking a question about this submission.
+        ...detail('Contact', sub.submitter_contact),
+        ...detail('Reason given', sub.kind === 'remove' ? sub.payload?.reason : null),
+        ...detail('Review note', sub.review_note))),
+
+      h('h2', { text: 'What it changes' }),
+      submissionDiff(sub),
+
+      h('h2', { text: 'Where' }),
+      miniMap(submissionPins(sub)),
+
+      resolved ? null : field('Reason', reason,
+        'Required for reject and request-changes. Optional on approve, where it is kept as a note.'),
+      actions);
+  }
+
+  function selectSubmission(id) {
+    state.selectedSubmission = id;
+    clearBanner();
+    if (id === null) {
+      releaseReviewMap();
+      renderQueue();
+      return replace($('#queue-review'), h('p', { class: 'muted', text: 'Select a submission to review it.' }));
+    }
+    renderQueue();
+    const sub = state.submissions.find((s) => s.id === id);
+    if (sub) renderSubmissionReview(sub);
+  }
+
+  const REVIEW_VERB = { approve: 'Approved', reject: 'Rejected', changes: 'Sent back for changes' };
+
+  /**
+   * Approve, reject, or send back.
+   *
+   * The reason is checked here only so the reviewer is told before a round
+   * trip; the server enforces it, and that is where the rule lives. A client
+   * check is UX, never the enforcement point.
+   */
+  async function reviewAction(sub, action, reasonEl, button) {
+    const reason = reasonEl.value.trim();
+    if (action !== 'approve' && !reason) {
+      reasonEl.focus();
+      return banner('warn', 'Give a reason. The submitter sees it, and "no" on its own is not reviewable feedback.');
+    }
+
+    button.disabled = true;
+    const res = await api(`/admin/submissions/${sub.id}/${action}`, {
+      method: 'POST',
+      body: reason ? { reason } : {},
+    });
+    button.disabled = false;
+
+    if (!res.ok) {
+      const [kind, message] = describeFailure(res);
+      banner(kind, message);
+      // Someone else got there first, or the payload can no longer be applied.
+      // Either way the queue on screen is out of date, so refresh it rather
+      // than leaving a resolved submission looking actionable.
+      if (res.status === 409 || res.status === 422) await loadQueue();
+      return;
+    }
+
+    // An approval wrote to the registry, so the location list and everything
+    // derived from it have moved.
+    if (action === 'approve') await loadLocations();
+    await loadQueue();
+    selectSubmission(sub.id);
+    // After selectSubmission, which clears the banner. Same trap as saveLocation.
+    banner('ok', action === 'approve' && res.body.location
+      ? `Approved. "${res.body.location.name}" is now ${res.body.location.status} in the registry.`
+      : `${REVIEW_VERB[action]}.`);
+  }
+
+  // ---------------------------------------------------------- candidates --
+
+  /**
+   * Mods tagged NCZoning on Nexus that have no pin and have not been put aside.
+   *
+   * An empty list is a real answer and the panel says so in words. Measured on
+   * staging while this was built: 41 tagged mods, 40 already locations, 1
+   * dismissed, so zero candidates was correct. A blank panel with no
+   * explanation is the version of this that costs an hour.
+   */
+  function candidateCard(entry, { dismissed }) {
+    const body = h('div', { class: 'candidate-body' },
+      h('div', { class: 'candidate-head' },
+        h('strong', { text: entry.name || `mod ${entry.nexus_id}` }),
+        h('a', {
+          class: 'muted', href: `https://www.nexusmods.com/cyberpunk2077/mods/${entry.nexus_id}`,
+          target: '_blank', rel: 'noopener noreferrer', text: `nexus ${entry.nexus_id}`,
+        })),
+      entry.updated_at
+        ? h('p', { class: 'muted' }, 'updated ', whenCell(entry.updated_at))
+        : null,
+      dismissed
+        ? h('p', { class: 'muted', text: `${entry.reason || 'no reason given'}, by ${entry.dismissed_by}` })
+        : null);
+
+    const actions = h('div', { class: 'candidate-actions' });
+    if (dismissed) {
+      actions.append(h('button', {
+        class: 'btn secondary', type: 'button', text: 'Restore',
+        onclick: (e) => restoreCandidate(entry, e.currentTarget),
+      }));
+    } else {
+      actions.append(
+        h('button', {
+          class: 'btn', type: 'button', text: 'Add to map',
+          // Straight into the editor with what we know: the name and the id.
+          // Coordinates are the part a person has to supply, and they are the
+          // part this tool cannot guess.
+          onclick: () => selectLocation('', { name: entry.name || '', nexus_id: entry.nexus_id }),
+        }),
+        h('button', {
+          class: 'btn secondary', type: 'button', text: 'Dismiss',
+          onclick: (e) => promptDismiss(entry, e.currentTarget.closest('.candidate')),
+        }),
+      );
+    }
+
+    return h('div', { class: 'candidate' },
+      entry.thumbnail_url
+        ? h('img', { class: 'candidate-thumb', src: entry.thumbnail_url, alt: '', loading: 'lazy' })
+        : h('div', { class: 'candidate-thumb empty' }),
+      body, actions);
+  }
+
+  /** Dismissal takes a reason, so it opens a field rather than firing at once. */
+  function promptDismiss(entry, card) {
+    if (card.querySelector('.dismiss-form')) return;
+    const reason = h('textarea', { placeholder: 'Why is this not a map location? Optional, and admin-only.', maxlength: '1000' });
+    const form = h('div', { class: 'dismiss-form' },
+      reason,
+      h('div', { class: 'candidate-actions' },
+        h('button', {
+          class: 'btn', type: 'button', text: 'Dismiss it',
+          onclick: (e) => dismissCandidate(entry, reason.value.trim(), e.currentTarget),
+        }),
+        h('button', {
+          class: 'btn secondary', type: 'button', text: 'Cancel', onclick: () => form.remove(),
+        })));
+    card.append(form);
+    reason.focus();
+  }
+
+  async function dismissCandidate(entry, reason, button) {
+    button.disabled = true;
+    const res = await api(`/admin/candidates/${encodeURIComponent(entry.nexus_id)}`, {
+      method: 'POST',
+      body: reason ? { reason } : {},
+    });
+    button.disabled = false;
+
+    if (!res.ok) {
+      const [kind, message] = describeFailure(res);
+      return banner(kind, message);
+    }
+    await loadCandidates();
+    banner('ok', `Dismissed "${entry.name || entry.nexus_id}". It is in the Dismissed list, and can be restored.`);
+  }
+
+  async function restoreCandidate(entry, button) {
+    button.disabled = true;
+    const res = await api(`/admin/candidates/${encodeURIComponent(entry.nexus_id)}`, { method: 'DELETE' });
+    button.disabled = false;
+
+    if (!res.ok) {
+      const [kind, message] = describeFailure(res);
+      return banner(kind, message);
+    }
+    await loadCandidates();
+    banner('ok', `Restored "${entry.name || entry.nexus_id}" to the candidates list.`);
+  }
+
+  function renderCandidates() {
+    const { candidates, dismissed } = state;
+
+    replace($('#candidate-list'), candidates.length
+      ? candidates.map((c) => candidateCard(c, { dismissed: false }))
+      // Two numbers, because one empty list cannot tell "nothing qualifies"
+      // apart from "nothing was ever swept".
+      : h('p', { class: 'muted', text: 'No candidates. Every NCZoning-tagged mod either has a pin already or was dismissed.' }));
+
+    replace($('#dismissed-list'), dismissed.length
+      ? dismissed.map((d) => candidateCard(d, { dismissed: true }))
+      : h('p', { class: 'muted', text: 'Nothing dismissed.' }));
+
+    $('#candidates-note').textContent =
+      `${candidates.length} waiting, ${dismissed.length} dismissed.`;
+    $('#candidates-count').textContent = candidates.length ? String(candidates.length) : '';
+  }
+
+  async function loadCandidates() {
+    const res = await api('/admin/candidates');
+    if (!res.ok) {
+      const [kind, message] = describeFailure(res);
+      // Distinct from "no candidates": a failed read must never render as an
+      // empty list, which is the most reassuring thing this panel could say.
+      $('#candidates-note').textContent = 'Could not read the candidates list.';
+      banner(kind, message);
+      return;
+    }
+    state.candidates = res.body.candidates || [];
+    state.dismissed = res.body.dismissed || [];
+    renderCandidates();
+  }
+
   // ----------------------------------------------------------- freshness --
 
   // Matches the external health monitor's threshold. The cron runs every 5
@@ -1061,6 +1505,16 @@
     }, inner);
   };
 
+  /** A headline number for a collection that is not the location list. */
+  const tabStat = (value, label, tab, kind) => h('button', {
+    class: `stat${kind ? ` ${kind}` : ''}`,
+    type: 'button',
+    title: `Open the ${label} tab`,
+    onclick: () => switchTab(tab),
+  },
+  h('span', { class: 'value', text: String(value) }),
+  h('span', { class: 'label', text: label }));
+
   function breakdown(entries, total, filterFor) {
     if (!entries.length) return h('p', { class: 'muted', text: 'Nothing to count yet.' });
     const max = Math.max(...entries.map(([, n]) => n));
@@ -1117,7 +1571,13 @@
       },
       h('span', { class: 'value', text: String(state.tags.length) }),
       h('span', { class: 'label', text: 'tags' })),
-      stat(untagged, 'untagged', untagged ? 'warn' : null, { special: 'untagged' }));
+      stat(untagged, 'untagged', untagged ? 'warn' : null, { special: 'untagged' }),
+
+      // Counts of other collections, so they lead to their own tabs. Both are
+      // derived from rows already fetched: no aggregate route, no stats table.
+      tabStat(pendingSubmissions().length, 'pending review', 'queue',
+        pendingSubmissions().length ? 'warn' : null),
+      tabStat(state.candidates.length, 'candidates', 'candidates'));
 
     replace($('#stat-category'),
       breakdown(countBy(records, (r) => r.category), records.length, (name) => ({ category: name })));
@@ -1296,7 +1756,7 @@
 
   // ---------------------------------------------------------------- tabs --
 
-  const TABS = ['overview', 'locations', 'tags', 'audit'];
+  const TABS = ['overview', 'locations', 'queue', 'candidates', 'tags', 'audit'];
 
   function switchTab(name) {
     for (const btn of document.querySelectorAll('nav.tabs button')) {
@@ -1306,6 +1766,9 @@
       $(`#tab-${id}`).hidden = id !== name;
     }
     if (name === 'audit') loadAudit();
+    // A Leaflet map built while its pane was display:none measured a zero-sized
+    // container, so it has to be told the size it actually has now.
+    if (name === 'queue') state.reviewMap?.invalidateSize?.();
     // Recomputed on entry rather than cached: the counts are derived from
     // state that any edit in another tab may have moved.
     if (name === 'overview') renderOverview();
@@ -1357,10 +1820,20 @@
     $('#audit-refresh').onclick = loadAudit;
     $('#audit-limit').onchange = loadAudit;
     $('#rebuild').onclick = (e) => rebuildDataset(e.currentTarget);
+    $('#queue-refresh').onclick = loadQueue;
+    $('#queue-status').onchange = (e) => {
+      state.queueStatus = e.target.value;
+      renderQueue();
+    };
+    $('#candidates-refresh').onclick = loadCandidates;
 
     // Tags first: the location editor's picker is built from them.
     await loadTags();
     await loadLocations();
+    // Both feed counts the Overview and the tab badges derive from, so they
+    // load at boot rather than on first visit to their tab. A badge that only
+    // appears once you have already gone looking is not a notification.
+    await Promise.all([loadQueue(), loadCandidates()]);
     await refreshFreshness();
     // Overview is the landing tab, and its numbers come from what was just
     // loaded, so it is rendered after both rather than on its own fetch.

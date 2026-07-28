@@ -84,6 +84,9 @@ function statement(db, sql, args = []) {
  * @param {Array}  [seed.locationTags]   `[location_id, tag_slug]` pairs
  * @param {Array}  [seed.users]          raw `users` rows
  * @param {Array}  [seed.tags]           extra tag rows beyond migration 0002's seed
+ * @param {Array}  [seed.submissions]    raw `submissions` rows
+ * @param {Array}  [seed.nexusCache]     raw `nexus_cache` rows
+ * @param {Array}  [seed.dismissed]      raw `dismissed_candidates` rows
  */
 export function sqliteD1(seed = {}) {
   const db = new DatabaseSync(':memory:');
@@ -95,12 +98,23 @@ export function sqliteD1(seed = {}) {
     db.exec(readFileSync(join(MIGRATIONS, file), 'utf8'));
   }
 
-  for (const row of seed.locations ?? []) {
-    const cols = Object.keys(row);
-    db.prepare(
-      `INSERT INTO locations (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
-    ).run(...cols.map((c) => row[c]));
-  }
+  /**
+   * Insert whatever columns the fixture names, rather than a fixed list.
+   *
+   * The alternative is a positional helper per table, and every one of those
+   * pins a column order that a later migration can quietly invalidate: the
+   * insert still succeeds, with the values in the wrong columns.
+   */
+  const insertRows = (table, rows) => {
+    for (const row of rows ?? []) {
+      const cols = Object.keys(row);
+      db.prepare(
+        `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
+      ).run(...cols.map((c) => row[c]));
+    }
+  };
+
+  insertRows('locations', seed.locations);
   for (const [locationId, tagSlug] of seed.locationTags ?? []) {
     db.prepare('INSERT INTO location_tags (location_id, tag_slug) VALUES (?, ?)')
       .run(locationId, tagSlug);
@@ -116,6 +130,9 @@ export function sqliteD1(seed = {}) {
     ).run(row.slug, row.name ?? null, row.description, row.sort_order ?? null,
       row.created_at ?? 'seed', row.updated_at ?? 'seed');
   }
+  insertRows('submissions', seed.submissions);
+  insertRows('nexus_cache', seed.nexusCache);
+  insertRows('dismissed_candidates', seed.dismissed);
 
   return {
     _db: db,

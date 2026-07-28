@@ -516,6 +516,68 @@ rather than paperwork: this is the first personal data the site collects.
 following `/auth/` and `/admin/`. The spec documents the `/v1` data contract
 that in-game consumers read, and this route is not part of it.
 
+## The review queue (`worker/src/review.js`)
+
+Reached through `handleAdmin`, so every route below has already passed the
+collaborator gate. There is deliberately no second gate in `review.js`: two
+checks in two files is how one of them ends up weaker than the other.
+
+| Route | Does |
+| --- | --- |
+| `GET /admin/submissions` | every submission, newest first (`?limit=`, default 200) |
+| `GET /admin/submissions/{id}` | one submission |
+| `POST /admin/submissions/{id}/approve` | applies the payload, then resolves; `reason` optional |
+| `POST /admin/submissions/{id}/reject` | `reason` **required** |
+| `POST /admin/submissions/{id}/changes` | `reason` **required** |
+| `GET /admin/candidates` | `{candidates, dismissed}` in one response |
+| `POST /admin/candidates/{nexus_id}` | dismiss, `reason` optional |
+| `DELETE /admin/candidates/{nexus_id}` | restore a dismissed candidate |
+
+**The statuses are a convention this module owns.** `submissions.status` has no
+CHECK constraint; it defaults to `pending` and the resolved values are
+`approved`, `rejected` and `changes_requested`. They are exported from
+`review.js` so the tests assert the same strings the routes write.
+
+**Resolving is one-way, and that is a correctness rule.** Only a `pending`
+submission can be resolved, and the check is a `WHERE status = 'pending'` on the
+resolving `UPDATE` rather than a read followed by a write: two reviewers
+clicking Approve at the same moment both pass a read-then-check, and only one
+can win a conditional update. Without it a double-clicked Approve on a `create`
+inserts the location twice, with two ids and two pins.
+
+**The registry write happens before the resolve.** A payload that can no longer
+be applied (a tag deleted since the submission arrived, a location deleted since
+the edit was proposed) leaves the submission `pending` and retryable. Marking it
+approved first and discovering afterwards that it could not be applied reads as
+done, and is not.
+
+**Approval revalidates**, against the tag registry as it stands now rather than
+as it stood when the submission was queued.
+
+**Approving a `remove` sets `status = 'hidden'`, it does not delete.** That is
+what `hidden` already means here: the pin comes off the map and the record
+stays. `DELETE` is for records that should never have existed, which is not a
+call a member of the public gets to make.
+
+**`submitter_ip_hash` is never in a response.** It exists for the rate limit and
+abuse triage, it is purged at 90 days, and no part of reviewing needs it.
+
+Every mutation writes an audit row, and an approval writes **two**: the queue
+moved and so did the registry. Reading a location's history must not depend on
+knowing which route created it.
+
+Approvals rebuild the read path through the same `DATA_SOURCE`-gated
+`materializeAfterWrite` as every other admin write. A rejection rebuilds
+nothing: no record changed, and a KV write with nothing to write is a wasted
+unit of the daily free-tier cap.
+
+`insertLocation` and `patchLocation` live in `worker/src/registry.js` and are
+shared with the admin editor rather than reimplemented here, so an approved
+submission produces a record indistinguishable from one an admin typed in. The
+parity gate rebuilds all 18 served fields, and a second `INSERT` with its own
+idea of the defaults would surface there as a difference that depends on which
+route wrote the row.
+
 ## Versioning
 
 `API_VERSION` (served as `version` on `/v1/health`) is SemVer for the API
