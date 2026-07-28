@@ -134,6 +134,56 @@ NCZ.fetchLocationsFromApi = async function () {
   return { mods, nexusThumbs, recentlyUpdatedDays, datasetVersion };
 };
 
+// ── Submissions ──────────────────────────────────────────────────────────────
+
+// NCZoning-tagged Nexus mods that are neither on the map nor dismissed, for the
+// submit form's mod picker.
+//
+// An empty list is a normal answer, not a failure: almost every tagged mod is
+// already a location, so the list is short by design and often empty. The
+// caller shows the manual path either way. THROWS on a transport or HTTP
+// failure, which is a different state again: the picker cannot say whether a
+// mod is listed, so it must not imply that it is not.
+NCZ.fetchSubmissionCandidates = async function () {
+  const res = await fetch(`${NCZ.API_BASE}/submissions/candidates`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Candidates: HTTP ${res.status}`);
+  const body = await res.json();
+  return Array.isArray(body?.candidates) ? body.candidates : [];
+};
+
+// Queue a submission. Resolves for every answer the API gives, including the
+// refusals, because they are not all the same thing to a form: an expired
+// Turnstile token needs the widget re-rendered, a rate limit is not a
+// validation error, and a 503 is the server's problem rather than the
+// submitter's.
+//
+// Returns { ok, status, code, errors, data }. `code` is the API's refusal code
+// (turnstile_expired, rate_limited, invalid_submission and friends), or
+// "network" when the request never arrived.
+NCZ.postSubmission = async function (body) {
+  let res;
+  try {
+    res = await fetch(`${NCZ.API_BASE}/submissions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return { ok: false, status: 0, code: "network", errors: [], data: null };
+  }
+
+  const payload = await res.json().catch(() => null);
+  if (res.ok) return { ok: true, status: res.status, code: null, errors: [], data: payload };
+
+  return {
+    ok: false,
+    status: res.status,
+    code: payload?.error ?? "unknown_error",
+    errors: Array.isArray(payload?.errors) ? payload.errors : [],
+    data: payload,
+  };
+};
+
 // ── Passive update check ─────────────────────────────────────────────────────
 
 // Has the served dataset changed since `knownVersion`? Returns the new envelope

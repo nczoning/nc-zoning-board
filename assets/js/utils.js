@@ -408,6 +408,142 @@ NCZ.computeVisibleMods = function (allMods, filters) {
   return visible;
 };
 
+// ── Submission form ──────────────────────────────────────────────────────────
+
+// The mod id in a Nexus reference. Accepts a bare numeric id, the current
+// /games/cyberpunk2077/mods/<id> URL and the older /cyberpunk2077/mods/<id>
+// form, with or without a scheme, query or trailing path.
+//
+// Returns { id } or { error }. A URL naming a different game is an error rather
+// than a silently accepted id: the number is real, it just points at another
+// game's mod, and nothing downstream could tell.
+NCZ.parseNexusRef = function (input) {
+  const text = String(input ?? "").trim();
+  if (!text) return { error: "Enter the mod's Nexus page URL, or its numeric id." };
+
+  if (/^\d+$/.test(text)) return { id: text };
+
+  if (/nexusmods\.com/i.test(text)) {
+    if (!/nexusmods\.com\/(games\/)?cyberpunk2077\//i.test(text)) {
+      return { error: "That link is for a different game. Use the mod's Cyberpunk 2077 page." };
+    }
+    const match = text.match(/\/mods\/(\d+)/);
+    if (match) return { id: match[1] };
+    return { error: "That link has no mod id in it. Open the mod's own page and copy the URL." };
+  }
+
+  return { error: "Enter the mod's Nexus page URL, or its numeric id." };
+};
+
+// Read and validate the location fields both submission modals collect.
+//
+// Pure: the caller passes raw strings and gets back the payload POST
+// /submissions accepts, plus one message per field that failed. Every rule here
+// also exists in worker/src/validate.js, which is the enforcement point:
+// /submissions is an anonymous public write, so a rule that lives only in the
+// browser sits in the layer the submitter controls. This copy exists to say so
+// inline, before a send that would come back 400.
+//
+// Two rules are deliberately stricter than the server, because the server
+// serves the admin editor too: `description` must be non-empty, and `nexus_id`
+// must be numeric. A reviewer can set "WIP" on approval; a submitter cannot
+// evidence it.
+//
+// @param {object} raw            trimmed or untrimmed strings, straight off the inputs
+// @param {object} [opts]
+// @param {string[]} [opts.knownTags]  tag slugs the registry knows; unknown tags
+//   are an error, matching the server rather than dropping them
+// @returns {{values: object, errors: object}}  errors is keyed by field name
+NCZ.collectLocationForm = function (raw, { knownTags } = {}) {
+  const errors = {};
+  const text = (v) => String(v ?? "").trim();
+
+  const name = text(raw.name);
+  if (name.length < NCZ.NAME_MIN_LENGTH) {
+    errors.name = `Give the location a name of at least ${NCZ.NAME_MIN_LENGTH} characters.`;
+  }
+
+  const authors = text(raw.authors).split(",").map((a) => a.trim()).filter(Boolean);
+  if (!authors.length) errors.authors = "Name at least one author.";
+
+  const description = text(raw.description);
+  if (!description) {
+    errors.description = "Describe the location, so a reviewer knows what is being added.";
+  } else if (description.length > NCZ.DESCRIPTION_MAX_LENGTH) {
+    errors.description = `Keep the description to ${NCZ.DESCRIPTION_MAX_LENGTH} characters or fewer.`;
+  }
+
+  // One message for the coordinate row, which is one control in the form.
+  const nums = ["x", "y", "z"].map((k) => parseFloat(text(raw[k])));
+  const [x, y, z] = nums;
+  if (!nums.every(Number.isFinite)) {
+    errors.coordinates = "Enter all three coordinates, X, Y and Z, as numbers.";
+  } else if (x < NCZ.TERRAIN_MIN_X || x > NCZ.TERRAIN_MAX_X || y < NCZ.TERRAIN_MIN_Y || y > NCZ.TERRAIN_MAX_Y) {
+    errors.coordinates = `X and Y must be between ${NCZ.TERRAIN_MIN_X} and ${NCZ.TERRAIN_MAX_X}. Check the values against the CET output.`;
+  } else if (z < NCZ.COORD_Z_MIN || z > NCZ.COORD_Z_MAX) {
+    errors.coordinates = `Z must be between ${NCZ.COORD_Z_MIN} and ${NCZ.COORD_Z_MAX}. Check the values against the CET output.`;
+  }
+
+  const yawText = text(raw.yaw);
+  let yaw = null;
+  if (yawText) {
+    yaw = parseFloat(yawText);
+    if (!Number.isFinite(yaw)) errors.yaw = "Yaw must be a number, or left blank.";
+  }
+
+  const category = text(raw.category);
+  if (!NCZ.CATEGORY_STYLES[category]) errors.category = "Choose a category.";
+
+  const tags = Array.isArray(raw.tags) ? raw.tags.map((t) => text(t)).filter(Boolean) : [];
+  if (knownTags) {
+    const unknown = tags.filter((t) => !knownTags.includes(t));
+    if (unknown.length) errors.tags = `Unknown tag(s): ${unknown.join(", ")}.`;
+  }
+
+  const ref = NCZ.parseNexusRef(raw.nexusId);
+  if (ref.error) errors.nexus_id = ref.error;
+
+  const credits = text(raw.credits);
+
+  const values = {
+    name,
+    authors,
+    description,
+    coordinates: nums.every(Number.isFinite) ? [x, y, z] : [],
+    yaw,
+    category,
+    tags,
+    nexus_id: ref.id ?? "",
+    credits: credits || null,
+  };
+
+  return { values, errors };
+};
+
+// The submission envelope fields, which sit beside the payload rather than in
+// it: validateLocationInput rejects unknown keys, so a note posted inside the
+// payload would refuse the whole submission.
+//
+// Both are optional. `contact` is personal data and is collected only so a
+// reviewer can ask a question; see docs/privacy.md.
+NCZ.collectSubmissionMeta = function (raw) {
+  const errors = {};
+  const note = String(raw.note ?? "").trim();
+  const contact = String(raw.contact ?? "").trim();
+
+  if (note.length > NCZ.SUBMISSION_NOTE_MAX) {
+    errors.note = `Keep the note to ${NCZ.SUBMISSION_NOTE_MAX} characters or fewer.`;
+  }
+  if (contact.length > NCZ.SUBMISSION_CONTACT_MAX) {
+    errors.contact = `Keep the contact to ${NCZ.SUBMISSION_CONTACT_MAX} characters or fewer.`;
+  }
+
+  return {
+    values: { submitter_note: note || null, submitter_contact: contact || null },
+    errors,
+  };
+};
+
 // Comparator for Array.sort: orders mods by Nexus updatedAt descending.
 // Mods with no Nexus date (WIP/Dummy) fall to end, sorted alphabetically.
 NCZ.sortModsByUpdated = function (a, b) {

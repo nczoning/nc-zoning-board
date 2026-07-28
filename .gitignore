@@ -17,6 +17,7 @@
 !/data/
 !/scripts/
 !/docs/
+!/test/
 !/package.json
 !/package-lock.json
 !/worker/

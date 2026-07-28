@@ -176,11 +176,15 @@ To exclude a mod, add its Nexus id and a short reason to `data/excluded_mods.jso
 
 ## Using the BBCode Generator
 
-The map includes a built-in generator to make adding the block easier. Click **[+] Submit** in the map header (or the **Submit a New Mod Location** button in the sidebar) to open the generator. The modal walks you through four steps:
+Click **[+] Submit** in the map header (or the **Submit a New Mod Location** button in the sidebar). That modal is now the **submit form**: it sends the location to a review queue, and a reviewer publishes it. The block is not involved in that path.
 
-1. **Acquire Coordinates**: get your CET X/Y values in-game
-2. **Configure Metadata**: fill out the form (category, tags, credits, authors) and click **Generate Block**
-3. **Tag Your Mod**: add the `NCZoning` tag on your Nexus mod page
-4. **Deploy Block**: copy the output and paste it into your Nexus mod description
+The generator lives inside the same modal, behind **Tagging your mod instead? Generate the NCZoning block** at the bottom. It reads the coordinates, category, tags, yaw and credits already filled in above it, so the steps are:
+
+1. **Acquire Coordinates**: get your CET X/Y/Z values in-game
+2. **Configure Metadata**: fill out the form (category, tags, credits, authors)
+3. Open the generator and click **Generate Block**
+4. Add the `NCZoning` tag on your Nexus mod page, and paste the block into your description
+
+The tag plus the block still publishes a pin without a review step, which is why both paths exist for now. The block and its parser retire once the queue replaces them.
 
 The block can be placed anywhere in your description. A common spot is at the bottom. Use the **spoiler wrap** option to keep it hidden from casual readers.
