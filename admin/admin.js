@@ -135,6 +135,35 @@
   const clear = (el) => { while (el.firstChild) el.removeChild(el.firstChild); return el; };
   const replace = (el, ...nodes) => { clear(el).append(...nodes.flat().filter(Boolean)); return el; };
 
+  /**
+   * A nexus id as a link to the mod page, wherever one is shown.
+   *
+   * Reviewing anything here almost always means looking at the mod: checking
+   * the images, reading the description, seeing whether it is a location mod at
+   * all. Retyping a six-digit number into a browser is the friction that stops
+   * that happening.
+   *
+   * NOT every nexus_id is a mod. `WIP` and `Dummy` are valid values for a
+   * record with no Nexus page (validate.js accepts them), and linking those
+   * would send a reviewer to a 404 that looks like a deleted mod. Only digits
+   * become links; the rest render as plain text.
+   */
+  const isRealNexusId = (id) => /^\d+$/.test(String(id ?? ''));
+
+  const nexusUrl = (id) => `https://www.nexusmods.com/cyberpunk2077/mods/${id}`;
+
+  function nexusLink(id, { label } = {}) {
+    const text = label ?? String(id ?? '');
+    if (!isRealNexusId(id)) return h('span', { class: 'mono', text });
+    return h('a', {
+      class: 'mono nexus-link',
+      href: nexusUrl(id),
+      target: '_blank',
+      rel: 'noopener noreferrer',
+      title: 'Open this mod on Nexus in a new tab',
+    }, text);
+  }
+
   // ------------------------------------------------------------ requests --
 
   /**
@@ -383,7 +412,8 @@
     h('td', {},
       h('span', { class: `badge status-${loc.status}`, text: loc.status }),
       loc.source === 'auto' ? h('span', { class: 'badge source-auto', text: 'auto' }) : null),
-    h('td', {}, loc.nexus_id))));
+    // stopPropagation, or opening the mod page also selects the row behind it.
+    h('td', { onclick: (e) => e.stopPropagation() }, nexusLink(loc.nexus_id)))));
 
     $('#loc-count').textContent = shown.length === state.locations.length
       ? `${shown.length} locations`
@@ -457,8 +487,10 @@
     return patch;
   }
 
-  const field = (label, control, hint) => h('div', { class: 'field', 'data-field': control.name || control.dataset?.field },
-    h('label', { text: label }), control, hint ? h('p', { class: 'muted', text: hint }) : null);
+  const field = (label, control, hint, extra) => h('div', { class: 'field', 'data-field': control.name || control.dataset?.field },
+    h('label', { text: label }), control,
+    hint ? h('p', { class: 'muted', text: hint }) : null,
+    extra || null);
 
   const input = (name, value, attrs = {}) => h('input', { name, value: value ?? '', ...attrs });
 
@@ -488,13 +520,28 @@
     const isNew = !loc.id;
     const [x, y, z] = loc.coordinates ?? ['', '', ''];
 
+    // A link that follows what is typed, so a nexus id can be checked against
+    // the actual mod page before the record is saved. That check is the whole
+    // reason the field is hand-entered rather than picked from a list.
+    const nexusInput = input('nexus_id', loc.nexus_id, { placeholder: '12345, WIP or Dummy' });
+    const nexusOpen = h('a', {
+      class: 'field-link', target: '_blank', rel: 'noopener noreferrer', text: 'open on Nexus',
+    });
+    const syncNexusLink = () => {
+      const id = nexusInput.value.trim();
+      nexusOpen.hidden = !isRealNexusId(id);
+      if (!nexusOpen.hidden) nexusOpen.href = nexusUrl(id);
+    };
+    nexusInput.addEventListener('input', syncNexusLink);
+    syncNexusLink();
+
     const form = h('form', { autocomplete: 'off', onsubmit: (e) => e.preventDefault() },
       field('Name', input('name', loc.name, { required: true, minlength: '3' })),
       h('div', { class: 'field row' },
         field('Category', select('category', CATEGORIES, loc.category)),
         field('Status', select('status', STATUSES, loc.status))),
       h('div', { class: 'field row' },
-        field('Nexus ID', input('nexus_id', loc.nexus_id, { placeholder: '12345, WIP or Dummy' })),
+        field('Nexus ID', nexusInput, null, nexusOpen),
         field('Source', select('source', SOURCES, loc.source))),
       // One data-field for all three, because the validator reports on
       // `coordinates` as a unit ("coordinates must all be finite numbers") and
@@ -680,7 +727,7 @@
           : null),
         row('Authors', (loc.authors || []).join(', ')),
         row('Credits', loc.credits),
-        row('Nexus ID', loc.nexus_id, 'mono'),
+        row('Nexus ID', loc.nexus_id ? nexusLink(loc.nexus_id) : null),
         row('Source', loc.source),
         row('Coordinates', coords, 'mono'),
         row('Yaw', loc.yaw === null || loc.yaw === undefined ? null : String(loc.yaw), 'mono'),
@@ -997,6 +1044,18 @@
   }
 
   /**
+   * The mod a submission is about.
+   *
+   * A create carries it in the payload; an edit or a removal names a location,
+   * and the mod is whatever that location points at. An edit may also propose a
+   * new nexus_id, and the proposed one is the right answer there: it is the one
+   * the reviewer has to go and check.
+   */
+  function submissionNexusId(sub) {
+    return sub.payload?.nexus_id ?? subjectOf(sub)?.nexus_id ?? null;
+  }
+
+  /**
    * A timestamp as "2h ago", with the exact value on hover.
    *
    * A future timestamp reads as "just now" rather than "-2h ago". Submissions
@@ -1278,6 +1337,9 @@
       h('p', { class: 'muted' }, `submission ${sub.id} · `, whenCell(sub.created_at)),
 
       h('div', { class: 'detail' }, h('dl', {},
+        // First, because "is this even a location mod" is answered on the mod
+        // page and nowhere in this payload.
+        ...detail('Mod', submissionNexusId(sub) ? nexusLink(submissionNexusId(sub)) : null),
         ...detail('From the submitter', sub.submitter_note),
         // Optional, and only ever for asking a question about this submission.
         ...detail('Contact', sub.submitter_contact),
@@ -1389,10 +1451,7 @@
     const body = h('div', { class: 'candidate-body' },
       h('div', { class: 'candidate-head' },
         h('strong', { text: entry.name || `mod ${entry.nexus_id}` }),
-        h('a', {
-          class: 'muted', href: `https://www.nexusmods.com/cyberpunk2077/mods/${entry.nexus_id}`,
-          target: '_blank', rel: 'noopener noreferrer', text: `nexus ${entry.nexus_id}`,
-        })),
+        nexusLink(entry.nexus_id, { label: `nexus ${entry.nexus_id}` })),
       entry.updated_at
         ? h('p', { class: 'muted' }, 'updated ', whenCell(entry.updated_at))
         : null,
@@ -1857,6 +1916,117 @@
     return rows.length ? h('div', { class: 'diff' }, rows) : h('p', { class: 'muted', text: 'No field changes recorded.' });
   }
 
+  /** Fields that actually moved between two audit snapshots. */
+  function changedFields(before, after) {
+    if (!before || !after) return [];
+    return [...new Set([...Object.keys(before), ...Object.keys(after)])]
+      .filter((k) => k !== 'updated_at' && !sameValue(before[k], after[k]))
+      .sort();
+  }
+
+  const quoted = (name) => h('strong', { text: `“${name}”` });
+
+  /** A name for a location the entry refers to, from the entry or from state. */
+  const auditLocationName = (e, id) => e.after?.name ?? e.before?.name
+    ?? state.locations.find((l) => l.id === id)?.name ?? null;
+
+  /** A name for a candidate mod, from whichever list currently holds it. */
+  const candidateName = (nexusId) => [...state.candidates, ...state.dismissed]
+    .find((c) => String(c.nexus_id) === String(nexusId))?.name ?? null;
+
+  const shortNote = (note) => (typeof note === 'string' && note.trim()
+    ? `“${note.length > 70 ? `${note.slice(0, 70)}…` : note}”`
+    : null);
+
+  /**
+   * One audit row as a sentence a person can read.
+   *
+   * The stored `action` and `target` are built for machines: `candidate.dismiss`
+   * against a bare `999001`, or `submission.approve` against `3`, are precise
+   * and say nothing about what happened. Someone reading back through a week of
+   * decisions needs the mod name, the location name, and what the decision was.
+   *
+   * The raw action is still rendered beside this, small, so the log stays
+   * greppable and this function cannot quietly mislabel something: the two are
+   * always visible together.
+   *
+   * Names are resolved from the audit row FIRST (`before`/`after` carry the
+   * record) and only then from loaded state, because a deleted location is not
+   * in state and its name is exactly what the log exists to preserve.
+   */
+  function describeAudit(e) {
+    const target = e.target ?? '';
+    const after = e.after ?? {};
+
+    switch (e.action) {
+      case 'location.create':
+        return ['created ', quoted(auditLocationName(e, target) ?? target)];
+      case 'location.update': {
+        const fields = changedFields(e.before, e.after);
+        return [
+          'updated ', quoted(auditLocationName(e, target) ?? target),
+          fields.length ? ` (${fields.join(', ')})` : '',
+        ];
+      }
+      case 'location.delete':
+        return ['deleted ', quoted(auditLocationName(e, target) ?? target)];
+
+      case 'tag.create': return ['created the tag ', h('code', { text: target })];
+      case 'tag.update': return ['edited the tag ', h('code', { text: target })];
+      case 'tag.rename':
+        return ['renamed the tag ', h('code', { text: e.before?.slug ?? '?' }),
+          ' to ', h('code', { text: target })];
+      case 'tag.delete': return ['deleted the tag ', h('code', { text: target })];
+
+      case 'dataset.refresh':
+        return [`rebuilt the served dataset from ${target || 'its source'}`];
+
+      // Written by the public route, so the actor is 'anonymous'.
+      case 'submission.create':
+        return ['submitted a new pin, ', quoted(after.payload?.name ?? 'unnamed')];
+      case 'submission.edit':
+        return ['proposed an edit to ', quoted(auditLocationName(e, after.location_id)
+          ?? after.location_id ?? 'a location')];
+      case 'submission.remove':
+        return ['asked for ', quoted(auditLocationName(e, after.location_id)
+          ?? after.location_id ?? 'a location'), ' to be taken off the map'];
+
+      case 'submission.approve': {
+        const name = auditLocationName(e, after.location_id) ?? after.location_id;
+        // `granted_by` is the one thing that distinguishes an approval which
+        // created a record from one which put an existing record back.
+        if (after.granted_by === 'restore') {
+          return ['approved submission #', target, ' by restoring ',
+            quoted(name ?? 'a hidden record'), ' rather than creating a second one'];
+        }
+        return ['approved submission #', target, name ? [', applied to ', quoted(name)] : ''];
+      }
+      case 'submission.reject': {
+        const note = shortNote(after.review_note);
+        return ['rejected submission #', target, note ? `: ${note}` : ''];
+      }
+      case 'submission.hold': {
+        const note = shortNote(after.review_note);
+        return ['put submission #', target, ' on hold', note ? `: ${note}` : ''];
+      }
+
+      case 'candidate.dismiss': {
+        const name = candidateName(target);
+        const note = shortNote(after.reason);
+        return ['dismissed mod ', nexusLink(target), name ? [' ', quoted(name)] : '',
+          ' from the candidates list', note ? `: ${note}` : ''];
+      }
+      case 'candidate.restore':
+        return ['put mod ', nexusLink(target), ' back in the candidates list'];
+
+      // An action this page has not been taught. Say what is known rather than
+      // rendering a blank line: a new server action must not vanish from view
+      // just because the dashboard is behind.
+      default:
+        return [e.action, target ? ` on ${target}` : ''];
+    }
+  }
+
   async function loadAudit() {
     const limit = $('#audit-limit').value;
     const res = await api(`/admin/audit?limit=${encodeURIComponent(limit)}`);
@@ -1869,10 +2039,12 @@
       ? entries.map((e) => h('div', { class: 'audit-entry' },
         h('div', { class: 'audit-head' },
           h('time', { datetime: e.at, text: new Date(e.at).toLocaleString() }),
-          h('span', { class: 'action', text: e.action }),
-          h('span', { class: 'who', text: e.actor }),
-          h('span', { class: 'target', text: e.target || '' })),
-        h('details', {}, h('summary', { text: 'What changed' }), renderDiff(e.before, e.after))))
+          h('span', { class: 'who', text: e.actor === 'anonymous' ? 'a visitor' : e.actor }),
+          h('span', { class: 'sentence' }, describeAudit(e).flat()),
+          // The machine-readable pair, kept visible so the sentence above can
+          // always be checked against what was actually recorded.
+          h('code', { class: 'action', title: `recorded as ${e.action} on ${e.target ?? 'nothing'}`, text: e.action })),
+        h('details', {}, h('summary', { text: 'The full record' }), renderDiff(e.before, e.after))))
       : h('p', { class: 'muted', text: 'No entries yet.' }));
   }
 

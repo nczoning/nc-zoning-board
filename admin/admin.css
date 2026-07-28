@@ -504,6 +504,26 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 }
 
 .detail dd.mono { font-family: ui-monospace, monospace; font-size: var(--fs-code); }
+
+/* A nexus id that goes somewhere. Underlined on hover only: every one of these
+   sits in a table or a definition list where a permanent underline would turn
+   a column of ids into a column of noise. */
+.nexus-link {
+    color: var(--secondary);
+    text-decoration: none;
+    font-family: ui-monospace, monospace;
+    font-size: var(--fs-code);
+}
+
+.nexus-link:hover, .nexus-link:focus-visible { text-decoration: underline; }
+
+/* "open on Nexus", under the id field in the editor. */
+.field-link {
+    display: inline-block;
+    margin-top: var(--space-2xs);
+    color: var(--secondary);
+    font-size: var(--fs-label);
+}
 .detail dd.empty { color: var(--text-dim); font-style: italic; }
 
 /* A count with a proportional bar. The bar is decoration on top of the number,
@@ -881,8 +901,21 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 }
 
 .audit-head time { color: var(--gray); font-variant-numeric: tabular-nums; }
-.audit-head .action { color: var(--secondary); font-weight: 700; letter-spacing: var(--tracking-tight); }
-.audit-head .target { color: var(--text-dim); font-family: ui-monospace, monospace; font-size: var(--fs-code); }
+.audit-head .who { color: var(--tertiary); font-weight: 600; }
+
+/* The sentence is the entry. It takes the row so the raw action can sit at the
+   end without competing with it. */
+.audit-head .sentence { flex: 1 1 20rem; color: var(--text-subtle); }
+.audit-head .sentence strong { color: var(--white); font-weight: 600; }
+.audit-head .sentence code { color: var(--secondary); font-size: var(--fs-code); }
+
+/* Still there, still greppable, no longer shouting. The sentence above it can
+   only be trusted if what was actually recorded stays visible next to it. */
+.audit-head .action {
+    color: var(--text-dim);
+    font-family: ui-monospace, monospace;
+    font-size: var(--fs-code);
+}
 
 .audit-entry details { margin-top: var(--space-2xs); }
 .audit-entry summary { cursor: pointer; color: var(--gray); font-size: var(--fs-ui); }
