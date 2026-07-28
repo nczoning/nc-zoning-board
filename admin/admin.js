@@ -1245,7 +1245,7 @@
     releaseReviewMap();
     const resolved = sub.status !== 'pending';
     const reason = h('textarea', {
-      placeholder: resolved ? '' : 'Required to reject or request changes. The submitter reads this.',
+      placeholder: resolved ? '' : 'Required to reject or request changes. Kept on the record.',
       maxlength: '1000',
     });
 
@@ -1295,7 +1295,28 @@
 
       resolved ? null : field('Reason', reason,
         'Required for reject and request-changes. Optional on approve, where it is kept as a note.'),
+      resolved ? null : reachability(sub),
       actions);
+  }
+
+  /**
+   * Whether anything you write here can reach the person who sent it.
+   *
+   * Nothing delivers a review note. Submissions are anonymous, there is no
+   * route by which a submitter can read their own row, and `submitter_contact`
+   * is optional free text that a human has to act on. So "request changes" is
+   * a real dead letter when no contact was given, and the reviewer should know
+   * that BEFORE choosing it over approve or reject rather than after waiting a
+   * week for a revision that was never asked for.
+   */
+  function reachability(sub) {
+    return sub.submitter_contact
+      ? h('p', { class: 'muted' },
+        'Nothing is sent automatically. To ask for changes you have to contact ',
+        h('strong', { text: sub.submitter_contact }), ' yourself.')
+      : h('p', { class: 'notice warn' },
+        'No contact was given, so nothing written here can reach the submitter. '
+        + 'The reason is kept on the record; requesting changes will not produce any.');
   }
 
   function selectSubmission(id) {
@@ -1324,7 +1345,7 @@
     const reason = reasonEl.value.trim();
     if (action !== 'approve' && !reason) {
       reasonEl.focus();
-      return banner('warn', 'Give a reason. The submitter sees it, and "no" on its own is not reviewable feedback.');
+      return banner('warn', 'Give a reason. It is the only record of why this was turned down, and "no" on its own is not one.');
     }
 
     button.disabled = true;

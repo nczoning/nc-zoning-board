@@ -281,9 +281,17 @@ async function act(request, env, ctx, { id, action, actor }) {
     return json(request, { error: 'invalid_body', detail: 'body must be a JSON object' }, 400);
   }
 
-  // A rejection and a request for changes are the two outcomes the submitter is
-  // owed an explanation for, so the reason is required on both. Approval needs
-  // no defending, and its note is optional.
+  // Required on the two outcomes that turn something down, optional on the one
+  // that does not.
+  //
+  // NOT because the submitter reads it. NOTHING DELIVERS IT: submissions are
+  // anonymous, `submitter_contact` is optional free text that only a person
+  // acts on, and there is no route by which a submitter can read their own
+  // row. The reason is required because it is the only record of why a
+  // submission was turned down, and it is what a reviewer needs when the same
+  // mod comes back. If a submitter-facing status page is built later, this
+  // field is what it would show, which is a reason to write it well now and
+  // not a reason to describe it as delivered today.
   const errors = checkNote(body.reason, { required: action !== 'approve' });
   if (body.restore_location_id !== undefined && typeof body.restore_location_id !== 'string') {
     errors.push('restore_location_id must be a string');
