@@ -2340,23 +2340,6 @@ body::before {
     }
 }
 
-.coord-help-btn {
-    background: transparent;
-    border: var(--ui-border-thin) solid var(--gray);
-    color: var(--gray);
-    font-family: var(--font-heading);
-    font-size: var(--text-2xs);
-    padding: var(--space-2xs) var(--space-sm);
-    cursor: help;
-    transition: var(--transition-fast);
-    flex-shrink: 0;
-
-    &:hover {
-        border-color: var(--secondary);
-        color: var(--secondary);
-    }
-}
-
 .bbcode-tag-grid {
     display: flex;
     flex-wrap: wrap;
@@ -2411,30 +2394,6 @@ body::before {
     }
 }
 
-.bbcode-output {
-    width: 100%;
-    background: var(--black-50);
-    border: var(--ui-border-thin) solid var(--dark-accent);
-    color: var(--secondary);
-    padding: var(--space-md);
-    font-family: monospace;
-    font-size: var(--text-sm);
-    resize: vertical;
-    margin-top: var(--space-xs);
-    line-height: var(--lh-relaxed);
-}
-
-.bbcode-copy-btn {
-    margin-top: var(--space-xs) !important;
-    border-color: var(--tertiary) !important;
-    color: var(--tertiary) !important;
-
-    &:hover {
-        background: var(--tertiary) !important;
-        color: var(--primary) !important;
-    }
-}
-
 .bbcode-cet-command-block {
     display: flex;
     gap: var(--space-sm);
@@ -2458,13 +2417,7 @@ body::before {
 }
 
 
-/* ── BBCode Steps & Notes ────────────────────────────────────────── */
-.bbcode-doc-link {
-    font-size: var(--text-sm);
-    margin-bottom: var(--space-md);
-    display: inline-block;
-}
-
+/* ── Steps & Notes ───────────────────────────────────────────────── */
 .bbcode-steps {
     list-style: none;
     counter-reset: step;
@@ -2636,29 +2589,6 @@ body::before {
 .submit-done-id {
     font-family: monospace;
     color: var(--tertiary);
-}
-
-.submit-legacy {
-    margin-top: var(--space-lg);
-    border-top: var(--ui-border-thin) solid var(--border-subtle);
-    padding-top: var(--space-md);
-
-    summary {
-        font-family: var(--font-heading);
-        font-size: var(--text-2xs);
-        color: var(--gray);
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        cursor: pointer;
-    }
-
-    .bbcode-note {
-        margin-top: var(--space-sm);
-    }
-
-    .bbcode-checkbox-label {
-        margin-bottom: var(--space-sm);
-    }
 }
 
 /* Submitting a location is plausibly a phone task, with the game running

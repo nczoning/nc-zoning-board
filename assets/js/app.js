@@ -449,6 +449,29 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  // The coordinates are the field most easily got wrong (a swapped axis, a
+  // dropped minus sign) and the only one a submitter cannot check against
+  // anything else on the page, so they are checked as they are typed.
+  //
+  // A blank stands in as 0, which is inside every bound: a half-filled row is
+  // unfinished rather than wrong, and saying so while someone is still typing
+  // the first number teaches them to ignore the message.
+  function validateCoordinatesLive() {
+    const raw = readForm();
+    const typed = ["x", "y", "z"].map((axis) => String(raw[axis] ?? "").trim());
+    if (typed.every((value) => !value)) {
+      setFieldError("coordinates", null);
+      return;
+    }
+    const [x, y, z] = typed;
+    const { errors } = NCZ.collectLocationForm({ ...raw, x: x || "0", y: y || "0", z: z || "0" });
+    setFieldError("coordinates", errors.coordinates ?? null);
+  }
+
+  ["bbcode-coord-x", "bbcode-coord-y", "bbcode-coord-z"].forEach((id) => {
+    document.getElementById(id)?.addEventListener("input", validateCoordinatesLive);
+  });
+
   if (aboutOpenBbcodeLink) {
     aboutOpenBbcodeLink.addEventListener("click", (event) => {
       event.preventDefault();
@@ -553,66 +576,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const bbcodeGenerateBtn = document.getElementById("bbcode-generate-btn");
-  if (bbcodeGenerateBtn) {
-    bbcodeGenerateBtn.addEventListener("click", () => {
-      const x = document.getElementById("bbcode-coord-x").value.trim();
-      const y = document.getElementById("bbcode-coord-y").value.trim();
-      const z = document.getElementById("bbcode-coord-z").value.trim();
-      const yaw = document.getElementById("bbcode-yaw").value.trim();
-      const category = document.getElementById("bbcode-category").value;
-      const credits = document.getElementById("bbcode-credits").value.trim();
-      const authors = document.getElementById("bbcode-authors").value.trim();
-      const spoiler = document.getElementById("bbcode-spoiler").checked;
-
-      // The block carries a subset of the form, so only that subset is checked,
-      // through the same validator the send path uses.
-      const { errors } = NCZ.collectLocationForm(readForm());
-      const blockErrors = {};
-      if (errors.coordinates) blockErrors.coordinates = errors.coordinates;
-      if (errors.category) blockErrors.category = errors.category;
-      if (Object.keys(blockErrors).length) {
-        showErrors(blockErrors);
-        return;
-      }
-
-      const selectedTags = Array.from(
-        document.querySelectorAll("#bbcode-tag-checkboxes input:checked"),
-      ).map((cb) => cb.value).join(",");
-
-      const lines = [`NCZoning:`, `coords=${x},${y},${z}`, `category=${category}`];
-      if (selectedTags) lines.push(`tags=${selectedTags}`);
-      if (yaw && Number.isFinite(parseFloat(yaw))) lines.push(`yaw=${yaw}`);
-      if (credits) lines.push(`credits=${credits}`);
-      if (authors) lines.push(`authors=${authors}`);
-
-      let block = `[code]\n${lines.join("\n")}\n[/code]`;
-      if (spoiler) block = `[spoiler]\n${block}\n[/spoiler]`;
-
-      document.getElementById("bbcode-output").value = block;
-      document.getElementById("bbcode-output-section").classList.remove("hidden");
-    });
-  }
-
-  const bbcodeCopyBtn = document.getElementById("bbcode-copy-btn");
-  if (bbcodeCopyBtn) {
-    bbcodeCopyBtn.addEventListener("click", () => {
-      const output = document.getElementById("bbcode-output").value;
-      navigator.clipboard.writeText(output).then(() => {
-        const original = bbcodeCopyBtn.textContent;
-        bbcodeCopyBtn.textContent = "[ COPIED! ]";
-        setTimeout(() => {
-          bbcodeCopyBtn.textContent = original;
-        }, NCZ.COPY_FEEDBACK_MS);
-      }).catch(() => {
-        bbcodeCopyBtn.textContent = "[ COPY FAILED ]";
-        setTimeout(() => {
-          bbcodeCopyBtn.textContent = "[ COPY TO CLIPBOARD ]";
-        }, NCZ.COPY_FEEDBACK_MS);
-      });
-    });
-  }
-
   function resetSubmitForm() {
     document.getElementById("bbcode-coord-x").value = "";
     document.getElementById("bbcode-coord-y").value = "";
@@ -621,10 +584,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("bbcode-category").value = "";
     document.getElementById("bbcode-credits").value = "";
     document.getElementById("bbcode-authors").value = "";
-    document.getElementById("bbcode-spoiler").checked = false;
     document.querySelectorAll("#bbcode-tag-checkboxes input:checked").forEach((cb) => (cb.checked = false));
-    document.getElementById("bbcode-output-section").classList.add("hidden");
-    document.getElementById("bbcode-output").value = "";
 
     if (nameInput) nameInput.value = "";
     if (descriptionInput) descriptionInput.value = "";

@@ -504,15 +504,16 @@
             </div>
             <div class="terminal-body bbcode-modal-body">
                 <ol class="bbcode-steps">
-                    <li><strong>ACQUIRE COORDINATES</strong> — Open CET in-game, run the command below in the console. Copy the output and paste the values below:
+                    <li><strong>TAG YOUR MOD</strong>: add the <code>NCZoning</code> tag to your mod on Nexus Mods. Tagged mods appear in the list below with their name and image ready to pick, which is all the tag does. It is optional: paste your mod's link instead and nothing else changes.</li>
+                    <li><strong>ACQUIRE COORDINATES</strong>: open CET in-game, run the command below in the console. Copy the output and paste the values below:
                         <div class="bbcode-cet-command-block">
                             <code id="bbcode-cet-command">local p,r = GetPlayer():GetWorldPosition(), GetPlayer():GetWorldOrientation():ToEulerAngles(); print(string.format("x=%.4f  y=%.4f  z=%.4f  yaw=%.4f", p.x, p.y, p.z, r.yaw))</code>
                             <button id="bbcode-copy-cet-btn" class="ui-popup-action-link ui-popup-action-link-copy-cmd tertiary" title="Copy command" aria-label="Copy command"><span class="ui-popup-action-link-icon" aria-hidden="true"></span></button>
                         </div>
                     </li>
-                    <li><strong>CONFIGURE METADATA</strong> — Fill out the form below</li>
-                    <li><strong>SUBMIT FOR REVIEW</strong> — Complete the check at the bottom of the form and send it</li>
-                    <li><strong>A REVIEWER DECIDES</strong> — Nothing reaches the map until a reviewer approves it</li>
+                    <li><strong>CONFIGURE METADATA</strong>: fill out the form below</li>
+                    <li><strong>SUBMIT FOR REVIEW</strong>: complete the check at the bottom of the form and send it</li>
+                    <li><strong>A REVIEWER DECIDES</strong>: nothing reaches the map until a reviewer approves it</li>
                 </ol>
                 <div class="bbcode-note">Submissions are anonymous, so nothing is sent back to you. Watch the map for your pin, or leave a contact below if you are happy to be asked a question about it.</div>
                 <div class="bbcode-form">
@@ -524,7 +525,8 @@
                         <div class="bbcode-coord-note">Mods tagged <code>NCZoning</code> on Nexus appear here. Most tagged mods are already on the map, so an empty list is normal.</div>
                         <div id="submit-mod-manual" class="submit-subfield hidden">
                             <label class="bbcode-label" for="submit-nexus-ref">Nexus page URL or mod id</label>
-                            <input type="text" id="submit-nexus-ref" class="bbcode-input" placeholder="https://www.nexusmods.com/games/cyberpunk2077/mods/12345">
+                            <input type="text" id="submit-nexus-ref" class="bbcode-input" placeholder="https://www.nexusmods.com/cyberpunk2077/mods/12345">
+                            <div class="bbcode-coord-note">The address of your mod's own page, or just the number at the end of it.</div>
                         </div>
                         <p class="submit-field-error" id="submit-error-nexus_id" hidden></p>
                         <div id="submit-mod-card" class="submit-mod-card hidden">
@@ -535,13 +537,13 @@
                     <div class="bbcode-field-row">
                         <label class="bbcode-label" for="submit-name">Location name</label>
                         <input type="text" id="submit-name" class="bbcode-input" placeholder="e.g. Cliffside Abode Player Home">
-                        <div class="bbcode-coord-note">Prefilled from the mod's Nexus title. Edit it to name the location itself, not the mod page.</div>
+                        <div class="bbcode-coord-note">Prefilled from your mod's Nexus title once you pick it above, which is what the <code>NCZoning</code> tag is for. Edit it to name the location itself, not the mod page.</div>
                         <p class="submit-field-error" id="submit-error-name" hidden></p>
                     </div>
                     <div class="bbcode-field-row">
                         <label class="bbcode-label" for="submit-description">Description</label>
                         <textarea id="submit-description" class="bbcode-textarea" rows="3" maxlength="500" placeholder="What is at these coordinates, in a sentence or two."></textarea>
-                        <div class="bbcode-coord-note"><span id="submit-description-count">0</span>/500 characters</div>
+                        <div class="bbcode-coord-note">Not prefilled: your Nexus page describes the mod, and this describes the place. It is what a reviewer reads. <span id="submit-description-count">0</span>/500 characters.</div>
                         <p class="submit-field-error" id="submit-error-description" hidden></p>
                     </div>
                     <div class="bbcode-field-row">
@@ -559,14 +561,12 @@
                                 <span class="coord-label">Z</span>
                                 <input type="number" id="bbcode-coord-z" placeholder="e.g. 42.5" step="any">
                             </div>
-                            <button class="coord-help-btn" tabindex="-1"
-                                title="Paste the output from the CET command above. Use X, Y, and Z values — do not swap them. Z is the height/elevation.">?</button>
                         </div>
-                        <div class="bbcode-coord-note">Coordinates can be negative — make sure to include the minus sign if present (e.g. <code>-1234.56</code>). Night City sits within about ±4000 on X and Y and ±300 on Z; anything outside ±8000, or outside -1000 to 2000 on Z, is refused.</div>
+                        <div class="bbcode-coord-note">Paste the three values from the CET output above, in the same order. Z is the height, so do not swap it with Y. Coordinates can be negative: include the minus sign if there is one (e.g. <code>-1234.56</code>). Night City sits within about ±4000 on X and Y and ±300 on Z; anything past ±8000, or past -1000 to 2000 on Z, is refused.</div>
                         <p class="submit-field-error" id="submit-error-coordinates" hidden></p>
                     </div>
                     <div class="bbcode-field-row">
-                        <label class="bbcode-label" for="bbcode-yaw">Yaw <span class="bbcode-optional">(optional — player facing direction in degrees, useful for teleport)</span></label>
+                        <label class="bbcode-label" for="bbcode-yaw">Yaw <span class="bbcode-optional">(optional: player facing direction in degrees, useful for teleport)</span></label>
                         <input type="number" id="bbcode-yaw" class="bbcode-input" placeholder="e.g. 180.0" step="any">
                         <p class="submit-field-error" id="submit-error-yaw" hidden></p>
                     </div>
@@ -620,22 +620,6 @@
                         <p class="submit-done-body">Submissions are anonymous, so there is no reply to wait for and no status page to check. Watch the map.</p>
                         <button id="submit-another-btn" class="terminal-btn">[ SUBMIT ANOTHER ]</button>
                     </div>
-                    <details id="bbcode-generator" class="submit-legacy">
-                        <summary>Tagging your mod instead? Generate the NCZoning block</summary>
-                        <div class="bbcode-note">The <code>NCZoning</code> tag plus this block in your Nexus description still publishes a pin without a review step. It retires once the queue replaces it. The coordinates, category, tags, yaw and credits above fill the block.</div>
-                        <label class="bbcode-checkbox-label">
-                            <input type="checkbox" id="bbcode-spoiler">
-                            Wrap in <code>[spoiler]</code> tag (hides block on mod page)
-                        </label>
-                        <button id="bbcode-generate-btn" class="terminal-btn">[ GENERATE BLOCK ]</button>
-                        <div id="bbcode-output-section" class="hidden">
-                            <label class="bbcode-label" style="margin-top: 12px; display: block;">DEPLOYMENT OUTPUT</label>
-                            <div class="bbcode-note" style="margin-bottom: 6px;">Paste into your Nexus mod description. Common placement is at the bottom. Block can go anywhere &mdash; use the spoiler wrap option above to keep it clean.</div>
-                            <textarea id="bbcode-output" class="bbcode-output" readonly rows="8"></textarea>
-                            <button id="bbcode-copy-btn" class="terminal-btn bbcode-copy-btn">[ COPY TO CLIPBOARD ]</button>
-                        </div>
-                        <a href="https://github.com/nczoning/nc-zoning-board/blob/main/docs/nczoning-auto-discovery.md" target="_blank" rel="noopener" class="terminal-link bbcode-doc-link">&gt; Full auto-discovery documentation</a>
-                    </details>
                 </div>
                 <button id="close-bbcode-modal" class="terminal-btn" style="margin-top: 10px; border-color: var(--gray); color: var(--gray);">[ CLOSE ]</button>
             </div>

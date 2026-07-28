@@ -47,7 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **API `0.3.0` → `0.4.0`.** `/v1/tags` now returns an array of `{slug, name, description, sort_order}` instead of a `{tag: description}` map, matching `/v1/locations` and the shape the in-game parser maps most easily. `name` falls back to the slug, so nothing renders differently. Breaking, and taken now while the pre-1.0 window makes it free.
 - Tags are registry data in D1 rather than `data/tags.json`, so they can be edited in the dashboard instead of by pull request, and a mistyped tag is rejected on write rather than caught in CI afterwards. The site reads `/v1/tags`, falling back to the static file only if the API is unreachable.
 - The submit form reports every problem at once, beside the field, instead of one alert at a time. Its coordinate limits are the ones the server enforces; the older, tighter numbers would have refused four locations already on the map.
-- The BBCode generator moves inside the submit form, under **Tagging your mod instead?**. The tag route still works and retires at Phase 6.
+
+### Removed
+
+- The BBCode generator. Nothing is pasted into a Nexus description any more: the `NCZoning` tag now only puts a mod in the submit form's picker, with its name and image ready to use. The block had to be placed and formatted by hand, most attempts needed correcting, and it published a pin with no review step.
 
 ## [1.7.2] - 2026-07-26
 
