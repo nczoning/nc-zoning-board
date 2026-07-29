@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- D1 databases (production + staging) with the location registry schema, and a one-time import of all 296 locations plus the single exclusion. Nothing reads D1 yet — `mods.json` is still the live source.
+- D1 databases (production + staging) with the location registry schema, and a one-time import of all 296 locations plus the single exclusion. Nothing reads D1 yet; `mods.json` is still the live source.
 - A parity gate that rebuilds `/v1/locations` from D1 and diffs it byte-for-byte against the live API, with negative controls that prove the diff can fail.
 - The refresh cron can source the registry from D1 via `DATA_SOURCE=d1`. Production stays on `mods.json` until the cutover; unset never means D1.
 - A second harness that runs both source paths head-to-head across a swept clock, and fails if the swept field never varied.
@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **API `0.3.0` → `0.4.0`.** `/v1/tags` now returns an array of `{slug, name, description, sort_order}` instead of a `{tag: description}` map, matching `/v1/locations` and the shape the in-game parser maps most easily. `name` falls back to the slug, so nothing renders differently. Breaking, and taken now while the pre-1.0 window makes it free.
 - Tags are registry data in D1 rather than `data/tags.json`, so they can be edited in the dashboard instead of by pull request, and a mistyped tag is rejected on write rather than caught in CI afterwards. The site reads `/v1/tags`, falling back to the static file only if the API is unreachable.
 - The submit form reports every problem at once, beside the field, instead of one alert at a time. Its coordinate limits are the ones the server enforces; the older, tighter numbers would have refused four locations already on the map.
+- `robots.txt` asks crawlers to leave `/admin` alone. The collaborator gate is what actually protects it; this just keeps the dashboard out of search results.
 
 ### Removed
 
