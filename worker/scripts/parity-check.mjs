@@ -262,14 +262,23 @@ async function main() {
     ['name changed', (r) => ({ ...r, name: `${r.name} ` }), null],
     ['coordinate nudged', (r) => ({ ...r, x: r.x + 0.0001 }), null],
     ['z dropped to NULL', (r) => ({ ...r, z: null }), null],
-    ['tag removed', (r) => ({ ...r, tags: JSON.stringify(JSON.parse(r.tags).slice(1)) }), null],
+    // Mutates the JOIN, not `locations.tags`. Migration 0002 made location_tags
+    // authoritative and resolveTags ignores the JSON column whenever the join is
+    // supplied, which it always is here -- so the original column mutation landed
+    // on a field nothing reads and the control could not fail. Do not move it back.
+    ['tag removed', null, null, (m) => {
+      const key = rows[0].id;
+      const slugs = m.get(key);
+      if (!slugs || !slugs.length) fail(`negative control cannot run: no location_tags rows for ${key}`);
+      return new Map(m).set(key, slugs.slice(1));
+    }],
     ['thumbnail_url changed', null, (e) => ({ ...e, thumbnailUrl: `${e.thumbnailUrl}?x` })],
     ['picture_url dropped', null, (e) => ({ ...e, pictureUrl: null })],
     ['updated_at moved', null, (e) => ({ ...e, updatedAt: '2020-01-01T00:00:00.000Z' })],
     ['archive name changed', null, (e) => ({ ...e, archives: [...e.archives, 'ghost.archive'] })],
   ];
   let controlsPassed = 0;
-  for (const [label, mutateRow, mutateIndex] of controls) {
+  for (const [label, mutateRow, mutateIndex, mutateTags] of controls) {
     const mutatedRows = mutateRow ? rows.map((r, i) => (i === 0 ? mutateRow(r) : r)) : rows;
     let mutatedIndex = nexusIndex;
     if (mutateIndex) {
@@ -281,9 +290,10 @@ async function main() {
       if (!entry) fail(`negative control cannot run: no nexus_cache row for ${key}`);
       mutatedIndex.set(key, mutateIndex(entry));
     }
+    const mutatedTags = mutateTags ? mutateTags(locationTags) : locationTags;
     let differs;
     try {
-      const out = buildFromRows(mutatedRows, dismissedIds, tagsDict, subdistricts.districts, mutatedIndex, nowMs, locationTags);
+      const out = buildFromRows(mutatedRows, dismissedIds, tagsDict, subdistricts.districts, mutatedIndex, nowMs, mutatedTags);
       differs = !compare(out, liveRecords);
     } catch {
       differs = true; // a throw is also a detection
