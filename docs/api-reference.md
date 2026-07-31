@@ -85,10 +85,9 @@ A location record:
   "nexus_id": "27618",
   "coordinates": [-2229.57, 3618.96, 12.22],
   "yaw": 180.0,
-  "category": "new-location",
-  "tags": ["nczoning", "corpo"],
-  "authors": ["SomeModder"],
-  "source": "auto",
+  "category": "other",
+  "tags": ["entertainment"],
+  "authors": ["ellios2normandie"],
   "district": "City Center",
   "subdistrict": "Corpo Plaza",
   "recently_updated": true,
@@ -130,10 +129,10 @@ so don't substitute one for another:
 
 `version` is SemVer for the API surface.
 
-> ⚠️ **The API is currently pre-1.0 (`0.3.0`), and the rules below are inverted
+> ⚠️ **The API is currently pre-1.0 (`0.5.0`), and the rules below are inverted
 > while it is.** The surface was rolled back from `1.3.0` because nothing
-> consuming it has shipped yet, and the upcoming admin/D1 work takes shape
-> changes rather than deferring them. On a 1.x line each of those would need
+> consuming it has shipped yet, and the D1 work took shape changes rather than
+> deferring them. On a 1.x line each of those would need
 > MAJOR plus a `/v1` → `/v2` move, standing up a parallel surface with no
 > consumers to preserve.
 >
@@ -157,26 +156,31 @@ From `1.0.0` onward:
 So a consumer can read `/v1/health` once and know whether the field it wants
 exists yet, without probing for it.
 
-The three additive changes the surface has taken, in order:
+Every shape change the surface has taken, in order. The last two are breaking,
+which on a 1.x line would each have cost a MAJOR plus a path move:
 
 | Shape change | Under the 1.x numbering | Now |
 | --- | --- | --- |
 | the initial `/v1` surface | 1.0.0 | 0.0.0 |
 | `recently_updated`, `recently_updated_days` | 1.1.0 | 0.1.0 |
 | `archives` | 1.2.0 | 0.2.0 |
-| `last_refresh_at`, `refresh_age_seconds` on `/v1/health` | 1.3.0 | **0.3.0** *(current)* |
+| `last_refresh_at`, `refresh_age_seconds` on `/v1/health` | 1.3.0 | 0.3.0 |
+| **breaking:** `/v1/tags` becomes an array of records | would be 2.0.0 | 0.4.0 |
+| **breaking:** `source` and the synthetic `nczoning` tag leave every location record | would be 3.0.0 | **0.5.0** *(current)* |
 
-The rollback is mechanical: the MINOR digit is preserved and the MAJOR drops, so
-the three changes already made survive as `0.3.0`.
+The rollback was mechanical: the MINOR digit was preserved and the MAJOR dropped,
+so the three additive changes already made survived as `0.3.0`. The two breaking
+changes since then each cost a MINOR, which is the whole point of taking them
+before `1.0.0`.
 
 **Honesty note:** the marker was a static `0.1.0` until the SemVer policy landed,
 so live deploys through the site's 1.6.0 release all reported `0.1.0` regardless
 of shape ([#857](https://github.com/nczoning/nc-zoning-board/issues/857)). The
-policy backfilled it to `1.3.0`, which shipped in 1.7.0 — and it has now been
-rolled back to `0.3.0`. The middle column above is a reconstruction (what each
+policy backfilled it to `1.3.0`, which shipped in 1.7.0, and it was rolled back to
+`0.3.0` in 1.7.2. The middle column above is a reconstruction (what each
 deploy *should* have served); the right-hand column is what the API serves today.
 
-⚠️ **`0.3.0` is numerically lower than the `1.3.0` recent deploys served.**
+⚠️ **`0.5.0` is numerically lower than the `1.3.0` some earlier deploys served.**
 Nothing compares this field numerically — verified before the rollback — but a
 consumer that starts doing so must not read the decrease as a downgrade.
 

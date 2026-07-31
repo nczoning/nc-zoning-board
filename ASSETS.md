@@ -51,7 +51,13 @@ If you have questions about specific uses of game assets or need an exception to
 
 ## Extracted Data Files
 
-The `data/locations/` and `data/subdistricts.json` directories contain coordinate data and metadata submitted by community members. This data is:
+Coordinate data and metadata submitted by community members. The location
+registry lives in a Cloudflare D1 database and is served publicly at
+`https://api.nczoning.net/v1/locations`; `data/subdistricts.json` (world geometry
+derived from the game) stays in this repository. `data/locations/` remains in the
+repository as the pre-cutover record and is no longer where submissions land.
+
+The terms are unchanged by where the data is stored. This data is:
 - **Original contributor work**: contributors retain ownership
 - **Licensed under MIT** (same as the software)
 - **Validated against game coordinates**: accuracy verified through player testing

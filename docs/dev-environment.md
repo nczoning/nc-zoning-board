@@ -97,7 +97,7 @@ git checkout -b feat/three-js-phase-N
 
 1. Push the feature branch to GitHub
 2. Open a PR targeting `dev` (not `main`)
-3. Verify the preview looks correct locally with `npx serve .` after running `node scripts/build_mods.js`
+3. Verify the preview looks correct locally with `npx serve .`
 4. Merge the PR into `dev`
 5. Cloudflare automatically deploys: verify at `dev.nczoning.net`
 
@@ -124,14 +124,18 @@ Once all phases of the Three.js migration are complete and verified on `dev.nczo
 
 ## Local Development
 
-Always rebuild `mods.json` before running the local server, otherwise you may be testing against stale data:
-
 ```bash
-node scripts/build_mods.js
 npx serve .
 ```
 
-`mods.json` is gitignored and is never committed: it is built fresh on every Cloudflare deploy and must be built manually for local testing.
+That is all you need. **The map reads `/v1/locations` from the production API**
+from every origin, localhost included, so locations are always live and there is
+nothing to rebuild. Use `?api=dev` to point at staging when testing an API
+change.
+
+`mods.json` is still built on every Cloudflare deploy and **nothing reads it**.
+It exists so the D1 cutover stays revertible, and it retires at Phase 6.
+Rebuilding it locally does not affect what the map shows.
 
 ---
 

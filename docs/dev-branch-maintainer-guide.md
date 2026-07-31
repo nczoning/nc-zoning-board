@@ -52,7 +52,7 @@ Create the phase branch off `dev`, not `main`. This picks up all completed prior
    git fetch origin
    git merge origin/dev
    ```
-4. **Test locally**: `node scripts/build_mods.js` then `npx serve .`
+4. **Test locally**: `npx serve .` (the map reads the production API; nothing to build)
 5. **Update the changelog**: add entries under `## [Unreleased]` in `CHANGELOG.md` describing what the phase adds
 6. **Update `three-js-scene.md`** if you change any architectural decisions, add new GLB assets, or change the data pipeline
 
@@ -177,11 +177,15 @@ Python dependencies: `numpy`, `Pillow`, `trimesh`, `scipy`, `rtree`.
 ### Dev server
 
 ```bash
-node scripts/build_mods.js   # Rebuild mods.json from data/locations/*.json first
-npx serve .                   # Serve the repo root
+npx serve .   # Serve the repo root
 ```
 
-Always rebuild `mods.json` before testing: it's gitignored and won't exist on a fresh clone.
+**The map reads `/v1/locations` from the production API** from every origin,
+localhost included, so there is nothing to build first. `?api=dev` points at
+staging when you are testing an API change.
+
+`mods.json` is still built on every Cloudflare deploy and nothing reads it; it
+keeps the D1 cutover revertible and retires at Phase 6.
 
 ## Troubleshooting
 
@@ -204,7 +208,7 @@ Always rebuild `mods.json` before testing: it's gitignored and won't exist on a 
 - Verify `package.json` dependencies haven't broken
 
 **Data desync between local and deployed**
-- `mods.json` is generated at deploy time. If local testing shows stale data, run `node scripts/build_mods.js` before `npx serve .`
+- Locations come from `/v1/locations`, not from any local file. If the map shows stale data, it is the API's 5-minute cache or the browser's, not a build step you missed.
 - Location file changes on main need to be merged into dev (`git merge origin/main`)
 
 ## Finalising the migration

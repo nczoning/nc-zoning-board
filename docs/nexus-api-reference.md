@@ -84,7 +84,7 @@ The Nexus API silently truncates `modsByUid` responses for large batches:
 
 ### 2. `NCZoningMods` (`mods`): Auto-Discovery Query
 
-**Purpose:** Finds all mods on Nexus Mods for Cyberpunk 2077 that have been tagged `NCZoning` by their authors. These mods' descriptions are parsed for an `[NCZoning]` metadata block.
+**Purpose:** Finds all mods on Nexus Mods for Cyberpunk 2077 that have been tagged `NCZoning` by their authors. **The tag is prefill only.** A tagged mod that is neither a location nor dismissed becomes a *candidate*: it appears in the submit form's picker and in the dashboard's Candidates tab. Nothing here publishes a pin.
 
 **Query:**
 
@@ -118,7 +118,7 @@ query NCZoningMods($filter: ModsFilter!, $count: Int!, $offset: Int!) {
 - `modId`: Numeric Nexus mod ID
 - `name`: Mod title
 - `summary`: Short description; used as the pin popup description (truncated to 500 chars)
-- `description`: Full mod description; parsed for `[NCZoning]` metadata block
+- `description`: Full mod description. No longer read for content; the block parser runs only to populate the `skipped` monitoring list
 - `pictureUrl`: Featured image URL (full resolution)
 - `thumbnailUrl`: Featured image thumbnail URL
 - `updatedAt`: ISO 8601 timestamp of the mod's last update on Nexus; used to drive the recently-updated badge
@@ -140,13 +140,16 @@ The Nexus API does not document pagination for the `mods` query, but it supports
 **Caching:** Handled server-side by the Data API cron (the browser no longer caches Nexus responses); see [Caching Strategy](#caching-strategy) below.
 
 **Post-Fetch Processing:**
-1. For mods whose `modId` already exists in manual `mods.json`: collect `pictureUrl`, `thumbnailUrl`, and `updatedAt` into a `meta` map keyed by `nexusId`, then skip (manual entry wins for all other data)
-2. Parse `node.description` for `[NCZoning]` metadata block (see [`parseNcZoningBlock()`](../worker/src/parse.js) in worker/src/parse.js)
-3. If block missing or invalid, skip the mod with a log message
-4. Construct authors array: Nexus uploader name + any additional authors from the block
-5. Truncate `summary` to 500 characters for the popup description
-6. Prepend `"nczoning"` tag automatically (identifies auto-discovered mods in the UI)
-7. Store `updatedAt` as `_updatedAt` on the mod object; if within `NCZ.RECENTLY_UPDATED_DAYS` days, an `UPDATED` badge is shown in the popup, sidebar, and cluster flyout
+1. A tagged mod that already has a location contributes nothing further here: its images and `updatedAt` reach the record through `nexus_cache` like every other record's
+2. A tagged mod that is neither a location nor dismissed is a **candidate**, offered in the submit form's picker and the dashboard
+3. `name`, `summary` (truncated to 500 characters) and `uploader.name` prefill the submit form when a candidate is selected. All three stay editable
+4. `updatedAt` drives the server-computed `recently_updated` bool, which shows an `UPDATED` badge in the popup, sidebar and cluster flyout
+
+> **Retired at 2.0.0.** `node.description` used to be parsed for an `[NCZoning]`
+> metadata block, and a valid block published a pin with no human step. The
+> parser (`parseNcZoningBlock()`) still runs, but **only** to collect the
+> `skipped` list on `/v1/meta` for monitoring; it never creates a record. The
+> synthetic `nczoning` tag it used to prepend is gone from the served payload.
 
 The function returns `{ mods, meta }` where `meta` contains image/timestamp data for manually registered mods that are also NCZoning-tagged. In the worker's merge step ([`worker/src/merge.js`](../worker/src/merge.js)), `meta` is folded into each manual mod's thumbnail/`updated_at` fields without a separate `modsByUid` call. Mods covered by `meta` are excluded from the `modsByUid` batch.
 
@@ -304,6 +307,6 @@ These Nexus calls now run only inside the Data API cron (`worker/`), not the bro
 ## References
 
 - **Nexus GraphQL API Docs:** https://graphql.nexusmods.com/
-- **Auto-Discovery Workflow:** See [`docs/nczoning-auto-discovery.md`](./nczoning-auto-discovery.md) for how mod authors tag mods and provide metadata
+- **The NCZoning tag:** See [`docs/nczoning-auto-discovery.md`](./nczoning-auto-discovery.md) for what tagging prefills, and what it no longer does
 - **Nexus fetch implementation (server-side):** [`worker/src/nexus.js`](../worker/src/nexus.js), merge in [`worker/src/merge.js`](../worker/src/merge.js), block parser in [`worker/src/parse.js`](../worker/src/parse.js)
 - **Site data loader:** `fetchLocationsFromApi()` in [`assets/js/services.js`](../assets/js/services.js)

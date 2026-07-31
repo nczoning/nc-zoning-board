@@ -1,12 +1,14 @@
 # Adding Mods to the Map
 
-> **Looking for the easiest way to add your mod?** Use [NCZoning Auto-Discovery](nczoning-auto-discovery.md): tag your mod on Nexus and paste a metadata block into your description. No GitHub required.
->
-> This guide covers the GitHub issue and manual PR methods for permanent, manually curated entries.
+> **Submit from the map**, at [nczoning.net](https://nczoning.net). No GitHub
+> account and no Git. This guide covers the coordinates you need and what each
+> field means; the [Submission Pipeline](submission-pipeline.md) covers what
+> happens after you press Submit.
 
-## mods.json Schema
+## The Location Record
 
-Each mod entry is stored in its own file in `data/locations/<UUID>.json`. The schema for a mod object is:
+Every location is a row in the D1 registry. These are the fields you fill in when
+you submit, and what each one means:
 
 ```json
 {
@@ -59,28 +61,30 @@ Use [Simple Location Manager](https://www.nexusmods.com/cyberpunk2077/mods/26454
 
 See the [Coordinate System docs](coordinate-system.md) for more details and a pre-built calibration preset.
 
-## Submission Methods
+## How to Submit
 
-### Method 1: GitHub Issue Form (Recommended)
+1. Open [nczoning.net](https://nczoning.net) and press **[+] Submit**.
+2. **Pick your mod.** Tagged mods appear in a picker with their name, description
+   and uploader prefilled. If yours is not listed, paste its Nexus link.
+3. Fill in the coordinates and the rest of the fields above.
+4. Send it. A reviewer approves or rejects it, and an approved submission puts
+   your pin on the map within seconds.
 
-Best for modders who don't use Git:
+Coordinates are checked as you type, and every problem in a row is named at once
+beside the field it belongs to.
 
-1. Go to the [Issues tab](https://github.com/nczoning/nc-zoning-board/issues)
-2. Click **New Issue** → **"📍 Submit a New Mod Location"**
-3. Fill in the form fields
-4. Submit. The automated bot creates a PR (with `validate-json` running automatically)
-5. A maintainer reviews and merges → **the issue closes automatically**, pin appears on the map
+### Correcting an existing pin
 
-### Method 2: Manual Pull Request
-
-Best for modders comfortable with Git:
-
-1. Fork the repository
-2. Create a new `<UUID>.json` file in `data/locations/`.
-3. Fill in your data following the schema rules above.
-4. Run validation locally: `node scripts/build_mods.js` then `npx ajv validate -s mods.schema.json -d mods.json`
-5. Commit and open a PR
+Open the pin's popup and press **Suggest a fix**. The form arrives filled in from
+the record and sends only the fields you change, so a reviewer sees exactly what
+moved. One choice inside the same form switches to requesting removal, which asks
+for a reason instead.
 
 ### Validation
 
-All submissions are validated against `mods.schema.json` by a GitHub Actions workflow. PRs that fail validation will be flagged automatically.
+The Worker validates every write against the same rules on the way in, so a bad
+value is refused at submission rather than caught later. There is no PR to fail.
+
+> **Retired at 2.0.0:** the GitHub issue forms and the manual pull request. Both
+> wrote locations into git, and the registry lives in D1 now, so neither could
+> reach the map.
