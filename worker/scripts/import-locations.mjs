@@ -56,7 +56,7 @@ function sql(value) {
  * `coordinates` may legally be [x, y] or [x, y, z]; a missing Z stays NULL
  * rather than becoming 0, so the materializer can rebuild the shorter array.
  */
-function toRow(rec, source, stamp) {
+function toRow(rec, stamp) {
   const [x, y, z] = rec.coordinates;
   if (typeof x !== 'number' || typeof y !== 'number') {
     throw new Error(`${rec.id}: coordinates must be numeric, got ${JSON.stringify(rec.coordinates)}`);
@@ -77,7 +77,6 @@ function toRow(rec, source, stamp) {
     credits: rec.credits ? rec.credits : null,
     authors: JSON.stringify(rec.authors ?? []),
     tags: JSON.stringify(rec.tags ?? []),
-    source,
     status: 'published',
     created_at: stamp,
     updated_at: stamp,
@@ -86,7 +85,7 @@ function toRow(rec, source, stamp) {
 
 const COLUMNS = [
   'id', 'name', 'nexus_id', 'category', 'x', 'y', 'z', 'yaw',
-  'description', 'credits', 'authors', 'tags', 'source', 'status',
+  'description', 'credits', 'authors', 'tags', 'status',
   'created_at', 'updated_at',
 ];
 
@@ -100,7 +99,7 @@ function readManual(stamp) {
   const files = fs.readdirSync(LOCATIONS_DIR).filter((f) => f.endsWith('.json'));
   return files.map((f) => {
     const rec = JSON.parse(fs.readFileSync(path.join(LOCATIONS_DIR, f), 'utf8'));
-    return toRow(rec, 'manual', stamp);
+    return toRow(rec, stamp);
   });
 }
 
@@ -113,7 +112,9 @@ async function readAuto(stamp) {
   if (!Array.isArray(records) || records.length === 0) {
     throw new Error('live /v1/locations returned no records');
   }
-  return records.filter((r) => r.source === 'auto').map((r) => toRow(r, 'auto', stamp));
+  // `source` is no longer served; the nexus-<id> primary key carries the same
+  // provenance. Verified against production: 9 of 9 auto rows have it, 0 manual do.
+  return records.filter((r) => r.id.startsWith('nexus-')).map((r) => toRow(r, stamp));
 }
 
 /**

@@ -25,7 +25,7 @@ const row = (over = {}) => ({
   x: 250, y: 250, z: 10, yaw: 90,
   description: 'A record.', credits: 'Thanks',
   authors: '["Spud"]', tags: '["apartment"]',
-  source: 'manual', status: 'published',
+  status: 'published',
   admin_notes: null, owner_id: null,
   created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
   ...over,
@@ -65,7 +65,7 @@ test('key order matches merge.js, because the gate compares bytes', () => {
   const { full } = build([row()]);
   assert.deepEqual(Object.keys(full['aaaa-1111']), [
     'id', 'name', 'nexus_id', 'coordinates', 'yaw', 'category', 'tags', 'authors',
-    'source', 'district', 'subdistrict', 'recently_updated', 'description', 'credits',
+    'district', 'subdistrict', 'recently_updated', 'description', 'credits',
     'thumbnail_url', 'picture_url', 'updated_at',
   ]);
 });

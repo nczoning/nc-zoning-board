@@ -111,7 +111,7 @@ NCZ.fetchLocationsFromApi = async function () {
 
   // Map API entries → the internal shape the rest of the app consumes. The API
   // uses source "manual"/"auto" + snake_case image fields; the app keys off the
-  // legacy `_source` sentinel, `_updatedAt`, and a `nexusThumbs` lookup.
+  // `_updatedAt` and a `nexusThumbs` lookup.
   const nexusThumbs = {};
   const mods = rawLocations.map((e) => {
     const nid = String(e.nexus_id);
@@ -124,9 +124,6 @@ NCZ.fetchLocationsFromApi = async function () {
     }
     return {
       ...e,
-      // Manual mods have no _source (drives the "Suggest Edit" link + no auto
-      // badge); auto mods use the "nexus-auto" sentinel the badges key off.
-      ...(e.source === "auto" ? { _source: "nexus-auto" } : {}),
       _updatedAt: e.updated_at || null,
     };
   });

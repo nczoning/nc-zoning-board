@@ -34,7 +34,7 @@ const NEXUS_ID_RE = /^(\d+|WIP|Dummy)$/;
 /** Fields an admin may set. Anything else in the payload is rejected outright. */
 const WRITABLE = new Set([
   'name', 'authors', 'credits', 'coordinates', 'yaw', 'nexus_id',
-  'description', 'category', 'tags', 'status', 'admin_notes', 'source',
+  'description', 'category', 'tags', 'status', 'admin_notes',
 ]);
 
 const isPlainObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -153,10 +153,6 @@ export function validateLocationInput(payload, { tagNames, partial = false } = {
 
   if (has('admin_notes') && payload.admin_notes !== null && typeof payload.admin_notes !== 'string') {
     err('admin_notes must be a string or null');
-  }
-
-  if (has('source') && !['manual', 'auto'].includes(payload.source)) {
-    err('source must be "manual" or "auto"');
   }
 
   return { ok: errors.length === 0, errors };

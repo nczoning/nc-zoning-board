@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "NC Zoning Data API",
-    "version": "0.4.0",
+    "version": "0.5.0",
     "description": "Read-only API serving the NC Zoning Board mod registry (Cyberpunk 2077 location mods) to in-game mods and the website. Every response is wrapped in a versioned envelope. Coordinates are raw CET world values [X, Y, Z], usable in-game with no transform. The JSON stays DTO-mappable for the in-game RedData parser: no arrays-of-arrays, property names are case-sensitive. See https://github.com/nczoning/nc-zoning-board for the project.",
     "contact": { "name": "NC Zoning Board", "url": "https://nczoning.net" }
   },
@@ -171,7 +171,7 @@
       "Location": {
         "type": "object",
         "description": "Core location record fields (shared by every representation).",
-        "required": ["id", "name", "nexus_id", "coordinates", "category", "tags", "authors", "source", "district"],
+        "required": ["id", "name", "nexus_id", "coordinates", "category", "tags", "authors", "district"],
         "properties": {
           "id": { "type": "string", "description": "UUID (manual) or nexus-<nexus_id> (auto).", "example": "nexus-27618" },
           "name": { "type": "string" },
@@ -181,7 +181,6 @@
           "category": { "type": "string", "enum": ["location-overhaul", "new-location", "other"] },
           "tags": { "type": "array", "items": { "type": "string" } },
           "authors": { "type": "array", "items": { "type": "string" } },
-          "source": { "type": "string", "enum": ["manual", "auto"] },
           "district": { "type": "string", "description": "Never null (defaults to Badlands)." },
           "subdistrict": { "type": ["string", "null"] }
         }

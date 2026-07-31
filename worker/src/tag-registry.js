@@ -202,15 +202,15 @@ export async function readTagsForLocations(env, ids) {
  * existence, so a delete-then-insert is the same end state as a computed diff
  * and has no partial-update case to get wrong.
  *
- * `source` decides whether the legacy column keeps the synthetic `nczoning`
- * marker at the front, which is how the existing auto rows are stored. Without
- * it, editing an auto record's tags would rewrite the column into a shape no
- * existing row has, and the parity gate would report a difference that is an
- * artefact of the write rather than a real one.
+ * The synthetic `nczoning` marker is no longer written to either the join or
+ * the legacy column. It was a marker auto-discovery added, and nothing
+ * auto-publishes now, so it described nothing a consumer could act on. Dropping
+ * it from the write path is half the removal; `materialize.js` stopping adding
+ * it at serve time is the other half.
  */
-export async function syncLocationTags(env, locationId, slugs, source) {
+export async function syncLocationTags(env, locationId, slugs) {
   const clean = [...new Set(slugs.filter((s) => !RESERVED_SLUGS.has(s)))].sort();
-  const legacy = source === 'auto' ? ['nczoning', ...clean] : clean;
+  const legacy = clean;
 
   const statements = [
     env.DB.prepare('DELETE FROM location_tags WHERE location_id = ?').bind(locationId),

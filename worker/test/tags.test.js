@@ -27,7 +27,7 @@ const row = (over = {}) => ({
   id: 'a', name: 'Alpha', nexus_id: '1', category: 'other',
   x: 1, y: 2, z: 3, yaw: null, description: 'd', credits: null,
   authors: '["Spud"]', tags: '["legacy-column-value"]',
-  source: 'manual', status: 'published',
+  status: 'published',
   created_at: 'x', updated_at: 'x', ...over,
 });
 
@@ -82,20 +82,21 @@ test('without the join it falls back to the legacy column', async () => {
   assert.deepEqual(full.a.tags, ['legacy-column-value']);
 });
 
-test('nczoning is re-added for auto records, and only for those', async () => {
+test('the synthetic nczoning marker is never added, for any record', async () => {
+  // It used to be prepended for source='auto' records, which made it a visible
+  // sidebar filter for a tag /v1/tags does not list. Nothing auto-publishes now,
+  // so it described nothing a consumer could act on.
   const full = build(
-    [row({ id: 'm', source: 'manual' }), row({ id: 'x', name: 'Zeta', source: 'auto' })],
+    [row({ id: 'm' }), row({ id: 'x', name: 'Zeta' })],
     new Map([['m', ['apartment']], ['x', ['corpo']]]),
   );
-  // It is not a registry row (not in the tags table), so the materializer
-  // prepends it exactly as merge.js does for auto entries.
   assert.deepEqual(full.m.tags, ['apartment']);
-  assert.deepEqual(full.x.tags, ['nczoning', 'corpo']);
+  assert.deepEqual(full.x.tags, ['corpo'], 'no marker, and no leading slot for one');
 });
 
-test('an auto record whose only tag was nczoning still gets it back', async () => {
-  const full = build([row({ id: 'x', source: 'auto' })], new Map()); // no links at all
-  assert.deepEqual(full.x.tags, ['nczoning']);
+test('a record with no tag links yields an empty array, not a lone marker', async () => {
+  const full = build([row({ id: 'x' })], new Map()); // no links at all
+  assert.deepEqual(full.x.tags, []);
 });
 
 test('a location with no tags yields an empty array, not undefined', async () => {

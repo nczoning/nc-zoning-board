@@ -25,6 +25,7 @@ The registry moves out of git into a database, with a dashboard for maintainers.
 - **The location registry lives in a database rather than in git.** Nothing changes for visitors. It removes the gap where a merged pull request and the live map could disagree.
 - **The `NCZoning` tag is prefill only.** Tagging a mod puts it in the submit form's picker with its name, description and uploader ready to use. It no longer publishes a pin on its own.
 - ⚠️ **Editing the block in a Nexus description no longer moves a pin.** Authors who kept their location up to date that way now do it from the map. Pins already on the map are unaffected.
+- **API `0.4.0` to `0.5.0`, breaking.** Two fields leave every `/v1` location record: `source` (`manual` / `auto`) and the synthetic `nczoning` tag. Nothing auto-publishes since the registry moved to D1, so `source='auto'` describes 9 legacy records rather than a category the system produces, and `nczoning` was a visible sidebar filter for a tag `/v1/tags` never listed. The **NCZONING filter button disappears** from the sidebar. Where a record came from is still readable: the auto-discovered nine keep their `nexus-<id>` ids.
 - **API `0.3.0` to `0.4.0`.** `/v1/tags` returns an array of `{slug, name, description, sort_order}` instead of a `{tag: description}` map, matching `/v1/locations` and the shape the in-game parser maps most easily. `name` falls back to the slug, so nothing renders differently. Breaking, and taken now while the pre-1.0 window makes it free.
 - Tags are registry data, edited in the dashboard rather than by pull request. A mistyped tag is refused on write instead of caught in CI afterwards.
 - `robots.txt` keeps `/admin` out of search results. The collaborator gate is what actually protects it.
@@ -37,6 +38,7 @@ The registry moves out of git into a database, with a dashboard for maintainers.
 
 ### Removed
 
+- **The GitHub issue forms for submitting and editing locations**, and the three workflows behind them. They wrote locations into git, and the registry no longer lives there, so a submission could no longer reach the map: the form accepted it, a PR opened, CI passed, the merge went green, and no pin appeared. Submitting from the map replaces both.
 - **The BBCode generator.** The block had to be placed and formatted by hand, most attempts needed correcting, and it published a pin with no review step. The submit form replaces it.
 
 ## [1.7.2] - 2026-07-26

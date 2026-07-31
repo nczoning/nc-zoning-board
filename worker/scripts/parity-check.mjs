@@ -15,7 +15,7 @@
  * rebuilt from D1 and compared; nothing is fed in from the live record:
  *
  *   FROM `locations`     id, name, nexus_id, coordinates, yaw, category, tags,
- *                        authors, source, description, credits
+ *                        authors, description, credits
  *   FROM `nexus_cache`   thumbnail_url, picture_url, updated_at, archives
  *   RECOMPUTED           district, subdistrict   (from D1's OWN x/y/z, which is
  *                                                 what catches a mangled
@@ -51,7 +51,7 @@ const ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || 'b9937d8d595fad7de8d1549
 
 const REBUILT_KEYS = new Set([
   'id', 'name', 'nexus_id', 'coordinates', 'yaw', 'category', 'tags', 'authors',
-  'source', 'description', 'credits', 'district', 'subdistrict', 'recently_updated',
+  'description', 'credits', 'district', 'subdistrict', 'recently_updated',
   'thumbnail_url', 'picture_url', 'updated_at', 'archives',
 ]);
 // Empty on purpose, and kept rather than deleted: it is the list of fields this

@@ -371,24 +371,24 @@ that return value, not on whether the call threw. Treating "it did not throw" as
 success would report every failed rebuild as a win. `changed: false` is a
 success, meaning the content hash matched and nothing needed rewriting.
 
-### Keeping D1 in step with `data/locations/` before the cutover
+### Getting `data/locations/` into D1
 
-Submissions still arrive the old way: issue → PR → `main` → a new
-`data/locations/<uuid>.json`. `mods.json` is rebuilt from those files so
-production picks the record up, and **D1 hears nothing**, so staging, which
-reads D1, silently serves a smaller map than production. A mod merged overnight
-did exactly that.
+`scripts/sync-locations.mjs` existed to close a gap that no longer exists:
+submissions used to arrive as an issue, become a PR, merge to `main` as a new
+`data/locations/<uuid>.json`, and reach `mods.json` while **D1 heard nothing**.
+It was deleted at the D1 cutover along with the issue forms and their workflows,
+because keeping git as a second source of truth is the redundant-representation
+problem the migration removes.
 
-```bash
-node scripts/sync-locations.mjs --db nczoning-data-staging --env staging --out .import/sync.sql
-npx wrangler d1 execute nczoning-data-staging --env staging --remote --file .import/sync.sql
-```
+Locations are submitted from the map now and land in D1 directly. The only
+remaining path from files into D1 is `scripts/import-locations.mjs`, which is the
+restore path rather than a routine tool.
 
-Emits SQL rather than running it, INSERT-only, and writes **both**
-`locations` and `location_tags`. A record inserted without the join rows
-renders with no tags at all. It never deletes: rows in D1 with no file are not
-drift, since the nine auto-discovered records have never existed as files. It
-also reports records that exist in both and disagree, without rewriting them.
+⚠️ **`import-locations.mjs` does not write `location_tags`** (see the tracking
+issue). It predates the join and fills only the legacy `locations.tags` column,
+so a database built from it alone serves every location with no tags. The
+deleted `sync-locations.mjs` did write both, and its implementation is recoverable
+from git history.
 
 Run it against **both** databases, and delete the script at cleanup. Keeping it
 after submissions land in D1 directly would preserve git as a second source of

@@ -85,7 +85,7 @@ export function buildDataset({ manualMods, tagsDict, excluded, nexusNodes, distr
           ? summary.slice(0, DESCRIPTION_MAX_LENGTH - 3) + '...'
           : summary,
       category: parsed.category,
-      tags: ['nczoning', ...parsed.tags],
+      tags: [...parsed.tags],
       source: 'auto',
       thumbnail_url: node.thumbnailUrl || null,
       picture_url: node.pictureUrl || null,
@@ -147,7 +147,6 @@ export function buildDataset({ manualMods, tagsDict, excluded, nexusNodes, distr
       category: entry.category,
       tags: entry.tags,
       authors: entry.authors,
-      source: entry.source,
       district,
       subdistrict,
       recently_updated,

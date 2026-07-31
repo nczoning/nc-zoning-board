@@ -41,12 +41,11 @@
 
   const CATEGORIES = ['location-overhaul', 'new-location', 'other'];
   const STATUSES = ['published', 'hidden', 'draft'];
-  const SOURCES = ['manual', 'auto'];
 
   /** Exactly the fields the API will accept. Anything else is a 422. */
   const WRITABLE = [
     'name', 'authors', 'credits', 'coordinates', 'yaw', 'nexus_id',
-    'description', 'category', 'tags', 'status', 'admin_notes', 'source',
+    'description', 'category', 'tags', 'status', 'admin_notes',
   ];
 
   // Reasons the OAuth callback can bounce back with. `check_unavailable` is
@@ -83,10 +82,10 @@
     // only, which is what "district" means anyway.
     districtById: new Map(),
     // Structured rather than "shove it in the search box": the Overview tiles
-    // filter by things free text cannot express (untagged, source, district),
+    // filter by things free text cannot express (untagged, district),
     // and each one has to be individually removable from the chip row.
     filter: {
-      q: '', status: '', category: '', tag: '', district: '', source: '', special: '',
+      q: '', status: '', category: '', tag: '', district: '', special: '',
     },
   };
 
@@ -97,7 +96,6 @@
     category: 'category',
     tag: 'tag',
     district: 'district',
-    source: 'source',
     special: '',
   };
 
@@ -374,7 +372,7 @@
 
   // ----------------------------------------------------------- locations --
 
-  const tagsOf = (loc) => (loc.source === 'auto' ? ['nczoning', ...loc.tags] : loc.tags);
+  const tagsOf = (loc) => loc.tags;
 
   /** Category, in the map's own pin colours. See .cat in admin.css. */
   const categoryTag = (category) => h('span', {
@@ -385,7 +383,6 @@
   function locationMatches(loc, f) {
     if (f.status && loc.status !== f.status) return false;
     if (f.category && loc.category !== f.category) return false;
-    if (f.source && loc.source !== f.source) return false;
     if (f.tag && !(loc.tags || []).includes(f.tag)) return false;
     if (f.district && state.districtById.get(loc.id) !== f.district) return false;
     if (f.special === 'untagged' && (loc.tags || []).length) return false;
@@ -407,7 +404,7 @@
    */
   function setFilter(patch, { reset = false, go = false } = {}) {
     if (reset) {
-      state.filter = { q: '', status: '', category: '', tag: '', district: '', source: '', special: '' };
+      state.filter = { q: '', status: '', category: '', tag: '', district: '', special: '' };
     }
     Object.assign(state.filter, patch);
     // The selects are a second view of the same state, so they follow it.
@@ -450,13 +447,11 @@
     h('td', {}, loc.name),
     h('td', {}, categoryTag(loc.category)),
     h('td', {}, tagsOf(loc).map((t) => h('span', {
-      class: `badge${t === 'nczoning' ? ' synthetic' : ''}`,
-      title: t === 'nczoning' ? 'Synthetic marker, added to auto-discovered records. Not editable.' : null,
+      class: 'badge',
       text: t,
     }))),
     h('td', {},
-      h('span', { class: `badge status-${loc.status}`, text: loc.status }),
-      loc.source === 'auto' ? h('span', { class: 'badge source-auto', text: 'auto' }) : null),
+      h('span', { class: `badge status-${loc.status}`, text: loc.status })),
     // stopPropagation, or opening the mod page also selects the row behind it.
     h('td', { onclick: (e) => e.stopPropagation() }, nexusLink(loc.nexus_id)))));
 
@@ -504,7 +499,6 @@
       nexus_id: trimmed('nexus_id'),
       category: val('category'),
       status: val('status'),
-      source: val('source'),
       coordinates,
       // Blank means "no value", which the API models as null, not as 0 or "".
       yaw: yawRaw === '' ? null : Number(yawRaw),
@@ -559,7 +553,7 @@
 
   const BLANK_LOCATION = {
     id: '', name: '', nexus_id: '', category: 'new-location', status: 'draft',
-    source: 'manual', coordinates: ['', '', ''], yaw: null, credits: null,
+    coordinates: ['', '', ''], yaw: null, credits: null,
     admin_notes: null, description: '', authors: [], tags: [],
   };
 
@@ -587,9 +581,7 @@
       h('div', { class: 'field row' },
         field('Category', select('category', CATEGORIES, loc.category)),
         field('Status', select('status', STATUSES, loc.status))),
-      h('div', { class: 'field row' },
-        field('Nexus ID', nexusInput, null, nexusOpen),
-        field('Source', select('source', SOURCES, loc.source))),
+      field('Nexus ID', nexusInput, null, nexusOpen),
       // One data-field for all three, because the validator reports on
       // `coordinates` as a unit ("coordinates must all be finite numbers") and
       // an error that cannot find its input is an error nobody sees.
@@ -601,10 +593,7 @@
       field('Authors', input('authors', (loc.authors || []).join(', '), { placeholder: 'comma separated' })),
       field('Credits', input('credits', loc.credits ?? '', { placeholder: 'blank for none' })),
       field('Description', h('textarea', { name: 'description', maxlength: '500' }, loc.description || '')),
-      field('Tags', tagPicker(loc.tags || []),
-        loc.source === 'auto'
-          ? 'nczoning is added automatically for auto-sourced records and is not listed here.'
-          : null),
+      field('Tags', tagPicker(loc.tags || [])),
       field('Admin notes', h('textarea', { name: 'admin_notes', placeholder: 'internal, never served on /v1' },
         loc.admin_notes || '')),
     );
@@ -768,14 +757,11 @@
         row('Status', h('span', { class: `badge status-${loc.status}`, text: loc.status })),
         row('Category', categoryTag(loc.category)),
         row('Tags', tagsOf(loc).length
-          ? tagsOf(loc).map((t) => h('span', {
-            class: `badge${t === 'nczoning' ? ' synthetic' : ''}`, text: t,
-          }))
+          ? tagsOf(loc).map((t) => h('span', { class: 'badge', text: t }))
           : null),
         row('Authors', (loc.authors || []).join(', ')),
         row('Credits', loc.credits),
         row('Nexus ID', loc.nexus_id ? nexusLink(loc.nexus_id) : null),
-        row('Source', loc.source),
         row('Coordinates', coords, 'mono'),
         row('Yaw', loc.yaw === null || loc.yaw === undefined ? null : String(loc.yaw), 'mono'),
         row('District', state.districtById.get(loc.id)),
@@ -1837,8 +1823,6 @@
       stat(published.length, 'published', 'good', { status: 'published' }),
       stat(hidden, 'hidden', hidden ? 'warn' : null, { status: 'hidden' }),
       stat(records.filter((r) => r.status === 'draft').length, 'draft', null, { status: 'draft' }),
-      stat(records.filter((r) => r.source === 'auto').length, 'auto-discovered', null,
-        { source: 'auto' }),
       stat(records.filter((r) => !/^\d+$/.test(String(r.nexus_id))).length, 'WIP / Dummy', null,
         { special: 'wip' }),
       // Tags are a different collection, so this one leads to the Tags tab, not

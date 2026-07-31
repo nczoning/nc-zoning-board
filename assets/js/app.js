@@ -2760,15 +2760,12 @@ async function initMap() {
         li.dataset.category = mod.category;
         li.dataset.tags = [...(mod.tags || []), ...(NCZ.isRecentlyUpdated(mod) ? ["updated"] : [])].join(",");
         li.dataset.authors = mod.authors.join(",");
-        const sidebarBadge = mod._source === "nexus-auto"
-          ? ` <span class="nexus-auto-badge" title="Sourced automatically from Nexus Mods" aria-hidden="true"></span>`
-          : "";
         const sidebarUpdatedBadge = NCZ.isRecentlyUpdated(mod)
           ? ` <span class="badge-updated" title="Updated on Nexus within the last ${NCZ.recentlyUpdatedDays ?? NCZ.RECENTLY_UPDATED_DAYS} days">${NCZ.UPDATED_LABEL}</span>`
           : "";
         li.innerHTML = `
                 <div class="mod-item-header">
-                    <span class="mod-item-name">${NCZ.escapeHtml(mod.name)}</span>${sidebarBadge}${sidebarUpdatedBadge}
+                    <span class="mod-item-name">${NCZ.escapeHtml(mod.name)}</span>${sidebarUpdatedBadge}
                 </div>
                 <span class="mod-item-author">by ${NCZ.escapeHtml(mod.authors.join(", "))}</span>
                 <div class="mod-item-meta">
