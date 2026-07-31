@@ -83,7 +83,7 @@ const ROW = {
   id: 'loc-1', name: 'Existing Loft', nexus_id: '12345', category: 'new-location',
   x: 1, y: 2, z: 3, yaw: 90, description: 'a place', credits: null,
   authors: '["Spud"]', tags: '["apartment"]', status: 'published',
-  admin_notes: null, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+  admin_notes: null, added_at: '2026-01-01T00:00:00Z', modified_at: '2026-01-01T00:00:00Z',
 };
 
 const FRESH_USER = (collab = 1) => ({
@@ -208,7 +208,7 @@ test('update: patches only what was sent', async () => {
   const row = env.DB.one('SELECT * FROM locations WHERE id = ?', 'loc-1');
   assert.equal(row.name, 'Renamed Loft');
   assert.equal(row.category, 'new-location', 'untouched fields must survive');
-  assert.notEqual(row.updated_at, '2026-01-01T00:00:00Z', 'updated_at must move');
+  assert.notEqual(row.modified_at, '2026-01-01T00:00:00Z', 'modified_at must move');
   assert.deepEqual(tagsOf(env, 'loc-1'), ['apartment'], 'a patch that omits tags must not clear them');
 });
 
@@ -340,9 +340,9 @@ test('a stale If-Match is refused with 409 and writes NOTHING', async () => {
   assert.equal(body.error, 'stale_write');
 
   // The refusal is only worth anything if the write really did not land.
-  const row = env.DB.one('SELECT name, updated_at FROM locations WHERE id = ?', 'loc-1');
+  const row = env.DB.one('SELECT name, modified_at FROM locations WHERE id = ?', 'loc-1');
   assert.equal(row.name, 'Existing Loft', 'the row must be untouched');
-  assert.equal(row.updated_at, '2026-01-01T00:00:00Z', 'and updated_at must not move');
+  assert.equal(row.modified_at, '2026-01-01T00:00:00Z', 'and modified_at must not move');
   assert.equal(auditRows(env).length, 0, 'a refused write writes no audit row either');
 });
 
@@ -352,7 +352,7 @@ test('the conflict response carries the current record, so the client can diff',
   const body = await res.json();
   assert.ok(body.current, 'refusing without the current record leaves the client blind');
   assert.equal(body.current.name, 'Existing Loft');
-  assert.equal(body.current.updated_at, '2026-01-01T00:00:00Z', 'the version to retry against');
+  assert.equal(body.current.modified_at, '2026-01-01T00:00:00Z', 'the version to retry against');
 });
 
 test('a current If-Match is accepted', async () => {
@@ -386,7 +386,7 @@ test('a tags-only patch still moves updated_at', async () => {
   const res = await hit(env, 'PATCH', '/admin/locations/loc-1', { tags: ['corpo'] });
   assert.equal(res.status, 200);
   assert.notEqual(
-    env.DB.one('SELECT updated_at FROM locations WHERE id = ?', 'loc-1').updated_at,
+    env.DB.one('SELECT modified_at FROM locations WHERE id = ?', 'loc-1').modified_at,
     '2026-01-01T00:00:00Z',
   );
 });

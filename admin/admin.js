@@ -458,6 +458,8 @@
     }))),
     h('td', {},
       h('span', { class: `badge status-${loc.status}`, text: loc.status })),
+    h('td', {}, whenCell(loc.added_at)),
+    h('td', {}, whenCell(loc.modified_at)),
     // stopPropagation, or opening the mod page also selects the row behind it.
     h('td', { onclick: (e) => e.stopPropagation() }, nexusLink(loc.nexus_id)))));
 
@@ -524,7 +526,7 @@
    * This is why the API's reject-unknown-keys behaviour stays useful: if the
    * client resent the whole record every time, a field the server does not
    * know about would come back on every save and the 422 would be noise rather
-   * than a signal. It also makes `updated_at` mean something.
+   * than a signal. It also makes `modified_at` mean something.
    */
   function diffPayload(current, original) {
     const patch = {};
@@ -641,7 +643,7 @@
 
     replace($('#loc-editor'),
       h('h2', { text: isNew ? 'New location' : `Editing: ${loc.name}` }),
-      isNew ? null : h('p', { class: 'muted' }, `id ${loc.id} · updated `, timeEl(loc.updated_at)),
+      isNew ? null : h('p', { class: 'muted' }, `id ${loc.id} · modified `, timeEl(loc.modified_at)),
       form, actions);
 
     refreshDirty();
@@ -696,7 +698,7 @@
         // The version this editor was opened on. The server applies the write
         // only while the record still carries it, so two admins editing the
         // same record cannot silently overwrite each other.
-        headers: { 'If-Match': `"${loc.updated_at}"` },
+        headers: { 'If-Match': `"${loc.modified_at}"` },
       });
     button.disabled = false;
 
@@ -789,8 +791,9 @@
         // Internal, and never served on /v1. Worth showing plainly here.
         row('Admin notes', loc.admin_notes),
         row('ID', loc.id, 'mono'),
-        row('Created', timeEl(loc.created_at)),
-        row('Updated', timeEl(loc.updated_at)),
+        row('Added', timeEl(loc.added_at)),
+        row('Modified', timeEl(loc.modified_at)),
+        row('Updated on Nexus', loc.nexus_updated_at ? timeEl(loc.nexus_updated_at) : null),
       )),
       h('div', { class: 'editor-actions' },
         h('button', {
@@ -2014,9 +2017,9 @@
     for (const key of keys) {
       const from = before ? before[key] : undefined;
       const to = after ? after[key] : undefined;
-      // updated_at moves on every write; showing it as a change is noise that
+      // modified_at moves on every write; showing it as a change is noise that
       // makes the real change harder to find.
-      if (key === 'updated_at') continue;
+      if (key === 'modified_at') continue;
       if (sameValue(from, to)) continue;
       rows.push(h('div', {},
         h('span', { class: 'k', text: `${key}: ` }),
@@ -2031,7 +2034,7 @@
   function changedFields(before, after) {
     if (!before || !after) return [];
     return [...new Set([...Object.keys(before), ...Object.keys(after)])]
-      .filter((k) => k !== 'updated_at' && !sameValue(before[k], after[k]))
+      .filter((k) => k !== 'modified_at' && !sameValue(before[k], after[k]))
       .sort();
   }
 

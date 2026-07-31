@@ -20,7 +20,7 @@ const LOCATION = {
   id: 'loc-1', name: 'Existing Loft', nexus_id: '12345', category: 'new-location',
   x: 1, y: 2, z: 3, yaw: 90, description: 'a place', credits: null,
   authors: '["Spud"]', tags: '["apartment"]', status: 'published',
-  admin_notes: null, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+  admin_notes: null, added_at: '2026-01-01T00:00:00Z', modified_at: '2026-01-01T00:00:00Z',
 };
 
 const FRESH_USER = (collab = 1) => ({
@@ -85,7 +85,7 @@ async function hit(env, method, path, body, ctx = {}) {
 }
 
 const subRows = (env) => env.DB.rows('SELECT * FROM submissions ORDER BY id');
-const locRows = (env) => env.DB.rows('SELECT * FROM locations ORDER BY created_at, id');
+const locRows = (env) => env.DB.rows('SELECT * FROM locations ORDER BY added_at, id');
 const auditRows = (env) => env.DB.rows('SELECT * FROM audit_log ORDER BY id');
 const actions = (env) => auditRows(env).map((r) => r.action);
 const firstId = (env) => subRows(env)[0].id;
@@ -227,7 +227,7 @@ test('approving an edit applies only the fields the submission names', async () 
   const row = locRows(env).find((r) => r.id === 'loc-1');
   assert.equal(row.yaw, 45);
   assert.equal(row.name, 'Existing Loft', 'an unnamed field must not move');
-  assert.notEqual(row.updated_at, '2026-01-01T00:00:00Z', 'but updated_at must');
+  assert.notEqual(row.modified_at, '2026-01-01T00:00:00Z', 'but modified_at must');
   assert.deepEqual(actions(env), ['location.update', 'submission.approve']);
 });
 

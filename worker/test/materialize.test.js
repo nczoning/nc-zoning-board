@@ -27,7 +27,7 @@ const row = (over = {}) => ({
   authors: '["Spud"]', tags: '["apartment"]',
   status: 'published',
   admin_notes: null, owner_id: null,
-  created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+  added_at: '2026-01-01T00:00:00Z', modified_at: '2026-01-01T00:00:00Z',
   ...over,
 });
 
