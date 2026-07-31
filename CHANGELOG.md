@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **A nightly backup of the location registry**, committed to a `data-snapshots` branch that shares no history with `main` or `dev`. It covers the nine auto-discovered records that have never existed as files, so the mirror is complete for the first time since the cutover.
+- The backup alerts under its own `export` source when a run fails, and says so in the dashboard rather than only going red in Actions.
+
+### Fixed
+
+- The importer can now restore from a snapshot: `--files-only` skips the live-API read that would duplicate the auto-discovered records, and the dismissed-candidate and tag files are accepted in both shapes.
+
 ## [2.1.0] - 2026-08-01
 
 Alerts get somewhere to live. Everything the site raises, from a new submission

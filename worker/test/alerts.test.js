@@ -11,7 +11,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   raiseAlert, recordAlert, readAlerts, countUnacknowledged, acknowledgeAlert,
-  alertedSinceUtcMidnight, validateAlertInput,
+  alertedSinceUtcMidnight, validateAlertInput, ALERT_SOURCES,
 } from '../src/alerts.js';
 import { handleInternal } from '../src/internal.js';
 import { sqliteD1 } from '../test-support/d1-sqlite.mjs';
@@ -210,6 +210,19 @@ test('an unknown source or severity is refused, not stored', () => {
   assert.equal(validateAlertInput({ ...ALERT, severity: 'catastrophic' }).ok, false);
   assert.equal(validateAlertInput({ ...ALERT, title: '   ' }).ok, false);
   assert.equal(validateAlertInput(ALERT).ok, true);
+});
+
+test('every declared source is accepted, so no producer is rejected at the door', () => {
+  for (const source of ALERT_SOURCES) {
+    assert.equal(validateAlertInput({ ...ALERT, source }).ok, true, `${source} was refused`);
+  }
+});
+
+test('the nightly snapshot export can raise an alert under its own source', () => {
+  // The workflow posts source:'export' to /internal/alerts. A source missing
+  // from the allow-list is a 400, which turns a failed backup into a silent one.
+  assert.equal(ALERT_SOURCES.includes('export'), true);
+  assert.equal(validateAlertInput({ ...ALERT, source: 'export' }).ok, true);
 });
 
 // ----------------------------------------------------------- /internal/alerts --
