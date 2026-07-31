@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en" class="theme-night-corp">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>NC Zoning Board Admin</title>
+<link rel="icon" type="image/svg+xml" href="../assets/img/favicon/favicon-map-cyan.svg">
+
+<!-- Fonts, as the map loads them. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@400;500;700&display=swap">
+
+<!-- theme.css only: the custom properties, shared with the map. style.css is
+     map layout (Leaflet panes, sidebar, clusters) and has nothing for this page. -->
+<link rel="stylesheet" href="../assets/css/theme.css">
+<!-- Leaflet, same pinned version as the map, for the queue's mini-map. The
+     review panel has to show WHERE a proposed pin lands: coordinates alone
+     cannot be checked by eye, and "is this in the bay" is the most common
+     thing wrong with a submission. -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<link rel="stylesheet" href="admin.css">
+</head>
+
+<body class="gate">
+
+<!-- The signed-out / refused screen. Shown until /auth/me answers 200 AND says
+     collaborator; see admin.js. -->
+<main id="gate" class="panel">
+  <h1>NC Zoning Board Admin</h1>
+  <div id="gate-body" class="spinner">Checking session…</div>
+</main>
+
+<header class="topbar">
+  <h1>NC Zoning Board</h1>
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+    <button type="button" role="tab" data-tab="locations" aria-selected="false">Locations</button>
+    <!-- The count is filled in from the rows already fetched, not from a
+         server aggregate. See the note on the Overview panel. -->
+    <button type="button" role="tab" data-tab="queue" aria-selected="false">Queue<span class="tab-count" id="queue-count"></span></button>
+    <button type="button" role="tab" data-tab="candidates" aria-selected="false">Candidates<span class="tab-count" id="candidates-count"></span></button>
+    <button type="button" role="tab" data-tab="tags" aria-selected="false">Tags</button>
+    <button type="button" role="tab" data-tab="audit" aria-selected="false">Audit</button>
+  </nav>
+  <span class="spacer"></span>
+  <!-- What the map is actually serving right now, and how old it is. Staging
+       has no cron, so without this the read path can sit hours stale with
+       nothing to show for it. -->
+  <span class="freshness" id="freshness" title="Age of the dataset the public API is serving"></span>
+  <button type="button" class="btn secondary" id="rebuild" title="Rebuild the served dataset from the current source">Rebuild</button>
+  <span class="muted">Signed in as <span class="who" id="whoami"></span></span>
+  <span class="muted" id="api-label"></span>
+  <button type="button" class="btn secondary" id="signout">Sign out</button>
+</header>
+
+<main>
+  <div id="banner"></div>
+
+  <!-- ------------------------------------------------------- overview -- -->
+  <!--
+    Every number here is DERIVED, client-side, from records already fetched for
+    the other tabs. No aggregate columns on the API and no stats table in D1:
+    `decisions/api-per-location-records` removed server-side aggregates because
+    several consumers computing the same counts independently produced bug #823.
+    This panel must be another consumer that derives, not the first that
+    re-materializes.
+  -->
+  <section id="tab-overview" class="overview">
+    <div class="panel">
+      <h2>Registry</h2>
+      <div id="stat-registry" class="stat-grid"></div>
+    </div>
+
+    <div class="panel">
+      <h2>API health</h2>
+      <div id="health-kv" class="kv"></div>
+    </div>
+
+    <!-- The panel that would have surfaced the KV write overage before
+         Cloudflare emailed about it. Caps are per-account per UTC day. -->
+    <div class="panel">
+      <h2>Free-tier burn-down</h2>
+      <p class="muted" id="quota-note">Reading usage…</p>
+      <div id="quota-meters" class="kv"></div>
+    </div>
+
+    <div class="panel">
+      <h2>By category</h2>
+      <div id="stat-category" class="breakdown"></div>
+    </div>
+
+    <div class="panel">
+      <h2>By district</h2>
+      <p class="muted">Districts are assigned by the materializer, so this counts the
+        <em>published</em> records the API is serving.</p>
+      <div id="stat-district" class="breakdown"></div>
+    </div>
+
+    <div class="panel" style="grid-column: 1 / -1">
+      <h2>By tag</h2>
+      <div id="stat-tag" class="breakdown"></div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------ locations -- -->
+  <section id="tab-locations" class="split" hidden>
+    <div class="panel">
+      <div class="toolbar">
+        <input type="search" id="loc-search" placeholder="Search name, author, nexus id…" aria-label="Search locations">
+        <select id="loc-status" aria-label="Filter by status">
+          <option value="">All statuses</option>
+          <option value="published">Published</option>
+          <option value="hidden">Hidden</option>
+          <option value="draft">Draft</option>
+        </select>
+        <select id="loc-category" aria-label="Filter by category">
+          <option value="">All categories</option>
+          <option value="location-overhaul">Location overhaul</option>
+          <option value="new-location">New location</option>
+          <option value="other">Other</option>
+        </select>
+        <span class="spacer" style="flex:1"></span>
+        <button type="button" class="btn" id="loc-new">New location</button>
+      </div>
+      <!-- What the list is currently showing, and why. A filtered table with no
+           visible reason reads as missing data. -->
+      <div class="toolbar filter-chips" id="loc-chips"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th><th>Category</th><th>Tags</th><th>Status</th><th>Nexus</th>
+            </tr>
+          </thead>
+          <tbody id="loc-rows"></tbody>
+        </table>
+      </div>
+      <p class="muted" id="loc-count"></p>
+    </div>
+
+    <div class="panel" id="loc-editor">
+      <p class="muted">Select a location to edit it, or create a new one.</p>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- queue -- -->
+  <!--
+    Public submissions awaiting a decision. The review pane renders a DIFF, not
+    a restatement of the record: a reviewer needs to see "yaw changed", and a
+    full field dump makes the one changed line the hardest thing to find.
+  -->
+  <section id="tab-queue" class="split" hidden>
+    <div class="panel">
+      <div class="toolbar">
+        <select id="queue-status" aria-label="Filter by review status">
+          <option value="pending" selected>Pending</option>
+          <option value="">All</option>
+          <option value="approved">Approved</option>
+          <option value="rejected">Rejected</option>
+          <option value="held">On hold</option>
+        </select>
+        <span class="spacer" style="flex:1"></span>
+        <button type="button" class="btn secondary" id="queue-refresh">Refresh</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Submitted</th><th>Kind</th><th>What</th><th>Status</th></tr>
+          </thead>
+          <tbody id="queue-rows"></tbody>
+        </table>
+      </div>
+      <p class="muted" id="queue-summary"></p>
+    </div>
+
+    <div class="panel" id="queue-review">
+      <p class="muted">Select a submission to review it.</p>
+    </div>
+  </section>
+
+  <!-- ----------------------------------------------------- candidates -- -->
+  <!--
+    NCZoning-tagged Nexus mods that are neither a location nor dismissed. An
+    EMPTY list here is a real answer, not a broken query: every tagged mod
+    already has a pin. The counts below say so explicitly rather than leaving a
+    blank panel to be read as a failure.
+  -->
+  <section id="tab-candidates" hidden>
+    <div class="panel">
+      <div class="toolbar">
+        <span class="muted">Tagged on Nexus, no pin on the map yet.</span>
+        <span class="spacer" style="flex:1"></span>
+        <button type="button" class="btn secondary" id="candidates-refresh">Refresh</button>
+      </div>
+      <p class="muted" id="candidates-note"></p>
+      <div id="candidate-list" class="candidate-list"></div>
+    </div>
+
+    <div class="panel" style="margin-top: var(--space-lg)">
+      <h2>Dismissed</h2>
+      <p class="muted">Put aside rather than mapped. Restoring one puts it back in the list above.</p>
+      <div id="dismissed-list" class="candidate-list"></div>
+    </div>
+  </section>
+
+  <!-- ----------------------------------------------------------- tags -- -->
+  <section id="tab-tags" class="split" hidden>
+    <div class="panel">
+      <div class="toolbar">
+        <span class="muted">The tag registry. Counts are live.</span>
+        <span class="spacer" style="flex:1"></span>
+        <button type="button" class="btn" id="tag-new">New tag</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Slug</th><th>Name</th><th>Description</th><th class="num">Used by</th></tr>
+          </thead>
+          <tbody id="tag-rows"></tbody>
+        </table>
+      </div>
+      <p class="muted">
+        <code>nczoning</code> is not listed: it is a marker auto-discovery adds to every
+        Nexus-sourced record, not a registry entry, and it cannot be created or deleted here.
+      </p>
+    </div>
+
+    <div class="panel" id="tag-editor">
+      <p class="muted">Select a tag to edit it, or create a new one.</p>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- audit -- -->
+  <section id="tab-audit" hidden>
+    <div class="panel">
+      <div class="toolbar">
+        <span class="muted">Append-only. A correction is another row, never an edit.</span>
+        <span class="spacer" style="flex:1"></span>
+        <select id="audit-limit" aria-label="How many entries">
+          <option value="50">Last 50</option>
+          <option value="100" selected>Last 100</option>
+          <option value="500">Last 500</option>
+        </select>
+        <button type="button" class="btn secondary" id="audit-refresh">Refresh</button>
+      </div>
+      <div id="audit-list"></div>
+    </div>
+  </section>
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<!-- The map's own constants and pure helpers, for cetToLeaflet. Loading them
+     is the point: a second copy of the CET transform in this file is a second
+     thing to update when the world extent is recalibrated, and a mini-map that
+     disagrees with the map by a few hundred metres is worse than none. Neither
+     file touches the DOM or fetches at load. -->
+<script src="../assets/js/constants.js"></script>
+<script src="../assets/js/utils.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

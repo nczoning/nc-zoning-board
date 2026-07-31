@@ -1,4 +1,8 @@
 User-agent: *
 Allow: /
+# The admin dashboard. The GitHub collaborator gate is the real control -- this
+# only keeps it out of search results. Longest-match wins over `Allow: /`, and
+# the prefix covers /admin, /admin/ and everything below it.
+Disallow: /admin
 
 Sitemap: https://nczoning.net/sitemap.xml

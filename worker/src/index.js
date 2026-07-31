@@ -18,6 +18,9 @@ import { runRefresh } from './refresh.js';
 import { KEYS } from './store.js';
 import { docsPage, spec } from './docs.js';
 import { RECENTLY_UPDATED_DAYS } from './config.js';
+import { login, callback, me, logout, adminCors } from './auth.js';
+import { handleAdmin } from './admin.js';
+import { handleSubmissions, purgeSubmitterIps } from './submissions.js';
 
 const SCHEMA_VERSION = 1;
 
@@ -25,6 +28,17 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
   'Access-Control-Allow-Headers': 'If-None-Match',
+  // Without this the whole conditional-request path is DEAD, silently.
+  //
+  // Cross-origin JS can only read a short safelist of response headers
+  // (cache-control, content-type, and a few others) unless the server names the
+  // rest here. `ETag` is not on that list, so `res.headers.get('ETag')` returned
+  // null in the browser, services.js never stored one, `If-None-Match` was never
+  // sent, and the 304 branch it implements cannot execute at all.
+  //
+  // Nothing fails loudly, because the fallback path is a correct 200: the
+  // localStorage cache simply never fills.
+  'Access-Control-Expose-Headers': 'ETag',
 };
 
 // Dataset routes are cached for 5 min at the edge/browser, with a 1-hour
@@ -106,7 +120,7 @@ const routes = {
 
   // Liveness + the cron heartbeat. `status` is "ok" whenever the Worker itself
   // answers; `last_refresh_at` (the "when did the cron last RUN" stamp, written
-  // every cron cycle — see refresh.js) plus a server-computed `refresh_age_seconds`
+  // every cron cycle, see refresh.js) plus a server-computed `refresh_age_seconds`
   // let the monitor detect a wedged-but-still-serving cron (issue #849) and give
   // the clockless in-game consumer a freshness read too. Both are null before the
   // first cron tick. no-store so the probe always reads origin, never an edge
@@ -168,14 +182,77 @@ export default {
   // 5-minute cron: rebuild the dataset into KV (see refresh.js).
   async scheduled(controller, env, ctx) {
     ctx.waitUntil(runRefresh(env));
+    // Retention on the submitters' hashed addresses. Separate from the refresh
+    // so a failed rebuild cannot stop the clock on data the site promised to
+    // delete. An UPDATE matching nothing writes nothing, which is every tick
+    // but a handful. See docs/privacy.md.
+    if (env.DB) ctx.waitUntil(purgeSubmitterIps(env).catch(() => 0));
   },
 
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    const isAuth = url.pathname.startsWith('/auth/');
+    const isAdmin = url.pathname.startsWith('/admin/');
+    const isSubmission = url.pathname === '/submissions' || url.pathname.startsWith('/submissions/');
 
     if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: CORS_HEADERS });
+      // Auth routes are credentialed, so they need the caller's exact origin
+      // echoed back; the wildcard CORS used by /v1/* is illegal with
+      // Allow-Credentials and would fail the preflight.
+      //
+      // Submissions are anonymous and wildcard, but they still POST JSON, so
+      // they need Allow-Methods and Allow-Headers that /v1/* does not: without
+      // this branch every submission fails at the preflight, before the
+      // handler is reached.
+      if (isSubmission) {
+        return new Response(null, {
+          status: 204,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+          },
+        });
+      }
+      return new Response(null, {
+        status: 204,
+        headers: isAuth || isAdmin
+          ? {
+            ...adminCors(request),
+            'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type',
+          }
+          : CORS_HEADERS,
+      });
     }
+
+    // Admin CRUD, before the read-only method gate: these are the write routes.
+    // handleAdmin gates every one of them on collaborator status itself, so
+    // there is no path through here that reaches a mutation ungated.
+    if (isAdmin) {
+      const res = await handleAdmin(request, env, ctx);
+      if (res) return res;
+    }
+
+    // Auth routes, before the read-only method gate below: logout is a POST
+    // deliberately, so a stray <img> or link cannot sign someone out.
+    if (isAuth) {
+      if (request.method === 'GET' && url.pathname === '/auth/login') return login(request, env);
+      if (request.method === 'GET' && url.pathname === '/auth/callback') return callback(request, env);
+      if (request.method === 'GET' && url.pathname === '/auth/me') return me(request, env);
+      if (request.method === 'POST' && url.pathname === '/auth/logout') return logout(request, env);
+      return json(envelope({ error: 'not_found' }, null), { status: 404 });
+    }
+
+    // The public write route, before the read-only method gate below. It is
+    // anonymous by design, so its own gate is Turnstile plus a rate limit
+    // rather than a session, and nothing it accepts reaches the map without a
+    // separate, collaborator-gated approval.
+    if (isSubmission) {
+      const res = await handleSubmissions(request, env);
+      if (res) return res;
+    }
+
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return json(envelope({ error: 'method_not_allowed' }, null), { status: 405 });
     }

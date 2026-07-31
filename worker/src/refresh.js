@@ -13,24 +13,20 @@
  * unit-testable with a fake KV + fake fetch.
  */
 
-import { fetchTaggedModNodes, fetchModsByUidThumbs, fetchModArchiveNames } from './nexus.js';
+import { fetchTaggedModNodes, fetchModsByUidThumbs } from './nexus.js';
 import { buildDataset } from './merge.js';
+import { materializeFromD1, attachArchives } from './materialize.js';
+import { refreshNexusCache, refreshArchives, readNexusIndex } from './nexus-cache.js';
+import {
+  readLocationRows, readDismissedIds, readTags, readLocationTags,
+} from './d1.js';
 import { districtsPayload } from './districts.js';
 import { HEARTBEAT_MIN_INTERVAL_MS } from './config.js';
 import {
-  KEYS, contentHash, readMeta, writeDataset, writeMeta, readArchives, writeArchives,
+  KEYS, contentHash, readMeta, writeDataset, writeMeta,
 } from './store.js';
 
 const SCHEMA_VERSION = 1;
-
-// Per-run limits on archive-name fetching. Archives are near-static (a mod's
-// .archive filenames only change on a re-upload, which bumps its updatedAt), so
-// steady state fetches nothing. These budgets cap the cold-start fill and any
-// re-upload burst so archive work can never breach the Worker's 50-subrequest
-// cap alongside the existing discovery + thumbnail calls. A cold cache fills
-// over ~ceil(mods / ARCHIVE_MOD_BUDGET) cron ticks.
-const ARCHIVE_MOD_BUDGET = 15; // max mods refreshed per run
-const ARCHIVE_SUBREQUEST_BUDGET = 25; // max archive subrequests per run
 
 /** Fetch a JSON file from the site origin; throws on non-200. */
 async function fetchJson(fetchImpl, origin, path) {
@@ -94,80 +90,137 @@ async function alertDiscordRecovered(env, fetchImpl) {
 }
 
 /**
- * Refresh the archive-name cache in place, budgeted. Mutates `cache`
- * ({ [nexus_id]: { updatedAt, archives } }) and returns { changed } so the
- * caller knows whether to persist it.
+ * Sweep `nexus_cache` and return the index the dataset is built against.
  *
- * A mod is refetched only when it's absent from the cache or its updatedAt moved
- * (the exact re-upload signal for its archive contents). Newest-updated mods are
- * refreshed first so a re-upload beats cold-fill for the budget. A transient
- * failure (ok:false) is left uncached so the next run retries, rather than
- * caching an empty/partial listing as final.
+ * The sweep never throws (a Nexus outage must leave last-known-good in place),
+ * so the only signal that it produced nothing usable is the index itself. What
+ * an empty one means depends on the source, so the caller judges it: see the
+ * guard in sourceAndBuild.
  */
-async function refreshArchives(fetchImpl, full, cache) {
-  const records = Object.values(full).filter((r) => /^\d+$/.test(r.nexus_id));
-
-  const stale = records
-    .filter((r) => {
-      const c = cache[r.nexus_id];
-      return !c || c.updatedAt !== (r.updated_at ?? null);
-    })
-    .sort((a, b) => String(b.updated_at ?? '').localeCompare(String(a.updated_at ?? '')));
-
-  let changed = false;
-  let refreshed = 0;
-  let okCount = 0;
-  let subrequests = 0;
-  for (const r of stale) {
-    if (refreshed >= ARCHIVE_MOD_BUDGET || subrequests >= ARCHIVE_SUBREQUEST_BUDGET) break;
-    const res = await fetchModArchiveNames(fetchImpl, r.nexus_id);
-    refreshed += 1;
-    subrequests += res.subrequests;
-    if (!res.ok) continue; // transient failure: leave stale, retry next run
-    okCount += 1;
-    cache[r.nexus_id] = { updatedAt: r.updated_at ?? null, archives: res.archives };
-    changed = true;
-  }
-  if (refreshed > 0) {
-    // Ops visibility for the cold-fill / re-upload catch-up (cf. the thumbnail
-    // warnings). Silent in steady state, when nothing is stale.
-    console.log(
-      `archives: refreshed ${okCount}/${refreshed} mods (${stale.length} stale, ${subrequests} subrequests), cache=${Object.keys(cache).length}`,
-    );
-  }
-
-  // Evict entries for mods no longer in the dataset (deleted/hidden on Nexus) so
-  // the cache can't grow without bound. No fetching, just set membership.
-  const live = new Set(records.map((r) => r.nexus_id));
-  for (const id of Object.keys(cache)) {
-    if (!live.has(id)) {
-      delete cache[id];
-      changed = true;
+async function sweepNexusCache(env, fetchImpl, nexusNodes, nowIso) {
+  try {
+    const sweep = await refreshNexusCache(env, { fetchImpl, taggedNodes: nexusNodes, nowIso });
+    if (sweep.written) {
+      console.log(
+        `nexus_cache: ${sweep.written} rows written (${sweep.tagged} tagged, `
+        + `${sweep.backfilled} backfilled, ${sweep.untagged} untagged)`,
+      );
     }
+    return await readNexusIndex(env);
+  } catch (err) {
+    // While production still builds from mods.json, D1 is not on its critical
+    // path and must not become so ahead of the cutover: a database problem may
+    // cost that environment its archives, never its freshness. Under
+    // DATA_SOURCE=d1 the registry read throws on its own account anyway.
+    if (env.DATA_SOURCE === 'd1') throw err;
+    console.warn('nexus_cache sweep failed (non-fatal on mods.json):', String(err).slice(0, 200));
+    return new Map();
   }
-
-  return { changed };
 }
 
 /**
- * Attach an `archives` string array to every full record (always present, `[]`
- * when unknown or not yet filled), refreshing the KV-backed cache first. Wrapped
- * so archive work can NEVER fail the refresh: on any error every record still
- * gets at least `[]`. Mutates `full` in place; run it before the content hash so
- * archive changes propagate to the ETag.
+ * Resolve and attach every record's `.archive` file names.
+ *
+ * Wrapped so archive work can NEVER fail the refresh, which is the posture the
+ * KV-backed version had: on any error every record still gets at least `[]`.
+ * Runs after the build because the served record set is what decides which mods
+ * need a listing, and before the content hash so a re-upload that changes only
+ * the file list still moves the ETag.
  */
-async function attachArchives(env, fetchImpl, full) {
-  let cache = {};
+async function fillArchives(env, fetchImpl, full, index, nowIso) {
   try {
-    cache = await readArchives(env);
-    const { changed } = await refreshArchives(fetchImpl, full, cache);
-    if (changed) await writeArchives(env, cache);
+    const r = await refreshArchives(env, fetchImpl, {
+      records: Object.values(full), index, nowIso,
+    });
+    if (r.fetched || r.seeded || r.pending) {
+      console.log(
+        `archives: +${r.fetched} fetched, +${r.seeded} carried over from KV, `
+        + `${r.pending} still due, ${r.written} rows written`,
+      );
+    }
   } catch (err) {
     console.warn('archive refresh failed (non-fatal):', String(err).slice(0, 200));
   }
-  for (const rec of Object.values(full)) {
-    rec.archives = cache[rec.nexus_id]?.archives ?? [];
+  attachArchives(full, index);
+}
+
+/**
+ * Build the dataset from whichever source this environment is pointed at.
+ *
+ * `DATA_SOURCE=d1` reads the registry from D1; anything else (including unset)
+ * reads the compiled mods.json from the site origin. **Unset means mods.json on
+ * purpose** — a missing var must not silently switch production onto a new
+ * source, which is the same "absent config read as permissive" trap that
+ * attached every MCP connection to a scheduled agent.
+ *
+ * It is a var rather than a code branch so the Phase 2 cutover, and more
+ * importantly its rollback, is a config change on a known-good build instead of
+ * a revert-and-redeploy under pressure.
+ *
+ * Both paths take the same Nexus inputs and the same clock, and both return the
+ * same `{ full, meta }` shape, which is what lets parity-ab.mjs diff them
+ * head-to-head. tags/subdistricts still come from the site origin in both —
+ * they move to D1 at Phase 4.
+ *
+ * `nexusNodes` and `nexusIndex` are passed in rather than fetched here: the
+ * sweep needs both before this runs, and the tagged query is one of the two
+ * expensive calls in the tick.
+ */
+async function sourceAndBuild(env, fetchImpl, origin, nowMs, { nexusNodes, nexusIndex }) {
+  const useD1 = env.DATA_SOURCE === 'd1';
+  const subdistricts = await fetchJson(fetchImpl, origin, '/data/subdistricts.json');
+  const districts = subdistricts.districts;
+
+  // The tag registry. From D1 once it owns tags, from the file otherwise — but
+  // EITHER WAY the served payload is the array shape. The public contract must
+  // not depend on an internal source flag, or /v1/tags would silently change
+  // shape when DATA_SOURCE flips. `tagsDict` stays a slug->description map for
+  // block validation, which is all the parsers need.
+  const tagsList = useD1
+    ? await readTags(env)
+    : Object.entries(await fetchJson(fetchImpl, origin, '/data/tags.json'))
+      .map(([slug, description], i) => ({
+        slug, name: slug, description, sort_order: i + 1,
+      }));
+  const tagsDict = Object.fromEntries(tagsList.map((t) => [t.slug, t.description]));
+
+  if (useD1) {
+    const [rows, dismissed, locationTags] = await Promise.all([
+      readLocationRows(env),
+      readDismissedIds(env),
+      readLocationTags(env),
+    ]);
+    // Checked here rather than at the sweep, so an empty registry reports
+    // itself first and this reads as what it is: there are records to serve and
+    // no images for any of them. Serving them anyway would pass the content
+    // hash and replace a good dataset with a stripped one. On the mods.json
+    // path this cannot arise, because merge.js images from its own modsByUid
+    // channel and an empty index costs only archives, which have always been
+    // allowed to degrade to `[]`.
+    if (nexusIndex.size === 0) {
+      throw new Error('nexus_cache is empty -- refusing to serve a dataset with no images');
+    }
+    // No modsByUid call here any more: the sweep has already resolved every
+    // published record's images into nexus_cache, including the auto-discovered
+    // ones, which are rows like any other under D1.
+    const built = materializeFromD1({
+      rows, dismissed, tagsDict, nexusNodes, districts, nexusIndex, locationTags, nowMs,
+    });
+    return { ...built, tagsList, districts };
   }
+
+  const [manualMods, excluded] = await Promise.all([
+    fetchJson(fetchImpl, origin, '/mods.json'),
+    fetchJson(fetchImpl, origin, '/data/excluded_mods.json').catch(() => ({})),
+  ]);
+  const manualNumericIds = manualMods
+    .map((m) => String(m.nexus_id))
+    .filter((id) => /^\d+$/.test(id));
+  const manualThumbs = await fetchModsByUidThumbs(fetchImpl, manualNumericIds);
+  const built = buildDataset({
+    manualMods, tagsDict, excluded, nexusNodes, districts, manualThumbs, nowMs,
+  });
+  return { ...built, tagsList, districts };
 }
 
 /**
@@ -193,34 +246,23 @@ export async function runRefresh(env, fetchImpl = fetch) {
   const generatedAt = new Date().toISOString();
 
   try {
-    const [manualMods, tagsDict, excluded, subdistricts] = await Promise.all([
-      fetchJson(fetchImpl, origin, '/mods.json'),
-      fetchJson(fetchImpl, origin, '/data/tags.json'),
-      fetchJson(fetchImpl, origin, '/data/excluded_mods.json').catch(() => ({})),
-      fetchJson(fetchImpl, origin, '/data/subdistricts.json'),
-    ]);
-    const districts = subdistricts.districts;
+    // One tagged query per tick, shared by the sweep and the build. It throws
+    // on failure, which is the existing posture: the catch below keeps
+    // last-known-good, flags discovery_stale and alerts.
     const nexusNodes = await fetchTaggedModNodes(fetchImpl);
+    const nexusIndex = await sweepNexusCache(env, fetchImpl, nexusNodes, generatedAt);
 
-    // Manual-mod thumbnails: the tagged query only backfills manual mods that
-    // are themselves NCZoning-tagged, so pull the rest via modsByUid. Cosmetic
-    // and non-throwing: a failure here just leaves some images null this
-    // cycle, it never marks the dataset stale.
-    const manualNumericIds = manualMods
-      .map((m) => String(m.nexus_id))
-      .filter((id) => /^\d+$/.test(id));
-    const manualThumbs = await fetchModsByUidThumbs(fetchImpl, manualNumericIds);
-
-    const { full, meta } = buildDataset({
-      manualMods, tagsDict, excluded, nexusNodes, districts, manualThumbs,
-      nowMs: Date.parse(generatedAt),
-    });
+    // Thumbnails are cosmetic and non-throwing inside this: a failure there
+    // leaves some images null for a cycle, it never marks the dataset stale.
+    // A D1 read failure, by contrast, throws and lands in the catch below --
+    // last-known-good, discovery_stale, alert. Never an empty map.
+    const { full, meta, tagsList, districts } = await sourceAndBuild(
+      env, fetchImpl, origin, Date.parse(generatedAt), { nexusNodes, nexusIndex },
+    );
     const districtsOut = districtsPayload(districts);
 
-    // Enrich every record with its shipped .archive file names (installed-mod
-    // detection). Budgeted + updatedAt-gated, and non-fatal by construction, so
-    // it slots in before the hash without touching the failure posture below.
-    await attachArchives(env, fetchImpl, full);
+    // Each record's shipped .archive file names (installed-mod detection).
+    await fillArchives(env, fetchImpl, full, nexusIndex, generatedAt);
 
     // Hash the content that actually varies (not generated_at). Tags are
     // included so a tags.json edit propagates through the ETag. `full` carries
@@ -229,7 +271,7 @@ export async function runRefresh(env, fetchImpl = fetch) {
     // caches even though nothing on Nexus changed). This is why the cron
     // rebuilds every tick against a fresh clock, with no Nexus short-circuit.
     const version = await contentHash(
-      JSON.stringify({ full, districts: districtsOut, tags: tagsDict }),
+      JSON.stringify({ full, districts: districtsOut, tags: tagsList }),
     );
 
     const prev = await readMeta(env);
@@ -257,7 +299,7 @@ export async function runRefresh(env, fetchImpl = fetch) {
     await writeDataset(env, {
       full,
       districts: districtsOut,
-      tags: tagsDict,
+      tags: tagsList,
       meta: {
         schema: SCHEMA_VERSION,
         generated_at: generatedAt,

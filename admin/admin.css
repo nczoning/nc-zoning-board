@@ -1,0 +1,954 @@
+/*
+ * Admin dashboard layout.
+ *
+ * Colour comes from ../assets/css/theme.css: the same custom properties the
+ * map uses, so switching theme switches this page too. TYPE DOES NOT.
+ *
+ * Two things are deliberately overridden rather than inherited:
+ *
+ * 1. `body`. theme.css sets `height: 100svh; display: flex; overflow: hidden`
+ *    which is correct for the map, which is a fixed viewport with Leaflet panes inside
+ *    it, and fatal here: the admin page is a long document and that rule
+ *    silently clipped everything below the fold with no scrollbar. The content
+ *    was present the whole time (scrollHeight 10300 against clientHeight 1249).
+ *
+ * 2. The type scale. The map's ladder tops out at --text-md (14px) and this
+ *    page was built on --text-sm (12px) and --text-xs (11px), which in Rajdhani
+ *    is barely legible. The roles below are lifted from nc-zoning-academy,
+ *    which hit the same wall and fixed it there. Its note on why the gaps look
+ *    large is worth keeping: sizes are NOT comparable across families:
+ *    Orbitron at 15px and Rajdhani at 18px have the same 11px cap height, so a
+ *    heading has to sit well above body size to read as one.
+ *
+ * The map itself still has this problem. Fixing it there is a much larger job
+ * (158 call sites sat on 17 tracking values before the academy's cleanup); this
+ * is scoped to /admin deliberately.
+ */
+
+:root {
+    /* Type roles, from nc-zoning-academy. A call site names a ROLE, never a
+       pixel size. That discipline is what keeps one adjustment here from
+       turning back into two dozen ad-hoc sizes. */
+    --fs-title: 34px;      /* page titles, hero numerics */
+    --fs-heading: 22px;    /* panel headings */
+    --fs-body: 18px;       /* reading prose */
+    --fs-secondary: 16px;  /* table cells, options, supporting text */
+    --fs-ui: 14px;         /* buttons, status lines */
+    --fs-code: 13px;       /* monospace: ids, JSON, diffs */
+    --fs-label: 12px;      /* uppercase labels, field labels */
+    --fs-micro: 10px;      /* badges, captions, meta */
+
+    --lh-body: 1.7;
+    --lh-tight: 1.4;
+
+    /* Five rungs, not the 17 ad-hoc values this replaces. Tracking is in `em`,
+       so it is not independent of size: uppercase labels at --fs-micro need
+       more of it than mixed-case prose does. */
+    --tracking-tight: 0.04em;
+    --tracking-label: 0.08em;
+    --tracking-mid: 0.12em;
+    --tracking-caps: 0.16em;
+}
+
+* { box-sizing: border-box; }
+
+/* The `hidden` attribute is a UA rule of the lowest specificity, so ANY
+   class that sets display beats it. `.split { display: grid }` on a
+   `<section class="split" hidden>` leaves the section visible. Every tab would
+   have rendered stacked on top of each other. Same trap as the body rule
+   above: something that looks like it settles the question, and does not. */
+[hidden] { display: none !important; }
+
+/* Undoes theme.css's map shell. Every property here is countering one of
+   `height: 100svh`, `display: flex`, `overflow: hidden`. Do not "tidy" them
+   away by deleting what looks like a default. */
+body {
+    margin: 0;
+    height: auto;
+    min-height: 100svh;
+    display: block;
+    overflow: visible;
+    background: var(--primary);
+    color: var(--white);
+    font-family: var(--font-body);
+    font-size: var(--fs-secondary);
+    line-height: var(--lh-tight);
+}
+
+a { color: var(--secondary); }
+
+/* ---------------------------------------------------------------- chrome -- */
+
+.topbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-lg);
+    padding: var(--space-md) var(--space-lg);
+    background: var(--surface-nav-80);
+    border-bottom: var(--ui-border-thin) solid var(--secondary-30);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: blur(6px);
+    flex-wrap: wrap;
+}
+
+/* The wordmark. Night Corp Display is a caps-only subset (A-Z, 0-9,
+   punctuation) drawn from the logo, so it belongs on exactly this kind of
+   short, large, branded string and nowhere else: never body copy, and never
+   anything that might render a lowercase glyph it does not have. */
+.topbar h1 {
+    margin: 0;
+    font-family: var(--font-nightcorp);
+    font-size: var(--fs-heading);
+    font-weight: 400;
+    letter-spacing: var(--tracking-tight);
+    text-transform: uppercase;
+    color: var(--secondary);
+    line-height: 1;
+}
+
+.topbar .spacer { flex: 1; }
+
+.who { color: var(--tertiary); font-weight: 600; }
+
+/* Dataset age. Three states rather than two, because "I have not asked yet" is
+   not the same as "it is current": a blank indicator must never read as fresh. */
+.freshness {
+    font-size: var(--fs-label);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+    padding: var(--space-2xs) var(--space-sm);
+    border: var(--ui-border-thin) solid var(--border-neutral);
+    border-radius: var(--ui-radius-xs);
+    color: var(--gray);
+    white-space: nowrap;
+}
+
+.freshness.fresh { border-color: var(--status-ok); color: var(--status-ok); }
+.freshness.stale { border-color: var(--tertiary); color: var(--tertiary); }
+.freshness.unknown { border-style: dashed; }
+
+nav.tabs { display: flex; gap: var(--space-2xs); }
+
+nav.tabs button {
+    background: transparent;
+    border: var(--ui-border-thin) solid transparent;
+    border-radius: var(--ui-radius-sm);
+    color: var(--gray);
+    font: inherit;
+    font-size: var(--fs-ui);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-mid);
+    padding: var(--space-xs) var(--space-lg);
+    cursor: pointer;
+}
+
+nav.tabs button:hover { background: var(--surface-hover); color: var(--white); }
+
+nav.tabs button[aria-selected="true"] {
+    color: var(--secondary);
+    border-color: var(--secondary-30);
+    background: var(--secondary-05);
+}
+
+main { padding: var(--space-lg); }
+
+.panel {
+    background: var(--surface-panel);
+    border: var(--ui-border-thin) solid var(--secondary-20);
+    border-radius: var(--ui-radius-sm);
+    padding: var(--space-lg);
+}
+
+.panel h2 {
+    margin: 0 0 var(--space-md);
+    font-family: var(--font-heading);
+    font-size: var(--fs-ui);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-mid);
+    color: var(--secondary);
+}
+
+/* ------------------------------------------------------------- controls -- */
+
+button, input, select, textarea {
+    font-family: var(--font-body);
+    font-size: var(--fs-secondary);
+    color: var(--white);
+}
+
+input, select, textarea {
+    width: 100%;
+    background: var(--black-30);
+    border: var(--ui-border-thin) solid var(--border-neutral);
+    border-radius: var(--ui-radius-xs);
+    padding: var(--space-xs) var(--space-sm);
+    line-height: var(--lh-tight);
+}
+
+input:focus, select:focus, textarea:focus {
+    outline: none;
+    border-color: var(--secondary);
+}
+
+input:disabled, textarea:disabled {
+    color: var(--text-dim);
+    background: var(--black-10);
+    cursor: not-allowed;
+}
+
+textarea { resize: vertical; min-height: 6rem; line-height: var(--lh-body); }
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2xs);
+    width: auto;
+    cursor: pointer;
+    padding: var(--space-xs) var(--space-lg);
+    border-radius: var(--ui-radius-sm);
+    border: var(--ui-border-thin) solid var(--secondary);
+    background: transparent;
+    color: var(--secondary);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+    font-size: var(--fs-ui);
+    white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) { background: var(--secondary-10); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn.secondary { border-color: var(--border-neutral); color: var(--gray); }
+.btn.secondary:hover:not(:disabled) { background: var(--surface-hover); color: var(--white); }
+
+.btn.danger { border-color: var(--status-critical); color: var(--status-critical); }
+.btn.danger:hover:not(:disabled) { background: rgb(255 0 0 / 0.1); }
+
+/* ------------------------------------------------------------- messages -- */
+
+.notice {
+    border-left: 3px solid var(--secondary);
+    background: var(--secondary-05);
+    padding: var(--space-sm) var(--space-lg);
+    margin-bottom: var(--space-lg);
+    font-size: var(--fs-secondary);
+    line-height: var(--lh-body);
+}
+
+/* Three states, three colours, and they are NOT interchangeable.
+   `.warn` is "could not tell" (503). `.error` is "no" (403, 422, 409).
+   Rendering an indeterminate check in the refusal colour tells an admin they
+   lack access when the truth is that GitHub was unreachable. */
+.notice.error { border-left-color: var(--status-critical); background: rgb(255 0 0 / 0.08); }
+.notice.warn { border-left-color: var(--tertiary); background: var(--tertiary-05); }
+.notice.ok { border-left-color: var(--status-ok); background: rgb(0 255 0 / 0.06); }
+
+.notice ul { margin: var(--space-xs) 0 0; padding-left: 1.2rem; }
+
+.muted { color: var(--gray); font-size: var(--fs-ui); }
+
+/* --------------------------------------------------------------- tables -- */
+
+.toolbar {
+    display: flex;
+    gap: var(--space-sm);
+    align-items: center;
+    margin-bottom: var(--space-lg);
+    flex-wrap: wrap;
+}
+
+.toolbar input[type="search"] { width: 20rem; }
+.toolbar select { width: auto; }
+
+/* Wide content scrolls inside its own box, so the page body never scrolls
+   sideways. */
+.table-wrap { overflow-x: auto; }
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-secondary);
+}
+
+th, td {
+    text-align: left;
+    padding: var(--space-sm) var(--space-md);
+    border-bottom: var(--ui-border-thin) solid var(--border-subtle);
+    vertical-align: top;
+    line-height: var(--lh-tight);
+}
+
+th {
+    color: var(--gray);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+    font-size: var(--fs-label);
+    font-weight: 700;
+    position: sticky;
+    top: 0;
+    background: var(--surface-panel-90);
+    backdrop-filter: blur(4px);
+}
+
+/* Zebra striping. Declared before hover/selection so those still win without
+   needing !important or a specificity fight. */
+tbody tr:nth-child(even) { background: var(--white-02); }
+tbody tr:hover { background: var(--surface-hover); }
+tbody tr[aria-selected="true"] { background: var(--secondary-10); }
+
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Category, in the same colours the map uses for its pins, so a category means
+   one thing across the product. The dot carries the colour and the word carries
+   the meaning. Colour alone would fail for anyone who cannot separate cyan
+   from amber. */
+.cat { display: inline-flex; align-items: center; gap: var(--space-xs); white-space: nowrap; }
+
+.cat::before {
+    content: "";
+    width: var(--space-sm);
+    height: var(--space-sm);
+    border-radius: 50%;
+    background: var(--cat-colour, var(--gray));
+    box-shadow: 0 0 var(--space-xs) var(--cat-glow, transparent);
+    flex: 0 0 auto;
+}
+
+.cat-location-overhaul { --cat-colour: var(--category-location-overhaul); --cat-glow: var(--category-location-overhaul-glow); }
+.cat-new-location { --cat-colour: var(--category-new-location); --cat-glow: var(--category-new-location-glow); }
+.cat-other { --cat-colour: var(--category-other); --cat-glow: var(--category-other-glow); }
+
+/* ---------------------------------------------------------------- badges -- */
+
+.badge {
+    display: inline-block;
+    padding: var(--space-2xs) var(--space-xs);
+    margin: 1px var(--space-2xs) 1px 0;
+    border-radius: var(--ui-radius-xs);
+    font-size: var(--fs-micro);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    border: var(--ui-border-thin) solid var(--border-neutral);
+    color: var(--text-subtle);
+    white-space: nowrap;
+    line-height: 1.3;
+}
+
+.badge.status-published { border-color: var(--status-ok); color: var(--status-ok); }
+.badge.status-hidden { border-color: var(--tertiary); color: var(--tertiary); }
+.badge.status-draft { border-color: var(--gray); color: var(--gray); }
+.badge.source-auto { border-color: var(--secondary); color: var(--secondary); }
+
+/* The synthetic marker, shown so it is not mistaken for a missing tag. */
+.badge.synthetic { border-style: dashed; color: var(--text-dim); }
+
+/* -------------------------------------------------------------- overview -- */
+
+.overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+    gap: var(--space-lg);
+    align-items: start;
+}
+
+/* Headline numbers. --fs-title exists for exactly this. */
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+    gap: var(--space-md);
+}
+
+.stat {
+    border: var(--ui-border-thin) solid var(--border-subtle);
+    border-radius: var(--ui-radius-xs);
+    padding: var(--space-md);
+    background: var(--black-30);
+}
+
+.stat .value {
+    display: block;
+    font-family: var(--font-heading);
+    font-size: var(--fs-title);
+    line-height: 1;
+    color: var(--secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.stat .label {
+    display: block;
+    margin-top: var(--space-2xs);
+    font-size: var(--fs-label);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+    color: var(--gray);
+}
+
+.stat.warn .value { color: var(--tertiary); }
+.stat.bad .value { color: var(--status-critical); }
+.stat.good .value { color: var(--status-ok); }
+
+/* A tile that filters. Only tiles that lead somewhere get the affordance:
+   a hover state on an inert number is a promise the UI does not keep. */
+button.stat {
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    transition: border-color 0.12s, background 0.12s;
+}
+
+button.stat:hover {
+    border-color: var(--secondary);
+    background: var(--secondary-05);
+}
+
+button.stat::after {
+    content: "filter →";
+    display: block;
+    margin-top: var(--space-2xs);
+    font-size: var(--fs-micro);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+    color: var(--text-dim);
+}
+
+button.stat:hover::after { color: var(--secondary); }
+
+/* Rows in the breakdowns are buttons for the same reason. */
+button.breakdown-row {
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-radius: var(--ui-radius-xs);
+    padding: var(--space-2xs) var(--space-xs);
+    cursor: pointer;
+    font: inherit;
+    font-size: var(--fs-ui);
+    text-align: left;
+}
+
+button.breakdown-row:hover { background: var(--secondary-05); }
+button.breakdown-row:hover .k { color: var(--secondary); }
+
+/* ------------------------------------------------------- active filters -- */
+
+.filter-chips {
+    display: flex;
+    gap: var(--space-xs);
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* No filters, no row, otherwise it keeps .toolbar's bottom margin as a gap
+   under nothing. */
+.filter-chips:empty { display: none; }
+
+/* What the list is currently showing, and why. A filtered table with no
+   visible reason reads as missing data. */
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-2xs) var(--space-xs);
+    border: var(--ui-border-thin) solid var(--secondary-30);
+    background: var(--secondary-05);
+    border-radius: var(--ui-radius-xs);
+    font-size: var(--fs-label);
+    color: var(--secondary);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+}
+
+.chip button {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    padding: 0;
+    font: inherit;
+    line-height: 1;
+    opacity: 0.7;
+}
+
+.chip button:hover { opacity: 1; }
+
+/* ---------------------------------------------------------------- detail -- */
+
+/* Read-first. Opening a record shows it; changing it is a separate, deliberate
+   act. A row click that opened a live form would make every browse a potential
+   edit, where one stray keystroke marks a record dirty that was only being
+   read. */
+.detail dl {
+    display: grid;
+    grid-template-columns: minmax(6rem, 9rem) 1fr;
+    gap: var(--space-xs) var(--space-md);
+    margin: 0;
+}
+
+.detail dt {
+    color: var(--gray);
+    font-size: var(--fs-label);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+    padding-top: 2px;
+}
+
+.detail dd {
+    margin: 0;
+    color: var(--white);
+    font-size: var(--fs-ui);
+    line-height: var(--lh-body);
+    overflow-wrap: anywhere;
+}
+
+.detail dd.mono { font-family: ui-monospace, monospace; font-size: var(--fs-code); }
+
+/* A nexus id that goes somewhere. Underlined on hover only: every one of these
+   sits in a table or a definition list where a permanent underline would turn
+   a column of ids into a column of noise. */
+.nexus-link {
+    color: var(--secondary);
+    text-decoration: none;
+    font-family: ui-monospace, monospace;
+    font-size: var(--fs-code);
+}
+
+.nexus-link:hover, .nexus-link:focus-visible { text-decoration: underline; }
+
+/* "open on Nexus", under the id field in the editor. */
+.field-link {
+    display: inline-block;
+    margin-top: var(--space-2xs);
+    color: var(--secondary);
+    font-size: var(--fs-label);
+}
+.detail dd.empty { color: var(--text-dim); font-style: italic; }
+
+/* A count with a proportional bar. The bar is decoration on top of the number,
+   never a replacement for it: a reader must be able to get the exact value. */
+.breakdown { display: grid; gap: var(--space-2xs); }
+
+.breakdown-row {
+    display: grid;
+    grid-template-columns: minmax(6rem, 10rem) 1fr auto;
+    gap: var(--space-sm);
+    align-items: center;
+    font-size: var(--fs-ui);
+}
+
+.breakdown-row .k { color: var(--text-subtle); }
+.breakdown-row .n { color: var(--white); font-variant-numeric: tabular-nums; }
+
+/* display:block is load-bearing. As a <span> this is inline by default, and an
+   inline box ignores height and collapses to its content width. It only looked
+   right inside .breakdown-row because being a grid item blockified it. In
+   .quota-row it rendered as a thin vertical sliver. */
+.bar {
+    display: block;
+    width: 100%;
+    height: var(--space-sm);
+    background: var(--black-30);
+    border-radius: var(--ui-radius-xs);
+    overflow: hidden;
+}
+
+.bar span {
+    display: block;
+    height: 100%;
+    background: var(--secondary-40, var(--secondary));
+    opacity: 0.7;
+}
+
+/* ----------------------------------------------------------------- quota -- */
+
+.quota-row { padding-bottom: var(--space-md); }
+
+.quota-head {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-md);
+    font-size: var(--fs-ui);
+    margin-bottom: var(--space-2xs);
+}
+
+.quota-head .k { color: var(--text-subtle); }
+.quota-head .v { font-variant-numeric: tabular-nums; }
+.quota-head .v.ok { color: var(--status-ok); }
+.quota-head .v.warn { color: var(--tertiary); }
+.quota-head .v.bad { color: var(--status-critical); }
+
+.bar span.ok { background: var(--status-ok); }
+.bar span.warn { background: var(--tertiary); }
+.bar span.bad { background: var(--status-critical); opacity: 1; }
+
+/* The projection carries the actual warning, so it is text rather than a
+   colour: "on track for 1,400 by midnight" is actionable in a way that an
+   amber bar at 8% is not. */
+.quota-projection {
+    display: block;
+    margin-top: var(--space-2xs);
+    font-size: var(--fs-label);
+    color: var(--gray);
+}
+
+/* Key/value rows for the health panel. */
+.kv { display: grid; gap: var(--space-xs); }
+
+.kv-row {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-lg);
+    padding-bottom: var(--space-xs);
+    border-bottom: var(--ui-border-thin) solid var(--border-subtle);
+    font-size: var(--fs-ui);
+}
+
+.kv-row .k { color: var(--gray); text-transform: uppercase; letter-spacing: var(--tracking-label); font-size: var(--fs-label); }
+.kv-row .v { color: var(--white); text-align: right; font-variant-numeric: tabular-nums; }
+.kv-row .v.mono { font-family: ui-monospace, monospace; font-size: var(--fs-code); }
+.kv-row .v.ok { color: var(--status-ok); }
+.kv-row .v.warn { color: var(--tertiary); }
+.kv-row .v.bad { color: var(--status-critical); }
+
+/* ---------------------------------------------------------------- editor -- */
+
+/*
+ * Two panes, each scrolling on its own.
+ *
+ * The split is exactly one viewport tall and each pane owns its overflow. A
+ * single document scroll carries the editor off screen while the 297-row list
+ * is scrolled, so a form being filled in leaves the viewport whenever the
+ * reader goes looking for a record.
+ *
+ * --topbar-h is measured in JS rather than hard-coded: the top bar wraps on
+ * narrow windows, so its height is not a constant, and a wrong guess here
+ * either clips the last row or leaves a dead gap under the panes.
+ */
+.split {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 30rem);
+    gap: var(--space-lg);
+    align-items: start;
+    height: calc(100svh - var(--topbar-h, 4rem) - (var(--space-lg) * 2));
+}
+
+/* min-height: 0 is what actually lets a grid/flex child shrink below its
+   content and scroll. Without it the pane grows to fit the table and the
+   overflow never engages. */
+.split > .panel {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    max-height: 100%;
+    overflow: hidden;
+}
+
+.split > .panel > .toolbar,
+.split > .panel > h2,
+.split > .panel > p { flex: 0 0 auto; }
+
+/* The list scrolls; the toolbar above it does not go with it. */
+.split .table-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+}
+
+/* The editor pane scrolls its own content when a long form outgrows it. */
+#loc-editor, #tag-editor { overflow-y: auto; }
+
+@media (max-width: 70rem) {
+    /* Stacked, the two-pane trick stops making sense: give the page back its
+       normal scroll rather than nesting two scrollers in one column. */
+    .split {
+        grid-template-columns: minmax(0, 1fr);
+        height: auto;
+    }
+
+    .split > .panel { overflow: visible; max-height: none; }
+    .split .table-wrap { overflow-x: auto; }
+}
+
+.field { margin-bottom: var(--space-lg); }
+
+.field label {
+    display: block;
+    color: var(--gray);
+    font-size: var(--fs-label);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+    margin-bottom: var(--space-2xs);
+}
+
+.field.row { display: flex; gap: var(--space-sm); }
+.field.row > * { flex: 1; }
+
+/* A field the server rejected. The message sits with the input, not in a
+   summary box: a validation error the admin has to scroll to find is one they
+   will read as "the save just did not work". */
+.field.invalid input,
+.field.invalid select,
+.field.invalid textarea { border-color: var(--status-critical); }
+
+.field .msg { color: var(--status-critical); font-size: var(--fs-label); margin-top: var(--space-2xs); }
+
+.tag-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2xs);
+    padding: var(--space-xs);
+    border: var(--ui-border-thin) solid var(--border-neutral);
+    border-radius: var(--ui-radius-xs);
+    background: var(--black-30);
+    max-height: 14rem;
+    overflow-y: auto;
+}
+
+.tag-picker label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2xs);
+    padding: var(--space-2xs) var(--space-xs);
+    border: var(--ui-border-thin) solid var(--border-neutral);
+    border-radius: var(--ui-radius-xs);
+    font-size: var(--fs-ui);
+    cursor: pointer;
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text-subtle);
+    margin: 0;
+}
+
+.tag-picker label:has(input:checked) {
+    border-color: var(--secondary);
+    color: var(--secondary);
+    background: var(--secondary-10);
+}
+
+.tag-picker input { width: auto; }
+
+.editor-actions {
+    display: flex;
+    gap: var(--space-sm);
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: var(--space-lg);
+    padding-top: var(--space-lg);
+    border-top: var(--ui-border-thin) solid var(--border-subtle);
+}
+
+.editor-actions .spacer { flex: 1; }
+
+/* Which fields will actually be sent. The PATCH carries only what changed, so
+   showing the diff is the difference between "save" and "save something". */
+.dirty-summary { font-size: var(--fs-label); color: var(--tertiary); }
+
+/* ------------------------------------------------------------ slug lock -- */
+
+.slug-lock {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-2xs);
+    flex-wrap: wrap;
+}
+
+.slug-lock .btn { padding: var(--space-2xs) var(--space-sm); font-size: var(--fs-label); }
+
+.slug-warning {
+    border-left: 3px solid var(--tertiary);
+    background: var(--tertiary-05);
+    padding: var(--space-sm);
+    margin-top: var(--space-xs);
+    font-size: var(--fs-ui);
+    line-height: var(--lh-body);
+    color: var(--text-subtle);
+}
+
+/* ------------------------------------------------------- queue + candidates -- */
+
+/* The count beside a tab label. Rendered only when it is non-zero (admin.js):
+   a "0" here is a standing invitation to check a queue with nothing in it. */
+.tab-count {
+    margin-left: var(--space-xs);
+    padding: 0 var(--space-2xs);
+    border-radius: var(--ui-radius-xs);
+    background: var(--tertiary);
+    color: var(--color-black);
+    font-size: var(--fs-micro);
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.tab-count:empty { display: none; }
+
+/* Shares the badge vocabulary with statuses rather than inventing a second
+   one: these sit in the same table cells and mean the same kind of thing. */
+.badge.kind-create { border-color: var(--status-ok); color: var(--status-ok); }
+.badge.kind-edit { border-color: var(--secondary); color: var(--secondary); }
+.badge.kind-remove { border-color: var(--status-critical); color: var(--status-critical); }
+
+.badge.review-pending { border-color: var(--tertiary); color: var(--tertiary); }
+.badge.review-approved { border-color: var(--status-ok); color: var(--status-ok); }
+.badge.review-rejected { border-color: var(--status-critical); color: var(--status-critical); }
+.badge.review-held { border-color: var(--gray); color: var(--gray); }
+
+#queue-review { overflow-y: auto; }
+
+/* Coordinates cannot be checked by eye. The mini-map is small on purpose: it
+   answers "roughly where", and the full map answers everything else.
+ *
+ * This element IS Leaflet's container, so `background` here is also what beats
+ * leaflet.css's `.leaflet-container { background: #ddd }`: same specificity,
+ * and this sheet loads second. Do not move it to a descendant selector. */
+.mini-map {
+    height: 18rem;
+    margin-bottom: var(--space-lg);
+    border: var(--ui-border-thin) solid var(--secondary-20);
+    border-radius: var(--ui-radius-xs);
+    background: var(--black-30);
+}
+
+/* Locations already on the map for the same mod.
+ *
+ * Neutral by default: nexus_id is one-to-many by design, so a second pin from
+ * one mod is a normal approval, and styling it as an alarm would train the
+ * reviewer to dismiss it. `.has-hidden` is the case that IS worth stopping
+ * for, and only that case gets the warning colour. */
+.sibling-panel {
+    margin: var(--space-md) 0 var(--space-lg);
+    padding: var(--space-sm) var(--space-md);
+    border-left: 3px solid var(--border-neutral);
+    background: var(--white-02);
+}
+
+.sibling-panel.has-hidden { border-left-color: var(--tertiary); background: var(--tertiary-05); }
+
+.sibling {
+    display: flex;
+    gap: var(--space-md);
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    padding: var(--space-sm) 0;
+    border-top: var(--ui-border-thin) solid var(--border-subtle);
+}
+
+.sibling p { margin: var(--space-2xs) 0 0; }
+
+.candidate-list { display: grid; gap: var(--space-sm); }
+
+.candidate {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: var(--space-md);
+    align-items: center;
+    padding: var(--space-sm);
+    border: var(--ui-border-thin) solid var(--border-subtle);
+    border-radius: var(--ui-radius-xs);
+}
+
+.candidate-thumb {
+    width: 6rem;
+    height: 3.5rem;
+    object-fit: cover;
+    border-radius: var(--ui-radius-xs);
+    background: var(--black-30);
+}
+
+.candidate-thumb.empty { border: var(--ui-border-thin) dashed var(--border-neutral); }
+
+.candidate-head {
+    display: flex;
+    gap: var(--space-md);
+    align-items: baseline;
+    flex-wrap: wrap;
+}
+
+.candidate-body p { margin: var(--space-2xs) 0 0; }
+
+.candidate-actions { display: flex; gap: var(--space-xs); flex-wrap: wrap; }
+
+/* Opened by the Dismiss button, and spans the card: a reason is worth more
+   room than the button that asked for it. */
+.dismiss-form {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: var(--space-xs);
+}
+
+.dismiss-form textarea { min-height: 4rem; }
+
+@media (max-width: 50rem) {
+    .candidate { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ----------------------------------------------------------------- audit -- */
+
+.audit-entry {
+    border-bottom: var(--ui-border-thin) solid var(--border-subtle);
+    padding: var(--space-md) 0;
+}
+
+.audit-head {
+    display: flex;
+    gap: var(--space-md);
+    align-items: baseline;
+    flex-wrap: wrap;
+    font-size: var(--fs-ui);
+}
+
+.audit-head time { color: var(--gray); font-variant-numeric: tabular-nums; }
+.audit-head .who { color: var(--tertiary); font-weight: 600; }
+
+/* The sentence is the entry. It takes the row so the raw action can sit at the
+   end without competing with it. */
+.audit-head .sentence { flex: 1 1 20rem; color: var(--text-subtle); }
+.audit-head .sentence strong { color: var(--white); font-weight: 600; }
+.audit-head .sentence code { color: var(--secondary); font-size: var(--fs-code); }
+
+/* Still there, still greppable, no longer shouting. The sentence above it can
+   only be trusted if what was actually recorded stays visible next to it. */
+.audit-head .action {
+    color: var(--text-dim);
+    font-family: ui-monospace, monospace;
+    font-size: var(--fs-code);
+}
+
+.audit-entry details { margin-top: var(--space-2xs); }
+.audit-entry summary { cursor: pointer; color: var(--gray); font-size: var(--fs-ui); }
+
+.diff { margin: var(--space-xs) 0 0; font-size: var(--fs-code); }
+.diff div { padding: var(--space-2xs) 0; font-family: ui-monospace, monospace; line-height: var(--lh-tight); }
+.diff .k { color: var(--gray); }
+.diff .from { color: var(--status-critical); }
+.diff .to { color: var(--status-ok); }
+
+/* ---------------------------------------------------------------- gate -- */
+
+/* The signed-out / refused screen, which is the whole page rather than a tab.
+ *
+ * `main:not(#gate)` matters: the gate is itself a <main>, so hiding a bare
+ * `main` here hid the sign-in screen along with the dashboard and rendered an
+ * empty navy page on a perfectly correct 401. */
+body.gate { display: grid; place-items: center; min-height: 100svh; padding: var(--space-lg); }
+body.gate .topbar, body.gate main:not(#gate) { display: none; }
+
+#gate { width: 100%; max-width: 32rem; }
+
+#gate h1 {
+    margin: 0 0 var(--space-lg);
+    font-family: var(--font-nightcorp);
+    font-size: var(--fs-heading);
+    font-weight: 400;
+    letter-spacing: var(--tracking-tight);
+    text-transform: uppercase;
+    color: var(--secondary);
+}
+
+body:not(.gate) #gate { display: none; }
+
+.spinner { color: var(--gray); }

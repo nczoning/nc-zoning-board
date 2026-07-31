@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "NC Zoning Data API",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "description": "Read-only API serving the NC Zoning Board mod registry (Cyberpunk 2077 location mods) to in-game mods and the website. Every response is wrapped in a versioned envelope. Coordinates are raw CET world values [X, Y, Z], usable in-game with no transform. The JSON stays DTO-mappable for the in-game RedData parser: no arrays-of-arrays, property names are case-sensitive. See https://github.com/nczoning/nc-zoning-board for the project.",
     "contact": { "name": "NC Zoning Board", "url": "https://nczoning.net" }
   },
@@ -97,16 +97,21 @@
     },
     "/v1/tags": {
       "get": {
-        "summary": "Tag dictionary",
-        "description": "Map of tag id → human description. The allow-list a location's tags are drawn from.",
+        "summary": "Tag registry",
+        "description": "The tag registry. **Changed in 0.4.0**: this was a map of tag id → description; it is now an array of records, matching /v1/locations and the per-record shape the in-game RedData parser maps most easily. `slug` is the stable identifier a location's `tags` array carries; `name` is the display label and falls back to the slug when unset.",
         "parameters": [{ "$ref": "#/components/parameters/IfNoneMatch" }],
         "responses": {
           "200": {
-            "description": "Tag dictionary.",
+            "description": "Tag registry.",
             "headers": { "ETag": { "$ref": "#/components/headers/ETag" }, "Cache-Control": { "$ref": "#/components/headers/CacheControl" } },
             "content": { "application/json": { "schema": {
               "allOf": [{ "$ref": "#/components/schemas/Envelope" }, { "type": "object", "properties": {
-                "data": { "type": "object", "additionalProperties": { "type": "string" }, "example": { "apartment": "A residence you can enter", "corpo": "Corporate aesthetic" } } } }]
+                "data": { "type": "array", "items": { "type": "object", "required": ["slug", "name", "description"], "properties": {
+                  "slug": { "type": "string", "description": "Stable identifier; this is what a location record carries in its tags array." },
+                  "name": { "type": "string", "description": "Display label. Falls back to the slug when unset." },
+                  "description": { "type": "string" },
+                  "sort_order": { "type": "integer", "nullable": true }
+                } }, "example": [{ "slug": "apartment", "name": "apartment", "description": "A player housing unit, usually a smaller dwelling within a megabuilding or high-rise.", "sort_order": 8 }] } } }]
             } } }
           },
           "304": { "$ref": "#/components/responses/NotModified" },

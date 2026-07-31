@@ -248,6 +248,57 @@ NCZ.pointInPolygon = function (point, ring) {
 
 // Builds the full popup HTML string for a mod.
 // View-agnostic: both Leaflet (marker.bindPopup) and Three.js (CSS2DObject) call this.
+/**
+ * Normalise whatever /v1/tags returned into the { slug: description } map the
+ * renderers use.
+ *
+ * TRANSITIONAL: accepts BOTH the array-of-records shape (D1-backed, current)
+ * and the legacy { slug: description } dictionary. Not defensive coding for its
+ * own sake — the site and the Worker deploy independently, and the dev site
+ * reads the PRODUCTION API by default, so during the migration a new site can
+ * legitimately be talking to an API still serving the pre-0.4.0 shape. Tolerating
+ * both means the two can ship in either order with no flag day.
+ *
+ * Delete the dictionary branch once every environment serves the array.
+ */
+NCZ.normaliseTags = function (payload) {
+  if (Array.isArray(payload)) {
+    return Object.fromEntries(
+      payload.map((t) => [t.slug, t.description ?? ""])
+    );
+  }
+  return payload && typeof payload === "object" ? payload : {};
+};
+
+/**
+ * The id a shared ?mod= link addresses. Always the location id: a Nexus id
+ * identifies a mod, and one mod can supply several locations (#889).
+ *
+ * The resolver must keep accepting a Nexus id too. Every link shared before
+ * this uses one.
+ */
+NCZ.modLinkId = function (mod) {
+  return mod.id;
+};
+
+/**
+ * The pin popup, for both views: Leaflet binds this string and the Three.js
+ * layer puts it in a CSS2DObject card.
+ *
+ * The fix action is a BUTTON carrying the location id, not a link, and nothing
+ * here binds a handler. One delegated listener in app.js serves every pin in
+ * both views; a per-popup listener would have to be attached twice, once in
+ * each view's popup-open path, and the two would drift.
+ *
+ * ONE action, not two. Asking for a pin to be taken down is a kind of
+ * correction, chosen inside the form, rather than a second button beside it:
+ * everything a separate report could say, the form already asks for.
+ *
+ * It renders on every record. The edit link it replaces was hidden on
+ * auto-discovered pins, which made sense when the only way to correct one was to
+ * edit a Nexus description. A submission goes to the same queue whatever the
+ * record's provenance.
+ */
 NCZ.buildPopupHtml = function (mod, catStyle, nexusThumbs, tagsDict) {
   const nexus_id_lower = String(mod.nexus_id).toLowerCase();
   let nexusUrl = `https://www.nexusmods.com/cyberpunk2077/mods/${mod.nexus_id}`;
@@ -260,13 +311,7 @@ NCZ.buildPopupHtml = function (mod, catStyle, nexusThumbs, tagsDict) {
     nexusLabel = "Status: Dummy/Test";
   }
 
-  const isNumericNexusId = /^\d+$/.test(String(mod.nexus_id));
-  const modLinkId = isNumericNexusId ? String(mod.nexus_id) : mod.id;
-  const copyLinkUrl = `${NCZ.SITE_URL}?${NCZ.URL_PARAM_MOD}=${encodeURIComponent(modLinkId)}`;
-
-  const [cX, cY, cZ] = mod.coordinates;
-  const yawParam = mod.yaw != null ? `&yaw=${mod.yaw}` : "";
-  const editUrl = `https://github.com/nczoning/nc-zoning-board/issues/new?template=modify_location.yml&location_id=${mod.id}&mod_name=${encodeURIComponent(mod.name)}&authors=${encodeURIComponent(mod.authors.join(", "))}&coord_x=${cX}&coord_y=${cY}&coord_z=${cZ ?? ""}&yaw=${mod.yaw ?? ""}${yawParam}`;
+  const copyLinkUrl = `${NCZ.SITE_URL}?${NCZ.URL_PARAM_MOD}=${encodeURIComponent(NCZ.modLinkId(mod))}`;
 
   const nexusThumb = nexusThumbs[String(mod.nexus_id)];
   const thumbSrc = nexusThumb?.thumbnailUrl || null;
@@ -315,7 +360,7 @@ NCZ.buildPopupHtml = function (mod, catStyle, nexusThumbs, tagsDict) {
         <div class="popup-actions">
           <a href="${NCZ.escapeHtml(nexusUrl)}" target="_blank" class="ui-popup-action-link ui-popup-action-link-nexus">${NCZ.escapeHtml(nexusLabel)}</a>
           <button type="button" class="ui-popup-action-link ui-popup-action-link-copy-link tertiary" data-copy-url="${NCZ.escapeHtml(copyLinkUrl)}" aria-label="Copy link to this pin" title="Copy link"><span class="ui-popup-action-link-icon" aria-hidden="true"></span></button>
-          ${!mod._source ? `<a href="${NCZ.escapeHtml(editUrl)}" target="_blank" class="ui-popup-action-link ui-popup-action-link-edit tertiary" aria-label="Suggest Edit" title="Suggest Edit"><span class="ui-popup-action-link-icon" aria-hidden="true"></span></a>` : ""}
+          <button type="button" class="ui-popup-action-link ui-popup-action-link-edit tertiary" data-edit-location="${NCZ.escapeHtml(String(mod.id))}" aria-label="Suggest a fix" title="Suggest a correction to this pin, or ask for it to be taken down. A reviewer decides."><span class="ui-popup-action-link-icon" aria-hidden="true"></span></button>
         </div>
       </div>
     </div>
@@ -375,6 +420,233 @@ NCZ.computeVisibleMods = function (allMods, filters) {
   }
 
   return visible;
+};
+
+// ── Submission form ──────────────────────────────────────────────────────────
+
+// The mod id in a Nexus reference. Accepts a bare numeric id, the current
+// /games/cyberpunk2077/mods/<id> URL and the older /cyberpunk2077/mods/<id>
+// form, with or without a scheme, query or trailing path.
+//
+// Returns { id } or { error }. A URL naming a different game is an error rather
+// than a silently accepted id: the number is real, it just points at another
+// game's mod, and nothing downstream could tell.
+NCZ.parseNexusRef = function (input) {
+  const text = String(input ?? "").trim();
+  if (!text) return { error: "Enter the mod's Nexus page URL, or its numeric id." };
+
+  if (/^\d+$/.test(text)) return { id: text };
+
+  if (/nexusmods\.com/i.test(text)) {
+    if (!/nexusmods\.com\/(games\/)?cyberpunk2077\//i.test(text)) {
+      return { error: "That link is for a different game. Use the mod's Cyberpunk 2077 page." };
+    }
+    const match = text.match(/\/mods\/(\d+)/);
+    if (match) return { id: match[1] };
+    return { error: "That link has no mod id in it. Open the mod's own page and copy the URL." };
+  }
+
+  return { error: "Enter the mod's Nexus page URL, or its numeric id." };
+};
+
+// Which of the three coordinate values are unusable, and the one message that
+// covers them.
+//
+// Split out because the row is a single control in the form and three boxes on
+// the screen: the message belongs to the row, the red border belongs to the box
+// that is wrong. It takes the three values rather than a whole form, so the
+// live check can call it on every keystroke.
+//
+// @returns {{axes: string[], message: string|null}}
+NCZ.coordinateProblems = function (x, y, z) {
+  const parse = (v) => parseFloat(String(v ?? "").trim());
+  const values = { x: parse(x), y: parse(y), z: parse(z) };
+  const failed = new Set();
+  const messages = [];
+
+  // Every problem in the row, not the first one. Returning early on the X/Y
+  // check hides a bad Z until X is fixed, so a submitter corrects one number,
+  // sends, and meets the next complaint.
+  const missing = ["x", "y", "z"].filter((axis) => !Number.isFinite(values[axis]));
+  if (missing.length) {
+    missing.forEach((axis) => failed.add(axis));
+    messages.push("Enter X, Y and Z as numbers.");
+  }
+
+  const outside = ["x", "y"].filter((axis) => Number.isFinite(values[axis]) && (
+    axis === "x"
+      ? values.x < NCZ.TERRAIN_MIN_X || values.x > NCZ.TERRAIN_MAX_X
+      : values.y < NCZ.TERRAIN_MIN_Y || values.y > NCZ.TERRAIN_MAX_Y
+  ));
+  if (outside.length) {
+    outside.forEach((axis) => failed.add(axis));
+    messages.push(`X and Y must be between ${NCZ.TERRAIN_MIN_X} and ${NCZ.TERRAIN_MAX_X}.`);
+  }
+
+  if (Number.isFinite(values.z) && (values.z < NCZ.COORD_Z_MIN || values.z > NCZ.COORD_Z_MAX)) {
+    failed.add("z");
+    messages.push(`Z must be between ${NCZ.COORD_Z_MIN} and ${NCZ.COORD_Z_MAX}.`);
+  }
+
+  return {
+    axes: ["x", "y", "z"].filter((axis) => failed.has(axis)),
+    message: messages.length ? `${messages.join(" ")} Check the values against the CET output.` : null,
+  };
+};
+
+// A Nexus summary as a starting description.
+//
+// The same truncation merge.js applies when it builds an auto-discovered
+// record's description from the summary, so a submitter sees what that path
+// would have published, and can edit it.
+NCZ.summaryToDescription = function (summary) {
+  const text = String(summary ?? "").trim();
+  if (text.length <= NCZ.DESCRIPTION_MAX_LENGTH) return text;
+  return `${text.slice(0, NCZ.DESCRIPTION_MAX_LENGTH - 3)}...`;
+};
+
+// Read and validate the location fields both submission modals collect.
+//
+// Pure: the caller passes raw strings and gets back the payload POST
+// /submissions accepts, plus one message per field that failed. Every rule here
+// also exists in worker/src/validate.js, which is the enforcement point:
+// /submissions is an anonymous public write, so a rule that lives only in the
+// browser sits in the layer the submitter controls. This copy exists to say so
+// inline, before a send that would come back 400.
+//
+// Two rules are deliberately stricter than the server, because the server
+// serves the admin editor too: `description` must be non-empty, and `nexus_id`
+// must be numeric. A reviewer can set "WIP" on approval; a submitter cannot
+// evidence it.
+//
+// @param {object} raw            trimmed or untrimmed strings, straight off the inputs
+// @param {object} [opts]
+// @param {string[]} [opts.knownTags]  tag slugs the registry knows; unknown tags
+//   are an error, matching the server rather than dropping them
+// @param {string} [opts.fixedNexusId]  the mod id an EDIT is against. An edit
+//   does not ask which mod this is, so there is no field to parse, and the
+//   stored value may be "WIP" or "Dummy", which the public form refuses for a
+//   new pin but must not refuse for an edit to an existing one.
+// @returns {{values: object, errors: object}}  errors is keyed by field name
+NCZ.collectLocationForm = function (raw, { knownTags, fixedNexusId } = {}) {
+  const errors = {};
+  const text = (v) => String(v ?? "").trim();
+
+  const name = text(raw.name);
+  if (name.length < NCZ.NAME_MIN_LENGTH) {
+    errors.name = `Give the location a name of at least ${NCZ.NAME_MIN_LENGTH} characters.`;
+  }
+
+  const authors = text(raw.authors).split(",").map((a) => a.trim()).filter(Boolean);
+  if (!authors.length) errors.authors = "Name at least one author.";
+
+  const description = text(raw.description);
+  if (!description) {
+    errors.description = "Describe the location, so a reviewer knows what is being added.";
+  } else if (description.length > NCZ.DESCRIPTION_MAX_LENGTH) {
+    errors.description = `Keep the description to ${NCZ.DESCRIPTION_MAX_LENGTH} characters or fewer.`;
+  }
+
+  const nums = ["x", "y", "z"].map((k) => parseFloat(text(raw[k])));
+  const coordinates = NCZ.coordinateProblems(raw.x, raw.y, raw.z);
+  if (coordinates.message) errors.coordinates = coordinates.message;
+
+  const yawText = text(raw.yaw);
+  let yaw = null;
+  if (yawText) {
+    yaw = parseFloat(yawText);
+    if (!Number.isFinite(yaw)) errors.yaw = "Yaw must be a number, or left blank.";
+  }
+
+  const category = text(raw.category);
+  if (!NCZ.CATEGORY_STYLES[category]) errors.category = "Choose a category.";
+
+  const tags = Array.isArray(raw.tags) ? raw.tags.map((t) => text(t)).filter(Boolean) : [];
+  if (knownTags) {
+    const unknown = tags.filter((t) => !knownTags.includes(t));
+    if (unknown.length) errors.tags = `Unknown tag(s): ${unknown.join(", ")}.`;
+  }
+
+  const ref = fixedNexusId
+    ? { id: String(fixedNexusId) }
+    : NCZ.parseNexusRef(raw.nexusId);
+  if (ref.error) errors.nexus_id = ref.error;
+
+  const credits = text(raw.credits);
+
+  const values = {
+    name,
+    authors,
+    description,
+    coordinates: nums.every(Number.isFinite) ? nums : [],
+    yaw,
+    category,
+    tags,
+    nexus_id: ref.id ?? "",
+    credits: credits || null,
+  };
+
+  return { values, errors };
+};
+
+// The fields of an edit that actually changed, against the record the map is
+// already holding.
+//
+// An edit submission sends only these. Sending the whole record would make
+// every proposal look like a rewrite in the review queue's diff, and the
+// reviewer's job is to see that the yaw moved, not to re-read the description.
+// The server agrees: `kind: 'edit'` validates with `partial: true` and refuses a
+// payload with no fields in it.
+//
+// Arrays compare by content, not by identity: `tags` and `authors` are rebuilt
+// from the form on every read, so a reference test would call every submission
+// a change to both.
+//
+// @param {object} original  the stored record, as /v1 serves it
+// @param {object} values    collectLocationForm().values
+// @returns {object} the changed subset, empty when nothing moved
+NCZ.diffLocation = function (original, values) {
+  const changed = {};
+  const same = (a, b) => {
+    if (Array.isArray(a) || Array.isArray(b)) {
+      const left = Array.isArray(a) ? a : [];
+      const right = Array.isArray(b) ? b : [];
+      return left.length === right.length && left.every((v, i) => v === right[i]);
+    }
+    // null and "" both mean "no credits" on a record, and a form cannot tell
+    // them apart, so clearing a field that was already empty is not a change.
+    if ((a ?? "") === "" && (b ?? "") === "") return true;
+    return a === b;
+  };
+
+  for (const [key, value] of Object.entries(values)) {
+    if (!same(original?.[key], value)) changed[key] = value;
+  }
+  return changed;
+};
+
+// The submission envelope fields, which sit beside the payload rather than in
+// it: validateLocationInput rejects unknown keys, so a note posted inside the
+// payload would refuse the whole submission.
+//
+// Both are optional. `contact` is personal data and is collected only so a
+// reviewer can ask a question; see docs/privacy.md.
+NCZ.collectSubmissionMeta = function (raw) {
+  const errors = {};
+  const note = String(raw.note ?? "").trim();
+  const contact = String(raw.contact ?? "").trim();
+
+  if (note.length > NCZ.SUBMISSION_NOTE_MAX) {
+    errors.note = `Keep the note to ${NCZ.SUBMISSION_NOTE_MAX} characters or fewer.`;
+  }
+  if (contact.length > NCZ.SUBMISSION_CONTACT_MAX) {
+    errors.contact = `Keep the contact to ${NCZ.SUBMISSION_CONTACT_MAX} characters or fewer.`;
+  }
+
+  return {
+    values: { submitter_note: note || null, submitter_contact: contact || null },
+    errors,
+  };
 };
 
 // Comparator for Array.sort: orders mods by Nexus updatedAt descending.

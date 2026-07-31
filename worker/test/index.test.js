@@ -95,6 +95,21 @@ test('the base ETag satisfies a ?full=1 request (one representation, shared ETag
   assert.equal(res.status, 304); // same hash, same body → a correct 304
 });
 
+test('ETag is exposed to cross-origin JS, or the whole 304 path is dead', async () => {
+  // Cross-origin JS can read only a short safelist of response headers unless
+  // the server names the rest in Access-Control-Expose-Headers. ETag is not on
+  // that list, so without this header `res.headers.get('ETag')` returns null in
+  // the browser, so services.js stores no ETag, never sends If-None-Match,
+  // and the 304 branch it implements can never execute. The fallback is a
+  // perfectly correct 200, so the failure is silent.
+  const res = await worker.fetch(GET('/v1/locations'), seededEnv());
+  const exposed = (res.headers.get('Access-Control-Expose-Headers') ?? '')
+    .split(',').map((s) => s.trim().toLowerCase());
+  assert.ok(exposed.includes('etag'),
+    `ETag must be exposed for conditional requests to work; saw: ${res.headers.get('Access-Control-Expose-Headers')}`);
+  assert.ok(res.headers.get('ETag'), 'and an ETag must actually be sent');
+});
+
 test('matching If-None-Match yields 304 with no body', async () => {
   const res = await worker.fetch(GET('/v1/locations', { 'If-None-Match': '"abc123"' }), seededEnv());
   assert.equal(res.status, 304);
@@ -133,7 +148,7 @@ test('GET /v1/tags returns the dictionary', async () => {
   assert.deepEqual((await res.json()).data, TAGS);
 });
 
-test('GET /v1/meta returns health flags only — no aggregate counts', async () => {
+test('GET /v1/meta returns health flags only, no aggregate counts', async () => {
   const res = await worker.fetch(GET('/v1/meta'), seededEnv());
   const body = await res.json();
   assert.equal(body.data.discovery_stale, false);

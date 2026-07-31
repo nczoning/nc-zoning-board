@@ -46,9 +46,39 @@
 		// package.json, then run `npm run version:lock` —
 		// test/api-version.test.js enforces all four. There is no monotonicity
 		// check, so a decrease passes provided all four move together.
-		"API_VERSION": "0.3.0",
+		"API_VERSION": "0.4.0",
 		// Origin the cron pulls source files from (mods.json, tags, subdistricts).
-		"SITE_ORIGIN": "https://nczoning.net"
+		"SITE_ORIGIN": "https://nczoning.net",
+		// Where the LOCATION REGISTRY is read from: "mods" (the compiled
+		// mods.json on SITE_ORIGIN) or "d1" (the DB binding above).
+		//
+		// The Phase 2 cutover is this one word, and so is its rollback -- a
+		// config change on a build already known to work, rather than a revert
+		// and redeploy while production is wrong.
+		//
+		// Anything other than "d1" means mods.json, INCLUDING unset. Absent
+		// config must never read as "switch production to the new source".
+		//
+		// Do not flip until parity-ab.mjs and parity-check.mjs are both green
+		// (worker/README.md). Tags and subdistricts still come from SITE_ORIGIN
+		// either way; they move to D1 at Phase 4.
+		"DATA_SOURCE": "mods",
+		// --- Admin auth (Phase 3) -------------------------------------------
+		// Not secrets: an App id and an OAuth client id are both public. The
+		// private key and client secret are Worker secrets — see README.
+		"GITHUB_APP_ID": "4397308",
+		"GITHUB_OAUTH_CLIENT_ID": "Iv23lixJitjZqJuIwhDW",
+		// Repo whose collaborator list IS the admin list. Adding an admin is a
+		// repo-collaborator change; there is no separate allowlist to drift.
+		"GITHUB_REPO": "nczoning/nc-zoning-board",
+		// Where /auth/callback sends the browser back to.
+		"ADMIN_ORIGIN": "https://nczoning.net",
+		// --- Quota burn-down (Phase 4c) -------------------------------------
+		// Not a secret: the account tag appears in every wrangler invocation and
+		// in worker/README.md. The ANALYTICS TOKEN is the secret
+		// (CF_ANALYTICS_TOKEN, Account Analytics:Read), and it never leaves the
+		// Worker: the dashboard reads /admin/quota instead of Cloudflare.
+		"CF_ACCOUNT_ID": "b9937d8d595fad7de8d1549b22390281"
 	},
 	// Dataset store (dashboard title: nczoning-api-dataset). Recreate with:
 	//   npx wrangler kv namespace create nczoning-api-dataset
@@ -58,6 +88,22 @@
 		{
 			"binding": "DATASET",
 			"id": "2f547f4c22ab4d5fb2cf4636e50a2559"
+		}
+	],
+	// Location registry (source of truth from Phase 2; Phase 1 imports and
+	// verifies it while mods.json is still the live source). Unlike KV, this
+	// content is NOT derived — losing it loses data, so it is never "recreate
+	// at any time". D1 Time Travel covers 30 days; the git mirror of
+	// data/locations/ is the longer backstop until Part C's nightly export.
+	//
+	// STAGING HAS ITS OWN DATABASE (see env.staging). Named environments do not
+	// inherit bindings, so `wrangler d1 migrations apply` must be run against
+	// BOTH database names, every time.
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "nczoning-data",
+			"database_id": "4365740b-76be-4a99-b985-16641e68703a"
 		}
 	],
 	// Rebuild the dataset every 5 minutes (faster mod propagation after a
@@ -103,14 +149,56 @@
 			],
 			"vars": {
 				// Pre-1.0 window — see the production block above.
-				"API_VERSION": "0.3.0",
-				"SITE_ORIGIN": "https://dev.nczoning.net"
+				"API_VERSION": "0.4.0",
+				"SITE_ORIGIN": "https://dev.nczoning.net",
+				// STAGING IS THE D1 CANARY: it runs the D1 path while production
+				// stays on mods.json, so the binding, the reads and the whole
+				// refresh cycle are exercised on a deployed Worker without the
+				// live map depending on any of it.
+				//
+				// This is the one thing unit tests and the local parity scripts
+				// cannot prove — that env.DB actually resolves at runtime in a
+				// deployed environment that inherits no bindings.
+				//
+				// Staging has no cron, so trigger a cycle by hand:
+				//   npx wrangler dev --env staging --remote --test-scheduled
+				//   curl "http://127.0.0.1:8787/__scheduled"
+				// Space repeat triggers ~60s apart: KV reads are eventually
+				// consistent, so back-to-back cycles re-read the pre-write
+				// archive cache and appear to stall.
+				// Seed its database first — an empty `locations` is refused, by
+				// design, rather than materialized as an empty map.
+				"DATA_SOURCE": "d1",
+				// Admin auth — see the production block. One App carries BOTH
+				// callback URLs (api.nczoning.net and api-dev.nczoning.net), so
+				// it serves both environments. SESSION_SECRET must DIFFER
+				// between them: a shared signing key means a staging session
+				// token is accepted as valid by production.
+				"GITHUB_APP_ID": "4397308",
+				"GITHUB_OAUTH_CLIENT_ID": "Iv23lixJitjZqJuIwhDW",
+				"GITHUB_REPO": "nczoning/nc-zoning-board",
+				"ADMIN_ORIGIN": "https://dev.nczoning.net",
+				// Same account as production: the quotas being burned down are
+				// per-ACCOUNT, so staging must report the same numbers rather
+				// than a staging-only slice that would always look healthy.
+				"CF_ACCOUNT_ID": "b9937d8d595fad7de8d1549b22390281"
 			},
 			// dashboard title: nczoning-api-dataset-staging
 			"kv_namespaces": [
 				{
 					"binding": "DATASET",
 					"id": "9fe7b7d13d6348d1913b8a01aca1fef6"
+				}
+			],
+			// Same binding name as production, different database. Declared in
+			// full because named environments inherit nothing — omitting this
+			// block does not fall back to the production database, it leaves
+			// env.DB undefined and every query throws at runtime.
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "nczoning-data-staging",
+					"database_id": "43bc0232-5f32-49c3-863d-ff3e53422827"
 				}
 			],
 			// MUST be an explicit empty array, not an omitted block. Wrangler

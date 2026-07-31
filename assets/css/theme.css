@@ -32,6 +32,9 @@
     --border-neutral: #444;
     --border-subtle: #333;
     --status-critical: #ff0000;
+    /* Wash behind a field the form has refused, so the red border reads as a
+       state rather than as a focus ring. */
+    --status-critical-10: rgba(255, 0, 0, 0.1);
     --status-ok: #00ff00;
 
     /* Generic utility tints */

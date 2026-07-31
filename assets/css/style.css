@@ -2155,7 +2155,7 @@ body::before {
     display: none !important;
 }
 
-/* ── BBCode Header Button ─────────────────────────────────────────── */
+/* ── Submit Header Button ─────────────────────────────────────────── */
 .parameters-modal-content,
 .showcase-modal-content {
     max-width: 420px;
@@ -2257,30 +2257,37 @@ body::before {
     background-size: contain;
 }
 
-/* ── BBCode Generator Modal ───────────────────────────────────────── */
-.bbcode-modal-content {
+/* ── Submit a Location Modal ──────────────────────────────────────── */
+.submit-modal-content {
     max-width: 560px;
     width: 95%;
 }
 
-.bbcode-modal-body {
+.submit-modal-body {
     max-height: 80svh;
     overflow-y: auto;
 }
 
-.bbcode-form {
+.submit-form {
     display: flex;
     flex-direction: column;
 }
 
-.bbcode-field-row {
+.submit-field-row {
     display: flex;
     flex-direction: column;
     gap: var(--space-xs);
     margin-bottom: 14px;
+
+    /* An author `display` beats the user agent's [hidden] rule, so a row the
+       script hides would otherwise stay on screen with its hidden property
+       reading true. */
+    &[hidden] {
+        display: none;
+    }
 }
 
-.bbcode-label {
+.submit-label {
     font-family: var(--font-heading);
     font-size: var(--text-2xs);
     color: var(--secondary);
@@ -2288,7 +2295,7 @@ body::before {
     letter-spacing: 1px;
 }
 
-.bbcode-optional {
+.submit-optional {
     color: var(--gray);
     font-family: var(--font-body);
     text-transform: none;
@@ -2296,7 +2303,7 @@ body::before {
     font-size: var(--text-xs);
 }
 
-.bbcode-coord-inputs {
+.submit-coord-inputs {
     display: flex;
     gap: var(--space-sm);
     align-items: center;
@@ -2316,17 +2323,17 @@ body::before {
     min-width: var(--space-md);
 }
 
-.bbcode-coord-note {
+.submit-hint {
     font-size: var(--text-xs);
     color: var(--tertiary);
     margin-top: 0.25rem;
     font-family: var(--font-body);
 }
 
-.bbcode-coord-inputs input[type="number"],
-.bbcode-input,
-.bbcode-select,
-.bbcode-textarea {
+.submit-coord-inputs input[type="number"],
+.submit-input,
+.ui-select,
+.submit-textarea {
     transition: border-color 0.2s ease;
 
     &:focus {
@@ -2334,36 +2341,19 @@ body::before {
     }
 }
 
-.bbcode-coord-inputs {
+.submit-coord-inputs {
     input[type="number"] {
         width: 140px;
     }
 }
 
-.coord-help-btn {
-    background: transparent;
-    border: var(--ui-border-thin) solid var(--gray);
-    color: var(--gray);
-    font-family: var(--font-heading);
-    font-size: var(--text-2xs);
-    padding: var(--space-2xs) var(--space-sm);
-    cursor: help;
-    transition: var(--transition-fast);
-    flex-shrink: 0;
-
-    &:hover {
-        border-color: var(--secondary);
-        color: var(--secondary);
-    }
-}
-
-.bbcode-tag-grid {
+.submit-tag-grid {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-xs);
 }
 
-.bbcode-tag-checkbox {
+.submit-tag-checkbox {
     display: flex;
     align-items: center;
     gap: var(--space-2xs);
@@ -2386,12 +2376,7 @@ body::before {
     }
 }
 
-.bbcode-checkbox-row {
-    flex-direction: row;
-    align-items: center;
-}
-
-.bbcode-checkbox-label {
+.ui-checkbox-label {
     display: flex;
     align-items: center;
     gap: var(--space-sm);
@@ -2411,31 +2396,7 @@ body::before {
     }
 }
 
-.bbcode-output {
-    width: 100%;
-    background: var(--black-50);
-    border: var(--ui-border-thin) solid var(--dark-accent);
-    color: var(--secondary);
-    padding: var(--space-md);
-    font-family: monospace;
-    font-size: var(--text-sm);
-    resize: vertical;
-    margin-top: var(--space-xs);
-    line-height: var(--lh-relaxed);
-}
-
-.bbcode-copy-btn {
-    margin-top: var(--space-xs) !important;
-    border-color: var(--tertiary) !important;
-    color: var(--tertiary) !important;
-
-    &:hover {
-        background: var(--tertiary) !important;
-        color: var(--primary) !important;
-    }
-}
-
-.bbcode-cet-command-block {
+.submit-cet-command-block {
     display: flex;
     gap: var(--space-sm);
     align-items: flex-start;
@@ -2458,14 +2419,8 @@ body::before {
 }
 
 
-/* ── BBCode Steps & Notes ────────────────────────────────────────── */
-.bbcode-doc-link {
-    font-size: var(--text-sm);
-    margin-bottom: var(--space-md);
-    display: inline-block;
-}
-
-.bbcode-steps {
+/* ── Steps & Notes ───────────────────────────────────────────────── */
+.submit-steps {
     list-style: none;
     counter-reset: step;
     padding: 0;
@@ -2503,11 +2458,246 @@ body::before {
     }
 }
 
-.bbcode-note {
+.submit-intro {
     font-size: var(--text-sm);
     color: var(--gray);
     font-style: italic;
     margin-bottom: var(--space-lg);
+}
+
+/* ── Submit a Location ───────────────────────────────────────────────── */
+/* Layered on the form rules above rather than parallel to them: the two
+   share every field, and only the send path is new. */
+
+/* .terminal-link is a block, sized for the sidebar. Inside a sentence it has to
+   be a word. */
+.submit-hint .terminal-link {
+    display: inline;
+    padding: 0;
+    border-left: none;
+    font-size: inherit;
+
+    &:hover {
+        background: transparent;
+    }
+}
+
+/* Edit and report run the same form against a record the map already holds, so
+   the parts that only make sense for a new pin are hidden rather than rebuilt
+   in a second modal. */
+.submit-target {
+    border-left: 2px solid var(--secondary);
+    padding: var(--space-xs) var(--space-md);
+    margin-bottom: var(--space-md);
+    color: var(--gray);
+    font-size: var(--text-md);
+}
+
+.submit-target-name {
+    color: var(--secondary);
+}
+
+.submit-form.is-edit .submit-create-only,
+.submit-form.is-report .submit-create-only,
+.submit-form.is-report #submit-location-fields {
+    display: none;
+}
+
+/* The intent choice only exists against an existing pin: a new one cannot be
+   asking for a removal. */
+.submit-form:not(.is-edit):not(.is-report) .submit-edit-only {
+    display: none;
+}
+
+/* Built on .submit-tag-checkbox, the same bordered pill the tag row uses, so
+   the two choices read as controls of this form rather than as browser
+   defaults. The selected one takes the accent, since it decides what the whole
+   form is asking for. */
+.submit-intent-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+}
+
+.submit-intent-option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    border: var(--ui-border-thin) solid var(--border-subtle);
+    border-radius: var(--ui-radius-sm);
+    color: var(--gray);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+
+    input[type="radio"] {
+        accent-color: var(--secondary);
+        width: 14px;
+        height: 14px;
+        margin: 0;
+    }
+
+    &:hover {
+        border-color: var(--tertiary);
+        color: var(--tertiary);
+    }
+
+    &:has(input:checked) {
+        border-color: var(--secondary);
+        background: var(--secondary-05);
+        color: var(--white);
+    }
+}
+
+.submit-subfield {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    margin-top: var(--space-xs);
+}
+
+.submit-mod-card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    border: var(--ui-border-thin) solid var(--border-subtle);
+    background: var(--black-50);
+    color: var(--white);
+    font-size: var(--text-sm);
+}
+
+.submit-mod-thumb {
+    width: 64px;
+    height: 36px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.submit-field-error {
+    color: var(--status-critical);
+    font-size: var(--text-sm);
+    margin: var(--space-2xs) 0 0 0;
+}
+
+/* The refused control itself, keyed off the attribute the script sets rather
+   than a parallel class, so what a screen reader announces and what the eye
+   sees cannot drift apart.
+
+   The element is named in the selector to beat the base control rule
+   (`input:not([type="checkbox"]):not([type="radio"]), select, textarea`), whose
+   two :not() arguments carry the specificity of an attribute selector each. A
+   class plus a bare attribute loses to it and the border stays grey. Held
+   through :focus, or it reverts the moment the box being complained about is
+   clicked. */
+.submit-modal-body .submit-form input[aria-invalid="true"],
+.submit-modal-body .submit-form select[aria-invalid="true"],
+.submit-modal-body .submit-form textarea[aria-invalid="true"] {
+    border-color: var(--status-critical);
+    background: var(--status-critical-10);
+
+    &:focus {
+        border-color: var(--status-critical);
+    }
+}
+
+.submit-form-error {
+    color: var(--status-critical);
+    font-size: var(--text-sm);
+    padding: var(--space-sm);
+    border: var(--ui-border-thin) solid var(--status-critical);
+    background: var(--status-critical-10);
+    margin: 0 0 var(--space-md) 0;
+}
+
+/* A rate limit is not a validation failure, so it does not borrow the shape
+   the field errors use. */
+.submit-form-error-notice {
+    color: var(--gray);
+    border-style: solid;
+    border-color: var(--border-subtle);
+    background: var(--black-50);
+}
+
+.submit-turnstile {
+    min-height: 65px;
+}
+
+.submit-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.submit-send-btn {
+    flex: 3;
+}
+
+.submit-reset-btn {
+    flex: 1;
+    border-color: var(--gray);
+    color: var(--gray);
+}
+
+/* The submitted state replaces the form rather than sitting under it: the
+   submission cannot be edited after sending, so leaving the fields live would
+   invite an edit that goes nowhere. */
+.submit-form.is-submitted > *:not(#submit-done) {
+    display: none;
+}
+
+/* The steps and the note describe filling the form in, so they leave with it. */
+.submit-modal-body.is-submitted {
+    .submit-steps,
+    > .submit-intro {
+        display: none;
+    }
+}
+
+.submit-done {
+    border: var(--ui-border-thin) solid var(--secondary);
+    background: var(--black-50);
+    padding: var(--space-md);
+}
+
+.submit-done-title {
+    font-family: var(--font-heading);
+    color: var(--secondary);
+    font-size: var(--text-md);
+    letter-spacing: 1px;
+    margin: 0 0 var(--space-sm) 0;
+}
+
+.submit-done-body {
+    font-size: var(--text-sm);
+    color: var(--white);
+    margin: 0 0 var(--space-sm) 0;
+}
+
+.submit-done-id {
+    font-family: monospace;
+    color: var(--tertiary);
+}
+
+/* Submitting a location is plausibly a phone task, with the game running
+   somewhere else. The fixed-width coordinate inputs are the only rule in the
+   modal that cannot reflow on its own. */
+@media (max-width: 768px) {
+    .submit-coord-inputs {
+        input[type="number"] {
+            width: 100%;
+        }
+    }
+
+    .coord-input-group {
+        flex: 1 1 45%;
+    }
+
+    .submit-actions {
+        flex-direction: column;
+    }
 }
 
 /* ── MarkerCluster style ────────────────────────────────────────── */
@@ -2778,3 +2968,90 @@ body::before {
     }
 }
 
+
+/* ── Passive dataset update notice ──────────────────────────────────────────
+   Shown when an open tab detects that the served dataset changed. Deliberately
+   small and corner-anchored: it must be noticeable without covering the map or
+   stealing focus from whatever the user was doing when it appeared. */
+.dataset-update-notice {
+    position: fixed;
+    left: 50%;
+    bottom: var(--space-lg);
+    transform: translateX(-50%) translateY(150%);
+    z-index: 1200;
+
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-sm) var(--space-lg);
+
+    background: var(--surface-tooltip-95);
+    border: var(--ui-border-thin) solid var(--secondary);
+    border-radius: var(--ui-radius-sm);
+    box-shadow: 0 4px 20px var(--black-50);
+    color: var(--white);
+    font-family: var(--font-body);
+    font-size: var(--text-md);
+
+    /* Off-screen and inert until shown, so it never intercepts a map drag. */
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.28s ease, opacity 0.28s ease;
+
+    &.is-visible {
+        transform: translateX(-50%) translateY(0);
+        opacity: 1;
+        pointer-events: auto;
+    }
+}
+
+.dataset-update-text {
+    white-space: nowrap;
+}
+
+.dataset-update-refresh {
+    font: inherit;
+    font-size: var(--text-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    padding: var(--space-2xs) var(--space-md);
+    border-radius: var(--ui-radius-xs);
+    border: var(--ui-border-thin) solid var(--secondary);
+    background: transparent;
+    color: var(--secondary);
+
+    &:hover {
+        background: var(--secondary-10);
+    }
+}
+
+.dataset-update-dismiss {
+    font: inherit;
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: var(--gray);
+    line-height: 1;
+    padding: var(--space-2xs);
+
+    &:hover {
+        color: var(--white);
+    }
+}
+
+@media (max-width: 600px) {
+    .dataset-update-notice {
+        left: var(--space-sm);
+        right: var(--space-sm);
+        transform: translateY(150%);
+
+        &.is-visible {
+            transform: translateY(0);
+        }
+    }
+
+    .dataset-update-text {
+        white-space: normal;
+    }
+}

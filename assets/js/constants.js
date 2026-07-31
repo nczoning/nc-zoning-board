@@ -97,13 +97,37 @@ NCZ.API_BASE =
   new URLSearchParams(location.search).get("api") === "dev"
     ? "https://api-dev.nczoning.net"
     : "https://api.nczoning.net";
-// { etag, data } for the full-locations list. Freshness is driven by the ETag
+// { etag, data } for the locations list. Freshness is driven by the ETag
 // (If-None-Match → 304), not a TTL, so this is stored raw rather than via the
 // TTL-based cacheGet/cacheSet.
-NCZ.API_LOCATIONS_CACHE_KEY = "nc_api_locations_full";
+//
+// Renamed off `nc_api_locations_full` with the `?full=1` alias: the "_full"
+// suffix named the slim/full split, which no longer exists. Renaming orphans
+// any existing entry, which costs one extra fetch and nothing else, and this
+// cache had never populated anyway, because the API did not expose `ETag`
+// through CORS, so `res.headers.get("ETag")` was always null.
+NCZ.API_LOCATIONS_CACHE_KEY = "nc_api_locations";
 
-// Data paths. tags.json stays a local static fetch (same-origin) alongside the
-// /v1 dataset — the tag registry the sidebar and BBCode generator render from.
+// How often an open tab asks whether the dataset changed.
+//
+// 60s is not a cost decision: it cannot be. `/v1/locations` is `max-age=300`,
+// so the browser answers most of these locally and the Worker sees roughly one
+// request per tab per 5 minutes whatever this is set to. Polling every 60s and
+// every 300s cost the same; 60s just means the tab notices promptly once the
+// cached copy does expire.
+//
+// Chrome throttles timers in hidden tabs to about once a minute, which this
+// already matches, and a tab that is merely unfocused (another monitor) is not
+// throttled at all.
+NCZ.DATASET_POLL_MS = 60 * 1000;
+
+// The tag registry now comes from /v1/tags alongside the locations: one origin,
+// one contract, rather than a same-origin fetch of data/tags.json, which was
+// fine while the file was the source of truth — from Phase 4 the D1 `tags`
+// table is, edited in the dashboard rather than by pull request.
+//
+// Kept only as the fallback if /v1/tags cannot be reached, so a tag-registry
+// hiccup degrades tooltips rather than the map.
 NCZ.DATA_TAGS_PATH = "data/tags.json";
 
 // 3D scene GLB source folder. The committed runtime path is "assets/glb-meshopt"
@@ -118,6 +142,44 @@ NCZ.GLB_DIR = "assets/glb-meshopt";
 NCZ.DESCRIPTION_MAX_LENGTH = 500;
 NCZ.COPY_FEEDBACK_MS = 2000;
 NCZ.SEARCH_DEBOUNCE_MS = 200;
+
+// ── Submissions (POST /submissions) ──────────────────────────────────────────
+
+// Turnstile widget site key. Public by design: it names the widget in the
+// markup, and the secret it pairs with is a Worker secret.
+//
+// The widget's allowed-hostnames list must cover every origin that renders the
+// form, dev.nczoning.net and localhost included, or Turnstile refuses to draw
+// and the form cannot be submitted from there.
+NCZ.TURNSTILE_SITE_KEY = "0x4AAAAAAD_ZV_WBiAX688lD";
+
+// Field limits the Worker enforces on a submission. Mirrored here so a
+// submitter is told before sending rather than by a 400 afterwards.
+// Sources: NOTE_MAX and CONTACT_MAX in worker/src/submissions.js,
+// DESCRIPTION_MAX in worker/src/validate.js.
+NCZ.SUBMISSION_NOTE_MAX = 1000;
+NCZ.SUBMISSION_CONTACT_MAX = 200;
+NCZ.NAME_MIN_LENGTH = 3;
+
+// Coordinate bounds for the write path, mirroring TERRAIN_* and COORD_Z_* in
+// worker/src/config.js. The server is the enforcement point; these exist so the
+// form can refuse the same values inline.
+//
+// DELIBERATELY NOT NCZ.WORLD_MIN_X and friends above, which describe the
+// satellite tile projection and are tighter than the terrain in every
+// direction: they would refuse a location standing on rendered ground.
+NCZ.TERRAIN_MIN_X = -8000;
+NCZ.TERRAIN_MAX_X = 8000;
+NCZ.TERRAIN_MIN_Y = -8000;
+NCZ.TERRAIN_MAX_Y = 8000;
+NCZ.COORD_Z_MIN = -1000;
+NCZ.COORD_Z_MAX = 2000;
+
+// Advisory, not the limit: where Night City coordinates usually land. Quoted in
+// the form as guidance so a value inside the terrain bounds but far outside the
+// city reads as worth checking.
+NCZ.COORD_TYPICAL_XY = 4000;
+NCZ.COORD_TYPICAL_Z = 300;
 
 // Deep-linking / URL sharing
 NCZ.SITE_URL      = "https://nczoning.net";

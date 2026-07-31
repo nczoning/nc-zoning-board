@@ -54,7 +54,7 @@ const SUN_DIR = new THREE.Vector3(-1, 1.5, -1).normalize();
 const ThreeScene = (() => {
   let renderer, camera, scene, controls;
   let initialized = false;
-  // True only when the renderer ended up on a real WebGPU backend. The webgpu
+  // True only when the renderer resolved to a real WebGPU backend. The webgpu
   // build reports renderer.isWebGPURenderer === true even on its WebGL2
   // fallback, so that flag can't be trusted; renderer.backend.isWebGPUBackend
   // (set by r184's WebGPUBackend, absent on WebGLBackend) is the real signal.

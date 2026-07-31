@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- D1 databases (production + staging) with the location registry schema, and a one-time import of all 296 locations plus the single exclusion. Nothing reads D1 yet; `mods.json` is still the live source.
+- A parity gate that rebuilds `/v1/locations` from D1 and diffs it byte-for-byte against the live API, with negative controls that prove the diff can fail.
+- The refresh cron can source the registry from D1 via `DATA_SOURCE=d1`. Production stays on `mods.json` until the cutover; unset never means D1.
+- A second harness that runs both source paths head-to-head across a swept clock, and fails if the swept field never varied.
+- GitHub sign-in for admins at `/admin/`, gated on repository collaborator status.
+- Admin CRUD over the location registry, with an append-only audit log: every mutation records who did it, and the record before and after. Nothing on the live map reads these writes yet.
+- The admin dashboard at `/admin/`: browse and filter every location, edit the full record, and read the audit log. Saves send only the fields that actually changed.
+- Tag management in the dashboard. A tag still attached to locations cannot be deleted; the refusal lists what is using it. Renaming a tag's identifier is locked behind an explicit unlock, because it re-points existing records and breaks `?tag=` links; the display name is the safe thing to edit.
+
+- The dashboard shows how old the served dataset is, and a Rebuild button that regenerates it on demand. Staging has no cron, so nothing there refreshed on its own and there was no way to see that.
+- `scripts/sync-locations.mjs` copies location records that exist in `data/locations/` but not yet in D1. Needed until submissions land in D1 directly: a mod merged to `main` reaches production but not the D1 registry.
+
+- The map notices when locations change while a tab is open and offers to refresh, instead of showing its load-time snapshot indefinitely. The check is served from the browser's own cache almost every time, so it costs roughly one request per tab per five minutes.
+
+- The cron keeps a Nexus mod index in D1, covering every tagged mod and every mod the map serves. It backs the submissions candidate list without a live Nexus call, and it is where the four Nexus-derived fields on each location now come from.
+- The parity gate covers all 18 served fields, including the thumbnails, pictures, update times and archive listings it could not rebuild before.
+- `POST /submissions` queues a new location, an edit or a removal request for review. Anonymous, behind a Turnstile check and a limit of 5 per address per hour, and nothing it accepts reaches the map without a reviewer approving it.
+- A privacy note at [docs/privacy.md](docs/privacy.md). Submissions are the first personal data the site collects: a salted one-way hash of the submitter's address, kept 90 days and then cleared automatically.
+- A review queue in the dashboard: pending submissions with a rendered diff of what each one changes and a mini-map of the proposed pin, and approve, reject or hold each one. Approving writes the location and rebuilds the map's data. Nothing is sent to the submitter: a review note is an internal record, and the queue says so.
+- Rebuild in the dashboard now also re-reads the page's own data, so a registry that changed underneath an open tab stops showing the copy it loaded with. A record open in the detail pane that no longer exists is closed rather than left on screen.
+- The audit log reads as sentences rather than as action names against ids: "dismissed mod 999001 “A Texture Pack” from the candidates list", not `candidate.dismiss` against `999001`. The recorded action stays beside each entry, so what the log actually holds can still be checked at a glance.
+- Nexus IDs are links to the mod page wherever the dashboard shows one, including a live one under the ID field in the editor. `WIP` and `Dummy` stay plain text, since they have no page to open.
+- A new-pin submission for a mod already on the map shows the records it would sit alongside, and how far away they are. One mod can legitimately supply several locations, so this is context rather than a warning; where the existing record is hidden, the queue offers to restore that one instead of creating a second.
+- A candidates tab listing NCZoning-tagged Nexus mods with no pin yet. Add one to the map with the editor prefilled, or dismiss it with a reason. Dismissals are reversible, which the Discord alert this replaces was not.
+- The submit form sends a location to the review queue. It starts from your mod (picked from the tagged list, or a Nexus link) and now collects the name and description the registry requires, which the block never carried.
+- Picking a tagged mod prefills its title, short description and uploader, the same three things auto-discovery took from the Nexus page. All three stay editable.
+- The coordinate boxes are checked as you type. The box that is wrong goes red, and every problem in the row is named at once rather than one per attempt.
+- Every pin can be corrected from its own popup. **Suggest a fix** opens the form filled in from the record and sends only the fields you change. Inside it, one choice switches from correcting the pin to asking for it to be taken down, which asks for a reason instead. Both go to the review queue, and the pin is unchanged until a reviewer decides.
+
+### Fixed
+
+- Share links pointed at the mod rather than the pin, so when one Nexus mod supplied two locations both pins produced the same link and it always opened the first. Links now use the location's own id. Links shared before this keep working.
+- Admin tag edits reached the legacy column but not the join the map reads, so they returned success and changed nothing. Both are now written together.
+- The API never told browsers they could read the `ETag` header, so the site's own conditional-request cache had never stored anything and its `304` handling was unreachable code. The browser's built-in cache masked it, which is why nothing looked wrong.
+- The new location added to `main` overnight reached production but not the D1 registry, so staging served one fewer mod than production.
+
+### Changed
+
+- **API `0.3.0` → `0.4.0`.** `/v1/tags` now returns an array of `{slug, name, description, sort_order}` instead of a `{tag: description}` map, matching `/v1/locations` and the shape the in-game parser maps most easily. `name` falls back to the slug, so nothing renders differently. Breaking, and taken now while the pre-1.0 window makes it free.
+- Tags are registry data in D1 rather than `data/tags.json`, so they can be edited in the dashboard instead of by pull request, and a mistyped tag is rejected on write rather than caught in CI afterwards. The site reads `/v1/tags`, falling back to the static file only if the API is unreachable.
+- The submit form reports every problem at once, beside the field, instead of one alert at a time. Its coordinate limits are the ones the server enforces; the older, tighter numbers would have refused four locations already on the map.
+- `robots.txt` asks crawlers to leave `/admin` alone. The collaborator gate is what actually protects it; this just keeps the dashboard out of search results.
+
+### Removed
+
+- The BBCode generator. Nothing is pasted into a Nexus description any more: the `NCZoning` tag now only puts a mod in the submit form's picker, with its name and image ready to use. The block had to be placed and formatted by hand, most attempts needed correcting, and it published a pin with no review step.
+
 ## [1.7.2] - 2026-07-26
 
 ### Changed
