@@ -51,7 +51,7 @@ const node = (modId, over = {}) => ({
 
 const location = (id, nexusId) => ({
   id, name: `Loc ${id}`, nexus_id: nexusId, category: 'new-location',
-  x: 0, y: 0, z: 0, authors: '["a"]', description: '', source: 'manual',
+  x: 0, y: 0, z: 0, authors: '["a"]', description: '',
   status: 'published', created_at: NOW, updated_at: NOW,
 });
 

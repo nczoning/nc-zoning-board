@@ -77,7 +77,7 @@ test('sorted alphabetically by name', () => {
 test('manual entry wins by nexus_id; node contributes thumbnail backfill', () => {
   const zeta = dataset.full['aaaa-1111'];
   assert.equal(zeta.name, 'Zeta Manual Loft'); // manual name, not the Nexus page name
-  assert.equal(zeta.source, 'manual');
+  assert.equal('source' in zeta, false, 'source is no longer served');
   assert.deepEqual(dataset.meta.nexus_thumbs['12345'], {
     pictureUrl: 'pic-dup', thumbnailUrl: 'thumb-dup', updatedAt: '2026-07-01',
   });
@@ -108,12 +108,12 @@ test('manualThumbs backfills manual mods that are not NCZoning-tagged (modsByUid
   assert.equal(full.updated_at, '2026-07-09');
 });
 
-test('auto entry: authors, tags (nczoning + known only), yaw, images in full', () => {
+test('auto entry: authors, tags (known only), yaw, images in full', () => {
   const auto = dataset.full['nexus-888'];
   assert.deepEqual(auto.authors, ['Uploader888', 'Friend']);
-  assert.deepEqual(auto.tags, ['nczoning', 'corpo']); // 'bogus' dropped
+  assert.deepEqual(auto.tags, ['corpo']); // 'bogus' dropped, and no synthetic marker
   assert.equal(auto.yaw, 45);
-  assert.equal(auto.source, 'auto');
+  assert.equal('source' in auto, false, 'source is no longer served');
   assert.equal(auto.credits, 'Team X');
   assert.equal(auto.thumbnail_url, 'thumb-888');
 });

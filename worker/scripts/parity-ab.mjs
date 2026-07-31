@@ -144,7 +144,9 @@ async function main() {
   // coords, category, tags, yaw, credits and authors -- all six are emitted
   // here, and `authors` is the *additional* authors only, because merge.js
   // prepends the uploader itself.
-  const nexusNodes = live.filter((r) => r.source === 'auto').map((r) => {
+  // `source` is no longer served. The nexus-<id> primary key records the same
+  // provenance, which is why Stage 7 keeps those keys rather than tidying them.
+  const nexusNodes = live.filter((r) => r.id.startsWith('nexus-')).map((r) => {
     const extraTags = r.tags.filter((t) => t !== 'nczoning');
     const extraAuthors = r.authors.slice(1);
     const block = [

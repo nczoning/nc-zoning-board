@@ -24,8 +24,8 @@ const META = {
 // the values of, and /v1/locations/{id} reads directly). Each carries the
 // server-computed recently_updated bool.
 const FULL = {
-  m1: { id: 'm1', name: 'Manual', nexus_id: '1', coordinates: [1, 2, 3], category: 'other', tags: [], authors: ['A'], source: 'manual', district: 'Watson', subdistrict: 'Kabuki', recently_updated: false, description: 'a manual mod' },
-  'nexus-2': { id: 'nexus-2', name: 'Auto', nexus_id: '2', coordinates: [4, 5, 6], category: 'new-location', tags: ['nczoning'], authors: ['B'], source: 'auto', district: 'Watson', subdistrict: null, recently_updated: true, description: 'an auto mod' },
+  m1: { id: 'm1', name: 'Manual', nexus_id: '1', coordinates: [1, 2, 3], category: 'other', tags: [], authors: ['A'], district: 'Watson', subdistrict: 'Kabuki', recently_updated: false, description: 'a manual mod' },
+  'nexus-2': { id: 'nexus-2', name: 'Auto', nexus_id: '2', coordinates: [4, 5, 6], category: 'new-location', tags: [], authors: ['B'], district: 'Watson', subdistrict: null, recently_updated: true, description: 'an auto mod' },
 };
 const DISTRICTS = [{ id: 'watson', name: 'Watson', boundary: [0, 0, 10, 0, 10, 10], centroid: { x: 5, y: 5 }, subdistricts: [] }];
 const TAGS = { apartment: 'a place', corpo: 'suits' };

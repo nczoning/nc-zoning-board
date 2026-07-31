@@ -318,9 +318,6 @@ NCZ.buildPopupHtml = function (mod, catStyle, nexusThumbs, tagsDict) {
   const fullSrc = nexusThumb?.pictureUrl || null;
   const hasPopupImage = Boolean(thumbSrc && fullSrc);
 
-  const nexusAutoBadge = mod._source === "nexus-auto"
-    ? ` <span class="nexus-auto-badge" title="Sourced automatically from Nexus Mods" aria-hidden="true"></span>`
-    : "";
   const updatedPopupBadge = NCZ.isRecentlyUpdated(mod)
     ? ` <span class="badge-updated" title="Updated on Nexus within the last ${NCZ.recentlyUpdatedDays ?? NCZ.RECENTLY_UPDATED_DAYS} days">${NCZ.UPDATED_LABEL}</span>`
     : "";
@@ -351,7 +348,7 @@ NCZ.buildPopupHtml = function (mod, catStyle, nexusThumbs, tagsDict) {
             <img src="${NCZ.escapeHtml(thumbSrc)}" class="popup-thumb" referrerpolicy="no-referrer" data-full-src="${NCZ.escapeHtml(fullSrc)}">
           </div>
         </div>` : ""}
-      <div class="custom-popup-title">${NCZ.escapeHtml(mod.name)}${nexusAutoBadge}</div>
+      <div class="custom-popup-title">${NCZ.escapeHtml(mod.name)}</div>
       <div class="custom-popup-body">
         <div class="custom-popup-authors">${authorsHtml}</div>
         ${mod.credits ? `<div class="custom-popup-credits">Credits: ${creditsHtml || NCZ.escapeHtml(mod.credits)}</div>` : ""}

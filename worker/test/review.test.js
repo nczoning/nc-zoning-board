@@ -19,7 +19,7 @@ const fakeKv = () => ({ async get() { return null; }, async put() {} });
 const LOCATION = {
   id: 'loc-1', name: 'Existing Loft', nexus_id: '12345', category: 'new-location',
   x: 1, y: 2, z: 3, yaw: 90, description: 'a place', credits: null,
-  authors: '["Spud"]', tags: '["apartment"]', source: 'manual', status: 'published',
+  authors: '["Spud"]', tags: '["apartment"]', status: 'published',
   admin_notes: null, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
 };
 
@@ -175,7 +175,7 @@ test('approving a create writes the location and resolves the submission', async
   const created = locRows(env).find((r) => r.name === 'Rooftop Bar');
   assert.ok(created, 'the location must be in D1');
   assert.equal(created.status, 'published');
-  assert.equal(created.source, 'manual');
+  assert.equal('source' in created, false, 'the column is gone; nexus-<id> keys carry provenance');
 
   // The join, not just the column: resolveTags treats location_tags as
   // authoritative, so a record that only got the column materializes untagged.

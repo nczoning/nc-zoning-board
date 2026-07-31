@@ -82,7 +82,7 @@ function refreshFetch() {
 const ROW = {
   id: 'loc-1', name: 'Existing Loft', nexus_id: '12345', category: 'new-location',
   x: 1, y: 2, z: 3, yaw: 90, description: 'a place', credits: null,
-  authors: '["Spud"]', tags: '["apartment"]', source: 'manual', status: 'published',
+  authors: '["Spud"]', tags: '["apartment"]', status: 'published',
   admin_notes: null, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
 };
 
@@ -297,17 +297,21 @@ test('the legacy column is kept byte-compatible with the join', async () => {
   assert.deepEqual(JSON.parse(row.tags), ['corpo', 'photos'], 'sorted, matching the join');
 });
 
-test('an auto-sourced record keeps the nczoning marker in the legacy column only', async () => {
+test('editing a legacy auto record strips the nczoning marker from both writes', async () => {
+  // The marker used to be re-added to the legacy column on every write, so that
+  // editing an auto record did not reshape it away from the other auto rows.
+  // Nothing auto-publishes now, so the marker is gone from both paths and an
+  // edit is what clears it from a row that still carries it.
   const env = envFor({
-    locations: [{ ...ROW, id: 'auto-1', source: 'auto', tags: '["nczoning","apartment"]' }],
+    locations: [{ ...ROW, id: 'auto-1', tags: '["nczoning","apartment"]' }],
     locationTags: [['auto-1', 'apartment']],
   });
   await hit(env, 'PATCH', '/admin/locations/auto-1', { tags: ['corpo'] });
-  assert.deepEqual(tagsOf(env, 'auto-1'), ['corpo'], 'the marker is not a registry row');
+  assert.deepEqual(tagsOf(env, 'auto-1'), ['corpo'], 'the join never held the marker');
   assert.deepEqual(
     JSON.parse(env.DB.one('SELECT tags FROM locations WHERE id = ?', 'auto-1').tags),
-    ['nczoning', 'corpo'],
-    'the stored column keeps the shape existing auto rows have',
+    ['corpo'],
+    'and the legacy column no longer has it re-added',
   );
 });
 

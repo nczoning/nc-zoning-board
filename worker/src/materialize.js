@@ -49,7 +49,6 @@ export function rowToEntry(row, locationTags) {
     category: row.category,
     tags: resolveTags(row, locationTags),
     authors: JSON.parse(row.authors ?? '[]'),
-    source: row.source,
     description: row.description ?? '',
     credits: row.credits,
   };
@@ -63,14 +62,15 @@ export function rowToEntry(row, locationTags) {
  * used; migration 0002 keeps both in sync precisely so the switch can be
  * proven byte-for-byte before the column is dropped.
  *
- * `nczoning` is re-added for auto-sourced records because it is not a registry
- * row: it is a marker auto-discovery adds, and merge.js prepends it the same
- * way. It goes first, matching every existing auto record.
+ * The synthetic `nczoning` marker is NOT added. It used to be prepended for
+ * auto-sourced records, which made it a visible filter for a tag `/v1/tags` does
+ * not list. Nothing auto-publishes any more, so `source='auto'` is a closed set
+ * of 9 legacy records rather than a category the system produces, and the marker
+ * described nothing a consumer could act on.
  */
 function resolveTags(row, locationTags) {
   if (!locationTags) return JSON.parse(row.tags ?? '[]');
-  const slugs = locationTags.get(row.id) ?? [];
-  return row.source === 'auto' ? ['nczoning', ...slugs] : [...slugs];
+  return [...(locationTags.get(row.id) ?? [])];
 }
 
 /**
@@ -149,7 +149,6 @@ export function materializeFromD1({
       category: entry.category,
       tags: entry.tags,
       authors: entry.authors,
-      source: entry.source,
       district,
       subdistrict,
       recently_updated,

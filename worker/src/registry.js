@@ -20,7 +20,7 @@ import { syncLocationTags, readTagsForLocations } from './tag-registry.js';
 /** Payload field -> column, for the fields that map one to one. */
 const COLUMN_FOR = {
   name: 'name', nexus_id: 'nexus_id', category: 'category', description: 'description',
-  credits: 'credits', source: 'source', status: 'status', admin_notes: 'admin_notes',
+  credits: 'credits', status: 'status', admin_notes: 'admin_notes',
   yaw: 'yaw',
 };
 
@@ -52,7 +52,6 @@ export function rowToAdmin(row, tags = []) {
     credits: row.credits,
     authors: JSON.parse(row.authors ?? '[]'),
     tags,
-    source: row.source,
     status: row.status,
     admin_notes: row.admin_notes,
     created_at: row.created_at,
@@ -131,8 +130,8 @@ export async function insertLocation(env, payload, nowIso = new Date().toISOStri
 
   await env.DB.prepare(`
     INSERT INTO locations (id, name, nexus_id, category, x, y, z, yaw, description,
-      credits, authors, tags, source, status, admin_notes, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      credits, authors, tags, status, admin_notes, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id, payload.name, payload.nexus_id, payload.category,
     x, y, z === undefined ? null : z,
@@ -140,13 +139,13 @@ export async function insertLocation(env, payload, nowIso = new Date().toISOStri
     payload.description ?? '',
     payload.credits || null,
     JSON.stringify(payload.authors), JSON.stringify(payload.tags),
-    payload.source ?? 'manual', payload.status ?? 'published',
+    payload.status ?? 'published',
     payload.admin_notes ?? null, nowIso, nowIso,
   ).run();
 
   // The join, not just the column. Without this the record materializes with
   // no tags at all, because resolveTags treats the join as authoritative.
-  await syncLocationTags(env, id, payload.tags, payload.source ?? 'manual');
+  await syncLocationTags(env, id, payload.tags);
   return id;
 }
 
@@ -165,12 +164,6 @@ export async function patchLocation(env, id, payload, nowIso = new Date().toISOS
   binds.push(nowIso, id);
   await env.DB.prepare(`UPDATE locations SET ${sets.join(', ')} WHERE id = ?`).bind(...binds).run();
 
-  if (patchesTags) {
-    // Re-read rather than reusing the row the caller loaded: the same patch may
-    // have just changed `source`, which decides whether the legacy column keeps
-    // the nczoning marker.
-    const { source } = await getRow(env, id);
-    await syncLocationTags(env, id, payload.tags, source);
-  }
+  if (patchesTags) await syncLocationTags(env, id, payload.tags);
   return { empty: false };
 }

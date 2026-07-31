@@ -14,7 +14,7 @@ const IP = '203.0.113.7';
 const LOCATION = {
   id: 'loc-1', name: 'Existing Loft', nexus_id: '12345', category: 'new-location',
   x: 1, y: 2, z: 3, yaw: 90, description: 'a place', credits: null,
-  authors: '["Spud"]', tags: '["apartment"]', source: 'manual', status: 'published',
+  authors: '["Spud"]', tags: '["apartment"]', status: 'published',
   admin_notes: null, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
 };
 
@@ -115,7 +115,7 @@ test('admin-only fields are refused rather than dropped', async () => {
   // Dropping them silently would leave an approve path applying a status the
   // submitter chose, and the submitter believing they had set it.
   const env = envFor();
-  for (const field of [{ status: 'published' }, { admin_notes: 'let me in' }, { source: 'auto' }]) {
+  for (const field of [{ status: 'published' }, { admin_notes: 'let me in' }]) {
     const res = await submit(env, {
       kind: 'create', payload: { ...VALID, ...field }, turnstile_token: 't',
     });

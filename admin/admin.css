@@ -340,10 +340,8 @@ td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .badge.status-published { border-color: var(--status-ok); color: var(--status-ok); }
 .badge.status-hidden { border-color: var(--tertiary); color: var(--tertiary); }
 .badge.status-draft { border-color: var(--gray); color: var(--gray); }
-.badge.source-auto { border-color: var(--secondary); color: var(--secondary); }
 
 /* The synthetic marker, shown so it is not mistaken for a missing tag. */
-.badge.synthetic { border-style: dashed; color: var(--text-dim); }
 
 /* -------------------------------------------------------------- overview -- */
 

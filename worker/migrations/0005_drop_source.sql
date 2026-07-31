@@ -1,0 +1,33 @@
+-- Drop `locations.source`.
+--
+-- WHY THIS IS SAFE TO DELETE RATHER THAN MIGRATE.
+--
+-- `source` was never authored. No file in data/locations/ carries it and it is
+-- not in mods.schema.json; merge.js stamped 'manual' onto everything from
+-- mods.json and 'auto' onto Nexus nodes at build time. It is a derived field,
+-- so this drops a computation rather than a column of real values.
+--
+-- It also stopped describing anything. Nothing auto-publishes since the D1
+-- cutover: a tagged Nexus mod with a valid block becomes a candidate, not a
+-- pin. So source='auto' is a closed set of 9 legacy records rather than a
+-- category the system keeps producing, and the manual/auto distinction is not
+-- something any consumer can act on.
+--
+-- PROVENANCE SURVIVES. The nine auto-discovered records keep their
+-- `nexus-<id>` primary keys, which record where they came from on their own.
+-- Verified against production before this ran: 9 of 9 auto rows carry that
+-- prefix and 0 manual rows do, so `id LIKE 'nexus-%'` answers the same question
+-- the column did. That is why Stage 7 of #888 keeps those keys rather than
+-- tidying them into UUIDs, and why import-locations.mjs and parity-ab.mjs now
+-- filter on the prefix.
+--
+-- The synthetic `nczoning` tag goes with it. It was prepended at serve time for
+-- source='auto' records, which made it a visible sidebar filter for a tag
+-- /v1/tags does not list. Both write paths are removed in the same release:
+-- materialize.js at serve time, tag-registry.js into the legacy column.
+--
+-- BREAKING for /v1: two served fields disappear (`source`, and `nczoning` from
+-- the tags array). API_VERSION goes 0.4.0 -> 0.5.0. Pre-1.0, so breaking is a
+-- MINOR and the path stays /v1.
+
+ALTER TABLE locations DROP COLUMN source;
