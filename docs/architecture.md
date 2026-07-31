@@ -160,7 +160,7 @@ Discord alerting uses secrets configured in **repo Settings → Secrets and vari
 | Secret | Value |
 | --- | --- |
 | `DISCORD_WEBHOOK_URL` | Legacy webhook for the retired **submissions** channel. Nothing writes to it now; it survives only as a fallback for the alerts webhook below, and retires at Phase 6 |
-| `NCZ_ALERTS_DISCORD_WEBHOOK_URL` | Webhook for the dedicated **map-alerts** channel: auto-discovery parse failures and Data API health/outage alerts, kept separate from submissions |
+| `NCZ_ALERTS_DISCORD_WEBHOOK_URL` | Webhook for the dedicated **map-alerts** channel: Data API health and outage alerts, kept separate from submissions |
 
 ### Discord Notifications
 
@@ -173,5 +173,4 @@ only as a legacy fallback for the alerts webhook below, and retires at Phase 6.
 
 **Alerts** (`NCZ_ALERTS_DISCORD_WEBHOOK_URL`) covers operational health:
 
-- **`monitor-auto-discovery.yml`**: Daily scan; alerts when a NCZoning-tagged mod fails to parse and isn't covered by a manual entry.
 - **`monitor-api-health.yml`**: Every 15 min; alerts when the Data API (`/v1`) isn't serving **or** its refresh cron has wedged (a frozen `/v1/health.last_refresh_at` heartbeat older than 45 min; the API can serve stale data silently, see #849). On a wedged cron it also **self-heals**: it dispatches `deploy-api.yml` to redeploy the affected Worker (re-registers the Cron Trigger), capped at 2 redeploys/env/hour before escalating for a human. The Worker's own refresh-failure alert (`worker/src/refresh.js`) posts here too (Cloudflare Worker secret, set separately via `wrangler secret put`).
