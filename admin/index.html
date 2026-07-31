@@ -73,6 +73,15 @@
     re-materializes.
   -->
   <section id="tab-overview" class="overview">
+    <!-- First on the landing tab, because an unacknowledged alert is the one
+         thing on this page asking for something to be done. Everything else
+         here is a number to know; this is a number to act on. Collapses to a
+         single muted line when nothing is open, so a quiet day costs no space. -->
+    <div class="panel" style="grid-column: 1 / -1">
+      <h2>Alerts</h2>
+      <div id="overview-alerts"></div>
+    </div>
+
     <div class="panel">
       <h2>Registry</h2>
       <div id="stat-registry" class="stat-grid"></div>

@@ -1018,6 +1018,31 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 .alert-foot { margin-top: var(--space-xs); font-size: var(--fs-ui); }
 .alert-foot .who { color: var(--tertiary); font-weight: 600; }
 
+/* The Overview's compact row. One line each, no body: the landing page answers
+   "is anything wrong", and the Alerts tab answers "what exactly". Shares the
+   .sev-* stripe colours above rather than defining a second palette. */
+.overview-alert {
+    display: flex;
+    gap: var(--space-md);
+    align-items: baseline;
+    flex-wrap: wrap;
+    border-left: 3px solid var(--gray);
+    padding: var(--space-xs) var(--space-md);
+    margin-bottom: var(--space-2xs);
+    font-size: var(--fs-ui);
+}
+
+.overview-alert.sev-info { border-left-color: var(--secondary); }
+.overview-alert.sev-warn { border-left-color: var(--tertiary); }
+.overview-alert.sev-error { border-left-color: var(--status-critical); }
+.overview-alert.sev-recovery { border-left-color: var(--status-ok); }
+
+/* Takes the row so the source and time sit at the end without competing. */
+.overview-alert .overview-alert-title { flex: 1 1 18rem; color: var(--white); font-weight: 600; }
+.overview-alert time { color: var(--gray); font-variant-numeric: tabular-nums; }
+
+#overview-alerts .btn { margin-top: var(--space-xs); }
+
 .diff { margin: var(--space-xs) 0 0; font-size: var(--fs-code); }
 .diff div { padding: var(--space-2xs) 0; font-family: ui-monospace, monospace; line-height: var(--lh-tight); }
 .diff .k { color: var(--gray); }
