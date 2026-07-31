@@ -293,6 +293,29 @@ th {
     backdrop-filter: blur(4px);
 }
 
+/* Sortable headers. The arrow is a pseudo-element so it cannot be selected with
+   the label text, and the column keeps a reserved slot for it either way: an
+   arrow that appears on sort would shift every heading sideways on each click. */
+th[data-sort] {
+    cursor: pointer;
+    user-select: none;
+}
+
+th[data-sort]::after {
+    content: "95";           /* up-down arrow: sortable, not yet sorted */
+    display: inline-block;
+    width: 1em;
+    margin-left: var(--space-xs);
+    opacity: 0.35;
+}
+
+th[data-sort]:hover,
+th[data-sort]:focus-visible { color: var(--secondary); }
+
+th[data-sort].sorted { color: var(--secondary); }
+th[data-sort].sorted::after { content: "91"; opacity: 1; }
+th[data-sort].sorted.desc::after { content: "93"; }
+
 /* Zebra striping. Declared before hover/selection so those still win without
    needing !important or a specificity fight. */
 tbody tr:nth-child(even) { background: var(--white-02); }

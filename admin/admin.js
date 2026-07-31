@@ -87,6 +87,10 @@
     filter: {
       q: '', status: '', category: '', tag: '', district: '', special: '',
     },
+    // The API returns locations ordered by name, which is the default here too.
+    // Sorting is client-side: the whole registry is already in memory, so a
+    // round trip per sort would be slower and would fight the active filter.
+    sort: { key: 'name', dir: 'asc' },
   };
 
   /** Human label for a filter, used on the chips. */
@@ -442,8 +446,77 @@
     replace($('#loc-chips'), chips);
   }
 
+  /**
+   * Value to sort a row on. Dates compare as plain strings because they are all
+   * ISO in UTC: the backfill normalises git's local offsets to `Z` precisely so
+   * this holds. Mixed offsets would sort by their text, not by their instant.
+   */
+  function sortValue(loc, key) {
+    if (key === 'added_at' || key === 'modified_at') return loc[key] ?? '';
+    return String(loc[key] ?? '').toLowerCase();
+  }
+
+  function sortLocations(rows) {
+    const { key, dir } = state.sort;
+    const sign = dir === 'desc' ? -1 : 1;
+    const isDate = key === 'added_at' || key === 'modified_at';
+    return [...rows].sort((a, b) => {
+      const av = sortValue(a, key);
+      const bv = sortValue(b, key);
+      // Ties fall back to name, so a re-sort of the same data cannot reshuffle
+      // rows that compare equal.
+      if (av === bv) return String(a.name).localeCompare(String(b.name));
+      // Dates compare by codepoint, NOT localeCompare. They are fixed-format
+      // ISO in UTC, so codepoint order is chronological order, whereas locale
+      // collation is free to reorder the punctuation these are full of.
+      if (isDate) return sign * (av < bv ? -1 : 1);
+      // Text does use localeCompare: names carry accents and case that a
+      // codepoint comparison orders in ways nobody reading the table expects.
+      return sign * av.localeCompare(bv);
+    });
+  }
+
+  /**
+   * Click a header to sort by it, click the same one again to reverse.
+   *
+   * A new column starts descending for the dates and ascending for the text
+   * ones, because "most recently modified" is the question a date column is
+   * there to answer, and "A first" is the question a name column is.
+   */
+  function setSort(key) {
+    const dateKey = key === 'added_at' || key === 'modified_at';
+    state.sort = state.sort.key === key
+      ? { key, dir: state.sort.dir === 'asc' ? 'desc' : 'asc' }
+      : { key, dir: dateKey ? 'desc' : 'asc' };
+    renderLocations();
+  }
+
+  /** Wire the sortable headers once, and keep aria-sort in step with state. */
+  function renderSortHeaders() {
+    for (const th of document.querySelectorAll('#loc-table th[data-sort]')) {
+      const key = th.dataset.sort;
+      const active = state.sort.key === key;
+      th.setAttribute('aria-sort', active
+        ? (state.sort.dir === 'asc' ? 'ascending' : 'descending')
+        : 'none');
+      th.classList.toggle('sorted', active);
+      th.classList.toggle('desc', active && state.sort.dir === 'desc');
+      if (!th.dataset.wired) {
+        th.dataset.wired = '1';
+        th.tabIndex = 0;
+        th.addEventListener('click', () => setSort(key));
+        // Keyboard parity: a header that only responds to a mouse is a control
+        // half the people using it cannot reach.
+        th.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSort(key); }
+        });
+      }
+    }
+  }
+
   function renderLocations() {
-    const shown = state.locations.filter((l) => locationMatches(l, state.filter));
+    renderSortHeaders();
+    const shown = sortLocations(state.locations.filter((l) => locationMatches(l, state.filter)));
 
     replace($('#loc-rows'), shown.map((loc) => h('tr', {
       'aria-selected': loc.id === state.selectedLocation ? 'true' : 'false',
