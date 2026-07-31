@@ -155,12 +155,21 @@ The 3D scene ships on `main`. These are the other five files:
 
 ## Repo Setup (for new maintainers)
 
-Discord alerting uses secrets configured in **repo Settings → Secrets and variables → Actions**. The Worker's own secrets are a **separate store**, set with `wrangler secret put`:
+Discord alerting uses secrets configured in **repo Settings → Secrets and variables → Actions**. The Worker's own secrets are a **separate store**, set with `npx wrangler secret put` from inside `worker/`:
+
+```powershell
+cd worker
+$env:CLOUDFLARE_ACCOUNT_ID='b9937d8d595fad7de8d1549b22390281'
+npx wrangler secret put <NAME>              # production
+npx wrangler secret put <NAME> --env staging
+```
+
+`wrangler` is a devDependency of `worker/`, not a global install, so it resolves only through `npx` (or an npm script, which puts `node_modules/.bin` on PATH). Running it from the repo root fails twice over: npm cannot find the binary, and `wrangler.jsonc` is not there either.
 
 | Secret | Value |
 | --- | --- |
 | `DISCORD_WEBHOOK_URL` | Legacy webhook for the retired **submissions** channel. Nothing writes to it now; it survives only as a fallback for the alerts webhook below, and retires at Phase 6 |
-| `NCZ_ALERTS_DISCORD_WEBHOOK_URL` | Webhook for the dedicated **map-alerts** channel. Held by the **Worker** now (`wrangler secret put`), because the Worker is what posts to Discord. The Actions copy is unused |
+| `NCZ_ALERTS_DISCORD_WEBHOOK_URL` | Webhook for the dedicated **map-alerts** channel. Held by the **Worker** now (`npx wrangler secret put`), because the Worker is what posts to Discord. The Actions copy is unused |
 | `ALERTS_INGEST_SECRET` | Bearer token for `POST /internal/alerts`. Needed in **both** stores: a GitHub Actions secret for `monitor_api_health.js`, and a Cloudflare Worker secret for the Worker that checks it. Setting one does not set the other |
 
 ### Alerts

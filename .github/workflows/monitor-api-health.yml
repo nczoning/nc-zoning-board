@@ -62,7 +62,7 @@ jobs:
           # ingest secret.
           #
           # This is a GitHub Actions secret. The Worker's copy is a Cloudflare
-          # Worker secret (`wrangler secret put ALERTS_INGEST_SECRET`), a
+          # Worker secret (`npx wrangler secret put ALERTS_INGEST_SECRET`), a
           # separate store: setting one does not set the other.
           ALERTS_INGEST_SECRET: ${{ secrets.ALERTS_INGEST_SECRET }}
           # Was the API down last run? A clean run after a down one is the
