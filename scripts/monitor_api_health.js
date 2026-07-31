@@ -310,7 +310,7 @@ async function postHealthAlert(results, { recovered = false, selfHeal: heal = nu
       (h) => `🔧 **Self-heal:** redeployed **${h.env}** to revive the cron (attempt ${h.attempt}/${SELF_HEAL_MAX_PER_HOUR}) — should recover next tick.`,
     ),
     ...(heal?.escalated || []).map(
-      (e) => `⛔ **Manual fix needed (${e.env}):** ${e.reason}. Redeploy: \`wrangler deploy${e.ref === "dev" ? " --env staging" : ""}\`.`,
+      (e) => `⛔ **Manual fix needed (${e.env}):** ${e.reason}. Redeploy: \`cd worker && npx wrangler deploy${e.ref === "dev" ? " --env staging" : ""}\`.`,
     ),
   ];
   const escalatedAny = (heal?.escalated || []).length > 0;

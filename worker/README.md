@@ -53,14 +53,19 @@ Workers Scripts:Edit, Workers KV Storage:Edit, and Zone DNS:Edit on the
 nczoning.net zone; DNS is needed so the custom-domain route can be created).
 Refresh-failure alerts post to the dedicated map-alerts channel via the
 `NCZ_ALERTS_DISCORD_WEBHOOK_URL` Worker secret (set once per environment:
-`wrangler secret put NCZ_ALERTS_DISCORD_WEBHOOK_URL` and again with
+`npx wrangler secret put NCZ_ALERTS_DISCORD_WEBHOOK_URL` and again with
 `--env staging`). It falls back to the legacy `DISCORD_WEBHOOK_URL` secret if
-the new one isn't set, so there's no alerting gap during the move. The secrets
-and KV namespaces persist across deploys and are not touched by CI.
+the new one isn't set, so there's no alerting gap during the move.
+
+`POST /internal/alerts` additionally needs `ALERTS_INGEST_SECRET`, set the same
+way, and set to the **same value** as the GitHub Actions secret of that name.
+The two are separate stores.
+
+The secrets and KV namespaces persist across deploys and are not touched by CI.
 
 The `routes` entry binds the custom domain on first deploy (DNS + certificate
 created automatically; the zone must be on the same Cloudflare account). The
-`triggers.crons` entry starts the 15-minute refresh once deployed; a freshly
+`triggers.crons` entry starts the 5-minute refresh once deployed; a freshly
 deployed env returns `503 not_ready` until its first cron tick seeds KV.
 
 ## Dataset refresh (cron)
