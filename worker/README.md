@@ -384,11 +384,16 @@ Locations are submitted from the map now and land in D1 directly. The only
 remaining path from files into D1 is `scripts/import-locations.mjs`, which is the
 restore path rather than a routine tool.
 
-⚠️ **`import-locations.mjs` does not write `location_tags`** (see the tracking
-issue). It predates the join and fills only the legacy `locations.tags` column,
-so a database built from it alone serves every location with no tags. The
-deleted `sync-locations.mjs` did write both, and its implementation is recoverable
-from git history.
+It writes **both** `locations` and the `location_tags` join. The join is what the
+materializer reads, so a database built without it serves every location with no
+tags at all, while `locations` looks perfect. The generated file ends with a
+`SELECT` that prints the location, link and untagged counts when it runs, so a
+restore is checked rather than assumed.
+
+Tag links go through the target database's own registry
+(`WHERE je.value IN (SELECT slug FROM tags)`), so a tag that is not curated is
+dropped rather than failing the import. The generator warns about any it expects
+the registry to drop, checked against `data/tags.json`.
 
 Run it against **both** databases, and delete the script at cleanup. Keeping it
 after submissions land in D1 directly would preserve git as a second source of
