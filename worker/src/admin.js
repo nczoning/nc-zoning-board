@@ -12,6 +12,7 @@ import { resolveSession } from './auth.js';
 import { adminCors } from './auth.js';
 import { validateLocationInput } from './validate.js';
 import { writeAudit, readAudit } from './audit.js';
+import { readAlerts, countUnacknowledged, acknowledgeAlert } from './alerts.js';
 import { runRefresh } from './refresh.js';
 import {
   validateTagInput, readTagSlugs, readTagsWithUsage, readTagUsers, readTag,
@@ -72,6 +73,33 @@ export async function handleAdmin(request, env, ctx) {
   if (url.pathname === '/admin/audit' && method === 'GET') {
     return json(request, { entries: await readAudit(env, url.searchParams.get('limit')) });
   }
+
+  // ---- alerts --------------------------------------------------------------
+  //
+  // Reading and acknowledging only. Alerts are WRITTEN at /internal/alerts,
+  // which carries a shared secret because its callers are GitHub Actions rather
+  // than a signed-in human. Keeping the write off this surface is what lets the
+  // gate above stay uniform.
+  if (url.pathname === '/admin/alerts' && method === 'GET') {
+    return json(request, {
+      alerts: await readAlerts(env, {
+        limit: url.searchParams.get('limit'),
+        unacknowledged: url.searchParams.get('unacknowledged') === '1',
+      }),
+      unacknowledged: await countUnacknowledged(env),
+    });
+  }
+
+  const alertMatch = url.pathname.match(/^\/admin\/alerts\/([^/]+)$/);
+  if (alertMatch && method === 'PATCH') {
+    const alert = await acknowledgeAlert(env, alertMatch[1], actor);
+    if (!alert) return json(request, { error: 'not_found' }, 404);
+    // No audit row. The audit log records changes to the registry, and an
+    // acknowledgement changes no data a visitor can see; the acknowledged_by
+    // and acknowledged_at columns are already the record of who cleared it.
+    return json(request, { alert });
+  }
+  if (alertMatch) return json(request, { error: 'method_not_allowed' }, 405);
 
   // ---- quota: dataset introspection --------------------------------------
   //

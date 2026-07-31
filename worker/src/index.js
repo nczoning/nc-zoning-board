@@ -21,6 +21,7 @@ import { RECENTLY_UPDATED_DAYS } from './config.js';
 import { login, callback, me, logout, adminCors } from './auth.js';
 import { handleAdmin } from './admin.js';
 import { handleSubmissions, purgeSubmitterIps } from './submissions.js';
+import { handleInternal } from './internal.js';
 
 const SCHEMA_VERSION = 1;
 
@@ -253,6 +254,15 @@ export default {
     // separate, collaborator-gated approval.
     if (isSubmission) {
       const res = await handleSubmissions(request, env);
+      if (res) return res;
+    }
+
+    // The machine surface, before the read-only method gate below: it is a POST
+    // and it is neither a browser nor a person. Its gate is a shared secret
+    // rather than a session, which is exactly why it does not live under
+    // /admin/ (see internal.js).
+    if (url.pathname.startsWith('/internal/')) {
+      const res = await handleInternal(request, env);
       if (res) return res;
     }
 
