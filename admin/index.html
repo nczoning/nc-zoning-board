@@ -44,6 +44,9 @@
     <button type="button" role="tab" data-tab="queue" aria-selected="false">Queue<span class="tab-count" id="queue-count"></span></button>
     <button type="button" role="tab" data-tab="candidates" aria-selected="false">Candidates<span class="tab-count" id="candidates-count"></span></button>
     <button type="button" role="tab" data-tab="tags" aria-selected="false">Tags</button>
+    <!-- Unacknowledged only. An alert that someone has already dealt with is
+         history, not a thing to badge. -->
+    <button type="button" role="tab" data-tab="alerts" aria-selected="false">Alerts<span class="tab-count" id="alerts-count"></span></button>
     <button type="button" role="tab" data-tab="audit" aria-selected="false">Audit</button>
   </nav>
   <span class="spacer"></span>
@@ -70,6 +73,15 @@
     re-materializes.
   -->
   <section id="tab-overview" class="overview">
+    <!-- First on the landing tab, because an unacknowledged alert is the one
+         thing on this page asking for something to be done. Everything else
+         here is a number to know; this is a number to act on. Collapses to a
+         single muted line when nothing is open, so a quiet day costs no space. -->
+    <div class="panel" style="grid-column: 1 / -1">
+      <h2>Alerts</h2>
+      <div id="overview-alerts"></div>
+    </div>
+
     <div class="panel">
       <h2>Registry</h2>
       <div id="stat-registry" class="stat-grid"></div>
@@ -237,6 +249,31 @@
 
     <div class="panel" id="tag-editor">
       <p class="muted">Select a tag to edit it, or create a new one.</p>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------- alerts -- -->
+  <!--
+    Every alert the Worker has fanned out, whether or not Discord kept it. The
+    table is written BEFORE the Discord post, so this list is the complete
+    record and the channel is the copy that can go missing.
+  -->
+  <section id="tab-alerts" hidden>
+    <div class="panel">
+      <div class="toolbar">
+        <span class="muted" id="alerts-note"></span>
+        <span class="spacer" style="flex:1"></span>
+        <label class="inline-check">
+          <input type="checkbox" id="alerts-unack-only"> Unacknowledged only
+        </label>
+        <select id="alerts-limit" aria-label="How many alerts">
+          <option value="50">Last 50</option>
+          <option value="100" selected>Last 100</option>
+          <option value="500">Last 500</option>
+        </select>
+        <button type="button" class="btn secondary" id="alerts-refresh">Refresh</button>
+      </div>
+      <div id="alerts-list"></div>
     </div>
   </section>
 

@@ -42,9 +42,11 @@
  *
  * Run: node scripts/monitor_api_health.js
  * Targets: API_HEALTH_TARGETS (comma-separated), default https://api.nczoning.net
- * Alerts:  NCZ_ALERTS_DISCORD_WEBHOOK_URL, the dedicated map-alerts channel,
- *          kept separate from the submissions webhook (prints a preview instead
- *          of sending if unset).
+ * Alerts:  POST to {NCZ_API_BASE}/internal/alerts with ALERTS_INGEST_SECRET as
+ *          a bearer token. The Worker records the alert and forwards it to the
+ *          map-alerts channel, so the dashboard keeps a history of everything
+ *          this monitor has said. Prints a preview instead of sending if the
+ *          secret is unset. NCZ_API_BASE defaults to https://api.nczoning.net.
  * Self-heal env: API_HEALTH_SELF_HEAL=true + GH_TOKEN (+ GITHUB_REPOSITORY,
  *          GITHUB_API_URL — set by Actions). Absent → alert only.
  * Exit:    0 when every target is serving fresh data; 1 on any outage, a wedged
@@ -296,8 +298,7 @@ async function selfHeal(results) {
 // `recovered` = the previous run reported an outage and this one is clean, so
 // this post is the down→up edge (a green all-clear) rather than a page.
 // `selfHeal` = { healed, escalated } from an auto-redeploy attempt this run.
-async function postDiscord(results, { recovered = false, selfHeal: heal = null } = {}) {
-  const url = process.env.NCZ_ALERTS_DISCORD_WEBHOOK_URL;
+async function postHealthAlert(results, { recovered = false, selfHeal: heal = null } = {}) {
   const down = results.filter((r) => r.issues.length);
   const frozen = results.filter((r) => r.stale);
   const anyWarning = results.some((r) => r.warnings.length);
@@ -309,7 +310,7 @@ async function postDiscord(results, { recovered = false, selfHeal: heal = null }
       (h) => `🔧 **Self-heal:** redeployed **${h.env}** to revive the cron (attempt ${h.attempt}/${SELF_HEAL_MAX_PER_HOUR}) — should recover next tick.`,
     ),
     ...(heal?.escalated || []).map(
-      (e) => `⛔ **Manual fix needed (${e.env}):** ${e.reason}. Redeploy: \`wrangler deploy${e.ref === "dev" ? " --env staging" : ""}\`.`,
+      (e) => `⛔ **Manual fix needed (${e.env}):** ${e.reason}. Redeploy: \`cd worker && npx wrangler deploy${e.ref === "dev" ? " --env staging" : ""}\`.`,
     ),
   ];
   const escalatedAny = (heal?.escalated || []).length > 0;
@@ -366,31 +367,63 @@ async function postDiscord(results, { recovered = false, selfHeal: heal = null }
   // Fold the self-heal outcome into the alert body (one post per run).
   if (healLines.length) description += `\n\n${healLines.join("\n")}`;
 
-  const body = {
-    embeds: [
-      {
-        title,
-        description,
-        color,
-        fields,
-        footer: { text: "NC Zoning Board • Data API health monitor" },
-      },
-    ],
-  };
+  // Per-target detail, flattened into the body. The embed used to carry these
+  // as `fields`; the `alerts` table is title + body, so a structured field list
+  // cannot be recorded. Flattening here rather than widening the schema keeps
+  // one shape for every producer, which is the point of routing through the
+  // Worker at all.
+  const detail = fields.map((f) => `**${f.name}**\n${f.value}`).join("\n\n");
 
-  if (!url) {
-    console.log("\n--- NCZ_ALERTS_DISCORD_WEBHOOK_URL not set — preview of payload that would be sent ---");
-    console.log(JSON.stringify(body, null, 2));
+  await sendAlert({
+    severity: color === 15158332 ? "error" : recovered ? "recovery" : "warn",
+    // The leading icon is added by the Worker from the severity, so it is not
+    // repeated here; the emoji in `title` above is stripped for the same reason.
+    title: title.replace(/^[^\p{L}\d]+/u, "").trim(),
+    body: detail ? `${description}\n\n${detail}` : description,
+  });
+}
+
+/**
+ * Hand an alert to the Worker, which records it and forwards it to Discord.
+ *
+ * This posts to `/internal/alerts` rather than to the Discord webhook directly.
+ * Posting straight to Discord would leave the dashboard with no history of
+ * anything this monitor ever said, which is the gap #901 exists to close: the
+ * alerts table has to be complete by construction, not by each producer
+ * remembering to write to it as well.
+ *
+ * The secret is a GitHub Actions secret here and a Cloudflare Worker secret at
+ * the other end. Same name, two separate stores, and setting one does not set
+ * the other. See learnings/discord-webhook-two-secret-stores.
+ */
+async function sendAlert({ severity, title, body }) {
+  const base = process.env.NCZ_API_BASE || "https://api.nczoning.net";
+  const secret = process.env.ALERTS_INGEST_SECRET;
+  const payload = { source: "api-health", severity, title, body };
+
+  if (!secret) {
+    console.log("\n--- ALERTS_INGEST_SECRET not set — preview of the alert that would be sent ---");
+    console.log(JSON.stringify(payload, null, 2));
     console.log("--- end preview (nothing was sent) ---");
     return;
   }
-  const res = await fetch(url, {
+
+  const res = await fetch(`${base}/internal/alerts`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+    body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error(`Discord webhook HTTP ${res.status}: ${await res.text()}`);
-  console.log("Posted Discord health alert.");
+  if (!res.ok) throw new Error(`Alert ingest HTTP ${res.status}: ${await res.text()}`);
+
+  // The endpoint reports the two halves separately. A recorded-but-not-forwarded
+  // alert is in the dashboard and not in Discord, which is worth saying out loud
+  // in the job log rather than reading as a clean run.
+  const result = await res.json().catch(() => ({}));
+  if (result.forwarded === false) {
+    console.log("Alert recorded, but Discord did not accept it (check the Worker's webhook secret).");
+  } else {
+    console.log("Alert recorded and forwarded.");
+  }
 }
 
 (async () => {
@@ -441,7 +474,7 @@ async function postDiscord(results, { recovered = false, selfHeal: heal = null }
     const prevOutage = process.env.API_HEALTH_PREV_OUTAGE === "true";
     const recovered = prevOutage && !anyOutage && !anyStale;
 
-    if (anyOutage || anyStale || anyWarning || recovered) await postDiscord(results, { recovered, selfHeal: heal });
+    if (anyOutage || anyStale || anyWarning || recovered) await postHealthAlert(results, { recovered, selfHeal: heal });
 
     if (anyOutage || anyStale) {
       console.error(

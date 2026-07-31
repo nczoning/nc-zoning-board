@@ -18,6 +18,8 @@
  * is exactly the reading that would make this panel lie.
  */
 
+import { raiseAlert, alertedSinceUtcMidnight } from './alerts.js';
+
 const GRAPHQL_ENDPOINT = 'https://api.cloudflare.com/client/v4/graphql';
 
 /**
@@ -186,6 +188,69 @@ export async function readQuota(env, { nowMs = Date.now(), fetchImpl = fetch } =
       kv_action_types: [...new Set((account.kv ?? []).map((r) => r.dimensions?.actionType))],
     },
   };
+}
+
+/** Fraction of a cap at which the burn-down stops being informational. */
+export const QUOTA_ALERT_PCT = 80;
+
+/**
+ * Alert when any cap passes 80% of its daily allowance.
+ *
+ * The plan calls this "the alert that would have pre-empted this entire
+ * thread": the KV write limit was discovered from a Cloudflare email, after the
+ * fact, with the numbers already on the dashboard and nobody looking at them.
+ *
+ * ## Once an hour, not every tick
+ *
+ * The refresh cron runs every 5 minutes. Querying Cloudflare's analytics API on
+ * all 288 ticks to police quota would be a quota-watching feature that is
+ * itself one of the heavier things running, so the check is gated to the tick
+ * whose UTC minute is under 5. That is exactly one tick an hour, it needs no
+ * stored "last checked" state (which on a 1,000/day cap would itself be a KV
+ * write worth avoiding), and it is derived from the clock rather than from a
+ * counter that a redeploy resets.
+ *
+ * ## Once a day per cap, not once an hour
+ *
+ * `alertedSinceUtcMidnight` suppresses the repeat. The window is UTC because
+ * the caps reset at UTC midnight; a local-midnight window would reopen partway
+ * through a quota day and post a duplicate for a cap already reported.
+ *
+ * Never throws: quota alerting must not be able to fail a refresh that
+ * otherwise succeeded.
+ */
+export async function checkQuotaThresholds(env, fetchImpl = fetch, nowMs = Date.now()) {
+  try {
+    if (new Date(nowMs).getUTCMinutes() >= 5) return { checked: false, raised: [] };
+    if (!env.CF_ANALYTICS_TOKEN) return { checked: false, raised: [] };
+
+    const quota = await readQuota(env, { nowMs, fetchImpl });
+    if (!quota.ok) return { checked: false, raised: [] };
+
+    const raised = [];
+    for (const row of quota.data.usage) {
+      if (row.pct == null || row.pct < QUOTA_ALERT_PCT) continue;
+      // The title is the dedup key, so it names the cap and nothing that varies
+      // within a day. Putting the percentage in it would defeat the suppression
+      // the moment usage ticked from 81% to 82%.
+      const title = `Quota ${QUOTA_ALERT_PCT}%: ${row.label}`;
+      if (await alertedSinceUtcMidnight(env, { source: 'quota', title }, nowMs)) continue;
+      await raiseAlert(env, {
+        source: 'quota',
+        severity: row.pct >= 100 ? 'error' : 'warn',
+        title,
+        body: `${row.label} is at ${row.pct}% of the daily free-tier cap `
+          + `(${row.used} of ${row.cap}) after ${quota.data.utc_hours_elapsed} UTC hours`
+          + `${row.projected == null ? '' : `, projecting ${row.projected} by UTC midnight`}.`
+          + `\n\nCaps are per ACCOUNT and reset at UTC midnight. Nothing degrades `
+          + `until the cap is hit, at which point the cron simply stops.`,
+      }, { fetchImpl, nowMs });
+      raised.push(title);
+    }
+    return { checked: true, raised };
+  } catch {
+    return { checked: false, raised: [] };
+  }
 }
 
 /**

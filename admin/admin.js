@@ -68,6 +68,12 @@
     submissions: [],
     candidates: [],
     dismissed: [],
+    // What the Alerts tab last loaded, and the server's own count of what is
+    // still unacknowledged. The count is kept separately because the list is
+    // subject to the tab's limit and filter, and the Overview must not report
+    // "3 open" when it merely fetched 3 of them.
+    alerts: [],
+    alertsUnacknowledged: 0,
     selectedLocation: null,   // id, or '' for a new record
     selectedTag: null,        // slug, or '' for a new tag
     selectedSubmission: null, // submission id
@@ -1935,7 +1941,11 @@
       // derived from rows already fetched: no aggregate route, no stats table.
       tabStat(pendingSubmissions().length, 'pending review', 'queue',
         pendingSubmissions().length ? 'warn' : null),
-      tabStat(state.candidates.length, 'candidates', 'candidates'));
+      tabStat(state.candidates.length, 'candidates', 'candidates'),
+      tabStat(state.alertsUnacknowledged, 'open alerts', 'alerts',
+        state.alertsUnacknowledged ? 'warn' : null));
+
+    renderOverviewAlerts();
 
     replace($('#stat-category'),
       breakdown(countBy(records, (r) => r.category), records.length, (name) => ({ category: name })));
@@ -2235,9 +2245,142 @@
       : h('p', { class: 'muted', text: 'No entries yet.' }));
   }
 
+  // -------------------------------------------------------------- alerts --
+
+  // Severity drives the stripe colour and the word shown. Kept in the same
+  // order the Worker uses so the two cannot disagree about what exists.
+  const SEVERITY_LABEL = {
+    info: 'Info',
+    warn: 'Warning',
+    error: 'Error',
+    recovery: 'Recovered',
+  };
+
+  // Where the alert came from, in words. `source` is a machine token stored in
+  // the row; this is the only place it is turned into something readable.
+  const SOURCE_LABEL = {
+    'api-health': 'API health monitor',
+    refresh: 'Dataset refresh',
+    submissions: 'Submission queue',
+    quota: 'Free-tier quota',
+  };
+
+  async function acknowledgeAlert(id, button) {
+    button.disabled = true;
+    const res = await api(`/admin/alerts/${encodeURIComponent(id)}`, { method: 'PATCH' });
+    if (!res.ok) {
+      button.disabled = false;
+      const [kind, message] = describeFailure(res);
+      return banner(kind, message);
+    }
+    clearBanner();
+    return loadAlerts();
+  }
+
+  function alertCard(a) {
+    const severity = SEVERITY_LABEL[a.severity] ? a.severity : 'info';
+    const acknowledged = Boolean(a.acknowledged_at);
+    return h('div', { class: `alert-entry sev-${severity}${acknowledged ? ' acknowledged' : ''}` },
+      h('div', { class: 'alert-head' },
+        h('span', { class: 'alert-sev', text: SEVERITY_LABEL[severity] }),
+        h('strong', { class: 'alert-title', text: a.title }),
+        h('span', { class: 'spacer', style: 'flex:1' }),
+        h('span', { class: 'muted', text: SOURCE_LABEL[a.source] ?? a.source }),
+        timeEl(a.at)),
+      // Pre-wrap: the body is plain text assembled with newlines by the
+      // producers, not markup, and it is inserted as text so a Discord-flavoured
+      // body can never become HTML here.
+      a.body ? h('p', { class: 'alert-body', text: a.body }) : null,
+      h('div', { class: 'alert-foot' },
+        acknowledged
+          ? h('span', { class: 'muted' },
+            'Acknowledged by ',
+            h('span', { class: 'who', text: a.acknowledged_by || 'someone' }),
+            ' ',
+            timeEl(a.acknowledged_at))
+          : h('button', {
+            type: 'button',
+            class: 'btn secondary',
+            onclick: (e) => acknowledgeAlert(a.id, e.currentTarget),
+          }, 'Acknowledge')));
+  }
+
+  async function loadAlerts() {
+    const limit = $('#alerts-limit').value;
+    const unackOnly = $('#alerts-unack-only').checked;
+    const res = await api(
+      `/admin/alerts?limit=${encodeURIComponent(limit)}${unackOnly ? '&unacknowledged=1' : ''}`,
+    );
+    if (!res.ok) {
+      const [kind, message] = describeFailure(res);
+      return banner(kind, message);
+    }
+
+    const alerts = res.body.alerts || [];
+    const unacknowledged = Number(res.body.unacknowledged ?? 0);
+
+    replace($('#alerts-list'), alerts.length
+      ? alerts.map(alertCard)
+      : h('p', { class: 'muted', text: unackOnly ? 'Nothing unacknowledged.' : 'No alerts yet.' }));
+
+    $('#alerts-note').textContent = alerts.length
+      ? `${alerts.length} shown, ${unacknowledged} unacknowledged.`
+      : `${unacknowledged} unacknowledged.`;
+
+    // Same rule as the queue badge: only a non-zero count earns one.
+    $('#alerts-count').textContent = unacknowledged ? String(unacknowledged) : '';
+
+    state.alerts = alerts;
+    state.alertsUnacknowledged = unacknowledged;
+    // The Overview's alerts panel reads this, and acknowledging from the tab
+    // has to move the number on the landing page too. Re-rendered rather than
+    // patched, for the same reason the other counts are: it derives.
+    renderOverviewAlerts();
+    return undefined;
+  }
+
+  /**
+   * The Overview's alerts panel: what is still open, most urgent first.
+   *
+   * Errors before warnings before the rest, NOT newest first the way the tab
+   * is. A landing page answers "is anything wrong", and a fresh `info` sitting
+   * above a six-hour-old `error` answers it wrongly.
+   */
+  function renderOverviewAlerts() {
+    const box = $('#overview-alerts');
+    if (!box) return;
+
+    const open = state.alerts.filter((a) => !a.acknowledged_at);
+    const total = state.alertsUnacknowledged;
+
+    if (!total) {
+      replace(box, h('p', { class: 'muted', text: 'Nothing open. Alerts that have been acknowledged stay in the Alerts tab.' }));
+      return;
+    }
+
+    const RANK = { error: 0, warn: 1, info: 2, recovery: 3 };
+    const SHOWN = 4;
+    const sorted = [...open].sort(
+      (a, b) => (RANK[a.severity] ?? 9) - (RANK[b.severity] ?? 9) || String(b.at).localeCompare(String(a.at)),
+    );
+
+    replace(box,
+      sorted.slice(0, SHOWN).map((a) => h('div', { class: `overview-alert sev-${SEVERITY_LABEL[a.severity] ? a.severity : 'info'}` },
+        h('span', { class: 'alert-sev', text: SEVERITY_LABEL[a.severity] ?? 'Info' }),
+        h('span', { class: 'overview-alert-title', text: a.title }),
+        h('span', { class: 'muted', text: SOURCE_LABEL[a.source] ?? a.source }),
+        timeEl(a.at))),
+      // Says what is NOT on screen. A panel capped at four that does not admit
+      // it reads as "four open" when there are twenty.
+      h('button', {
+        class: 'btn secondary', type: 'button',
+        onclick: () => switchTab('alerts'),
+      }, total > SHOWN ? `See all ${total} open alerts` : 'Open the Alerts tab'));
+  }
+
   // ---------------------------------------------------------------- tabs --
 
-  const TABS = ['overview', 'locations', 'queue', 'candidates', 'tags', 'audit'];
+  const TABS = ['overview', 'locations', 'queue', 'candidates', 'tags', 'alerts', 'audit'];
 
   function switchTab(name) {
     for (const btn of document.querySelectorAll('nav.tabs button')) {
@@ -2247,6 +2390,7 @@
       $(`#tab-${id}`).hidden = id !== name;
     }
     if (name === 'audit') loadAudit();
+    if (name === 'alerts') loadAlerts();
     // A Leaflet map built while its pane was display:none measured a zero-sized
     // container, so it has to be told the size it actually has now.
     if (name === 'queue') state.reviewMap?.invalidateSize?.();
@@ -2300,6 +2444,9 @@
     $('#tag-new').onclick = () => selectTag('');
     $('#audit-refresh').onclick = loadAudit;
     $('#audit-limit').onchange = loadAudit;
+    $('#alerts-refresh').onclick = loadAlerts;
+    $('#alerts-limit').onchange = loadAlerts;
+    $('#alerts-unack-only').onchange = loadAlerts;
     $('#rebuild').onclick = (e) => rebuildDataset(e.currentTarget);
     $('#queue-refresh').onclick = loadQueue;
     $('#queue-status').onchange = (e) => {
@@ -2314,7 +2461,7 @@
     // Both feed counts the Overview and the tab badges derive from, so they
     // load at boot rather than on first visit to their tab. A badge that only
     // appears once you have already gone looking is not a notification.
-    await Promise.all([loadQueue(), loadCandidates()]);
+    await Promise.all([loadQueue(), loadCandidates(), loadAlerts()]);
     await refreshFreshness();
     // Overview is the landing tab, and its numbers come from what was just
     // loaded, so it is rendered after both rather than on its own fetch.

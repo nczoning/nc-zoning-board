@@ -155,23 +155,56 @@ The 3D scene ships on `main`. These are the other five files:
 
 ## Repo Setup (for new maintainers)
 
-Discord alerting uses secrets configured in **repo Settings → Secrets and variables → Actions**. The Worker's own secrets are a **separate store**, set with `wrangler secret put`:
+Discord alerting uses secrets configured in **repo Settings → Secrets and variables → Actions**. The Worker's own secrets are a **separate store**, set with `npx wrangler secret put` from inside `worker/`:
+
+```powershell
+cd worker
+$env:CLOUDFLARE_ACCOUNT_ID='b9937d8d595fad7de8d1549b22390281'
+npx wrangler secret put <NAME>              # production
+npx wrangler secret put <NAME> --env staging
+```
+
+`wrangler` is a devDependency of `worker/`, not a global install, so it resolves only through `npx` (or an npm script, which puts `node_modules/.bin` on PATH). Running it from the repo root fails twice over: npm cannot find the binary, and `wrangler.jsonc` is not there either.
 
 | Secret | Value |
 | --- | --- |
 | `DISCORD_WEBHOOK_URL` | Legacy webhook for the retired **submissions** channel. Nothing writes to it now; it survives only as a fallback for the alerts webhook below, and retires at Phase 6 |
-| `NCZ_ALERTS_DISCORD_WEBHOOK_URL` | Webhook for the dedicated **map-alerts** channel: auto-discovery parse failures and Data API health/outage alerts, kept separate from submissions |
+| `NCZ_ALERTS_DISCORD_WEBHOOK_URL` | Webhook for the dedicated **map-alerts** channel. Held by the **Worker** now (`npx wrangler secret put`), because the Worker is what posts to Discord. The Actions copy is unused |
+| `ALERTS_INGEST_SECRET` | Bearer token for `POST /internal/alerts`. Needed in **both** stores: a GitHub Actions secret for `monitor_api_health.js`, and a Cloudflare Worker secret for the Worker that checks it. Setting one does not set the other |
 
-### Discord Notifications
+### Alerts
 
-One channel now. The **submissions** channel (`DISCORD_WEBHOOK_URL`) covered the
-mod submission lifecycle: a bot posted an embed when a submission PR opened, then
+Every alert goes through one place: **`POST /internal/alerts` on the Worker**,
+which **records it in the `alerts` table and then forwards it to Discord**.
+
+The ordering is the point. The table exists so alert history survives Discord
+burying or dropping a message, and forwarding first would mean a Discord outage
+loses the record as well as the notification. The two steps fail independently:
+a failed D1 write still notifies, and a failed Discord post still leaves the
+alert in the dashboard's **Alerts** tab, where it can be acknowledged.
+
+Alerts come from four sources, and the `source` column names them:
+
+| Source | Raised by | When |
+| --- | --- | --- |
+| `api-health` | `monitor-api-health.yml`, every 15 min | The Data API (`/v1`) is not serving, **or** its refresh cron has wedged (a frozen `/v1/health.last_refresh_at` heartbeat older than 45 min; the API can serve stale data silently, see #849). On a wedged cron it also **self-heals**: it dispatches `deploy-api.yml` to redeploy the affected Worker (re-registers the Cron Trigger), capped at 2 redeploys/env/hour before escalating for a human |
+| `refresh` | `worker/src/refresh.js`, on the 5-minute cron | A dataset rebuild failed (amber: last-known-good is still served), and the matching all-clear when one later succeeds |
+| `submissions` | `worker/src/submissions.js` | A submission reached the review queue. A plain "one is waiting" post linking to the dashboard, deliberately not the old edit-in-place embed |
+| `quota` | `worker/src/quota.js`, hourly on the cron | A free-tier cap passed 80% for the UTC day. Checked on one tick an hour, and suppressed to once per cap per UTC day |
+
+**In-Worker producers call `raiseAlert()` directly** rather than making an HTTP
+request to their own Worker. `/internal/alerts` is the remote entry point to the
+same function, and exists because a GitHub Action cannot hold a session.
+
+**Why `/internal/` and not `/admin/`.** Every `/admin/*` route is gated on GitHub
+collaborator status, and `index.js` states that as an invariant. The machine
+surface authenticates with a shared secret instead, so it sits on its own prefix
+and the invariant stays literally true. Reading and acknowledging alerts *are*
+on `/admin/alerts`, behind the session, because those are done by a person.
+
+The legacy **submissions** channel (`DISCORD_WEBHOOK_URL`) covered the mod
+submission lifecycle: a bot posted an embed when a submission PR opened, then
 edited that message in place to show merged or closed. Discord was acting as the
 queue's UI. The dashboard holds that state now, and all three producing workflows
-retired at the D1 cutover, so nothing writes to that webhook any more. It is kept
-only as a legacy fallback for the alerts webhook below, and retires at Phase 6.
-
-**Alerts** (`NCZ_ALERTS_DISCORD_WEBHOOK_URL`) covers operational health:
-
-- **`monitor-auto-discovery.yml`**: Daily scan; alerts when a NCZoning-tagged mod fails to parse and isn't covered by a manual entry.
-- **`monitor-api-health.yml`**: Every 15 min; alerts when the Data API (`/v1`) isn't serving **or** its refresh cron has wedged (a frozen `/v1/health.last_refresh_at` heartbeat older than 45 min; the API can serve stale data silently, see #849). On a wedged cron it also **self-heals**: it dispatches `deploy-api.yml` to redeploy the affected Worker (re-registers the Cron Trigger), capped at 2 redeploys/env/hour before escalating for a human. The Worker's own refresh-failure alert (`worker/src/refresh.js`) posts here too (Cloudflare Worker secret, set separately via `wrangler secret put`).
+retired at the D1 cutover. It survives only as a fallback for the alerts webhook,
+and retires at Phase 6.

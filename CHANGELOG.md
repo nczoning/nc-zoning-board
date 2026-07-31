@@ -5,23 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.1.0] - 2026-08-01
+
+Alerts get somewhere to live. Everything the site raises, from a new submission
+to a free-tier cap running down, is recorded and shown in the dashboard rather
+than only being posted to Discord and scrolling away. The registry's own
+housekeeping is tidied up behind it: real dates, sortable columns, and edits that
+cannot silently overwrite each other.
+
+### Added
+
+- **A submission now tells someone it arrived.** Since the cutover a submission reached the review queue silently and the only way to find one was to open the dashboard and look. The map-alerts channel gets a post linking to the dashboard.
+- **An Alerts tab in the dashboard**, with a count beside it and an acknowledge button. Every alert is recorded before it is sent to Discord, so the history is complete even when Discord drops or buries a message.
+- **The Overview tab opens with what is still unacknowledged**, most severe first rather than most recent, because the first question on a landing page is whether anything is wrong.
+- **A warning when any free-tier cap passes 80% for the day**, checked hourly and said once per cap per day. This is the alert that would have caught the KV write limit before Cloudflare emailed about it.
 
 ### Changed
 
 - The locations table sorts by any of Name, Category, Status, Added or Modified. Click a heading to sort, click it again to reverse. Dates start newest-first, text starts A to Z, because that is the question each one is usually being asked. Keyboard reachable, and the current sort is announced to screen readers.
 - The dashboard shows when a location was **added** and when it was last **modified**, in the locations table as well as the detail pane, alongside when the mod itself was last **updated on Nexus**. Three different dates, named so they cannot be confused: the one a `/v1` record carries is the Nexus one.
-
-### Changed
-
 - Tags are stored one way, in the join the map reads. The duplicate JSON column that was kept alongside it while the two were proven identical is gone, so there is no second copy to drift.
+
+### Removed
+
+- The daily auto-discovery health alert is retired. It warned that a tagged mod's metadata block was missing or unparseable, but the block itself retired at 2.0.0, so a missing block is now the normal case and the alert had started firing on every ordinary candidate. The dashboard's candidates panel already shows that set.
 
 ### Fixed
 
 - A restore from the location files would have produced a registry where every location had no tags. The importer wrote the tag column but not the join the map actually reads, so the database would have looked complete and served untagged. It writes both now, and the generated file ends with a check that prints what landed.
 - Location dates were all the same timestamp: the moment the registry was imported, so every record claimed it was added and last edited at the same instant on 26 July. Backfilled from git history, which is the only place the real dates survived. 288 records now carry their true dates, spanning 7 March to 26 July, and 212 of them show a modified date genuinely later than their added date. The nine auto-discovered records keep the import date, because they have never existed as files and nothing recorded when they arrived.
-
 - Two admins editing the same location no longer overwrite each other. A save applies only while the record still looks the way it did when the editor was opened; if it moved, the save is refused, nothing is written, and the current version is loaded so the change can be reapplied. Previously the second save won silently and the first admin's edit disappeared on next load.
+- An acknowledged alert was dimmed so far that it became hard to read. It now recedes by losing its severity colour rather than its contrast.
+- The maintainer docs told you to run `wrangler`, which only works from inside an npm script. Every instruction now says `npx wrangler`, and the refresh cron is described as 5 minutes rather than 15, which is the health monitor's interval.
 
 ## [2.0.0] - 2026-07-31
 

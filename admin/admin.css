@@ -942,6 +942,107 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 .audit-entry details { margin-top: var(--space-2xs); }
 .audit-entry summary { cursor: pointer; color: var(--gray); font-size: var(--fs-ui); }
 
+/* --------------------------------------------------------------- alerts -- */
+
+/* The dashboard's first checkbox. Baseline alignment rather than centre: it
+   sits in a toolbar row beside a <select> and a button. */
+.inline-check {
+    display: inline-flex;
+    gap: var(--space-2xs);
+    align-items: center;
+    color: var(--text-subtle);
+    font-size: var(--fs-ui);
+    white-space: nowrap;
+}
+
+.alert-entry {
+    border-bottom: var(--ui-border-thin) solid var(--border-subtle);
+    /* The stripe is the severity. A left border rather than a background so a
+       wall of warnings does not become a wall of colour. 3px matches `.notice`,
+       which is the same device carrying the same meaning. */
+    border-left: 3px solid var(--gray);
+    padding: var(--space-md);
+}
+
+.alert-entry.sev-info { border-left-color: var(--secondary); }
+.alert-entry.sev-warn { border-left-color: var(--tertiary); }
+.alert-entry.sev-error { border-left-color: var(--status-critical); }
+.alert-entry.sev-recovery { border-left-color: var(--status-ok); }
+
+/* Dealt with, kept visible.
+
+   De-emphasis by withdrawing the COLOUR, not the contrast. Fading the whole
+   entry was the obvious move and the wrong one: the only lower opacity in this
+   file is `.btn:disabled`, which is meant to look unusable, and an acknowledged
+   alert is the opposite (history, still worth reading). Text stays at full
+   contrast; the stripe goes neutral and the severity word stops shouting, so
+   the row drops out of the scan without dropping out of legibility.
+
+   Equal specificity to the .sev-* rules above, so this must stay after them. */
+.alert-entry.acknowledged { border-left-color: var(--border-neutral); }
+.alert-entry.acknowledged .alert-sev { color: var(--text-dim); }
+
+.alert-head {
+    display: flex;
+    gap: var(--space-md);
+    align-items: baseline;
+    flex-wrap: wrap;
+    font-size: var(--fs-ui);
+}
+
+.alert-head time { color: var(--gray); font-variant-numeric: tabular-nums; }
+.alert-head .alert-title { color: var(--white); font-weight: 600; }
+
+.alert-head .alert-sev {
+    font-size: var(--fs-micro);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+}
+
+.sev-info .alert-sev { color: var(--secondary); }
+.sev-warn .alert-sev { color: var(--tertiary); }
+.sev-error .alert-sev { color: var(--status-critical); }
+.sev-recovery .alert-sev { color: var(--status-ok); }
+
+/* Producers assemble the body as plain text with newlines, so the line breaks
+   they wrote are the ones shown. */
+.alert-body {
+    margin: var(--space-xs) 0 0;
+    color: var(--text-subtle);
+    font-size: var(--fs-ui);
+    line-height: var(--lh-body);
+    white-space: pre-wrap;
+}
+
+.alert-foot { margin-top: var(--space-xs); font-size: var(--fs-ui); }
+.alert-foot .who { color: var(--tertiary); font-weight: 600; }
+
+/* The Overview's compact row. One line each, no body: the landing page answers
+   "is anything wrong", and the Alerts tab answers "what exactly". Shares the
+   .sev-* stripe colours above rather than defining a second palette. */
+.overview-alert {
+    display: flex;
+    gap: var(--space-md);
+    align-items: baseline;
+    flex-wrap: wrap;
+    border-left: 3px solid var(--gray);
+    padding: var(--space-xs) var(--space-md);
+    margin-bottom: var(--space-2xs);
+    font-size: var(--fs-ui);
+}
+
+.overview-alert.sev-info { border-left-color: var(--secondary); }
+.overview-alert.sev-warn { border-left-color: var(--tertiary); }
+.overview-alert.sev-error { border-left-color: var(--status-critical); }
+.overview-alert.sev-recovery { border-left-color: var(--status-ok); }
+
+/* Takes the row so the source and time sit at the end without competing. */
+.overview-alert .overview-alert-title { flex: 1 1 18rem; color: var(--white); font-weight: 600; }
+.overview-alert time { color: var(--gray); font-variant-numeric: tabular-nums; }
+
+#overview-alerts .btn { margin-top: var(--space-xs); }
+
 .diff { margin: var(--space-xs) 0 0; font-size: var(--fs-code); }
 .diff div { padding: var(--space-2xs) 0; font-family: ui-monospace, monospace; line-height: var(--lh-tight); }
 .diff .k { color: var(--gray); }

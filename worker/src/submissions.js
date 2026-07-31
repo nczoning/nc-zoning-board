@@ -35,6 +35,7 @@ import { validateLocationInput } from './validate.js';
 import { readTagSlugs } from './tag-registry.js';
 import { readCandidates } from './nexus-cache.js';
 import { writeAudit } from './audit.js';
+import { raiseAlert } from './alerts.js';
 
 const KINDS = ['create', 'edit', 'remove'];
 
@@ -268,6 +269,30 @@ async function create(request, env, { fetchImpl = fetch, nowMs = Date.now() } = 
     target: id === null ? null : String(id),
     after: { kind, location_id: body.location_id ?? null, payload: stored },
   }, nowMs);
+
+  // Tell someone. Until this existed, a submission reached the queue and nobody
+  // was told: the three workflows retired at the D1 cutover had carried the only
+  // notification, and the dashboard replaced the queue's UI without replacing
+  // its doorbell. See learnings/retiring-a-channel-took-the-only-submission-
+  // notification-with-it.
+  //
+  // Deliberately a plain "one is waiting" post that links to the dashboard. The
+  // old webhook posted an embed and then EDITED it in place to show merged or
+  // closed, which made Discord the queue's UI; the dashboard holds that state
+  // now and the message-editing machinery is not being rebuilt.
+  //
+  // Nothing from the submitter is quoted. The note and contact are unreviewed
+  // free text from an anonymous caller, and this posts to a channel; the
+  // reviewer reads them in the dashboard, behind the collaborator gate.
+  await raiseAlert(env, {
+    source: 'submissions',
+    severity: 'info',
+    title: `New ${kind} submission awaiting review`,
+    // Plain /admin/, not a deep link: the dashboard has no hash routing, so
+    // /admin/#queue would silently open on Overview and read as a broken link.
+    body: `A ${kind} submission is pending${id === null ? '' : ` (#${id})`}.`
+      + `\n\nReview it in the Queue tab at ${env.SITE_ORIGIN ?? 'https://nczoning.net'}/admin/`,
+  }, { nowMs });
 
   return json({ id, kind, status: 'pending' }, 201);
 }
