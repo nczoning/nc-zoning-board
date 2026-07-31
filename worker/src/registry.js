@@ -152,8 +152,25 @@ export async function insertLocation(env, payload, nowIso = new Date().toISOStri
 /**
  * Apply a validated partial patch. `{empty: true}` when the payload names no
  * column and no tags, which is a caller error rather than a no-op write.
+ *
+ * OPTIMISTIC CONCURRENCY. Pass `ifMatch` as the `updated_at` the caller read,
+ * and the write applies only while the record still carries it. Three admins
+ * share one registry and one queue, so without this the second save silently
+ * replaces the first: the audit log records both, but nobody is told, and the
+ * admin who saved first sees their change vanish on next load.
+ *
+ * Returns `{conflict: true}` when the row moved underneath. SQLite counts a
+ * matched row as changed even when the values are identical, so `changes === 0`
+ * means the WHERE did not match rather than "nothing needed writing". The
+ * caller has already established the row exists, so the only way to miss is a
+ * stale `ifMatch`.
+ *
+ * Omitting `ifMatch` is an unguarded write, which is correct for a caller that
+ * genuinely means "apply this regardless" (see review.js).
  */
-export async function patchLocation(env, id, payload, nowIso = new Date().toISOString()) {
+export async function patchLocation(
+  env, id, payload, nowIso = new Date().toISOString(), { ifMatch = null } = {},
+) {
   const patchesTags = Object.prototype.hasOwnProperty.call(payload, 'tags');
   const { sets, binds } = buildUpdate(payload);
   if (!sets.length && !patchesTags) return { empty: true };
@@ -162,7 +179,14 @@ export async function patchLocation(env, id, payload, nowIso = new Date().toISOS
   // unconditional rather than gated on `sets`.
   sets.push('updated_at = ?');
   binds.push(nowIso, id);
-  await env.DB.prepare(`UPDATE locations SET ${sets.join(', ')} WHERE id = ?`).bind(...binds).run();
+
+  let sql = `UPDATE locations SET ${sets.join(', ')} WHERE id = ?`;
+  if (ifMatch) {
+    sql += ' AND updated_at = ?';
+    binds.push(ifMatch);
+  }
+  const res = await env.DB.prepare(sql).bind(...binds).run();
+  if (ifMatch && res?.meta?.changes === 0) return { conflict: true };
 
   if (patchesTags) await syncLocationTags(env, id, payload.tags);
   return { empty: false };

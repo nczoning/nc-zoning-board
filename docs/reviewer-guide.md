@@ -71,6 +71,29 @@ appears within seconds. Rejecting keeps the record of the decision.
 - **Duplicate:** the queue already shows nearby records for the same mod. If it
   is a genuine duplicate rather than a second location, reject it.
 
+## ✋ When a save is refused
+
+If someone else changed a location while you had it open, your save is refused
+and **nothing is written**. The current version loads so you can see what moved,
+then reapply your change and save again.
+
+That is deliberate. Three of us share one registry, and without it the second
+save silently replaces the first: no error, and the person who saved first only
+finds out when their change is gone.
+
+### One case it does not cover: approving a stale submission
+
+A submission is written against the record as the **submitter** saw it, and
+approving applies it however long it has been sitting in the queue.
+
+So if you fixed something on a record while a submission for it was pending,
+approving that submission puts the submitter's older values back over your fix.
+This needs no second person: you editing a record and then approving a
+submission for it is enough.
+
+**Read the diff before you approve.** It shows exactly what the submission would
+write, which is the check that catches this.
+
 ## 📋 The audit log
 
 Every change records who made it and the record before and after. It replaced

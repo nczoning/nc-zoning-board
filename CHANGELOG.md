@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Two admins editing the same location no longer overwrite each other. A save applies only while the record still looks the way it did when the editor was opened; if it moved, the save is refused, nothing is written, and the current version is loaded so the change can be reapplied. Previously the second save won silently and the first admin's edit disappeared on next load.
+
 ## [2.0.0] - 2026-07-31
 
 Submissions move onto the map. A location can now be added, corrected or reported

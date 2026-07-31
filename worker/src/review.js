@@ -189,6 +189,8 @@ async function restoreInstead(env, submission, locationId, { actor, nowIso }) {
   }
 
   const before = await loadAdminRecord(env, row);
+  // Unguarded on purpose: publishing a record this approval just restored is
+  // this call's whole job, and there is no competing version to lose.
   await patchLocation(env, locationId, { status: 'published' }, nowIso);
   const after = await loadAdminRecordById(env, locationId);
   await writeAudit(env, { actor, action: 'location.update', target: locationId, before, after });
@@ -245,6 +247,14 @@ async function applyApproval(env, submission, { actor, nowIso, restoreLocationId
     const v = validateLocationInput(payload, { tagNames: await readTagSlugs(env), partial: true });
     if (!v.ok) return { error: 'validation_failed', errors: v.errors, status: 422 };
 
+    // Unguarded, and this one is a real trade-off rather than a non-issue.
+    // A submission is written against the record as it looked when the
+    // submitter saw it, and approving applies it however long it sat in the
+    // queue. If an admin tidied the record meanwhile, approving reapplies the
+    // submitter's older values over that tidy-up. Guarding it properly needs
+    // the submission to record the version it was based on, which is a schema
+    // change; see the follow-up on #899. Until then the reviewer sees the diff
+    // before approving, which is the mitigation.
     const patched = await patchLocation(env, submission.location_id, payload, nowIso);
     if (patched.empty) {
       return { error: 'empty_patch', detail: 'this submission changes no field', status: 422 };
@@ -260,6 +270,8 @@ async function applyApproval(env, submission, { actor, nowIso, restoreLocationId
   if (before.status === 'hidden') {
     return { error: 'already_hidden', detail: 'this location is already off the map', status: 409 };
   }
+  // Unguarded on purpose: an approved removal pulls the pin regardless of what
+  // else changed on the record, which is the point of approving it.
   await patchLocation(env, submission.location_id, { status: 'hidden' }, nowIso);
   const after = await loadAdminRecordById(env, submission.location_id);
   await writeAudit(env, {

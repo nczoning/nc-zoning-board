@@ -220,7 +220,10 @@ export default {
           ? {
             ...adminCors(request),
             'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            // If-Match carries the record version on a guarded PATCH. Omitting it
+            // here fails the preflight, so the write never reaches the Worker and
+            // the browser reports CORS rather than a conflict.
+            'Access-Control-Allow-Headers': 'Content-Type, If-Match',
           }
           : CORS_HEADERS,
       });
