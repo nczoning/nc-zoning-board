@@ -4,17 +4,15 @@
  * `location_tags` join.
  *
  * Phase 4b moved tags into D1 but only wired up the read path. Phase 4a's admin
- * writes predate it and still set the legacy `locations.tags` JSON column, which
- * the materializer stopped reading the moment the join became authoritative. An
- * admin editing tags therefore got a 200 and no change on the map. That is the
- * gap this module closes, and it is why every location write now goes through
- * `syncLocationTags` rather than a bare column update.
+ * writes predate it and set a `locations.tags` JSON column the materializer had
+ * stopped reading, so an admin editing tags got a 200 and no change on the map.
+ * That is the gap this module closes, and it is why every location write goes
+ * through `syncLocationTags` rather than a bare column update.
  *
- * DUAL WRITE, on purpose. `locations.tags` is kept byte-compatible with the join
- * until a later migration drops the column. Migration 0002 is additive
- * specifically so the switch can be proven byte-for-byte first; writing to only
- * one of the two would make the parity gate compare a live column against a
- * frozen one and call the difference a regression.
+ * ONE WRITE. `location_tags` is the only representation. The JSON column was
+ * kept byte-compatible with the join while migration 0002's additive overlap
+ * let the switch be proven byte-for-byte; migration 0007 drops it, so there is
+ * no second copy to keep in step.
  */
 
 /** Never a registry row: a marker auto-discovery prepends, not a curated tag. */
@@ -210,15 +208,12 @@ export async function readTagsForLocations(env, ids) {
  */
 export async function syncLocationTags(env, locationId, slugs) {
   const clean = [...new Set(slugs.filter((s) => !RESERVED_SLUGS.has(s)))].sort();
-  const legacy = clean;
 
   const statements = [
     env.DB.prepare('DELETE FROM location_tags WHERE location_id = ?').bind(locationId),
     ...clean.map((slug) => env.DB.prepare(
       'INSERT INTO location_tags (location_id, tag_slug) VALUES (?, ?)',
     ).bind(locationId, slug)),
-    env.DB.prepare('UPDATE locations SET tags = ? WHERE id = ?')
-      .bind(JSON.stringify(legacy), locationId),
   ];
 
   // Batched so the join is never briefly empty for a location that has tags.

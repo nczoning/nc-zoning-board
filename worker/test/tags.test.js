@@ -26,7 +26,7 @@ function fakeDb({ tags = [], links = [] } = {}) {
 const row = (over = {}) => ({
   id: 'a', name: 'Alpha', nexus_id: '1', category: 'other',
   x: 1, y: 2, z: 3, yaw: null, description: 'd', credits: null,
-  authors: '["Spud"]', tags: '["legacy-column-value"]',
+  authors: '["Spud"]',
   status: 'published',
   created_at: 'x', updated_at: 'x', ...over,
 });
@@ -69,17 +69,17 @@ test('readLocationTags groups slugs by location', async () => {
   assert.equal(map.get('missing'), undefined);
 });
 
-test('the join is authoritative when supplied, not the legacy column', async () => {
+test('the join is the only source of tags', async () => {
   const full = build([row()], new Map([['a', ['apartment', 'corpo']]]));
   assert.deepEqual(full.a.tags, ['apartment', 'corpo']);
-  assert.equal(full.a.tags.includes('legacy-column-value'), false);
 });
 
-test('without the join it falls back to the legacy column', async () => {
-  // Migration 0002 keeps both in sync on purpose, so the fallback is a
-  // transitional path rather than a silent inconsistency.
-  const full = build([row()], null);
-  assert.deepEqual(full.a.tags, ['legacy-column-value']);
+test('a missing join THROWS rather than serving every record untagged', async () => {
+  // There used to be a fallback to the legacy locations.tags column, kept while
+  // migration 0002 held both in step. Migration 0007 dropped that column, and a
+  // silent default here would serve 297 untagged records while looking like it
+  // worked, which is the exact failure this area keeps producing.
+  assert.throws(() => build([row()], null), /locationTags is required/);
 });
 
 test('the synthetic nczoning marker is never added, for any record', async () => {

@@ -31,14 +31,11 @@ export async function getRow(env, id) {
 /**
  * Row -> the admin representation (everything, including admin-only fields).
  *
- * `tags` comes from the `location_tags` join, passed in by the caller, NOT from
- * the legacy `locations.tags` column. The join is what the materializer reads,
- * so it is what the dashboard must show. Rendering the column would let an
- * edit that never reached the join look like it had landed.
+ * `tags` comes from the `location_tags` join, passed in by the caller. That is
+ * the only representation since migration 0007 dropped the JSON column.
  *
- * The synthetic `nczoning` marker is absent here by construction (it is not a
- * registry row, so it has no join rows). That is correct for an editor: it is
- * not a tag an admin owns, and the materializer re-adds it for auto records.
+ * The synthetic `nczoning` marker is absent by construction: it is not a
+ * registry row, so it has no join rows. Nothing adds it at serve time either.
  */
 export function rowToAdmin(row, tags = [], nexusUpdatedAt = null) {
   return {
@@ -152,15 +149,15 @@ export async function insertLocation(env, payload, nowIso = new Date().toISOStri
 
   await env.DB.prepare(`
     INSERT INTO locations (id, name, nexus_id, category, x, y, z, yaw, description,
-      credits, authors, tags, status, admin_notes, added_at, modified_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      credits, authors, status, admin_notes, added_at, modified_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id, payload.name, payload.nexus_id, payload.category,
     x, y, z === undefined ? null : z,
     payload.yaw ?? null,
     payload.description ?? '',
     payload.credits || null,
-    JSON.stringify(payload.authors), JSON.stringify(payload.tags),
+    JSON.stringify(payload.authors),
     payload.status ?? 'published',
     payload.admin_notes ?? null, nowIso, nowIso,
   ).run();

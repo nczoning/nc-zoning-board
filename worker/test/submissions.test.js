@@ -14,7 +14,7 @@ const IP = '203.0.113.7';
 const LOCATION = {
   id: 'loc-1', name: 'Existing Loft', nexus_id: '12345', category: 'new-location',
   x: 1, y: 2, z: 3, yaw: 90, description: 'a place', credits: null,
-  authors: '["Spud"]', tags: '["apartment"]', status: 'published',
+  authors: '["Spud"]', status: 'published',
   admin_notes: null, added_at: '2026-01-01T00:00:00Z', modified_at: '2026-01-01T00:00:00Z',
 };
 

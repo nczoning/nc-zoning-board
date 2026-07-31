@@ -76,6 +76,8 @@ function toRow(rec, stamp) {
     // gate on truthiness, so '' and NULL alike omit the key from /v1.
     credits: rec.credits ? rec.credits : null,
     authors: JSON.stringify(rec.authors ?? []),
+    // Not a column any more (migration 0007). Carried on the row because
+    // insertLocationTags reads it to build the join.
     tags: JSON.stringify(rec.tags ?? []),
     status: 'published',
     added_at: stamp,
@@ -85,13 +87,38 @@ function toRow(rec, stamp) {
 
 const COLUMNS = [
   'id', 'name', 'nexus_id', 'category', 'x', 'y', 'z', 'yaw',
-  'description', 'credits', 'authors', 'tags', 'status',
+  'description', 'credits', 'authors', 'status',
   'added_at', 'modified_at',
 ];
 
 function insertLocation(row) {
   const values = COLUMNS.map((c) => sql(row[c])).join(', ');
   return `INSERT INTO locations (${COLUMNS.join(', ')}) VALUES (${values});`;
+}
+
+/**
+ * The tag links for one row. THE JOIN, NOT JUST THE COLUMN.
+ *
+ * `materialize.js` treats `location_tags` as authoritative, so a database built
+ * without these rows serves every location with no tags at all. `locations`
+ * looks correct and only the join is empty, which makes the failure silent.
+ *
+ * Reads the record's own tag array rather than `locations.tags`, so this keeps
+ * working when that column is dropped (planned, #888 stage 7).
+ *
+ * `IN (SELECT slug FROM tags)` filters through the registry as it exists in the
+ * target database at import time, which drops anything not curated without this
+ * script needing to know the registry. Same rule migration 0002 used for its
+ * backfill. Callers are warned about tags this will drop.
+ */
+function insertLocationTags(row) {
+  const tags = JSON.parse(row.tags);
+  if (!tags.length) return [];
+  return [
+    'INSERT INTO location_tags (location_id, tag_slug)\n'
+    + `  SELECT ${sql(row.id)}, je.value FROM json_each(${sql(row.tags)}) je\n`
+    + '  WHERE je.value IN (SELECT slug FROM tags);',
+  ];
 }
 
 /** Manual records: one JSON file each, UUID filenames. */
@@ -154,14 +181,46 @@ async function main() {
 
   const dismissed = readDismissed(stamp);
 
+  // Tags the registry will drop. The filter runs in SQL against the target
+  // database, so this script cannot refuse them, but a silent truncation would
+  // leave a location quietly short a tag nobody asked to remove. data/tags.json
+  // is the offline mirror of the registry and retires with it at phase 6.
+  const known = new Set(Object.keys(
+    JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'data', 'tags.json'), 'utf8')),
+  ));
+  const unknown = new Map();
+  for (const r of rows) {
+    for (const t of JSON.parse(r.tags)) {
+      if (!known.has(t)) unknown.set(t, (unknown.get(t) ?? 0) + 1);
+    }
+  }
+
+  const tagLinks = rows.flatMap(insertLocationTags);
+  const expectedLinks = rows.reduce(
+    (n, r) => n + JSON.parse(r.tags).filter((t) => known.has(t)).length, 0,
+  );
+
   const body = [
     `-- Phase 1 seed, generated ${stamp} by worker/scripts/import-locations.mjs`,
     `-- ${manual.length} manual + ${auto.length} auto = ${rows.length} locations,`,
     `-- ${dismissed.length} dismissed candidate(s). Plain INSERTs: re-running fails.`,
+    `-- ${tagLinks.length} location(s) carry tags, ${expectedLinks} link(s) expected in`,
+    '-- location_tags, assuming the target registry matches data/tags.json.',
     '',
     ...rows.map(insertLocation),
     '',
+    '-- The join. Without these the materializer serves every location untagged.',
+    ...tagLinks,
+    '',
     ...dismissed,
+    '',
+    '-- Printed when this file is executed. `links` must match the header count,',
+    '-- and `untagged` must be the number of locations that genuinely have none.',
+    'SELECT (SELECT COUNT(*) FROM locations) AS locations,',
+    '       (SELECT COUNT(*) FROM location_tags) AS links,',
+    '       (SELECT COUNT(*) FROM locations l',
+    '          WHERE NOT EXISTS (SELECT 1 FROM location_tags lt WHERE lt.location_id = l.id))',
+    '         AS untagged;',
     '',
   ].join('\n');
 
@@ -169,8 +228,14 @@ async function main() {
   fs.writeFileSync(outPath, body);
   console.log(
     `wrote ${outPath}\n  ${manual.length} manual + ${auto.length} auto = ${rows.length} locations`
-    + `\n  ${dismissed.length} dismissed candidate(s)`,
+    + `\n  ${dismissed.length} dismissed candidate(s)`
+    + `\n  ${expectedLinks} tag link(s) across ${tagLinks.length} location(s)`,
   );
+  if (unknown.size) {
+    console.warn(`\n  WARNING: ${unknown.size} tag(s) are not in data/tags.json and the`);
+    console.warn('  registry filter will drop them, leaving those locations short a tag:');
+    for (const [t, n] of unknown) console.warn(`    ${t} (on ${n} record(s))`);
+  }
 }
 
 main().catch((err) => {

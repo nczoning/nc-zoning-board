@@ -49,14 +49,14 @@ const ROWS = [
   {
     id: 'm1', name: 'Manual Loft', nexus_id: '12345', category: 'new-location',
     x: 250, y: 250, z: 10, yaw: null, description: 'x', credits: null,
-    authors: '["Spud"]', tags: '["apartment"]', status: 'published',
+    authors: '["Spud"]', status: 'published',
     admin_notes: null, owner_id: null,
     added_at: '2026-01-01T00:00:00Z', modified_at: '2026-01-01T00:00:00Z',
   },
   {
     id: 'nexus-888', name: 'Auto Bar', nexus_id: '888', category: 'other',
     x: 600, y: 600, z: null, yaw: null, description: 'auto', credits: null,
-    authors: '["Up888"]', tags: '[]', status: 'published',
+    authors: '["Up888"]', status: 'published',
     admin_notes: null, owner_id: null,
     added_at: '2026-01-01T00:00:00Z', modified_at: '2026-01-01T00:00:00Z',
   },

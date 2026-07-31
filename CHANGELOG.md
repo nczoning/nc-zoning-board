@@ -12,8 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The locations table sorts by any of Name, Category, Status, Added or Modified. Click a heading to sort, click it again to reverse. Dates start newest-first, text starts A to Z, because that is the question each one is usually being asked. Keyboard reachable, and the current sort is announced to screen readers.
 - The dashboard shows when a location was **added** and when it was last **modified**, in the locations table as well as the detail pane, alongside when the mod itself was last **updated on Nexus**. Three different dates, named so they cannot be confused: the one a `/v1` record carries is the Nexus one.
 
+### Changed
+
+- Tags are stored one way, in the join the map reads. The duplicate JSON column that was kept alongside it while the two were proven identical is gone, so there is no second copy to drift.
+
 ### Fixed
 
+- A restore from the location files would have produced a registry where every location had no tags. The importer wrote the tag column but not the join the map actually reads, so the database would have looked complete and served untagged. It writes both now, and the generated file ends with a check that prints what landed.
 - Location dates were all the same timestamp: the moment the registry was imported, so every record claimed it was added and last edited at the same instant on 26 July. Backfilled from git history, which is the only place the real dates survived. 288 records now carry their true dates, spanning 7 March to 26 July, and 212 of them show a modified date genuinely later than their added date. The nine auto-discovered records keep the import date, because they have never existed as files and nothing recorded when they arrived.
 
 - Two admins editing the same location no longer overwrite each other. A save applies only while the record still looks the way it did when the editor was opened; if it moved, the save is refused, nothing is written, and the current version is loaded so the change can be reapplied. Previously the second save won silently and the first admin's edit disappeared on next load.
