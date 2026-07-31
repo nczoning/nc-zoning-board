@@ -20,6 +20,7 @@ import {
 import { introspectDatasets, introspectType, readQuota } from './quota.js';
 import {
   getRow, rowToAdmin, loadAdminRecord, materializeAfterWrite, insertLocation, patchLocation,
+  readNexusUpdatedMap,
 } from './registry.js';
 import { handleReview } from './review.js';
 
@@ -172,7 +173,12 @@ export async function handleAdmin(request, env, ctx) {
     const { results } = await env.DB.prepare('SELECT * FROM locations ORDER BY name').all();
     const rows = results ?? [];
     const tagMap = await readTagsForLocations(env, rows.map((r) => r.id));
-    return json(request, { locations: rows.map((r) => rowToAdmin(r, tagMap.get(r.id) ?? [])) });
+    const nexusMap = await readNexusUpdatedMap(env);
+    return json(request, {
+      locations: rows.map((r) => rowToAdmin(
+        r, tagMap.get(r.id) ?? [], nexusMap.get(String(r.nexus_id)) ?? null,
+      )),
+    });
   }
 
   // ---- create ------------------------------------------------------------

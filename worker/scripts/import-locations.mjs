@@ -78,15 +78,15 @@ function toRow(rec, stamp) {
     authors: JSON.stringify(rec.authors ?? []),
     tags: JSON.stringify(rec.tags ?? []),
     status: 'published',
-    created_at: stamp,
-    updated_at: stamp,
+    added_at: stamp,
+    modified_at: stamp,
   };
 }
 
 const COLUMNS = [
   'id', 'name', 'nexus_id', 'category', 'x', 'y', 'z', 'yaw',
   'description', 'credits', 'authors', 'tags', 'status',
-  'created_at', 'updated_at',
+  'added_at', 'modified_at',
 ];
 
 function insertLocation(row) {

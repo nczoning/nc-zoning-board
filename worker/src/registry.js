@@ -40,7 +40,7 @@ export async function getRow(env, id) {
  * registry row, so it has no join rows). That is correct for an editor: it is
  * not a tag an admin owns, and the materializer re-adds it for auto records.
  */
-export function rowToAdmin(row, tags = []) {
+export function rowToAdmin(row, tags = [], nexusUpdatedAt = null) {
   return {
     id: row.id,
     name: row.name,
@@ -54,15 +54,37 @@ export function rowToAdmin(row, tags = []) {
     tags,
     status: row.status,
     admin_notes: row.admin_notes,
-    created_at: row.created_at,
-    updated_at: row.updated_at,
+    added_at: row.added_at,
+    modified_at: row.modified_at,
+    // The MOD's update time on Nexus, which is a different thing from both of
+    // the above and is the `updated_at` a /v1 record carries. Named in full here
+    // so the dashboard cannot show three dates that look interchangeable.
+    nexus_updated_at: nexusUpdatedAt,
   };
 }
 
-/** One location, joined to its tags. */
+/**
+ * `nexus_id` -> the mod's Nexus update time, for every cached mod.
+ *
+ * One query for the whole list rather than a lookup per record: the admin list
+ * route already reads tags in bulk for the same reason.
+ */
+export async function readNexusUpdatedMap(env) {
+  const { results } = await env.DB.prepare(
+    'SELECT nexus_id, updated_at FROM nexus_cache',
+  ).all();
+  const map = new Map();
+  for (const r of results ?? []) map.set(String(r.nexus_id), r.updated_at ?? null);
+  return map;
+}
+
+/** One location, joined to its tags and the mod's Nexus update time. */
 export async function loadAdminRecord(env, row) {
   const map = await readTagsForLocations(env, [row.id]);
-  return rowToAdmin(row, map.get(row.id) ?? []);
+  const nexus = await env.DB.prepare(
+    'SELECT updated_at FROM nexus_cache WHERE nexus_id = ?',
+  ).bind(String(row.nexus_id)).first();
+  return rowToAdmin(row, map.get(row.id) ?? [], nexus?.updated_at ?? null);
 }
 
 /** The same, by id. Returns null when the record is gone. */
@@ -130,7 +152,7 @@ export async function insertLocation(env, payload, nowIso = new Date().toISOStri
 
   await env.DB.prepare(`
     INSERT INTO locations (id, name, nexus_id, category, x, y, z, yaw, description,
-      credits, authors, tags, status, admin_notes, created_at, updated_at)
+      credits, authors, tags, status, admin_notes, added_at, modified_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id, payload.name, payload.nexus_id, payload.category,
@@ -153,7 +175,7 @@ export async function insertLocation(env, payload, nowIso = new Date().toISOStri
  * Apply a validated partial patch. `{empty: true}` when the payload names no
  * column and no tags, which is a caller error rather than a no-op write.
  *
- * OPTIMISTIC CONCURRENCY. Pass `ifMatch` as the `updated_at` the caller read,
+ * OPTIMISTIC CONCURRENCY. Pass `ifMatch` as the `modified_at` the caller read,
  * and the write applies only while the record still carries it. Three admins
  * share one registry and one queue, so without this the second save silently
  * replaces the first: the audit log records both, but nobody is told, and the
@@ -175,14 +197,14 @@ export async function patchLocation(
   const { sets, binds } = buildUpdate(payload);
   if (!sets.length && !patchesTags) return { empty: true };
 
-  // A tags-only patch still has to move updated_at, so the column write is
+  // A tags-only patch still has to move modified_at, so the column write is
   // unconditional rather than gated on `sets`.
-  sets.push('updated_at = ?');
+  sets.push('modified_at = ?');
   binds.push(nowIso, id);
 
   let sql = `UPDATE locations SET ${sets.join(', ')} WHERE id = ?`;
   if (ifMatch) {
-    sql += ' AND updated_at = ?';
+    sql += ' AND modified_at = ?';
     binds.push(ifMatch);
   }
   const res = await env.DB.prepare(sql).bind(...binds).run();

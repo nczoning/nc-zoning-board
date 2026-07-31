@@ -51,14 +51,14 @@ const ROWS = [
     x: 250, y: 250, z: 10, yaw: null, description: 'x', credits: null,
     authors: '["Spud"]', tags: '["apartment"]', status: 'published',
     admin_notes: null, owner_id: null,
-    created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+    added_at: '2026-01-01T00:00:00Z', modified_at: '2026-01-01T00:00:00Z',
   },
   {
     id: 'nexus-888', name: 'Auto Bar', nexus_id: '888', category: 'other',
     x: 600, y: 600, z: null, yaw: null, description: 'auto', credits: null,
     authors: '["Up888"]', tags: '[]', status: 'published',
     admin_notes: null, owner_id: null,
-    created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+    added_at: '2026-01-01T00:00:00Z', modified_at: '2026-01-01T00:00:00Z',
   },
 ];
 

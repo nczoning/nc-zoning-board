@@ -130,10 +130,16 @@
            visible reason reads as missing data. -->
       <div class="toolbar filter-chips" id="loc-chips"></div>
       <div class="table-wrap">
-        <table>
+        <table id="loc-table">
           <thead>
             <tr>
-              <th>Name</th><th>Category</th><th>Tags</th><th>Status</th><th>Nexus</th>
+              <th data-sort="name" scope="col">Name</th>
+              <th data-sort="category" scope="col">Category</th>
+              <th scope="col">Tags</th>
+              <th data-sort="status" scope="col">Status</th>
+              <th data-sort="added_at" scope="col">Added</th>
+              <th data-sort="modified_at" scope="col">Modified</th>
+              <th scope="col">Nexus</th>
             </tr>
           </thead>
           <tbody id="loc-rows"></tbody>
