@@ -211,8 +211,20 @@ export async function handleAdmin(request, env, ctx) {
     const v = validateLocationInput(payload, { tagNames: await readTagSlugs(env), partial: true });
     if (!v.ok) return json(request, { error: 'validation_failed', errors: v.errors }, 422);
 
-    const patched = await patchLocation(env, id, payload);
+    // The version the editor was opened on. Absent means an unguarded write,
+    // which keeps older clients and curl working; the dashboard always sends it.
+    const ifMatch = (request.headers.get('If-Match') || '').replace(/^"|"$/g, '') || null;
+
+    const patched = await patchLocation(env, id, payload, undefined, { ifMatch });
     if (patched.empty) return json(request, { error: 'empty_patch' }, 400);
+    if (patched.conflict) {
+      // The current record comes back so the dashboard can show what changed
+      // rather than just refusing. Nothing was written.
+      return json(request, {
+        error: 'stale_write',
+        current: await loadAdminRecord(env, await getRow(env, id)),
+      }, 409);
+    }
 
     const after = await loadAdminRecord(env, await getRow(env, id));
     await writeAudit(env, { actor, action: 'location.update', target: id, before, after });

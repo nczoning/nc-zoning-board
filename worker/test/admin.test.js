@@ -315,6 +315,72 @@ test('editing a legacy auto record strips the nczoning marker from both writes',
   );
 });
 
+// --- optimistic concurrency (#899) ---------------------------------------
+// Three admins share one registry. Without the guard the second save silently
+// replaces the first: the audit log records both, but nobody is told.
+
+/** PATCH carrying an If-Match version, bypassing `hit` so headers can be set. */
+async function patchWithVersion(env, id, body, version) {
+  return worker.fetch(
+    await authed(`https://api.nczoning.net/admin/locations/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+      headers: version === null ? {} : { 'If-Match': `"${version}"` },
+    }),
+    env,
+    {},
+  );
+}
+
+test('a stale If-Match is refused with 409 and writes NOTHING', async () => {
+  const env = envFor();
+  const res = await patchWithVersion(env, 'loc-1', { name: 'Overwritten' }, '2020-01-01T00:00:00Z');
+  assert.equal(res.status, 409);
+  const body = await res.json();
+  assert.equal(body.error, 'stale_write');
+
+  // The refusal is only worth anything if the write really did not land.
+  const row = env.DB.one('SELECT name, updated_at FROM locations WHERE id = ?', 'loc-1');
+  assert.equal(row.name, 'Existing Loft', 'the row must be untouched');
+  assert.equal(row.updated_at, '2026-01-01T00:00:00Z', 'and updated_at must not move');
+  assert.equal(auditRows(env).length, 0, 'a refused write writes no audit row either');
+});
+
+test('the conflict response carries the current record, so the client can diff', async () => {
+  const env = envFor();
+  const res = await patchWithVersion(env, 'loc-1', { name: 'Overwritten' }, '2020-01-01T00:00:00Z');
+  const body = await res.json();
+  assert.ok(body.current, 'refusing without the current record leaves the client blind');
+  assert.equal(body.current.name, 'Existing Loft');
+  assert.equal(body.current.updated_at, '2026-01-01T00:00:00Z', 'the version to retry against');
+});
+
+test('a current If-Match is accepted', async () => {
+  const env = envFor();
+  const res = await patchWithVersion(env, 'loc-1', { name: 'Renamed' }, '2026-01-01T00:00:00Z');
+  assert.equal(res.status, 200);
+  assert.equal(env.DB.one('SELECT name FROM locations WHERE id = ?', 'loc-1').name, 'Renamed');
+});
+
+test('the second of two saves against the same version loses, rather than winning silently', async () => {
+  const env = envFor();
+  const base = '2026-01-01T00:00:00Z';
+  const first = await patchWithVersion(env, 'loc-1', { name: 'Admin A' }, base);
+  assert.equal(first.status, 200);
+
+  // B opened the editor at the same time and still holds the old version.
+  const second = await patchWithVersion(env, 'loc-1', { name: 'Admin B' }, base);
+  assert.equal(second.status, 409, "B's save must be refused, not applied over A's");
+  assert.equal(env.DB.one('SELECT name FROM locations WHERE id = ?', 'loc-1').name, 'Admin A');
+});
+
+test('no If-Match still writes, so curl and older clients keep working', async () => {
+  const env = envFor();
+  const res = await patchWithVersion(env, 'loc-1', { name: 'Unguarded' }, null);
+  assert.equal(res.status, 200);
+  assert.equal(env.DB.one('SELECT name FROM locations WHERE id = ?', 'loc-1').name, 'Unguarded');
+});
+
 test('a tags-only patch still moves updated_at', async () => {
   const env = envFor();
   const res = await hit(env, 'PATCH', '/admin/locations/loc-1', { tags: ['corpo'] });

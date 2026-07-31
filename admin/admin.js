@@ -218,16 +218,18 @@
    * Never throws on an HTTP error: the status IS the information here, and
    * callers have to branch on 403 vs 503 vs 409 rather than on "it failed".
    */
-  async function api(path, { method = 'GET', body } = {}) {
+  async function api(path, { method = 'GET', body, headers } = {}) {
     let res;
     try {
       res = await fetch(`${API}${path}`, {
         method,
         credentials: 'include',
-        ...(body === undefined ? {} : {
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        }),
+        ...(body === undefined
+          ? (headers ? { headers } : {})
+          : {
+            headers: { 'Content-Type': 'application/json', ...(headers || {}) },
+            body: JSON.stringify(body),
+          }),
       });
     } catch (err) {
       // Network-level: no status at all. Distinct from every HTTP status, and
@@ -259,6 +261,10 @@
         // several distinct conflicts, and one of them (another reviewer won the
         // race after this request had already written the location) is
         // specifically NOT "nothing was changed".
+        if (res.body?.error === 'stale_write') {
+          return ['error', 'This record changed after you opened it, so nothing was saved. '
+            + 'The current version has been loaded; reapply your change and save again.'];
+        }
         return ['error', res.body?.error === 'tag_exists'
           ? `A tag with the slug "${res.body.slug}" already exists.`
           : res.body?.detail || 'Conflict. Nothing was changed.'];
@@ -684,13 +690,27 @@
     button.disabled = true;
     const res = isNew
       ? await api('/admin/locations', { method: 'POST', body: payload })
-      : await api(`/admin/locations/${encodeURIComponent(loc.id)}`, { method: 'PATCH', body: payload });
+      : await api(`/admin/locations/${encodeURIComponent(loc.id)}`, {
+        method: 'PATCH',
+        body: payload,
+        // The version this editor was opened on. The server applies the write
+        // only while the record still carries it, so two admins editing the
+        // same record cannot silently overwrite each other.
+        headers: { 'If-Match': `"${loc.updated_at}"` },
+      });
     button.disabled = false;
 
     if (!res.ok) {
       const [kind, message] = describeFailure(res);
       banner(kind, message);
       if (res.status === 422) applyFieldErrors(form, res.body.errors || []);
+      // A stale write comes back with the record as it stands now. Load it, so
+      // the next save is against a version that exists and the admin can see
+      // what they would have overwritten.
+      if (res.body?.error === 'stale_write' && res.body.current) {
+        await loadLocations();
+        renderLocationEditor(res.body.current);
+      }
       return;
     }
 
