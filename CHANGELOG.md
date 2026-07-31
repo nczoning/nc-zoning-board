@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A submission now tells someone it arrived.** Since the cutover a submission reached the review queue silently and the only way to find one was to open the dashboard and look. The map-alerts channel gets a post linking to the dashboard.
+- **An Alerts tab in the dashboard**, with a count beside it and an acknowledge button. Every alert is recorded before it is sent to Discord, so the history is complete even when Discord drops or buries a message.
+- **A warning when any free-tier cap passes 80% for the day**, checked hourly and said once per cap per day. This is the alert that would have caught the KV write limit before Cloudflare emailed about it.
+
 ### Changed
 
 - The locations table sorts by any of Name, Category, Status, Added or Modified. Click a heading to sort, click it again to reverse. Dates start newest-first, text starts A to Z, because that is the question each one is usually being asked. Keyboard reachable, and the current sort is announced to screen readers.

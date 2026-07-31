@@ -25,6 +25,8 @@ import { HEARTBEAT_MIN_INTERVAL_MS } from './config.js';
 import {
   KEYS, contentHash, readMeta, writeDataset, writeMeta,
 } from './store.js';
+import { raiseAlert } from './alerts.js';
+import { checkQuotaThresholds } from './quota.js';
 
 const SCHEMA_VERSION = 1;
 
@@ -36,57 +38,37 @@ async function fetchJson(fetchImpl, origin, path) {
 }
 
 /**
- * Post a failure embed to Discord if a webhook is configured. Prefers the
- * dedicated map-alerts channel (NCZ_ALERTS_DISCORD_WEBHOOK_URL), falling back
- * to the legacy submissions webhook so there's no alerting gap until the new
- * Cloudflare Worker secret is set (`wrangler secret put
- * NCZ_ALERTS_DISCORD_WEBHOOK_URL` for BOTH the prod and staging Workers).
+ * Refresh failed: keep serving last-known-good and say so.
+ *
+ * Goes through `raiseAlert` rather than posting to the webhook directly, so the
+ * dashboard gets a history row as well as the channel getting a message. That
+ * call never throws, which preserves the rule this function has always had:
+ * alerting must never mask the original failure.
  */
-async function alertDiscord(env, fetchImpl, reason) {
-  const webhook = env.NCZ_ALERTS_DISCORD_WEBHOOK_URL || env.DISCORD_WEBHOOK_URL;
-  if (!webhook) return;
-  try {
-    await fetchImpl(webhook, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        embeds: [{
-          title: '⚠️ Data API refresh failed',
-          description: String(reason).slice(0, 1500),
-          color: 0xffb300,
-          footer: { text: 'Serving last-known-good dataset (discovery_stale=true)' },
-        }],
-      }),
-    });
-  } catch {
-    // Alerting must never mask the original failure.
-  }
+async function alertRefreshFailed(env, fetchImpl, reason) {
+  await raiseAlert(env, {
+    source: 'refresh',
+    // warn, not error: the dataset is still being served. A failed refresh
+    // degrades freshness (discovery_stale=true) and takes nothing down, which
+    // is why this embed has always been amber. `error` is for not serving.
+    severity: 'warn',
+    title: 'Data API refresh failed',
+    body: `${String(reason).slice(0, 1200)}\n\nServing last-known-good dataset (discovery_stale=true).`,
+  }, { fetchImpl });
 }
 
 /**
- * Post a recovery embed: the previous cycle marked the dataset discovery_stale
- * and this cycle rebuilt it cleanly, so this is the down→up edge. Fires once
- * (the next successful cycle sees discovery_stale=false and stays quiet).
+ * The previous cycle marked the dataset discovery_stale and this cycle rebuilt
+ * it cleanly, so this is the down to up edge. Fires once (the next successful
+ * cycle sees discovery_stale=false and stays quiet).
  */
-async function alertDiscordRecovered(env, fetchImpl) {
-  const webhook = env.NCZ_ALERTS_DISCORD_WEBHOOK_URL || env.DISCORD_WEBHOOK_URL;
-  if (!webhook) return;
-  try {
-    await fetchImpl(webhook, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        embeds: [{
-          title: '✅ Data API refresh recovered',
-          description: 'A refresh succeeded after an earlier failure — the dataset is fresh again (discovery_stale=false).',
-          color: 0x2ecc71,
-          footer: { text: 'NC Zoning Board • Data API refresh' },
-        }],
-      }),
-    });
-  } catch {
-    // A missed all-clear is not worth throwing over.
-  }
+async function alertRefreshRecovered(env, fetchImpl) {
+  await raiseAlert(env, {
+    source: 'refresh',
+    severity: 'recovery',
+    title: 'Data API refresh recovered',
+    body: 'A refresh succeeded after an earlier failure. The dataset is fresh again (discovery_stale=false).',
+  }, { fetchImpl });
 }
 
 /**
@@ -309,7 +291,8 @@ export async function runRefresh(env, fetchImpl = fetch) {
         last_refresh_at: generatedAt, // liveness heartbeat (see #849)
       },
     });
-    if (recovered) await alertDiscordRecovered(env, fetchImpl);
+    if (recovered) await alertRefreshRecovered(env, fetchImpl);
+    await checkQuotaThresholds(env, fetchImpl, Date.parse(generatedAt));
     return { changed: true, version, stale: false, recovered };
   } catch (err) {
     // Keep last-known-good; flag stale; alert. Never wipe the dataset.
@@ -325,7 +308,7 @@ export async function runRefresh(env, fetchImpl = fetch) {
         last_refresh_at: generatedAt,
       });
     }
-    await alertDiscord(env, fetchImpl, err);
+    await alertRefreshFailed(env, fetchImpl, err);
     return {
       changed: false,
       version: prev?.dataset_version ?? null,
