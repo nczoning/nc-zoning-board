@@ -59,10 +59,20 @@
 		// Anything other than "d1" means mods.json, INCLUDING unset. Absent
 		// config must never read as "switch production to the new source".
 		//
-		// Do not flip until parity-ab.mjs and parity-check.mjs are both green
-		// (worker/README.md). Tags and subdistricts still come from SITE_ORIGIN
-		// either way; they move to D1 at Phase 4.
-		"DATA_SOURCE": "mods",
+		// FLIPPED 2026-07-31 (#888 stage 5). Both gates were green against
+		// production D1 first: parity-check byte-for-byte identical on 297
+		// records with 9/9 negative controls, and parity-ab agreeing at all 10
+		// swept clocks with recently_updated actually varying. Note that
+		// parity-check can no longer fail from here, because the live API it
+		// diffs against IS this database now.
+		//
+		// ROLLBACK IS THIS WORD. Set it back to "mods" and production serves
+		// exactly what it served before, off a build already known to work.
+		// mods.json is still built and still unread, which is what keeps that
+		// true; it goes at Phase 6, not before.
+		//
+		// Tags and subdistricts still come from SITE_ORIGIN either way.
+		"DATA_SOURCE": "d1",
 		// --- Admin auth (Phase 3) -------------------------------------------
 		// Not secrets: an App id and an OAuth client id are both public. The
 		// private key and client secret are Worker secrets — see README.
