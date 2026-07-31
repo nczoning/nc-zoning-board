@@ -76,6 +76,8 @@ function toRow(rec, stamp) {
     // gate on truthiness, so '' and NULL alike omit the key from /v1.
     credits: rec.credits ? rec.credits : null,
     authors: JSON.stringify(rec.authors ?? []),
+    // Not a column any more (migration 0007). Carried on the row because
+    // insertLocationTags reads it to build the join.
     tags: JSON.stringify(rec.tags ?? []),
     status: 'published',
     added_at: stamp,
@@ -85,7 +87,7 @@ function toRow(rec, stamp) {
 
 const COLUMNS = [
   'id', 'name', 'nexus_id', 'category', 'x', 'y', 'z', 'yaw',
-  'description', 'credits', 'authors', 'tags', 'status',
+  'description', 'credits', 'authors', 'status',
   'added_at', 'modified_at',
 ];
 

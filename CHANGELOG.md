@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The locations table sorts by any of Name, Category, Status, Added or Modified. Click a heading to sort, click it again to reverse. Dates start newest-first, text starts A to Z, because that is the question each one is usually being asked. Keyboard reachable, and the current sort is announced to screen readers.
 - The dashboard shows when a location was **added** and when it was last **modified**, in the locations table as well as the detail pane, alongside when the mod itself was last **updated on Nexus**. Three different dates, named so they cannot be confused: the one a `/v1` record carries is the Nexus one.
 
+### Changed
+
+- Tags are stored one way, in the join the map reads. The duplicate JSON column that was kept alongside it while the two were proven identical is gone, so there is no second copy to drift.
+
 ### Fixed
 
 - A restore from the location files would have produced a registry where every location had no tags. The importer wrote the tag column but not the join the map actually reads, so the database would have looked complete and served untagged. It writes both now, and the generated file ends with a check that prints what landed.

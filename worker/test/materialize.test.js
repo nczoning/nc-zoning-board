@@ -24,16 +24,25 @@ const row = (over = {}) => ({
   id: 'aaaa-1111', name: 'Alpha', nexus_id: '12345', category: 'new-location',
   x: 250, y: 250, z: 10, yaw: 90,
   description: 'A record.', credits: 'Thanks',
-  authors: '["Spud"]', tags: '["apartment"]',
+  authors: '["Spud"]',
   status: 'published',
   admin_notes: null, owner_id: null,
   added_at: '2026-01-01T00:00:00Z', modified_at: '2026-01-01T00:00:00Z',
   ...over,
 });
 
+// locationTags is required: the join is the only representation since 0007.
+// Defaulted to a map giving every fixture row the same tag, so tests that are
+// not about tags do not have to care.
 const build = (rows, over = {}) => materializeFromD1({
-  rows, dismissed: [], tagsDict: TAGS, nexusNodes: [], districts: DISTRICTS,
-  nowMs: Date.parse('2026-01-10T00:00:00Z'), ...over,
+  rows,
+  dismissed: [],
+  tagsDict: TAGS,
+  nexusNodes: [],
+  districts: DISTRICTS,
+  locationTags: new Map(rows.map((r) => [r.id, ['apartment']])),
+  nowMs: Date.parse('2026-01-10T00:00:00Z'),
+  ...over,
 });
 
 /** readNexusIndex()'s shape, for the four Nexus-derived fields. */
@@ -167,14 +176,15 @@ test('a WIP record stays image-less rather than borrowing another mod images', (
   assert.equal(full['aaaa-1111'].thumbnail_url, null);
 });
 
-test('rowToEntry parses the JSON array columns', () => {
-  const entry = rowToEntry(row({ authors: '["A","B"]', tags: '["x"]' }));
+test('rowToEntry parses authors from JSON and takes tags from the join', () => {
+  const r = row({ authors: '["A","B"]' });
+  const entry = rowToEntry(r, new Map([[r.id, ['x']]]));
   assert.deepEqual(entry.authors, ['A', 'B']);
-  assert.deepEqual(entry.tags, ['x']);
+  assert.deepEqual(entry.tags, ['x'], 'tags come from the join, never from the row');
 });
 
-test('rowToEntry tolerates NULL authors/tags columns', () => {
-  const entry = rowToEntry(row({ authors: null, tags: null }));
+test('rowToEntry tolerates a NULL authors column and a record with no tag links', () => {
+  const entry = rowToEntry(row({ authors: null }), new Map());
   assert.deepEqual(entry.authors, []);
-  assert.deepEqual(entry.tags, []);
+  assert.deepEqual(entry.tags, [], 'no join rows is an empty array, not undefined');
 });

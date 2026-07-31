@@ -82,7 +82,7 @@ function refreshFetch() {
 const ROW = {
   id: 'loc-1', name: 'Existing Loft', nexus_id: '12345', category: 'new-location',
   x: 1, y: 2, z: 3, yaw: 90, description: 'a place', credits: null,
-  authors: '["Spud"]', tags: '["apartment"]', status: 'published',
+  authors: '["Spud"]', status: 'published',
   admin_notes: null, added_at: '2026-01-01T00:00:00Z', modified_at: '2026-01-01T00:00:00Z',
 };
 
@@ -287,32 +287,25 @@ test('a tag edit reaches location_tags, not just the legacy column', async () =>
   assert.deepEqual((await res.json()).location.tags, ['corpo', 'photos']);
 });
 
-test('the legacy column is kept byte-compatible with the join', async () => {
-  // Migration 0002 is additive so parity can be proven before the column drops.
-  // Writing only one of the two would make the gate compare a live column
-  // against a frozen one and call the difference a regression.
+test('a tag edit is stored sorted and deduplicated, in the join', async () => {
+  // There used to be a second assertion here on a legacy locations.tags column
+  // kept byte-compatible with this. Migration 0007 dropped it: one
+  // representation, so there is no second copy to disagree.
   const env = envFor();
-  await hit(env, 'PATCH', '/admin/locations/loc-1', { tags: ['photos', 'corpo'] });
-  const row = env.DB.one('SELECT tags FROM locations WHERE id = ?', 'loc-1');
-  assert.deepEqual(JSON.parse(row.tags), ['corpo', 'photos'], 'sorted, matching the join');
+  await hit(env, 'PATCH', '/admin/locations/loc-1', { tags: ['photos', 'corpo', 'photos'] });
+  assert.deepEqual(tagsOf(env, 'loc-1'), ['corpo', 'photos']);
 });
 
 test('editing a legacy auto record strips the nczoning marker from both writes', async () => {
-  // The marker used to be re-added to the legacy column on every write, so that
-  // editing an auto record did not reshape it away from the other auto rows.
-  // Nothing auto-publishes now, so the marker is gone from both paths and an
-  // edit is what clears it from a row that still carries it.
+  // The marker used to be prepended on every write. Nothing auto-publishes now,
+  // so it is gone from the write path entirely and RESERVED_SLUGS keeps it out
+  // even when a caller sends it.
   const env = envFor({
-    locations: [{ ...ROW, id: 'auto-1', tags: '["nczoning","apartment"]' }],
+    locations: [{ ...ROW, id: 'auto-1' }],
     locationTags: [['auto-1', 'apartment']],
   });
   await hit(env, 'PATCH', '/admin/locations/auto-1', { tags: ['corpo'] });
   assert.deepEqual(tagsOf(env, 'auto-1'), ['corpo'], 'the join never held the marker');
-  assert.deepEqual(
-    JSON.parse(env.DB.one('SELECT tags FROM locations WHERE id = ?', 'auto-1').tags),
-    ['corpo'],
-    'and the legacy column no longer has it re-added',
-  );
 });
 
 // --- optimistic concurrency (#899) ---------------------------------------
