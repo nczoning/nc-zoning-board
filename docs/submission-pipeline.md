@@ -1,79 +1,98 @@
-# Automated Mod Submission Pipeline
+# Mod Submission Pipeline
 
-To make it as easy as possible for modders to add their locations to the map, we allow submissions via a simple GitHub Issue form.
+How a location gets onto the map. Submissions arrive from the map itself, land in
+a review queue, and reach the map only when an admin approves them.
 
-This document explains what happens under the hood when a user submits that form.
+> **This replaced a GitHub Actions pipeline at the D1 cutover (2026-07-31).** An
+> issue form used to become a bot-authored PR adding a `data/locations/*.json`
+> file, and merging it published the pin. The registry no longer lives in git, so
+> that path could no longer reach the map, and the templates and workflows were
+> deleted rather than left as a road to nowhere. Nothing errored while they were
+> still there, which is exactly the problem: the form accepted, the PR opened, CI
+> passed, the merge went green, and no pin appeared.
 
 ---
 
 ## 🏗️ High-Level Flow
 
-1. **User Submission:** Mod author fills out the "Submit a New Mod Location" Issue form.
-2. **Issue Parsing (Bot):** GitHub Actions extracts the data from the issue and creates a new `.json` file in `data/locations/`.
-3. **PR Creation (Bot):** The bot creates a pull request on behalf of the user containing only the new mod file.
-4. **Discord Notification (Bot):** A webhook sends an "Awaiting Review" embed to the Discord server.
-5. **Validation (CI):** The PR is automatically validated against `mods.schema.json` and `data/tags.json`.
-6. **Maintainer Review:** A human reviews the data (using the [Reviewer Guide](reviewer-guide.md)), ensures it isn't malicious, and clicks Merge.
-7. **Resolution (Bot):** The issue automatically closes, and the Discord embed updates to ✅ Approved.
+```text
+map (+ Submit, or a pin's "Suggest a fix")
+   │  Turnstile + rate limit
+   ▼
+POST /submissions ──► D1 `submissions` (status: pending)
+   │
+   ▼
+admin dashboard, Queue tab ──► approve / reject / hold
+   │  approve
+   ▼
+D1 `locations` ──► write-through materialize ──► KV ──► /v1/locations ──► the map
+```
 
 ---
 
-## 🔍 Stage 1: The Issue Form
+## 🔍 Stage 1: The Submitter
 
-[**.github/ISSUE_TEMPLATE/mod_submission.yml**](../.github/ISSUE_TEMPLATE/mod_submission.yml)
+Everything happens on [nczoning.net](https://nczoning.net). No GitHub account and
+no Git knowledge.
 
-This is a YAML-defined GitHub Issue form. It guarantees that users submit data in a strict layout with Markdown headers (e.g., `### Mod Name` or `### Category`). This structured format is critical for the bot to parse the data reliably.
+- **New location:** the **[+] Submit** button. The first step picks the mod,
+  either from the tagged list or by pasting a Nexus link. Tagging a mod
+  **NCZoning** on Nexus is what puts it in that picker, prefilled with its name,
+  description and uploader. The tag does not publish anything on its own.
+- **Fixing an existing pin:** **Suggest a fix** in the pin's own popup, prefilled
+  from the record. It sends only the fields that changed, so a reviewer sees "yaw
+  changed" rather than a restatement of the whole record. One choice inside the
+  same form switches to requesting removal, which asks for a reason instead.
 
-## ⚙️ Stage 2: `auto-pr-submission.yml`
-
-[**.github/workflows/auto-pr-submission.yml**](../.github/workflows/auto-pr-submission.yml)
-
-This workflow triggers whenever the `mod-submission` label is applied to an issue. It runs a custom JavaScript script using `actions/github-script`.
-
-**Step-by-step logic:**
-
-1. **Regex Extraction:** The script reads the raw Markdown body of the issue and uses Regex to locate the `###` headers and extract the values for Name, Authors, Coordinates, Link, Category, Tags, and Description.
-2. **Data Type Casting:** Validates that X and Y coordinates are floats (numbers). Authors are split from a comma-separated string. Tags are parsed from the checkbox list (`- [x] tagname`) in the form.
-3. **Append Data:** Generates a random completely unique `UUID v4` for the mod's ID and builds a JSON object with the user's data.
-4. **Create File:** Writes the data to a new file: `data/locations/<UUID>.json`. This design prevents merge conflicts when multiple submissions occur simultaneously.
-5. **Create PR:** Uses a Personal Access Token (`ACTIONS_PAT`) to open a Pull Request.
-6. **Comment:** The bot replies to the issue confirming it has created the PR.
-
-## 💬 Stage 3: Discord Webhook Integration
-
-Within the same `auto-pr-submission.yml` workflow, the bot reaches out to a Discord channel (using the `DISCORD_WEBHOOK_URL` secret) with an embedded message noting that a PR is awaiting review.
-
-> `DISCORD_WEBHOOK_URL` is the **submissions** channel. Operational alerts (health/monitoring) go to a separate channel via `NCZ_ALERTS_DISCORD_WEBHOOK_URL`. See [architecture.md](architecture.md#discord-notifications).
-
-**The Clever Part:**
-To allow the bot to update this exact discord message later on, the webhook returns a unique `message_id`. The bot saves this ID as a hidden HTML comment at the bottom of the original GitHub Issue `<!-- discord_message_id: XXXXX -->`.
-
-## 🛡️ Stage 4: `validate-mods.yml`
-
-[**.github/workflows/validate-mods.yml**](../.github/workflows/validate-mods.yml)
-
-When a PR is opened, GitHub Actions launches this workflow. It **always runs** on every PR (so the required status check is always reported), but skips the validation steps if no data files changed.
-
-1. **Change Detection**: Diffs the PR branch against its base: if no `data/locations/`, `data/tags.json`, or `mods.schema.json` files changed, the remaining steps are skipped and the check passes immediately.
-2. **Schema Validation**: Uses `ajv-cli` to compare the compiled `mods.json` (after a test build) against `mods.schema.json`.
-3. **Tag Validation**: Runs `node scripts/validate_tags.js` to ensure all tags used in the PR exist in the `data/tags.json` registry.
-
-## 🎉 Stage 5: Finalisation & Merge
-
-When a maintainer reviews the PR and hits Merge, the newly added mod goes live on the `main` branch.
-
-Because the PR body contains the text `Closes #XXX` (referencing the original issue), merging the PR automatically closes the user's opened Issue.
-
-This Issue closure triggers [**`notify-discord-pr-status.yml`**](../.github/workflows/notify-discord-pr-status.yml), which reads the hidden `discord_message_id`, makes a `PATCH` request to the Discord API, and switches the embed to a green checkmark indicating the mod is now live!
+Coordinates are checked as you type, against the limits the server enforces.
 
 ---
 
-## 📝 Stage 6: The Modification / Edit Pipeline
+## ⚙️ Stage 2: `POST /submissions`
 
-If a user wants to update their mod's coordinates, tags, or authors (or request removal), they use the **Suggest Edit** feature.
+`worker/src/submissions.js`. Anonymous, and guarded by:
 
-1. **Issue Form**: They click "Suggest Edit" on the map popup, which pre-fills the [**`modify_location.yml`**](../.github/ISSUE_TEMPLATE/modify_location.yml) GitHub Issue template with the mod's UUID.
-2. **Bot Processing**: The [**`modify-location-submission.yml`**](../.github/workflows/modify-location-submission.yml) workflow fires when the `mod-modification` label is applied. It parses the new values, merging them with the existing file (blank fields keep their current value).
-3. **Discord Notification**: Follows the same stored-ID pattern as submissions: the initial "Awaiting Review" message ID is saved as a hidden comment on the issue so it can be edited (not reposted) on merge/close.
-4. **PR Creation**: The bot modifies the existing `data/locations/<UUID>.json` file and creates a Pull Request reflecting the diff.
-5. **Validation & Merge**: Functions identically to the standard submission pipeline. Once merged, the map updates.
+- **Turnstile.** A missing or failed token is refused. It also refuses automated
+  browsers, which is why this round trip cannot be driven by tooling.
+- **A rate limit** of 5 per address per hour.
+- **A salted one-way hash of the submitter's address**, never the address itself,
+  cleared automatically after 90 days. See [privacy.md](privacy.md).
+
+Three kinds: `create`, `edit` and `remove`. Nothing at this stage touches
+`locations`.
+
+---
+
+## 💬 Stage 3: Review
+
+The dashboard's **Queue** tab, gated on repository collaborator status.
+
+Each submission renders a field-level diff of what it would change and a mini-map
+of the proposed pin. A new pin for a mod already on the map lists the records it
+would sit beside and how far away they are, since one mod can legitimately supply
+several locations.
+
+Actions are approve, reject with a reason, or hold. **A review note is an
+internal record; nothing is sent to the submitter**, and the queue says so.
+
+---
+
+## 🎉 Stage 4: Publication
+
+Approving writes the location to D1 and materializes write-through, so the pin
+appears within seconds rather than waiting for the next cron tick.
+
+Every mutation writes an `audit_log` row recording who did it and the record
+before and after. That log is what replaced `git log` for data changes.
+
+An approved removal keeps the record and sets `status = 'hidden'`, which pulls
+the pin while preserving the history. Deleting a record outright is a separate,
+deliberate action.
+
+---
+
+## 🛡️ What still runs in CI
+
+`validate-mods.yml` validates `mods.json` against `mods.schema.json` on any PR
+touching `data/`. `mods.json` is still built and **nothing reads it**; it exists
+so the cutover stays revertible. Both retire at Phase 6.

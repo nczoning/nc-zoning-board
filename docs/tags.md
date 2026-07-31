@@ -23,13 +23,19 @@ Tags are used to describe the aesthetic, function, or intended audience of a loc
 | `shop` | A retail location to purchase weapons, clothing, items, etc. |
 | `streetkid` | Environments resonating with gang culture, neon lights, and urban survival. |
 
-> The tag registry is the source of truth: `data/tags.json`. Entries in `mods.json` are validated against it at build time by `scripts/validate_tags.js`.
+> **The tag registry lives in D1 and is served at `/v1/tags`.** It is edited in the
+> dashboard, and a mistyped tag is refused on write rather than caught in CI
+> afterwards. `data/tags.json` survives only as the site's fallback if the API is
+> unreachable, and as the file `scripts/validate_tags.js` checks `mods.json`
+> against while `mods.json` is still built. Both retire at Phase 6.
 
 ---
 
 ## Synthetic Tags
 
-Synthetic tags are applied automatically by the map system. They are **not** in `data/tags.json`, cannot be manually assigned, and will not pass schema validation if added to a location file.
+Synthetic tags are applied automatically by the map system. They are **not** rows
+in the `tags` registry, cannot be manually assigned, and will not pass validation
+if submitted on a location.
 
 | Tag | Applied by | Description |
 | --- | --- | --- |
@@ -40,50 +46,57 @@ Synthetic tags are applied automatically by the map system. They are **not** in 
 
 ## Adding a Tag
 
-1. **`data/tags.json`**: Add the new key and a concise definition sentence.
+Tags are registry data in D1, edited in the dashboard. There are no files to
+change and no deploy to wait for.
 
-2. **`.github/ISSUE_TEMPLATE/mod_submission.yml`**: Add a checkbox entry under the `tags` checkboxes field, in alphabetical order:
-   ```yaml
-   - label: "your-tag — Short description matching the one in tags.json"
-   ```
+1. Sign in to [/admin/](https://nczoning.net/admin/) and open the **Tags** tab.
+2. Add the tag: a **slug** (the identifier, e.g. `entropism`), an optional
+   **display name**, a **description**, and a **sort order**.
 
-3. **`.github/ISSUE_TEMPLATE/modify_location.yml`**: Add the same checkbox entry in the same alphabetical position.
+The description is the authoritative definition and is used as tooltip text on
+the live map. If the display name is left empty it falls back to the slug, which
+is how every tag currently renders.
 
-The sidebar filter UI in `app.js` is fully data-driven: the new tag will appear automatically once any mod uses it. No frontend changes are needed.
-
----
-
-## Modifying a Tag Description
-
-If you only need to update the wording of an existing tag's description (not rename the key):
-
-1. **`data/tags.json`**: Update the definition string for the key.
-2. **`.github/ISSUE_TEMPLATE/mod_submission.yml`**: Update the matching checkbox label text.
-3. **`.github/ISSUE_TEMPLATE/modify_location.yml`**: Update the matching checkbox label text.
-
-> The label text shown in the issue form (after ` — `) is cosmetic only. The authoritative definition lives in `tags.json` and is used as tooltip text on the live map.
+The sidebar filter UI in `app.js` is fully data-driven: the new tag appears once
+any location uses it. No frontend change is needed.
 
 ---
 
-## Renaming a Tag Key
+## Modifying a Tag
 
-Renaming a tag key (e.g. `photos` → `photography`) is a **breaking change**: it invalidates any existing location data that uses the old key.
+**Editing the display name or the description is safe.** Neither is an
+identifier, so nothing else has to move. This is the normal way to relabel a
+tag: set the display name to `Neo-Militarism` and the slug stays
+`neomilitarism`.
 
-1. **Audit existing data**: find all locations using the old key:
-   ```bash
-   grep -rl '"old-tag"' data/locations/
-   ```
-2. **Update each affected location file**: replace the old key with the new key in the `tags` array.
-3. Follow the [Adding a Tag](#adding-a-tag) steps for the new key.
-4. Follow the [Removing a Tag](#removing-a-tag) steps for the old key.
+Splitting the two is the point of having both. Before the D1 move there was no
+display label at all, so the identifier *was* the label and relabelling meant
+renaming the key.
+
+---
+
+## Renaming a Tag Slug
+
+Renaming the slug re-points every location carrying it, so the dashboard puts it
+behind an explicit unlock rather than treating it as ordinary editing.
+
+`location_tags.tag_slug` is declared `ON UPDATE CASCADE`, so one update
+propagates to every record. That makes it safe for the data and still a
+link-breaking event, which is why it is deliberate rather than routine. Reach for
+it only to fix a genuine mistake such as a typo in the identifier. For anything
+else, edit the display name.
 
 ---
 
 ## Removing a Tag
 
-1. **Audit existing data**: confirm no location files use the tag (see command above). If any do, update or remove the tag from those files first.
-2. **`data/tags.json`**: Delete the key.
-3. **`.github/ISSUE_TEMPLATE/mod_submission.yml`**: Remove the checkbox entry.
-4. **`.github/ISSUE_TEMPLATE/modify_location.yml`**: Remove the checkbox entry.
+1. Open the **Tags** tab and delete the tag.
+2. **A tag still attached to locations cannot be deleted.** The refusal is a
+   `409` naming the usage count and the records using it, so the next step is
+   obvious. Clear the tag from those locations first, then delete it.
 
-The tag will disappear from the sidebar filter automatically on next deploy.
+The refusal is deliberate: neither a cascade that silently strips a tag from
+every record on one click, nor a bare delete failing on a foreign key with an
+opaque error, is a good answer.
+
+The tag disappears from the sidebar filter on the next dataset refresh.

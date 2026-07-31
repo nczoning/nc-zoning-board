@@ -6,24 +6,26 @@ Thanks for wanting to help! There are a few different ways to contribute dependi
 
 ## 🗺️ Submitting a Mod Location
 
-### Preferred: NCZoning Auto-Discovery
+Submit it from the map. There is one way to do this now, and it needs no GitHub
+account and no Git knowledge.
 
-Add your mod directly from Nexus (no GitHub required). Tag your mod with **NCZoning**, then use the **[+] Submit** button on the map to generate and paste a metadata block into your mod description.
+1. Get your in-game coordinates from the CET console (see
+   **[docs/adding-mods.md](docs/adding-mods.md)** for the exact command).
+2. Open [nczoning.net](https://nczoning.net) and press **[+] Submit**.
+3. Pick your mod, or paste its Nexus link if it is not listed. Tagging your mod
+   **NCZoning** on Nexus puts it in the picker with its name, description and
+   author already filled in.
+4. Fill in the rest and send it. A maintainer reviews it, and approving it puts
+   your pin on the map within seconds.
 
-See **[docs/nczoning-auto-discovery.md](docs/nczoning-auto-discovery.md)** for full instructions.
+Already have a pin? Correct it from its own popup with **Suggest a fix**, which
+sends only the fields you change. The same form can request removal instead.
 
-### Alternative: GitHub Issue
-
-For a permanent, manually curated entry. See **[docs/adding-mods.md](docs/adding-mods.md)** for full instructions.
-
-**Short version:**
-
-1. Get your in-game coordinates from the CET console: `print(GetPlayer():GetWorldPosition())`
-2. Go to [Issues → New Issue → 📍 Submit a New Mod Location](https://github.com/nczoning/nc-zoning-board/issues/new/choose)
-3. Fill in the form, and the bot creates a PR automatically
-4. A maintainer reviews and merges it → your pin appears on the live map
-
-> **No Git knowledge required** for either method.
+> **The GitHub issue forms are gone**, and so is the metadata block that used to
+> be pasted into a Nexus description. Both wrote locations into git, and the
+> registry no longer lives there, so neither could reach the map. The
+> **NCZoning** tag is still worth adding: it is what puts your mod in the
+> picker.
 
 ---
 
@@ -119,7 +121,7 @@ Help keep docs/ current, write guides for new contributors, or clarify existing 
 - [Tag Registry](docs/tags.md): current tags, and how to add, modify, or remove tags
 - [Tile Generation](docs/tile-generation.md): how the map tiles are generated and upgraded
 - [Skills & Roles](docs/skills-and-roles.md): full role descriptions and recruiting priorities
-- [Roadmap](https://github.com/orgs/nczoning/projects/1): what's shipped, in progress and planned — the project board *is* the roadmap, so it is never out of date
+- [Roadmap](https://github.com/orgs/nczoning/projects/1): what's shipped, in progress and planned. The project board *is* the roadmap, so it is never out of date
 
 ---
 

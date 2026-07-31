@@ -37,6 +37,7 @@ The registry moves out of git into a database, with a dashboard for maintainers.
 
 ### Removed
 
+- **The GitHub issue forms for submitting and editing locations**, and the three workflows behind them. They wrote locations into git, and the registry no longer lives there, so a submission could no longer reach the map: the form accepted it, a PR opened, CI passed, the merge went green, and no pin appeared. Submitting from the map replaces both.
 - **The BBCode generator.** The block had to be placed and formatted by hand, most attempts needed correcting, and it published a pin with no review step. The submit form replaces it.
 
 ## [1.7.2] - 2026-07-26

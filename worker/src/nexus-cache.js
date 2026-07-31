@@ -53,11 +53,12 @@
  * re-upload.
  *
  * refreshArchives() is a SEPARATE pass from the sweep, driven by the records
- * the dataset actually serves rather than by the `locations` table. While
- * production still builds from mods.json those two sets can differ -- a mod
- * merged to main reaches mods.json and does not reach D1 until someone runs
- * sync-locations.mjs -- and driving archives off the table would silently ship
- * no file list for exactly those mods.
+ * the dataset actually serves rather than by the `locations` table. The two sets
+ * are the same now that production reads D1, but keeping the pass driven by what
+ * is served means it stays correct if they ever diverge again. They used to:
+ * while production built from mods.json, a mod merged to main reached mods.json
+ * and not D1, and driving archives off the table would have shipped no file list
+ * for exactly those mods.
  *
  * ## D1 bound parameters
  *

@@ -40,11 +40,10 @@ nc-zoning-board/
 │
 ├── .github/
 │   ├── ISSUE_TEMPLATE/
-│   │   ├── mod_submission.yml      # GitHub Issue form for mod submissions
-│   │   └── suggest_edit.yml        # GitHub Issue form for suggesting edits
+│   │   ├── bug_report.yml          # Locations are submitted from the map, not
+│   │   ├── feature_request.yml     # from an issue form. The submission
+│   │   └── feedback.yml            # templates retired at the D1 cutover.
 │   └── workflows/
-│       ├── auto-pr-submission.yml       # Bot: submission issue → PR with new JSON
-│       ├── modify-location-submission.yml # Bot: edit issue → PR with modified JSON
 │       └── validate-mods.yml            # CI: validates mods.json against schema
 │                                        # (deploys via Cloudflare Pages Git integration, not a workflow)
 │
@@ -159,14 +158,14 @@ The auto-PR pipeline and Discord notifications require two secrets configured in
 
 ### Discord Notifications
 
-Two channels, two webhooks. **Submissions** (`DISCORD_WEBHOOK_URL`) covers the mod
-submission lifecycle:
+One channel now. The **submissions** channel (`DISCORD_WEBHOOK_URL`) covered the
+mod submission lifecycle: a bot posted an embed when a submission PR opened, then
+edited that message in place to show merged or closed. Discord was acting as the
+queue's UI. The dashboard holds that state now, and all three producing workflows
+retired at the D1 cutover, so nothing writes to that webhook any more. It is kept
+only as a legacy fallback for the alerts webhook below, and retires at Phase 6.
 
-- **`auto-pr-submission.yml`**: Posts a new embed when a submission PR is created (status: ⏳ Awaiting review). Stores the Discord message ID as a hidden comment on the issue.
-- **`modify-location-submission.yml`**: Posts an embed for modification/removal requests.
-- **`notify-discord-pr-status.yml`**: When the PR is merged or closed, edits the original embed in-place to show the outcome (✅ Approved or ❌ Closed). Must use the same webhook that posted the message.
-
-**Alerts** (`NCZ_ALERTS_DISCORD_WEBHOOK_URL`) covers operational health on a separate channel:
+**Alerts** (`NCZ_ALERTS_DISCORD_WEBHOOK_URL`) covers operational health:
 
 - **`monitor-auto-discovery.yml`**: Daily scan; alerts when a NCZoning-tagged mod fails to parse and isn't covered by a manual entry.
-- **`monitor-api-health.yml`**: Every 15 min; alerts when the Data API (`/v1`) isn't serving **or** its refresh cron has wedged (a frozen `/v1/health.last_refresh_at` heartbeat > 20 min old — the API can serve stale data silently, see #849). On a wedged cron it also **self-heals**: it dispatches `deploy-api.yml` to redeploy the affected Worker (re-registers the Cron Trigger), capped at 2 redeploys/env/hour before escalating for a human. The Worker's own refresh-failure alert (`worker/src/refresh.js`) posts here too (Cloudflare Worker secret, set separately via `wrangler secret put`).
+- **`monitor-api-health.yml`**: Every 15 min; alerts when the Data API (`/v1`) isn't serving **or** its refresh cron has wedged (a frozen `/v1/health.last_refresh_at` heartbeat older than 45 min; the API can serve stale data silently, see #849). On a wedged cron it also **self-heals**: it dispatches `deploy-api.yml` to redeploy the affected Worker (re-registers the Cron Trigger), capped at 2 redeploys/env/hour before escalating for a human. The Worker's own refresh-failure alert (`worker/src/refresh.js`) posts here too (Cloudflare Worker secret, set separately via `wrangler secret put`).
