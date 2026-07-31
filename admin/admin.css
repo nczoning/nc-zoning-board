@@ -302,7 +302,7 @@ th[data-sort] {
 }
 
 th[data-sort]::after {
-    content: "95";           /* up-down arrow: sortable, not yet sorted */
+    content: "↕";           /* up-down arrow: sortable, not yet sorted */
     display: inline-block;
     width: 1em;
     margin-left: var(--space-xs);
@@ -313,8 +313,8 @@ th[data-sort]:hover,
 th[data-sort]:focus-visible { color: var(--secondary); }
 
 th[data-sort].sorted { color: var(--secondary); }
-th[data-sort].sorted::after { content: "91"; opacity: 1; }
-th[data-sort].sorted.desc::after { content: "93"; }
+th[data-sort].sorted::after { content: "↑"; opacity: 1; }
+th[data-sort].sorted.desc::after { content: "↓"; }
 
 /* Zebra striping. Declared before hover/selection so those still win without
    needing !important or a specificity fight. */
