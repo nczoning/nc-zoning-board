@@ -129,12 +129,23 @@
 			"*/5 * * * *"
 		]
 	},
-	// Refresh-failure alerts post to the dedicated map-alerts channel:
+	// Every alert (refresh failure, quota threshold, new submission, and the
+	// api-health monitor's) is recorded in the `alerts` table and forwarded to
+	// the dedicated map-alerts channel by the Worker:
 	//   wrangler secret put NCZ_ALERTS_DISCORD_WEBHOOK_URL           (production)
 	//   wrangler secret put NCZ_ALERTS_DISCORD_WEBHOOK_URL --env staging
 	// Falls back to the legacy DISCORD_WEBHOOK_URL secret if the new one isn't
 	// set (no alerting gap during the move). Secrets aren't committed here.
-	// Optional: refresh runs without either.
+	// Optional: refresh runs without either, and the alert is still recorded.
+	//
+	// POST /internal/alerts lets scripts/monitor_api_health.js (GitHub Actions)
+	// use that same fan-out. It authenticates with a shared secret:
+	//   wrangler secret put ALERTS_INGEST_SECRET                      (production)
+	//   wrangler secret put ALERTS_INGEST_SECRET --env staging
+	// The SAME value must also be a GitHub Actions secret of the same name.
+	// They are separate stores; setting one does not set the other. Unset here,
+	// the endpoint answers 503 and records nothing rather than accepting an
+	// empty bearer token.
 
 	"env": {
 		// Staging: pulls source files from the dev site, writes to a separate

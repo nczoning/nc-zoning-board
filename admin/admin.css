@@ -942,6 +942,73 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 .audit-entry details { margin-top: var(--space-2xs); }
 .audit-entry summary { cursor: pointer; color: var(--gray); font-size: var(--fs-ui); }
 
+/* --------------------------------------------------------------- alerts -- */
+
+/* The dashboard's first checkbox. Baseline alignment rather than centre: it
+   sits in a toolbar row beside a <select> and a button. */
+.inline-check {
+    display: inline-flex;
+    gap: var(--space-2xs);
+    align-items: center;
+    color: var(--text-subtle);
+    font-size: var(--fs-ui);
+    white-space: nowrap;
+}
+
+.alert-entry {
+    border-bottom: var(--ui-border-thin) solid var(--border-subtle);
+    /* The stripe is the severity. A left border rather than a background so a
+       wall of warnings does not become a wall of colour. 3px matches `.notice`,
+       which is the same device carrying the same meaning. */
+    border-left: 3px solid var(--gray);
+    padding: var(--space-md);
+}
+
+.alert-entry.sev-info { border-left-color: var(--secondary); }
+.alert-entry.sev-warn { border-left-color: var(--tertiary); }
+.alert-entry.sev-error { border-left-color: var(--status-critical); }
+.alert-entry.sev-recovery { border-left-color: var(--status-ok); }
+
+/* Dealt with, kept visible. Receding rather than hiding: the history is the
+   point of the table, so an acknowledged alert stays readable. */
+.alert-entry.acknowledged { opacity: 0.55; }
+
+.alert-head {
+    display: flex;
+    gap: var(--space-md);
+    align-items: baseline;
+    flex-wrap: wrap;
+    font-size: var(--fs-ui);
+}
+
+.alert-head time { color: var(--gray); font-variant-numeric: tabular-nums; }
+.alert-head .alert-title { color: var(--white); font-weight: 600; }
+
+.alert-head .alert-sev {
+    font-size: var(--fs-micro);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+}
+
+.sev-info .alert-sev { color: var(--secondary); }
+.sev-warn .alert-sev { color: var(--tertiary); }
+.sev-error .alert-sev { color: var(--status-critical); }
+.sev-recovery .alert-sev { color: var(--status-ok); }
+
+/* Producers assemble the body as plain text with newlines, so the line breaks
+   they wrote are the ones shown. */
+.alert-body {
+    margin: var(--space-xs) 0 0;
+    color: var(--text-subtle);
+    font-size: var(--fs-ui);
+    line-height: var(--lh-body);
+    white-space: pre-wrap;
+}
+
+.alert-foot { margin-top: var(--space-xs); font-size: var(--fs-ui); }
+.alert-foot .who { color: var(--tertiary); font-weight: 600; }
+
 .diff { margin: var(--space-xs) 0 0; font-size: var(--fs-code); }
 .diff div { padding: var(--space-2xs) 0; font-family: ui-monospace, monospace; line-height: var(--lh-tight); }
 .diff .k { color: var(--gray); }

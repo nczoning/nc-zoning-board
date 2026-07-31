@@ -55,8 +55,16 @@ jobs:
 
       - name: Probe /v1, alert, and self-heal a wedged cron
         env:
-          # Dedicated map-alerts channel, kept separate from submissions.
-          NCZ_ALERTS_DISCORD_WEBHOOK_URL: ${{ secrets.NCZ_ALERTS_DISCORD_WEBHOOK_URL }}
+          # Alerts go to the Worker, which records them in the `alerts` table
+          # and forwards to the map-alerts channel. Posting to Discord from here
+          # would leave the dashboard with no history of anything this monitor
+          # said. The Worker holds the webhook now; this job holds only the
+          # ingest secret.
+          #
+          # This is a GitHub Actions secret. The Worker's copy is a Cloudflare
+          # Worker secret (`wrangler secret put ALERTS_INGEST_SECRET`), a
+          # separate store: setting one does not set the other.
+          ALERTS_INGEST_SECRET: ${{ secrets.ALERTS_INGEST_SECRET }}
           # Was the API down last run? A clean run after a down one is the
           # recovery edge → the script posts a green all-clear exactly once.
           API_HEALTH_PREV_OUTAGE: ${{ steps.prev.outputs.prev_outage }}
