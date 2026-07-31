@@ -148,8 +148,11 @@ The Nexus API does not document pagination for the `mods` query, but it supports
 > **Retired at 2.0.0.** `node.description` used to be parsed for an `[NCZoning]`
 > metadata block, and a valid block published a pin with no human step. The
 > parser (`parseNcZoningBlock()`) still runs, but **only** to collect the
-> `skipped` list on `/v1/meta` for monitoring; it never creates a record. The
-> synthetic `nczoning` tag it used to prepend is gone from the served payload.
+> `skipped` list on `/v1/meta`; it never creates a record. The synthetic
+> `nczoning` tag it used to prepend is gone from the served payload. Nothing
+> alerts on `skipped` any more either: with the block retired, a tagged mod
+> having no block is the normal case, so the list is now close to a restatement
+> of the dashboard's candidates panel and is kept only as an informational field.
 
 The function returns `{ mods, meta }` where `meta` contains image/timestamp data for manually registered mods that are also NCZoning-tagged. In the worker's merge step ([`worker/src/merge.js`](../worker/src/merge.js)), `meta` is folded into each manual mod's thumbnail/`updated_at` fields without a separate `modsByUid` call. Mods covered by `meta` are excluded from the `modsByUid` batch.
 
