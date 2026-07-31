@@ -969,9 +969,18 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 .alert-entry.sev-error { border-left-color: var(--status-critical); }
 .alert-entry.sev-recovery { border-left-color: var(--status-ok); }
 
-/* Dealt with, kept visible. Receding rather than hiding: the history is the
-   point of the table, so an acknowledged alert stays readable. */
-.alert-entry.acknowledged { opacity: 0.55; }
+/* Dealt with, kept visible.
+
+   De-emphasis by withdrawing the COLOUR, not the contrast. Fading the whole
+   entry was the obvious move and the wrong one: the only lower opacity in this
+   file is `.btn:disabled`, which is meant to look unusable, and an acknowledged
+   alert is the opposite (history, still worth reading). Text stays at full
+   contrast; the stripe goes neutral and the severity word stops shouting, so
+   the row drops out of the scan without dropping out of legibility.
+
+   Equal specificity to the .sev-* rules above, so this must stay after them. */
+.alert-entry.acknowledged { border-left-color: var(--border-neutral); }
+.alert-entry.acknowledged .alert-sev { color: var(--text-dim); }
 
 .alert-head {
     display: flex;
