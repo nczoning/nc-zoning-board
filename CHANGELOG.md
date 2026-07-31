@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0] - 2026-07-31
 
 Submissions move onto the map. A location can now be added, corrected or reported
 from the map itself, and everything goes through a review queue before it appears.
@@ -22,11 +22,11 @@ The registry moves out of git into a database, with a dashboard for maintainers.
 
 ### Changed
 
-- **The location registry lives in a database rather than in git.** Nothing changes for visitors. It removes the gap where a merged pull request and the live map could disagree.
+- **The location registry lives in a database rather than in git.** The move itself changes nothing a visitor sees: same pins, same data. It removes the gap where a merged pull request and the live map could disagree.
 - **The `NCZoning` tag is prefill only.** Tagging a mod puts it in the submit form's picker with its name, description and uploader ready to use. It no longer publishes a pin on its own.
 - ⚠️ **Editing the block in a Nexus description no longer moves a pin.** Authors who kept their location up to date that way now do it from the map. Pins already on the map are unaffected.
-- **API `0.4.0` to `0.5.0`, breaking.** Two fields leave every `/v1` location record: `source` (`manual` / `auto`) and the synthetic `nczoning` tag. Nothing auto-publishes since the registry moved to D1, so `source='auto'` describes 9 legacy records rather than a category the system produces, and `nczoning` was a visible sidebar filter for a tag `/v1/tags` never listed. The **NCZONING filter button disappears** from the sidebar. Where a record came from is still readable: the auto-discovered nine keep their `nexus-<id>` ids.
-- **API `0.3.0` to `0.4.0`.** `/v1/tags` returns an array of `{slug, name, description, sort_order}` instead of a `{tag: description}` map, matching `/v1/locations` and the shape the in-game parser maps most easily. `name` falls back to the slug, so nothing renders differently. Breaking, and taken now while the pre-1.0 window makes it free.
+- **API `0.3.0` to `0.5.0`, breaking twice.** `/v1/tags` returns an array of `{slug, name, description, sort_order}` instead of a `{tag: description}` map, matching `/v1/locations` and the shape the in-game parser maps most easily; `name` falls back to the slug, so nothing renders differently. And two fields leave every location record: `source` (`manual` / `auto`) and the synthetic `nczoning` tag, neither of which describes anything now that nothing auto-publishes. Where a record came from is still readable, because the auto-discovered nine keep their `nexus-<id>` ids. **The `/v1` API is versioned separately from the site**, and is still pre-1.0, where breaking changes cost a MINOR and the path stays `/v1`. Both were taken now because the only consumers are unreleased; the API returns to `1.0.0` when the first in-game mod ships.
+- **The NCZONING filter button disappears** from the sidebar, and the small Nexus icon next to auto-discovered pins goes with it. Both marked a distinction that no longer exists: every location now arrives the same way, through the review queue.
 - Tags are registry data, edited in the dashboard rather than by pull request. A mistyped tag is refused on write instead of caught in CI afterwards.
 - `robots.txt` keeps `/admin` out of search results. The collaborator gate is what actually protects it.
 

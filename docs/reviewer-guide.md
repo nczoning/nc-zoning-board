@@ -1,70 +1,86 @@
 # Mod Submission Reviewer Guide
 
-Welcome! If you're here, you've been asked to help review and approve new mod locations for the map. This guide covers the essential steps to ensure the map stays accurate and secure.
+If you're here, you've been asked to help review new mod locations for the map.
+Reviewing happens in the **admin dashboard** at
+[nczoning.net/admin/](https://nczoning.net/admin/), signed in with GitHub.
+
+Access is your **collaborator status on the repository**. There is no separate
+list to be added to: if you can push to `nczoning/nc-zoning-board`, you can
+review.
+
+---
 
 ## 🚀 The Review Process
 
-Reviewers are coordinated through the **[Locations Hub Discord](https://discord.gg/sc4yEx2fNf)**.
+1. Open the dashboard and go to the **Queue** tab. The tab carries a count when
+   anything is pending.
+2. Each submission renders a **field-level diff** of what it would change, and a
+   mini-map of the proposed pin.
+3. Check the three things below.
+4. **Approve**, **reject with a reason**, or **hold**.
 
-1. **Role & Channel:** Ensure you have the **Cartographer** role. You will find all notifications in the **#nc-zoning-board-submissions** channel.
-2. **Notification:** When a mod is submitted, a bot sends an "Awaiting Review" embed. You can click the **[Review PRs]** link in the embed to go straight to the PR on GitHub.
-3. **PR Creation:** The bot simultaneously parses the issue and creates the PR.
-4. **Validation:** Wait for the automated GitHub Actions to complete their validation checks.
-5. **Merge:** After a manual check (see below), you merge the PR.
+Approving writes the location and rebuilds the map's data, so an approved pin
+appears within seconds. Rejecting keeps the record of the decision.
 
-### Discord Notification Statuses
+> **Nothing is sent to the submitter.** A review note is an internal record only,
+> and the queue says so where you type it. Submissions are anonymous by design;
+> there is no address to reply to.
 
-The notification in Discord will update its colour and status automatically:
+### Three kinds of submission
 
-- ⏳ **Awaiting review** (Yellow): Initial submission, needs a human eye.
-- ✅ **Approved: pin is now live!** (Green): PR merged successfully.
-- ❌ **Closed without merging** (Red): PR was closed or rejected.
+- **Create**: a new pin. If the mod already has one, the queue lists the
+  existing records it would sit beside and how far away they are. That is
+  context, not a warning: one mod can legitimately supply several locations.
+- **Edit**: a correction sent from a pin's popup. Only the changed fields are
+  sent, so the diff is the whole story.
+- **Remove**: a takedown request with a reason. Approving sets the record to
+  `hidden`, which pulls the pin and keeps the history. It does not delete it.
 
 ---
 
 ## 🔍 What to Check
 
-Before merging any PR, please verify these three things:
+### 1. The Nexus link
 
-### 1. Nexus Mods Link
-
-- Click the link provided in the PR or Issue.
 - Does the mod actually exist?
-- Is it a "Location" or "Doms/Housing" mod? (If it's just a weapon/clothing mod, it doesn't belong on this map).
+- Is it a location or housing mod? A weapon or clothing mod does not belong on
+  this map.
 
 ### 2. Coordinates
 
-- Does the mod description on Nexus mention coordinates? If so, do they match (roughly) what was submitted?
-- If you're in-game, you can use `Game.Teleport(X, Y, Z)` in CET to verify the location yourself (optional but helpful).
-- **Red Flag:** If the X/Y values are exactly `0.0`, the submitter likely forgot to copy them.
+- The mini-map is the fastest check: is the pin somewhere plausible?
+- Does the mod's Nexus description mention coordinates? Do they roughly match?
+- In-game you can verify with `Game.Teleport(X, Y, Z)` in CET.
+- **Red flag:** X/Y of exactly `0.0` usually means the submitter forgot to copy
+  them.
 
-### 3. Tags & Category
+### 3. Tags and category
 
-- Does the category (`location-overhaul`, `new-location`, or `other`) make sense for the mod?
-- Are the selected tags reasonable? The automated validation will reject any tags not in the [registry](../data/tags.json), but a tag being valid doesn't mean it's accurate.
-
----
-
-## ✅ Merging
-
-If everything looks good:
-
-1. Go to the **Pull Request** tab on GitHub.
-2. Ensure the "Checks" (Validation) have passed.
-3. Click **Merge pull request** → **Confirm merge**.
-
-### What happens now?
-
-- The Original Issue will close automatically.
-- The Discord notification will update to "Approved".
-- The new pin will appear on the live map within minutes.
+- Does the category (`location-overhaul`, `new-location`, `other`) fit the mod?
+- Are the tags reasonable? A tag outside the registry is refused on write, but a
+  valid tag is not necessarily an accurate one.
 
 ---
 
-## 🛑 Handling Issues
+## 🛑 Handling Problems
 
-- **Incomplete Data:** Comment on the Issue asking the user for the missing info. Do not merge until fixed.
-- **Spam/Malicious:** Close the Issue and PR immediately without merging. Notify the lead maintainer.
-- **Duplicate:** Check if a pin already exists for that mod. If so, close the new submission as a duplicate.
+- **Incomplete data:** reject with a reason saying what was missing, or approve
+  and fix it yourself in the editor. There is no submitter to ask.
+- **Spam or malicious:** reject. If it is a tagged Nexus mod you never want
+  offered again, dismiss it in the **Candidates** tab, which is reversible.
+- **Duplicate:** the queue already shows nearby records for the same mod. If it
+  is a genuine duplicate rather than a second location, reject it.
+
+## 📋 The audit log
+
+Every change records who made it and the record before and after. It replaced
+`git log` for data changes, so it answers "who changed this pin, and when".
+
+---
+
+> **Retired at 2.0.0:** reviewing used to mean merging a bot-authored pull
+> request, with a Discord bot editing its own message in place to show the
+> outcome. Discord was acting as the queue's UI. The dashboard holds that state
+> now, and the submission issue forms and their workflows are gone.
 
 *Thanks for keeping Night City mapped!* 🌃

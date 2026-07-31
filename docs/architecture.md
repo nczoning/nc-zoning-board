@@ -52,58 +52,63 @@ nc-zoning-board/
 
 ## Data Flow
 
-> For a full breakdown of the bot implementation, see the [Submission Pipeline](submission-pipeline.md) documentation.
+> For what happens between pressing Submit and the pin appearing, see the
+> [Submission Pipeline](submission-pipeline.md).
 
 ```text
-┌─────────────┐     ┌──────────────┐     ┌───────────────┐
-│ Mod Author  │────▶│ GitHub Issue  │────▶│  Auto-PR Bot  │
-│ submits CET │     │   Form       │     │  (Actions)    │
-│ coordinates │     └──────────────┘     └───────┬───────┘
-└─────────────┘                                  │
-                                                 ▼
-                                         ┌──────────────┐
-                                         │ data/locations│
-                                         │ <UUID>.json  │
-                                         └──────┬───────┘
-                                                │
-                                                ▼
-                                         ┌──────────────┐
-                                         │  build_mods  │
-                                         │  → mods.json │
-                                         └──────┬───────┘
-                                                │
-                                                ▼
-                                    ┌────────────────────────┐
-                                    │     services.js        │
-                                    │  cetToLeaflet(x, y)    │
-                                    │  → [lat, lng] on map   │
-                                    └────────────┬───────────┘
-                                                 │
-                                                 ▼
-                                    ┌────────────────────────┐
-                                    │    Leaflet Map         │
-                                    │  Sidebar GUI           │
-                                    │  Category Filtering    │
-                                    │  L.marker (pins)       │
-                                    └────────────────────────┘
+┌─────────────┐     ┌────────────────────┐     ┌──────────────────┐
+│ Mod Author  │────▶│  Map: [+] Submit   │────▶│ POST /submissions│
+│ submits CET │     │  or "Suggest a fix"│     │ Turnstile + rate │
+│ coordinates │     └────────────────────┘     │ limit            │
+└─────────────┘                                └────────┬─────────┘
+                                                        │
+                                                        ▼
+                                              ┌────────────────────┐
+                                              │ D1 `submissions`   │
+                                              │ status: pending    │
+                                              └────────┬───────────┘
+                                                       │  admin approves
+                                                       ▼
+                                              ┌────────────────────┐
+                                              │ D1 `locations`     │
+                                              │ + `audit_log` row  │
+                                              └────────┬───────────┘
+                                                       │  write-through
+                                                       ▼
+                                              ┌────────────────────┐
+                                              │ materialize → KV   │
+                                              │ /v1/locations      │
+                                              └────────┬───────────┘
+                                                       │
+                                                       ▼
+                                              ┌────────────────────┐
+                                              │ services.js        │
+                                              │ cetToLeaflet(x, y) │
+                                              │ → [lat, lng]       │
+                                              └────────┬───────────┘
+                                                       │
+                                                       ▼
+                                              ┌────────────────────┐
+                                              │ Leaflet map        │
+                                              │ Three.js scene     │
+                                              │ Sidebar            │
+                                              └────────────────────┘
 ```
 
 ## Key Components
 
 ### JavaScript Architecture
 
-The core frontend JS is four files loaded via `<script>` tags (no ES modules, no bundler). All shared symbols live on the `window.NCZ` namespace.
+The frontend JS is nine files loaded via `<script>` tags (no bundler; two are ES modules). All shared symbols live on the `window.NCZ` namespace.
 
 | File | Role |
 | --- | --- |
 | `constants.js` | All config values: category styles, API endpoints, cache keys, UI sizing, 3D scene constants |
 | `utils.js` | Pure functions: `escapeHtml`, `cetToLeaflet`, `cetToThree`, positioning algorithm, submit-form validation (`collectLocationForm`) |
-| `services.js` | Fetch functions: the `/v1` Data API loader (`fetchLocationsFromApi()`) |
+| `services.js` | Fetch functions: the `/v1` Data API loader (`fetchLocationsFromApi()`) and the submissions POST |
 | `app.js` | DOM logic: map init, sidebar, cluster panel, modals, image gallery, view switching |
 
-Load order on `main`: `constants.js` → `utils.js` → `services.js` → `app.js`
-
-**Three.js migration** (in progress on `dev` branch) adds four more files:
+The 3D scene ships on `main`. These are the other five files:
 
 | File | Role |
 | --- | --- |
@@ -112,7 +117,10 @@ Load order on `main`: `constants.js` → `utils.js` → `services.js` → `app.j
 | `three-markers.js` | 3D pin/popup/tooltip/cluster layer: interactive parity with Leaflet (`NCZ.ThreeMarkers`). See [three-markers.md](three-markers.md) for the full architecture. |
 | `flyover.js` | Optional cinematic flyover showcase, include/exclude via `<script>` tag |
 
-Load order on `dev`/feature branches: `constants.js` → `utils.js` → `services.js` → `overlay.js` → `three-scene.js` (module) → `three-markers.js` (module) → `app.js` → `[flyover.js optional]`
+**Load order, identical on `main` and `dev`** (verified against `index.html`, 2026-07-31):
+
+`constants.js` → `utils.js` → `district-info.js` → `services.js` → `overlay.js` →
+`three-scene.js` (module) → `three-markers.js` (module) → `flyover.js` → `app.js`
 
 ### Map Layer (`app.js`)
 
@@ -128,12 +136,13 @@ Load order on `dev`/feature branches: `constants.js` → `utils.js` → `service
 - `NCZ.cetToThree(x, y, z)` converts CET coordinates to Three.js scene space (`[x, z||0, -y]`)
 - See [Coordinate System](coordinate-system.md) for full details
 
-### Mod Data (`data/locations/*.json`)
+### Location Data (D1)
 
-- Individual JSON files per mod to prevent merge conflicts.
-- **Attributes**: `id` (UUID), `name`, `authors` (array), `coordinates` ([X, Y]), `nexus_id` (ID string, "WIP", or "Dummy"), `category`, `tags` (array), and `description`.
-- **Credits**: Optional field for team-based acknowledgements.
-- **Validation**: Individual tags are checked against `data/tags.json` and the final compiled `mods.json` is validated against `mods.schema.json` in CI.
+- **The registry is a Cloudflare D1 database**, served at `/v1/locations`. It stopped living in git at the 2.0.0 cutover.
+- **Attributes**: `id` (UUID, or `nexus-<id>` for the nine legacy auto-discovered records), `name`, `authors` (array), `coordinates` ([X, Y, Z]), `yaw`, `nexus_id` (ID string, "WIP" or "Dummy"), `category`, `tags` (via the `location_tags` join), `description`, `credits`, `status` and `admin_notes`.
+- **Never served**: `admin_notes` is admin-only and is deliberately withheld from `/v1`.
+- **Validation** happens on the write path in the Worker, so a bad value is refused at submission rather than caught in CI afterwards.
+- `data/locations/*.json` remains in the repo as the pre-cutover record and is read by nothing. It goes at Phase 6.
 
 ### Styling (`style.css`)
 
@@ -146,15 +155,12 @@ Load order on `dev`/feature branches: `constants.js` → `utils.js` → `service
 
 ## Repo Setup (for new maintainers)
 
-The auto-PR pipeline and Discord notifications require two secrets configured in **repo Settings → Secrets and variables → Actions**:
+Discord alerting uses secrets configured in **repo Settings → Secrets and variables → Actions**. The Worker's own secrets are a **separate store**, set with `wrangler secret put`:
 
 | Secret | Value |
 | --- | --- |
-| `ACTIONS_PAT` | A GitHub Personal Access Token (fine-grained) with `Contents: Read/Write` and `Pull requests: Read/Write` on this repo |
-| `DISCORD_WEBHOOK_URL` | Webhook for the **submissions** channel: new/modified submission embeds and their PR-status edits (channel Settings → Integrations → Webhooks) |
+| `DISCORD_WEBHOOK_URL` | Legacy webhook for the retired **submissions** channel. Nothing writes to it now; it survives only as a fallback for the alerts webhook below, and retires at Phase 6 |
 | `NCZ_ALERTS_DISCORD_WEBHOOK_URL` | Webhook for the dedicated **map-alerts** channel: auto-discovery parse failures and Data API health/outage alerts, kept separate from submissions |
-
-> **Why ACTIONS_PAT?** GitHub's `GITHUB_TOKEN` cannot trigger other workflow runs (a security design). Using a PAT for `create-pull-request` allows the `validate-json` check to fire automatically on the generated PR.
 
 ### Discord Notifications
 

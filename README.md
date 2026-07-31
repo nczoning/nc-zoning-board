@@ -58,38 +58,42 @@ See [Tile Generation Guide](docs/tile-generation.md) for details.
 
 ## Submitting Your Mod
 
-### Preferred Method (NCZoning Auto-Discovery)
+Submit it from the map. No GitHub account, no Git, one way to do it.
 
-Add your mod to the map directly from Nexus (no GitHub account required):
+1. Get your in-game coordinates from the CET console
+2. Open [nczoning.net](https://nczoning.net) and press **[+] Submit**
+3. Pick your mod, or paste its Nexus link, then fill in the rest
+4. A maintainer reviews it, and approving it puts your pin on the map within seconds
 
-1. Tag your mod on Nexus with **NCZoning**
-2. Use the **[+] Submit** button on the map to generate your metadata block
-3. Paste the block into your mod description and save
+Tagging your mod **NCZoning** on Nexus is still worth doing: it puts your mod in
+the picker with its name, description and author already filled in. It no longer
+publishes a pin on its own.
 
-Your pin will appear on the map within a few minutes. See the **[NCZoning Auto-Discovery Guide](docs/nczoning-auto-discovery.md)** for full details.
+Already on the map? Correct your pin from its own popup with **Suggest a fix**,
+which sends only the fields you change. The same form can request removal.
 
-### GitHub Issue Method
-
-Prefer a permanent, manually curated entry? See **[docs/adding-mods.md](docs/adding-mods.md)** for instructions on submitting via GitHub issue or pull request.
+See **[docs/adding-mods.md](docs/adding-mods.md)** for the CET command and the
+full field reference.
 
 ## Documentation
 
 | Guide | Description |
 |-------|-------------|
-| [NCZoning Auto-Discovery](docs/nczoning-auto-discovery.md) | Add your mod to the map directly from Nexus |
-| [Adding Mods](docs/adding-mods.md) | GitHub issue / manual PR submission, mods.json schema |
+| [Adding Mods](docs/adding-mods.md) | Submitting from the map, CET coordinates, the field reference |
+| [The NCZoning Tag](docs/nczoning-auto-discovery.md) | What tagging your mod on Nexus prefills, and what it no longer does |
+| [Submission Pipeline](docs/submission-pipeline.md) | What happens between pressing Submit and the pin appearing |
 | [Coordinate System](docs/coordinate-system.md) | CET ↔ Leaflet transform, calibration data |
 | [Architecture](docs/architecture.md) | File structure, data flow, tech stack |
 | [Tile Generation](docs/tile-generation.md) | Map tiling, source images, upgrading resolution |
-| [Roadmap](https://github.com/orgs/nczoning/projects/1) | Current status and planned work — the project board is the roadmap |
+| [Roadmap](https://github.com/orgs/nczoning/projects/1) | Current status and planned work. The project board is the roadmap |
 
 ## Tech Stack
 
 - **[Leaflet.js](https://leafletjs.com/)**: Interactive map (`L.CRS.Simple` with custom tiles)
-- **Vanilla JS / CSS**: No frameworks, purely static files
+- **Vanilla JS / CSS**: No frameworks, no bundler
 - **[Sharp](https://sharp.pixelplumbing.com/)**: 8k map tile generation (dev dependency)
-- **GitHub Actions**: Automated JSON validation and PR pipeline
-- **Cloudflare Pages**: Static hosting (Git integration)
+- **Cloudflare Workers + D1 + KV**: the `/v1` Data API, the location registry, and the served dataset
+- **Cloudflare Pages**: hosting for the site and the admin dashboard (Git integration)
 
 ## Contributors & Community
 
