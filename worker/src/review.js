@@ -39,6 +39,19 @@
  * make. An admin who does want it gone can delete it afterwards from the
  * editor, deliberately.
  *
+ * ## An approved edit is guarded, and a removal is not
+ *
+ * A submission carries `base_modified_at`: the version of the location it was
+ * written against (migration 0008). Approving an `edit` applies the payload
+ * only while the record still carries that version, so an admin's edit made
+ * while the submission sat in the queue cannot be silently replaced by the
+ * submitter's older values. A refusal is `stale_submission`, and it leaves the
+ * submission PENDING with the current record attached, so the reviewer can see
+ * what they would have overwritten and approve again against that version.
+ *
+ * A `remove` is unguarded, and a NULL base is unguarded. Both are decisions,
+ * and both are stated where they apply rather than here.
+ *
  * ## What is never sent to the client
  *
  * `submitter_ip_hash`. It exists for the rate limit and for abuse triage
@@ -209,7 +222,7 @@ async function restoreInstead(env, submission, locationId, { actor, nowIso }) {
  * submission pending: a submission that could not be applied has not been
  * reviewed, and marking it approved anyway would lose it.
  */
-async function applyApproval(env, submission, { actor, nowIso, restoreLocationId }) {
+async function applyApproval(env, submission, { actor, nowIso, restoreLocationId, baseOverride }) {
   const payload = parsePayload(submission.payload);
 
   if (submission.kind === 'create') {
@@ -247,17 +260,36 @@ async function applyApproval(env, submission, { actor, nowIso, restoreLocationId
     const v = validateLocationInput(payload, { tagNames: await readTagSlugs(env), partial: true });
     if (!v.ok) return { error: 'validation_failed', errors: v.errors, status: 422 };
 
-    // Unguarded, and this one is a real trade-off rather than a non-issue.
-    // A submission is written against the record as it looked when the
+    // GUARDED. A submission is written against the record as it looked when the
     // submitter saw it, and approving applies it however long it sat in the
-    // queue. If an admin tidied the record meanwhile, approving reapplies the
-    // submitter's older values over that tidy-up. Guarding it properly needs
-    // the submission to record the version it was based on, which is a schema
-    // change; see the follow-up on #899. Until then the reviewer sees the diff
-    // before approving, which is the mitigation.
-    const patched = await patchLocation(env, submission.location_id, payload, nowIso);
+    // queue. Without this, an admin who tidied the record meanwhile has that
+    // tidy-up silently replaced by the submitter's older values.
+    //
+    // `base_modified_at` is what the submitter saw (migration 0008), and
+    // `baseOverride` is what the REVIEWER saw: after a refusal the dashboard
+    // reloads the record, shows the diff against its current values, and
+    // re-sends with that version. So the second attempt is still guarded, just
+    // rebased onto a version a human looked at, rather than a force flag that
+    // would lose a third admin's write landing in between.
+    //
+    // NULL applies unguarded, and must: a submission accepted before 0008 has
+    // no base, and one that refused would be unapprovable forever.
+    const ifMatch = baseOverride ?? submission.base_modified_at ?? null;
+    const patched = await patchLocation(env, submission.location_id, payload, nowIso, { ifMatch });
     if (patched.empty) {
       return { error: 'empty_patch', detail: 'this submission changes no field', status: 422 };
+    }
+    if (patched.conflict) {
+      // Nothing was written. The record comes back so the dashboard can show
+      // what this approval would have overwritten, and it is re-read rather
+      // than reusing `before`: the point of the refusal is that the row moves
+      // under this request, so the freshest read is the only honest one.
+      return {
+        error: 'stale_submission',
+        detail: `"${beforeRow.name}" changed after this submission was made, so nothing was applied`,
+        current: await loadAdminRecordById(env, submission.location_id),
+        status: 409,
+      };
     }
     const after = await loadAdminRecordById(env, submission.location_id);
     await writeAudit(env, {
@@ -312,6 +344,12 @@ async function act(request, env, ctx, { id, action, actor }) {
   if (body.restore_location_id !== undefined && typeof body.restore_location_id !== 'string') {
     errors.push('restore_location_id must be a string');
   }
+  // The version the REVIEWER is approving against, sent only on a second
+  // attempt after a `stale_submission` refusal. See applyApproval's edit branch.
+  if (body.base_modified_at !== undefined
+    && (typeof body.base_modified_at !== 'string' || !body.base_modified_at)) {
+    errors.push('base_modified_at must be a non-empty string');
+  }
   if (errors.length) return json(request, { error: 'invalid_review', errors }, 400);
 
   const row = await readSubmission(env, id);
@@ -324,6 +362,15 @@ async function act(request, env, ctx, { id, action, actor }) {
     return json(request, {
       error: 'invalid_review',
       errors: ['restore_location_id applies only to approving a create'],
+    }, 400);
+  }
+  // Same shape of mistake: a create inserts and a removal is unguarded on
+  // purpose, so neither has a base to rebase onto. Accepting the field there
+  // would read as a guard that is not running.
+  if (body.base_modified_at && !(action === 'approve' && row.kind === 'edit')) {
+    return json(request, {
+      error: 'invalid_review',
+      errors: ['base_modified_at applies only to approving an edit'],
     }, 400);
   }
   if (row.status !== PENDING) {
@@ -339,13 +386,20 @@ async function act(request, env, ctx, { id, action, actor }) {
   let applied = null;
   if (action === 'approve') {
     applied = await applyApproval(env, row, {
-      actor, nowIso, restoreLocationId: body.restore_location_id ?? null,
+      actor,
+      nowIso,
+      restoreLocationId: body.restore_location_id ?? null,
+      baseOverride: body.base_modified_at ?? null,
     });
     if (applied.error) {
+      // `current` is set only on a stale_submission. The reviewer has to see
+      // the record as it stands before deciding whether to approve over it.
+      // The submission is untouched and still pending: resolve() has not run.
       return json(request, {
         error: applied.error,
         detail: applied.detail,
         errors: applied.errors,
+        current: applied.current,
       }, applied.status);
     }
   }
@@ -378,6 +432,10 @@ async function act(request, env, ctx, { id, action, actor }) {
       // inserted nothing and an approval that inserted a record are different
       // events, and the log is the only place that distinction survives.
       granted_by: applied ? (applied.restored ? 'restore' : 'apply') : null,
+      // The reviewer approved an edit over a record that had moved since the
+      // submission was made. The before/after pair above shows what changed;
+      // this says the overwrite was a decision rather than a race.
+      base_override: applied && body.base_modified_at ? true : undefined,
     },
   });
 

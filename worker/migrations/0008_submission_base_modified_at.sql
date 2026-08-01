@@ -1,0 +1,38 @@
+-- The version of the location a submission was written against.
+--
+-- WHY. A submission sits in the queue for as long as it takes someone to review
+-- it, and the registry does not stand still meanwhile. An admin fixes a typo on
+-- the record, the reviewer approves the older submission, and the submitter's
+-- stale values overwrite the fix with no error and no warning. The audit log
+-- records both writes, so the history survives; the person who made the fix is
+-- told nothing.
+--
+-- `patchLocation` has taken an `ifMatch` since the dashboard editor needed one
+-- (worker/src/registry.js). It could not be used from the review path because
+-- nothing recorded WHICH version the submitter saw. This column is that value:
+-- `locations.modified_at` as it stood when the submission was accepted.
+--
+-- THE NAME. Matches `locations.modified_at`, which is what it holds. NOT
+-- `base_updated_at`: migration 0006 exists specifically to kill the
+-- `updated_at` collision, because `updated_at` on a served /v1 record is the
+-- NEXUS mod date out of `nexus_cache`. Reintroducing that name here recreates
+-- the ambiguity that hid a bug once already.
+--
+-- NULL MEANS UNGUARDED, and that is deliberate rather than a gap:
+--   * a `create` submission has no base by construction -- `location_id` is
+--     NULL for a create, there is no record to be stale against, and the
+--     approval inserts rather than patches;
+--   * every submission accepted before this migration has no base either.
+-- Treating NULL as "apply regardless" keeps those approvable, which is the
+-- behaviour they have today. A NULL that refused would strand them.
+--
+-- NO BACKFILL. `submissions` held 0 rows in production at the time this ran
+-- (all statuses, checked 2026-08-01), so there is nothing to fill in and
+-- nothing pending to break.
+--
+-- CAPTURED FOR `remove` TOO, though approving a removal stays unguarded on
+-- purpose: an approved removal pulls the pin regardless of what else changed.
+-- The value is recorded because it is the honest answer to "what did the
+-- submitter see", and it costs one column read at submission time.
+
+ALTER TABLE submissions ADD COLUMN base_modified_at TEXT;

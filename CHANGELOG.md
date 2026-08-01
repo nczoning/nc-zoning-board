@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Approving an edit can no longer silently overwrite an admin's change.** A submission now records the version of the location it was written against, and approving it applies only while the record still carries that version.
+- A refused approval says what changed, leaves the submission pending, and offers to apply it over the current record — which is still a guarded write, not a force.
+
 ## [2.2.0] - 2026-08-01
 
 The registry gets a backup again. When locations moved into the database, the
