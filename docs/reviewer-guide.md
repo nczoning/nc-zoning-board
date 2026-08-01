@@ -81,18 +81,26 @@ That is deliberate. Three of us share one registry, and without it the second
 save silently replaces the first: no error, and the person who saved first only
 finds out when their change is gone.
 
-### One case it does not cover: approving a stale submission
+### Approving a stale submission is guarded too
 
-A submission is written against the record as the **submitter** saw it, and
-approving applies it however long it has been sitting in the queue.
+A submission is written against the record as the **submitter** saw it, and it
+may sit in the queue for a while. So if you fixed something on a record while a
+submission for it was pending, approving that submission would put the
+submitter's older values back over your fix. This needs no second person: you
+editing a record and then approving a submission for it is enough.
 
-So if you fixed something on a record while a submission for it was pending,
-approving that submission puts the submitter's older values back over your fix.
-This needs no second person: you editing a record and then approving a
-submission for it is enough.
+**Approving an edit is refused when that has happened.** Nothing is written, the
+submission stays pending, and the queue reloads the record and redraws the diff
+against its current values, so you can see what you would have overwritten.
 
-**Read the diff before you approve.** It shows exactly what the submission would
-write, which is the check that catches this.
+If the submission should still apply, press **Apply anyway**. That re-sends it
+against the version now on your screen, so it is still a guarded write: if
+someone else saves in the moment between the refusal and your retry, that is
+caught too. The audit log records the approval as having been made over a newer
+version, so it is distinguishable afterwards from an ordinary one.
+
+Removals are unguarded on purpose. An approved removal pulls the pin regardless
+of what else changed on the record, which is the point of approving it.
 
 ## 📋 The audit log
 
