@@ -63,7 +63,13 @@ jobs:
       # install means nothing to break at 02:17 in a job nobody is watching.
       - name: Export the registry
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          # An account-owned token holding only Account -> D1 -> Read. NOT
+          # CLOUDFLARE_API_TOKEN, which deploys the Workers: that one is built
+          # from the "Edit Cloudflare Workers" template and carries no D1
+          # permission, and a read-only backup has no business holding deploy
+          # rights. No fallback to it either, so a missing secret fails here
+          # rather than half-working under the wrong identity.
+          CLOUDFLARE_D1_READ_TOKEN: ${{ secrets.CLOUDFLARE_D1_READ_TOKEN }}
           # Production `nczoning-data`. Stated rather than defaulted so the
           # database this backs up is readable from the workflow.
           D1_DATABASE_ID: 4365740b-76be-4a99-b985-16641e68703a

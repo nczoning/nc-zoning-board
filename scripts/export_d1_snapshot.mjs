@@ -15,11 +15,17 @@
  *   node scripts/export_d1_snapshot.mjs --out ../snapshot --dry-run
  *
  * Env:
- *   CLOUDFLARE_API_TOKEN   required. Needs **Account → D1 → Read** (or Edit).
- *                          A token scoped only for Workers deploys will 403 on
- *                          /d1/database/.../query with code 10000. The endpoint
- *                          named in the error is what tells you which permission
- *                          is missing (learnings/wrangler-ci-token-permissions).
+ *   CLOUDFLARE_D1_READ_TOKEN  required. An ACCOUNT-owned token (Manage Account
+ *                          -> API Tokens, not My Profile) holding exactly
+ *                          Account -> D1 -> Read. Deliberately NOT the deploy
+ *                          token: that one comes from the "Edit Cloudflare
+ *                          Workers" template, which does not carry D1, and
+ *                          reusing it would give a read-only backup job
+ *                          permission to redeploy the Workers. A token without
+ *                          D1 fails on /d1/database/.../query with code 10000;
+ *                          the endpoint named in the error is what identifies
+ *                          the missing permission
+ *                          (learnings/wrangler-ci-token-permissions).
  *   CLOUDFLARE_ACCOUNT_ID  defaults to the account in worker/wrangler.jsonc.
  *   D1_DATABASE_ID         defaults to production `nczoning-data`.
  *
@@ -243,11 +249,11 @@ export function serialize(value) {
 export async function d1Query(sql, params = [], deps = {}) {
   const {
     fetchImpl = fetch,
-    token = process.env.CLOUDFLARE_API_TOKEN,
+    token = process.env.CLOUDFLARE_D1_READ_TOKEN,
     accountId = ACCOUNT_ID,
     databaseId = DATABASE_ID,
   } = deps;
-  if (!token) throw new Error('CLOUDFLARE_API_TOKEN is not set');
+  if (!token) throw new Error('CLOUDFLARE_D1_READ_TOKEN is not set');
 
   const endpoint = `${CF_API}/accounts/${accountId}/d1/database/${databaseId}/query`;
   const res = await fetchImpl(endpoint, {
@@ -263,7 +269,7 @@ export async function d1Query(sql, params = [], deps = {}) {
       .join('; ') || `HTTP ${res.status}`;
     throw new Error(
       `D1 query failed on ${endpoint}: ${detail}\n`
-      + '  If this is code 10000, the API token is missing Account → D1 → Read.',
+      + '  If this is code 10000, CLOUDFLARE_D1_READ_TOKEN is missing Account → D1 → Read.',
     );
   }
   return body.result?.[0]?.results ?? [];

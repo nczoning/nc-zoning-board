@@ -223,7 +223,7 @@ test('a 200 with success:false is an error, and the message names the endpoint',
 test('a missing token fails before any request is made', async () => {
   await assert.rejects(
     () => X.d1Query('SELECT 1', [], { fetchImpl: () => assert.fail('should not fetch'), token: '' }),
-    /CLOUDFLARE_API_TOKEN is not set/,
+    /CLOUDFLARE_D1_READ_TOKEN is not set/,
   );
 });
 
