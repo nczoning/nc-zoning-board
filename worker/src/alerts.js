@@ -27,8 +27,16 @@
  * second failure, and it must never mask the one it is reporting.
  */
 
-/** Recognised sources, matching the `source` column comment in migration 0001. */
-export const ALERT_SOURCES = ['api-health', 'refresh', 'submissions', 'quota'];
+/**
+ * Recognised sources, matching the `source` column comment in migration 0001.
+ *
+ * `export` is the nightly D1 snapshot (`.github/workflows/export-d1-snapshot.yml`),
+ * which posts through `/internal/alerts` like the health monitor does. It is its
+ * own source rather than folded into `refresh`: the 5-minute dataset cron and the
+ * nightly git mirror fail for unrelated reasons and are fixed in different places,
+ * and the dashboard's source filter is how they are told apart.
+ */
+export const ALERT_SOURCES = ['api-health', 'refresh', 'submissions', 'quota', 'export'];
 
 /** Recognised severities, matching the `severity` column comment. */
 export const ALERT_SEVERITIES = ['info', 'warn', 'error', 'recovery'];

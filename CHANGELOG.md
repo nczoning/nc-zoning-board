@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-08-01
+
+The registry gets a backup again. When locations moved into the database, the
+folder of JSON files in git quietly stopped being a complete copy of them; ten
+records have been living in one place ever since. A job now writes the whole
+registry out every night, to a branch kept separate from everything else.
+
+### Added
+
+- **A nightly backup of the location registry**, committed to a `data-snapshots` branch that shares no history with `main` or `dev`. It covers the ten records the git mirror was missing, so the copy is complete for the first time since the cutover.
+- The backup alerts under its own `export` source when a run fails, and says so in the dashboard rather than only going red in Actions.
+- [An infrastructure map](docs/infrastructure-map.md): what each Pages project, Worker, database and branch is, and which one to look at when something breaks.
+
+### Fixed
+
+- The importer can now restore from a snapshot: `--files-only` skips the live-API read that would duplicate the auto-discovered records, and the dismissed-candidate and tag files are accepted in both shapes.
+
 ## [2.1.0] - 2026-08-01
 
 Alerts get somewhere to live. Everything the site raises, from a new submission

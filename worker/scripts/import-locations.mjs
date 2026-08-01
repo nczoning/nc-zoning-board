@@ -1,6 +1,21 @@
 /**
- * One-time Phase 1 import: data/locations/*.json + the live auto-discovered
- * records -> D1 `locations`; data/excluded_mods.json -> `dismissed_candidates`.
+ * Registry import: data/locations/*.json + the live auto-discovered records ->
+ * D1 `locations`; data/excluded_mods.json -> `dismissed_candidates`.
+ *
+ * TWO CALLERS, and the difference between them is `--files-only`:
+ *
+ * 1. The Phase 1 migration (the default). Manual records come from the JSON
+ *    files, auto-discovered ones from the live API, because at that moment the
+ *    nine `nexus-` records exist only in the running system.
+ * 2. DISASTER RECOVERY from the `data-snapshots` branch (`--files-only`), where
+ *    all 297 are files. Fetching the live API there would re-add the nine and
+ *    die on the primary key, and there may be no live API to fetch from: that
+ *    is the situation a restore is for.
+ *
+ *   node worker/scripts/import-locations.mjs --files-only \
+ *     --data ../snapshot/data --out worker/.import/restore.sql
+ *
+ * `--data <dir>` points at a snapshot checkout instead of the working tree.
  *
  * Emits SQL rather than executing it, for three reasons: the 296 rows are
  * reviewable before they land, `wrangler d1 execute --file` is the same command
@@ -31,9 +46,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const LOCATIONS_DIR = path.join(REPO_ROOT, 'data', 'locations');
-const EXCLUDED_FILE = path.join(REPO_ROOT, 'data', 'excluded_mods.json');
 const LIVE_API = process.env.NCZ_API_ORIGIN || 'https://api.nczoning.net';
+
+/** Resolved from `--data`; defaults to the working tree's own data directory. */
+function dataPaths(dataDir) {
+  return {
+    locations: path.join(dataDir, 'locations'),
+    excluded: path.join(dataDir, 'excluded_mods.json'),
+    tags: path.join(dataDir, 'tags.json'),
+  };
+}
 
 /**
  * SQLite string literal. Doubling the single quote is the whole escape --
@@ -79,9 +101,13 @@ function toRow(rec, stamp) {
     // Not a column any more (migration 0007). Carried on the row because
     // insertLocationTags reads it to build the join.
     tags: JSON.stringify(rec.tags ?? []),
-    status: 'published',
-    added_at: stamp,
-    modified_at: stamp,
+    // A snapshot file carries all three; a Phase 1 source file carries none.
+    // `stamp` is honest for the second case ("this is when it became a row") and
+    // wrong for the first: a restore that stamps every record with the restore
+    // time discards the dates #906 recovered from git history.
+    status: rec.status ?? 'published',
+    added_at: rec.added_at ?? stamp,
+    modified_at: rec.modified_at ?? stamp,
   };
 }
 
@@ -121,11 +147,11 @@ function insertLocationTags(row) {
   ];
 }
 
-/** Manual records: one JSON file each, UUID filenames. */
-function readManual(stamp) {
-  const files = fs.readdirSync(LOCATIONS_DIR).filter((f) => f.endsWith('.json'));
+/** Records held as files: one JSON file each, `<id>.json`. */
+function readFiles(dir, stamp) {
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
   return files.map((f) => {
-    const rec = JSON.parse(fs.readFileSync(path.join(LOCATIONS_DIR, f), 'utf8'));
+    const rec = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
     return toRow(rec, stamp);
   });
 }
@@ -149,27 +175,73 @@ async function readAuto(stamp) {
  * a location, so it becomes a dismissal, not a `locations` row with a special
  * status. `dismissed_by` is 'system': the repo records no author for these, and
  * inventing one would be a fabrication.
+ *
+ * TWO SHAPES, and getting this wrong corrupts rather than crashes. The repo file
+ * is `{ "29860": "reason" }`; the snapshot branch's is a bare `["29860"]`,
+ * because the reasons are admin-only and redacted out of the export. Running
+ * Object.entries over the array form yields `["0", "29860"]`, which imports a
+ * dismissal for nexus id `0` and loses the real one, silently.
  */
-function readDismissed(stamp) {
-  const excluded = JSON.parse(fs.readFileSync(EXCLUDED_FILE, 'utf8'));
-  return Object.entries(excluded).map(([nexusId, reason]) => (
+function readDismissed(file, stamp) {
+  const excluded = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const entries = Array.isArray(excluded)
+    ? excluded.map((id) => [String(id), null])
+    : Object.entries(excluded);
+  return entries.map(([nexusId, reason]) => (
     `INSERT INTO dismissed_candidates (nexus_id, reason, dismissed_by, dismissed_at) `
     + `VALUES (${sql(nexusId)}, ${sql(reason)}, ${sql('system')}, ${sql(stamp)});`
   ));
 }
 
+/**
+ * The tag registry, in whichever shape the source file uses.
+ *
+ * Repo file:     `{ slug: description }`      (predates `name` and `sort_order`)
+ * Snapshot file: `[{ slug, name, description, sort_order, ... }]`
+ *
+ * Returns `{ slugs, statements }`. `slugs` is what the unknown-tag warning
+ * checks against. `statements` restores the registry itself and is emitted ONLY
+ * for the full-row shape: migration 0002 seeds the tags as they stood on
+ * 2026-07-26, so a restore from a later snapshot would otherwise silently drop
+ * every tag curated in the dashboard since, and every location_tags link that
+ * referenced one. The flat shape cannot carry `name`/`sort_order`, so importing
+ * from it would overwrite curated values with nulls; it stays read-only.
+ */
+function readTags(file) {
+  const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+  if (!Array.isArray(parsed)) {
+    return { slugs: new Set(Object.keys(parsed)), statements: [] };
+  }
+  return {
+    slugs: new Set(parsed.map((t) => t.slug)),
+    statements: parsed.map((t) => (
+      'INSERT OR REPLACE INTO tags (slug, name, description, sort_order, created_at, updated_at) '
+      + `VALUES (${sql(t.slug)}, ${sql(t.name ?? null)}, ${sql(t.description)}, `
+      + `${sql(t.sort_order ?? null)}, ${sql(t.created_at)}, ${sql(t.updated_at)});`
+    )),
+  };
+}
+
+function arg(name) {
+  const i = process.argv.indexOf(name);
+  return i === -1 ? null : process.argv[i + 1] ?? null;
+}
+
 async function main() {
-  const outIdx = process.argv.indexOf('--out');
-  if (outIdx === -1 || !process.argv[outIdx + 1]) {
-    console.error('usage: import-locations.mjs --out <file.sql>');
+  const out = arg('--out');
+  if (!out) {
+    console.error('usage: import-locations.mjs --out <file.sql> [--files-only] [--data <dir>]');
     process.exit(1);
   }
-  const outPath = path.resolve(process.argv[outIdx + 1]);
+  const outPath = path.resolve(out);
+  const filesOnly = process.argv.includes('--files-only');
+  const dataDir = path.resolve(arg('--data') ?? path.join(REPO_ROOT, 'data'));
+  const paths = dataPaths(dataDir);
   const stamp = new Date().toISOString();
 
-  const manual = readManual(stamp);
-  const auto = await readAuto(stamp);
-  const rows = [...manual, ...auto];
+  const fromFiles = readFiles(paths.locations, stamp);
+  const auto = filesOnly ? [] : await readAuto(stamp);
+  const rows = [...fromFiles, ...auto];
 
   // Duplicate ids would be caught by the primary key on execute, but failing
   // here names both records instead of just the id.
@@ -179,15 +251,12 @@ async function main() {
     seen.set(r.id, r.name);
   }
 
-  const dismissed = readDismissed(stamp);
+  const dismissed = readDismissed(paths.excluded, stamp);
 
   // Tags the registry will drop. The filter runs in SQL against the target
   // database, so this script cannot refuse them, but a silent truncation would
-  // leave a location quietly short a tag nobody asked to remove. data/tags.json
-  // is the offline mirror of the registry and retires with it at phase 6.
-  const known = new Set(Object.keys(
-    JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'data', 'tags.json'), 'utf8')),
-  ));
+  // leave a location quietly short a tag nobody asked to remove.
+  const { slugs: known, statements: tagRows } = readTags(paths.tags);
   const unknown = new Map();
   for (const r of rows) {
     for (const t of JSON.parse(r.tags)) {
@@ -201,14 +270,21 @@ async function main() {
   );
 
   const body = [
-    `-- Phase 1 seed, generated ${stamp} by worker/scripts/import-locations.mjs`,
-    `-- ${manual.length} manual + ${auto.length} auto = ${rows.length} locations,`,
+    `-- Generated ${stamp} by worker/scripts/import-locations.mjs`,
+    `-- source: ${dataDir}${filesOnly ? ' (--files-only, no live API read)' : ` + ${LIVE_API}`}`,
+    `-- ${fromFiles.length} file(s) + ${auto.length} auto = ${rows.length} locations,`,
     `-- ${dismissed.length} dismissed candidate(s). Plain INSERTs: re-running fails.`,
     `-- ${tagLinks.length} location(s) carry tags, ${expectedLinks} link(s) expected in`,
-    '-- location_tags, assuming the target registry matches data/tags.json.',
+    '-- location_tags, assuming the target registry matches tags.json.',
     '',
     ...rows.map(insertLocation),
     '',
+    // Before the join, so the `IN (SELECT slug FROM tags)` filter below sees the
+    // registry as the snapshot recorded it rather than as migration 0002 seeded
+    // it. Empty when the source file is the legacy flat map (see readTags).
+    ...(tagRows.length
+      ? ['-- The tag registry as at the snapshot. Overwrites migration 0002\'s seed.', ...tagRows, '']
+      : []),
     '-- The join. Without these the materializer serves every location untagged.',
     ...tagLinks,
     '',
@@ -227,12 +303,13 @@ async function main() {
   fs.mkdirSync(path.dirname(outPath), { recursive: true });
   fs.writeFileSync(outPath, body);
   console.log(
-    `wrote ${outPath}\n  ${manual.length} manual + ${auto.length} auto = ${rows.length} locations`
+    `wrote ${outPath}\n  ${fromFiles.length} file(s) + ${auto.length} auto = ${rows.length} locations`
     + `\n  ${dismissed.length} dismissed candidate(s)`
-    + `\n  ${expectedLinks} tag link(s) across ${tagLinks.length} location(s)`,
+    + `\n  ${expectedLinks} tag link(s) across ${tagLinks.length} location(s)`
+    + `\n  ${tagRows.length} tag registry row(s) restored`,
   );
   if (unknown.size) {
-    console.warn(`\n  WARNING: ${unknown.size} tag(s) are not in data/tags.json and the`);
+    console.warn(`\n  WARNING: ${unknown.size} tag(s) are not in ${paths.tags} and the`);
     console.warn('  registry filter will drop them, leaving those locations short a tag:');
     for (const [t, n] of unknown) console.warn(`    ${t} (on ${n} record(s))`);
   }
