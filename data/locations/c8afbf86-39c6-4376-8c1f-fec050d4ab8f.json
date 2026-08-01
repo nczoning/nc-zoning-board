@@ -1,0 +1,25 @@
+{
+    "id": "c8afbf86-39c6-4376-8c1f-fec050d4ab8f",
+    "name": "Room 206 (Rent a Motel)",
+    "nexus_id": "21729",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1137.5416,
+        1320.3446,
+        28
+    ],
+    "yaw": 175.4787,
+    "tags": [
+        "apartment",
+        "entertainment",
+        "kitsch"
+    ],
+    "authors": [
+        "Hepero"
+    ],
+    "credits": "Kaoziun - Room 206",
+    "description": "Rent a Motel lets you stay for the night or the week at several motels including the room 206 at no tell motel.",
+    "status": "published",
+    "added_at": "2026-03-15T19:20:12.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

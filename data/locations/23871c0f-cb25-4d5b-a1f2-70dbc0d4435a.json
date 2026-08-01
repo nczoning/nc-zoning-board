@@ -1,0 +1,26 @@
+{
+    "id": "23871c0f-cb25-4d5b-a1f2-70dbc0d4435a",
+    "name": "Showroom - Photo Studio (Visual - Photomode space)",
+    "nexus_id": "26078",
+    "category": "new-location",
+    "coordinates": [
+        -667.84863,
+        2668.6604,
+        53.9817
+    ],
+    "yaw": 13.85,
+    "tags": [
+        "corpo",
+        "nomad",
+        "photos",
+        "streetkid"
+    ],
+    "authors": [
+        "Kaoziun"
+    ],
+    "credits": "manavortex, Akiway",
+    "description": "Photo studio and visual room to provide an optimal working space for all sorts of Virtual Photographers needs, get creative !",
+    "status": "published",
+    "added_at": "2026-03-12T03:34:03.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

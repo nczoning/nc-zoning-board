@@ -1,0 +1,24 @@
+{
+    "id": "134793d5-2df5-43af-89f6-e34cb448e641",
+    "name": "Northside Apartment 1235",
+    "nexus_id": "27658",
+    "category": "new-location",
+    "coordinates": [
+        -1517.3856,
+        2188.6147,
+        22.2
+    ],
+    "yaw": 120.2501,
+    "tags": [
+        "apartment",
+        "entropism",
+        "streetkid"
+    ],
+    "authors": [
+        "OyVaye"
+    ],
+    "description": "Unique, purchasable, standalone player apartment, located in the Northside Complex. Crafted for a solo with a side hustle.",
+    "status": "published",
+    "added_at": "2026-03-12T11:15:27.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

@@ -1,0 +1,23 @@
+{
+    "id": "fc1097ab-1eef-42e5-90be-180a0cb51405",
+    "name": "Lina Malina house enchanced",
+    "nexus_id": "22818",
+    "category": "location-overhaul",
+    "coordinates": [
+        -2225.1167,
+        -2645.5527,
+        34.4427
+    ],
+    "yaw": -9.2524,
+    "tags": [
+        "apartment",
+        "entropism"
+    ],
+    "authors": [
+        "8eartic"
+    ],
+    "description": "Lina Malina house enhanced with new interactions.",
+    "status": "published",
+    "added_at": "2026-03-20T19:02:18.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

@@ -1,0 +1,22 @@
+{
+    "id": "491fbb93-7e93-4e64-ad32-e756d46573d5",
+    "name": "Japantown Apartment Balcony",
+    "nexus_id": "29466",
+    "category": "location-overhaul",
+    "coordinates": [
+        -784.7092,
+        978.3455,
+        28.2095
+    ],
+    "yaw": 94.3499,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "hnovak1"
+    ],
+    "description": "The same balcony as in my Rockerdoll Japantown Apartment mod, but without changing any other part of the apartmen",
+    "status": "published",
+    "added_at": "2026-05-17T20:33:41.000Z",
+    "modified_at": "2026-05-17T20:33:41.000Z"
+}

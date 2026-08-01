@@ -1,0 +1,22 @@
+{
+    "id": "2586d486-2066-445a-b36f-d5bf85394238",
+    "name": "H10 Metro Walkway",
+    "nexus_id": "27541",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1446.6057,
+        1199.9326,
+        37.9153
+    ],
+    "yaw": -160,
+    "tags": [
+        "infrastructure"
+    ],
+    "authors": [
+        "ThaFunktopus"
+    ],
+    "description": "Restores access to the walkway and police station rooftop at the H10 metro station",
+    "status": "published",
+    "added_at": "2026-03-12T06:54:08.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

@@ -1,0 +1,23 @@
+{
+    "id": "5d37efd8-18d6-4f85-afbf-e83c8626e222",
+    "name": "Mizu - Home",
+    "nexus_id": "22572",
+    "category": "new-location",
+    "coordinates": [
+        84.730194,
+        1409.2559,
+        136.0819
+    ],
+    "yaw": 92.8912,
+    "tags": [
+        "entropism",
+        "neomilitarism"
+    ],
+    "authors": [
+        "B1W"
+    ],
+    "description": "Custom semi traditional Japanese home for V.",
+    "status": "published",
+    "added_at": "2026-03-12T12:19:23.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

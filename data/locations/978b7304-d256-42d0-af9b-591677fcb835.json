@@ -1,0 +1,24 @@
+{
+    "id": "978b7304-d256-42d0-af9b-591677fcb835",
+    "name": "Santo Domingo Player Home and Garage",
+    "nexus_id": "24335",
+    "category": "location-overhaul",
+    "coordinates": [
+        449.86444,
+        -2046.914,
+        0.9917
+    ],
+    "yaw": -46.9069,
+    "tags": [
+        "entropism",
+        "house",
+        "streetkid"
+    ],
+    "authors": [
+        "Magicman010"
+    ],
+    "description": "Have you ever wanted to own your own home and property in the suburbs of Night City? There is now such a property available to purchase in the Rancho Coronado neighborhood in Santo Domingo !",
+    "status": "published",
+    "added_at": "2026-03-12T05:19:19.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

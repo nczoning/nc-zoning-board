@@ -1,0 +1,24 @@
+{
+    "id": "011a0908-bf96-47b8-a154-4456e5fb3402",
+    "name": "WWE Animals Safe base",
+    "nexus_id": "22757",
+    "category": "location-overhaul",
+    "coordinates": [
+        -2507.745,
+        -2603.8274,
+        22.9349
+    ],
+    "yaw": -68,
+    "tags": [
+        "apartment",
+        "entropism",
+        "streetkid"
+    ],
+    "authors": [
+        "8eartic"
+    ],
+    "description": "WWE Animals Safe base.",
+    "status": "published",
+    "added_at": "2026-03-23T18:47:25.000Z",
+    "modified_at": "2026-04-06T07:55:08.000Z"
+}

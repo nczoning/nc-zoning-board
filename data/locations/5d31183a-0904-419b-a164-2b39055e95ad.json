@@ -1,0 +1,22 @@
+{
+    "id": "5d31183a-0904-419b-a164-2b39055e95ad",
+    "name": "Kabuki Diner Apartment",
+    "nexus_id": "24577",
+    "category": "new-location",
+    "coordinates": [
+        -1164.3862,
+        1748.7799,
+        31.37
+    ],
+    "yaw": 86.9052,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "brocreate"
+    ],
+    "description": "Adds a new purchasable apartment in Kabuki above a Tom's Diner.",
+    "status": "published",
+    "added_at": "2026-03-14T09:08:00.000Z",
+    "modified_at": "2026-04-08T23:01:57.000Z"
+}

@@ -1,0 +1,20 @@
+{
+    "id": "08af57b0-6ad6-4dea-9d4c-d2d5aa270184",
+    "name": "Japantown Greenery",
+    "nexus_id": "22203",
+    "category": "location-overhaul",
+    "coordinates": [
+        -751.0852,
+        1396.5695,
+        29.57
+    ],
+    "yaw": -38.5913,
+    "tags": [],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "The Japantown Greenery IS SICK but needed a touchup or two! Now with added Vegetation and lighting, it feels a lot cooler to fight in! BTW Enemies spawn here, so I ALSO ADDED a trap door on the Top of the Greenery you can use to drop down on the enemies and strike like a true assassin!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

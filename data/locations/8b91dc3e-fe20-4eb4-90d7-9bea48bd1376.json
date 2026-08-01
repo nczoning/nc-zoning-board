@@ -1,0 +1,23 @@
+{
+    "id": "8b91dc3e-fe20-4eb4-90d7-9bea48bd1376",
+    "name": "Grey rd House - Santo Domingo",
+    "nexus_id": "30699",
+    "category": "new-location",
+    "coordinates": [
+        141.5926,
+        -2118.6399,
+        16.6663
+    ],
+    "yaw": 23.78,
+    "tags": [
+        "apartment",
+        "house"
+    ],
+    "authors": [
+        "DevilDevil868"
+    ],
+    "description": "A new home for V in Santo Domingo.",
+    "status": "published",
+    "added_at": "2026-06-21T21:16:02.000Z",
+    "modified_at": "2026-06-21T21:16:02.000Z"
+}

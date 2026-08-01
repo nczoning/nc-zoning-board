@@ -1,0 +1,22 @@
+{
+    "id": "db58aeec-f226-4f66-8673-6f8b2c63c2f7",
+    "name": "Lucy Apartment Remastered 2025",
+    "nexus_id": "23239",
+    "category": "location-overhaul",
+    "coordinates": [
+        -807.3178,
+        845.1145,
+        36.7671
+    ],
+    "yaw": 98.25,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "t1993810"
+    ],
+    "description": "Edgerunners Lucy's apartment in the location from the anime with the signature look out of the window and from the roof.",
+    "status": "published",
+    "added_at": "2026-04-09T08:25:34.000Z",
+    "modified_at": "2026-04-09T08:25:34.000Z"
+}

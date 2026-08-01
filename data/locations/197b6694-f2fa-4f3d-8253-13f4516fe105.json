@@ -1,0 +1,23 @@
+{
+    "id": "197b6694-f2fa-4f3d-8253-13f4516fe105",
+    "name": "Soccer field - Football minigame",
+    "nexus_id": "26224",
+    "category": "new-location",
+    "coordinates": [
+        -1881.7848,
+        2004.3577,
+        18.238426
+    ],
+    "yaw": 0.5533915,
+    "tags": [
+        "entertainment",
+        "infrastructure"
+    ],
+    "authors": [
+        "Kaoziun"
+    ],
+    "description": "Fully playable and modular soccer field near with several options for your soccer balls scales. Play on foot or with a vehicle, shoot a gigantic ball through the streets !",
+    "status": "published",
+    "added_at": "2026-03-12T03:43:08.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

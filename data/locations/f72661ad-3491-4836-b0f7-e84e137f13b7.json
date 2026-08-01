@@ -1,0 +1,22 @@
+{
+    "id": "f72661ad-3491-4836-b0f7-e84e137f13b7",
+    "name": "Konpeki Plaza Expanded ( with Apartment )",
+    "nexus_id": "20233",
+    "category": "location-overhaul",
+    "coordinates": [
+        -2210.0337,
+        1754.9215,
+        20
+    ],
+    "yaw": -68.0112,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "The Konpeki Plaza has RE-OPENED AND EXPANDED! Now Featuring Vegetation, Statues, Lights and even a FULL BAR! Below is the Garage with plenty of space! On the 44th floor is the AV Pad and the Apartments where you'll find your room welcoming you back to Konpeki Plaza!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

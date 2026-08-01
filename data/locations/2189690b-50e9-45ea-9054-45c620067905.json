@@ -1,0 +1,22 @@
+{
+    "id": "2189690b-50e9-45ea-9054-45c620067905",
+    "name": "dogtown hideout revamp - apartment",
+    "nexus_id": "28680",
+    "category": "location-overhaul",
+    "coordinates": [
+        -2237.8062,
+        -2556.0313,
+        80.3226
+    ],
+    "yaw": -95,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "thumbsuckerr"
+    ],
+    "description": "cleaned up the dogtown hideout",
+    "status": "published",
+    "added_at": "2026-04-13T19:42:11.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+}

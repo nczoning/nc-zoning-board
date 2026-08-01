@@ -1,0 +1,24 @@
+{
+    "id": "f65c8847-cf18-497d-8170-f2fa21c9d662",
+    "name": "Kabuki tech terrarium - apartment",
+    "nexus_id": "29664",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1155.2279,
+        1279.0404,
+        67.8113
+    ],
+    "yaw": 79.8803,
+    "tags": [
+        "apartment",
+        "corpo",
+        "neomilitarism"
+    ],
+    "authors": [
+        "thumbsuckerr"
+    ],
+    "description": "Dark techy hideout with a view",
+    "status": "published",
+    "added_at": "2026-05-17T17:17:46.000Z",
+    "modified_at": "2026-05-17T17:17:46.000Z"
+}

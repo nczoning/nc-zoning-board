@@ -1,0 +1,26 @@
+{
+    "id": "8c3bcd49-dc88-41ac-8df7-410b37934624",
+    "name": "APEX - Sonora Canyon and Safehouse",
+    "nexus_id": "25999",
+    "category": "new-location",
+    "coordinates": [
+        4684.4287,
+        -2359.75,
+        271.3593
+    ],
+    "yaw": 4.6147,
+    "tags": [
+        "house",
+        "neomilitarism",
+        "quest"
+    ],
+    "authors": [
+        "Nox2182",
+        "MrBilL61"
+    ],
+    "credits": "TPMG",
+    "description": "Militech Black Site: APEX. Features a lore friendly quest, player safehouse, garage, other smaller buildings and an overhaul of the surrounding area into 'Sonora Canyon'.",
+    "status": "published",
+    "added_at": "2026-03-07T00:53:22.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

@@ -1,0 +1,23 @@
+{
+    "id": "fc5c9819-755a-415c-ae35-a8e19c3a04fe",
+    "name": "the glen v.1 apartment",
+    "nexus_id": "26020",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1521.956,
+        -973.40356,
+        86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+        "apartment",
+        "streetkid"
+    ],
+    "authors": [
+        "thumbsuckerr"
+    ],
+    "description": "bold flashy neon glen redesign with wraparound balcony",
+    "status": "published",
+    "added_at": "2026-03-13T03:34:24.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+}

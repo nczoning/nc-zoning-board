@@ -1,0 +1,24 @@
+{
+    "id": "4d2ac5a3-7f8a-4acf-a99a-5763469768df",
+    "name": "Revgo - Modular Track Builder and Demo Circuits",
+    "nexus_id": "28059",
+    "category": "new-location",
+    "coordinates": [
+        -2676.679,
+        -774.5576,
+        8.367989
+    ],
+    "yaw": 0.9851844,
+    "tags": [
+        "infrastructure",
+        "nomad",
+        "streetkid"
+    ],
+    "authors": [
+        "Kaoziun"
+    ],
+    "description": "Resource to easily create tracks and roads, with a demo build featuring several circuits and a few visual options.",
+    "status": "published",
+    "added_at": "2026-03-12T03:50:59.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

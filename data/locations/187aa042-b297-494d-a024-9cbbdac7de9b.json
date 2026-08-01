@@ -1,0 +1,23 @@
+{
+    "id": "187aa042-b297-494d-a024-9cbbdac7de9b",
+    "name": "Gomorrah Night Club",
+    "nexus_id": "23350",
+    "category": "new-location",
+    "coordinates": [
+        -1571.5,
+        1184.6,
+        16.3697
+    ],
+    "yaw": 166.35,
+    "tags": [
+        "entertainment",
+        "shop"
+    ],
+    "authors": [
+        "LiquidBronze"
+    ],
+    "description": "This is a standalone version of the Gomorrah night club on Urmland Street.",
+    "status": "published",
+    "added_at": "2026-03-12T23:40:31.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

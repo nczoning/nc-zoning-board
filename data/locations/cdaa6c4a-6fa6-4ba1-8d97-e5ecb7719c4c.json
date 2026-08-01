@@ -1,0 +1,23 @@
+{
+    "id": "cdaa6c4a-6fa6-4ba1-8d97-e5ecb7719c4c",
+    "name": "V's Santo Domingo Safehouse",
+    "nexus_id": "24408",
+    "category": "new-location",
+    "coordinates": [
+        443.63907,
+        -2091.798,
+        15.9486
+    ],
+    "yaw": -133.3089,
+    "tags": [
+        "apartment",
+        "neomilitarism"
+    ],
+    "authors": [
+        "ThaFunktopus"
+    ],
+    "description": "Player compound in Rancho Coronado with several amenities.",
+    "status": "published",
+    "added_at": "2026-03-12T06:39:28.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

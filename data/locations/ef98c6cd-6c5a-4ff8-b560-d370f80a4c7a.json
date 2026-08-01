@@ -1,0 +1,21 @@
+{
+    "id": "ef98c6cd-6c5a-4ff8-b560-d370f80a4c7a",
+    "name": "Japantown Rooftop Mansion",
+    "nexus_id": "22274",
+    "category": "new-location",
+    "coordinates": [
+        -783.2472,
+        981.29614,
+        125.1391
+    ],
+    "yaw": -144.6862,
+    "tags": [],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "credits": "rexxgta",
+    "description": "This Luxury Japantown Mansion is now fitted with an AV Landing Pad and an entire Top Floor Garden with AMAZING views!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

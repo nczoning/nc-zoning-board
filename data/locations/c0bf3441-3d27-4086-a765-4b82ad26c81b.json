@@ -1,0 +1,24 @@
+{
+    "id": "c0bf3441-3d27-4086-a765-4b82ad26c81b",
+    "name": "Sandra Dorsette Apartment",
+    "nexus_id": "23150",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1277.292,
+        1515.3153,
+        45
+    ],
+    "yaw": -78.0868,
+    "tags": [
+        "apartment",
+        "corpo",
+        "neokitsch"
+    ],
+    "authors": [
+        "8eartic"
+    ],
+    "description": "After you helped her recover her databank and scrubbed her name from the corpos' systems,\nSandra Dorsett now considers you someone she can trust.\nAs a token of gratitude, she’s given you access to her hidden Kabuki apartment.\nA quiet, secure place — and more functional than it looks.",
+    "status": "published",
+    "added_at": "2026-03-21T03:25:46.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

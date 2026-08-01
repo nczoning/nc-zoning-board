@@ -1,0 +1,22 @@
+{
+    "id": "a984b84d-86f2-4ba4-8ecb-5c5971e2ce5b",
+    "name": "GLEN_OASIS_Apartment",
+    "nexus_id": "21288",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1521.956,
+        -973.40356,
+        86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "77reye"
+    ],
+    "description": "Updated overhaul of my Glen apartment edit. Features Archive XL for install and Native Interaction Framework to inject interactions.",
+    "status": "published",
+    "added_at": "2026-03-21T06:54:21.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

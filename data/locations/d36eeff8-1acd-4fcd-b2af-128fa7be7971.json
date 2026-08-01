@@ -1,0 +1,24 @@
+{
+    "id": "d36eeff8-1acd-4fcd-b2af-128fa7be7971",
+    "name": "TactiCool V's H10 Apartment",
+    "nexus_id": "9169",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1382.787,
+        1270.6815,
+        123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+        "apartment",
+        "kitsch",
+        "neomilitarism"
+    ],
+    "authors": [
+        "Roxterfox"
+    ],
+    "description": "Improved V's H10 apartment. All the tactical needs you desire in the bed or out in the field.",
+    "status": "published",
+    "added_at": "2026-03-21T13:26:57.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

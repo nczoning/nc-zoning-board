@@ -1,0 +1,23 @@
+{
+    "id": "4b64c436-93e3-4e4e-984f-73a376643b7c",
+    "name": "Jig Jig Surprise - Randomized Outcomes Location",
+    "nexus_id": "28278",
+    "category": "new-location",
+    "coordinates": [
+        -625.0426,
+        824.43835,
+        18.3832
+    ],
+    "yaw": -81.3003,
+    "tags": [
+        "entertainment",
+        "kitsch"
+    ],
+    "authors": [
+        "Kaoziun"
+    ],
+    "description": "Enter the parlor… and hope for the best. 20 unique randomized outcomes available so far. Rewarding, goofy, lethal, slightly NSFW. An unique type of location.",
+    "status": "published",
+    "added_at": "2026-03-26T10:42:24.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

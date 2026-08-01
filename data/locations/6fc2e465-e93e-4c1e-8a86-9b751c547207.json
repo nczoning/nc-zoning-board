@@ -1,0 +1,23 @@
+{
+    "id": "6fc2e465-e93e-4c1e-8a86-9b751c547207",
+    "name": "Jig Jig Unleashed",
+    "nexus_id": "16580",
+    "category": "location-overhaul",
+    "coordinates": [
+        -637.181,
+        864.77386,
+        19.1553
+    ],
+    "yaw": 155,
+    "tags": [
+        "entertainment"
+    ],
+    "authors": [
+        "ProximaDust"
+    ],
+    "credits": "ProximaDust",
+    "description": "Off the leash !",
+    "status": "published",
+    "added_at": "2026-03-20T19:08:53.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

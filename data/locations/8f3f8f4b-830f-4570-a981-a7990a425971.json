@@ -1,0 +1,23 @@
+{
+    "id": "8f3f8f4b-830f-4570-a981-a7990a425971",
+    "name": "Pacifica_Beach_House",
+    "nexus_id": "28580",
+    "category": "new-location",
+    "coordinates": [
+        -2086.2092,
+        -1898.6732,
+        11.53
+    ],
+    "yaw": -115.1198,
+    "tags": [
+        "apartment",
+        "house"
+    ],
+    "authors": [
+        "Rodrigo51098"
+    ],
+    "description": "This is the decoration of a house in the beach area of Pacifica, with a pretty good view of the Night City pier. It includes some basic interactions to make the gameplay more comfortable.",
+    "status": "published",
+    "added_at": "2026-04-13T17:49:15.000Z",
+    "modified_at": "2026-04-13T17:49:15.000Z"
+}

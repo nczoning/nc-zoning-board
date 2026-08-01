@@ -1,0 +1,24 @@
+{
+    "id": "nexus-25251",
+    "name": "Northside - Tidy Your Trash - Modular Apartment Makeover",
+    "nexus_id": "25251",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1505.9731,
+        2230.9961,
+        22.2
+    ],
+    "yaw": 36.55,
+    "tags": [
+        "apartment",
+        "entropism",
+        "streetkid"
+    ],
+    "authors": [
+        "Spuddeh"
+    ],
+    "description": "Another attempt to tidy up the Northside apartment. The aim of this one wasn't to remove all the trash, but instead to make it look like V can walk to a bin every once in a while. They've also gone out and bought some cleaning supplies and",
+    "status": "published",
+    "added_at": "2026-07-26T05:46:29.225Z",
+    "modified_at": "2026-07-26T05:46:29.225Z"
+}

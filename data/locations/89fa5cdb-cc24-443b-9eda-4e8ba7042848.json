@@ -1,0 +1,22 @@
+{
+    "id": "89fa5cdb-cc24-443b-9eda-4e8ba7042848",
+    "name": "RWB Garage Inspired with apartment house",
+    "nexus_id": "27921",
+    "category": "new-location",
+    "coordinates": [
+        -646.5449,
+        2955.5977,
+        27.0869
+    ],
+    "yaw": -72.9163,
+    "tags": [
+        "streetkid"
+    ],
+    "authors": [
+        "oguraoguri"
+    ],
+    "description": "RWB Garage Inspired with apartment house that player can stay in using world builder.",
+    "status": "published",
+    "added_at": "2026-03-17T22:59:23.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

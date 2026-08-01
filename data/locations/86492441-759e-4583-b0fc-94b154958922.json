@@ -1,0 +1,21 @@
+{
+    "id": "86492441-759e-4583-b0fc-94b154958922",
+    "name": "Japantown Shooting Range",
+    "nexus_id": "21800",
+    "category": "location-overhaul",
+    "coordinates": [
+        -449.38403,
+        1452.8348,
+        37.3881
+    ],
+    "yaw": 91.671,
+    "tags": [],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "credits": "Sammmy1036",
+    "description": "This mod Restores area access to the Shooting Range as well as adding decorations! Now you can Visit the Range and test your accuracy whenever!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

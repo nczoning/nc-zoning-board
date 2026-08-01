@@ -1,0 +1,23 @@
+{
+    "id": "e93bf752-72fe-4725-857b-c57be3e9e2ef",
+    "name": "Yaiba Bike Showroom",
+    "nexus_id": "28552",
+    "category": "new-location",
+    "coordinates": [
+        175.0685,
+        195.7454,
+        40.2795
+    ],
+    "yaw": 61.388,
+    "tags": [
+        "corpo",
+        "neokitsch"
+    ],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "WELCOME BACK to the Yaiba Bike Showroom ! This is ALMOST an exact copy of the area from the Mission \"Nitro Youth Energy\" with an AV Landing Pad, Added Back Sitting Area and Parking Lot! Stop by this Luxurious Showroom, check out the latest and greatest models of most Cyberpunk bikes, and even use a computer to buy some vehicles while you're here !",
+    "status": "published",
+    "added_at": "2026-03-31T16:36:11.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

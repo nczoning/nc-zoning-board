@@ -1,0 +1,23 @@
+{
+    "id": "83c7e86f-4f22-4f4a-93ab-9f39e76896de",
+    "name": "Johnny's Trailer",
+    "nexus_id": "27739",
+    "category": "location-overhaul",
+    "coordinates": [
+        1168.99,
+        -573.8667,
+        30.5923
+    ],
+    "yaw": -162.7732,
+    "tags": [
+        "apartment",
+        "entropism"
+    ],
+    "authors": [
+        "temprnce"
+    ],
+    "description": "Turns out Johnny had a place he could crash at back in the '20s. Who could've guessed he didn't just couchsurf? In any case, the place is all yours now. | Semi-apartment, semi-immersion location made with World Builder.",
+    "status": "published",
+    "added_at": "2026-03-19T22:09:49.000Z",
+    "modified_at": "2026-04-08T23:01:57.000Z"
+}

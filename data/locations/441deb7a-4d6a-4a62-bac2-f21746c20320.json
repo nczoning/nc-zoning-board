@@ -1,0 +1,22 @@
+{
+    "id": "441deb7a-4d6a-4a62-bac2-f21746c20320",
+    "name": "Yaiba Tower Apartment",
+    "nexus_id": "30379",
+    "category": "new-location",
+    "coordinates": [
+        -1152.0175,
+        1582.7865,
+        75.6756
+    ],
+    "yaw": -107.4471,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "lovewich"
+    ],
+    "description": "Industrial-chic penthouse with 360° views and a rooftop sanctuary",
+    "status": "published",
+    "added_at": "2026-06-12T23:15:24.000Z",
+    "modified_at": "2026-06-12T23:15:24.000Z"
+}

@@ -1,0 +1,24 @@
+{
+    "id": "16da1ff3-ab48-44b7-bb8c-2f8b23e21a6b",
+    "name": "H10 Moxx Makeover (world edit)",
+    "nexus_id": "21418",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1382.787,
+        1270.6815,
+        123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+        "apartment",
+        "kitsch",
+        "streetkid"
+    ],
+    "authors": [
+        "evafan84"
+    ],
+    "description": "A Moxx inspired makeover of V's Megabuilding H10 Apartment. Built using archiveXL / World Builder / Native Interactions.",
+    "status": "published",
+    "added_at": "2026-03-19T23:06:58.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

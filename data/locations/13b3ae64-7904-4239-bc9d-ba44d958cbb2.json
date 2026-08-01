@@ -1,0 +1,23 @@
+{
+    "id": "13b3ae64-7904-4239-bc9d-ba44d958cbb2",
+    "name": "Shaitan Black Market Vendor (The Mercs' Alley - Kabuki)",
+    "nexus_id": "21794",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1098.735,
+        1455.1047,
+        4.3038
+    ],
+    "yaw": -120,
+    "tags": [
+        "neomilitarism",
+        "shop"
+    ],
+    "authors": [
+        "Jmolinares03"
+    ],
+    "description": "Shaitan, one of the legends of Night City, returns to the streets, this time with his best merchandise, including weapons, attachments, and mods.",
+    "status": "published",
+    "added_at": "2026-03-13T23:31:21.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+}

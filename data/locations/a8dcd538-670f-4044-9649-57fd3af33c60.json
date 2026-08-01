@@ -1,0 +1,23 @@
+{
+    "id": "a8dcd538-670f-4044-9649-57fd3af33c60",
+    "name": "Japantown Rooftop Temples",
+    "nexus_id": "23081",
+    "category": "location-overhaul",
+    "coordinates": [
+        -412.0287,
+        1196.8372,
+        196.626
+    ],
+    "yaw": 8.6162,
+    "tags": [
+        "infrastructure",
+        "neokitsch"
+    ],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "The GRAND OPENING of the Japantown Rooftop Temples is here ! The BRAND NEW Arasaka funded Rooftop Temples are a monument to all those who have fallen, protecting this Great City but also as a symbol of Arasakas Power and Wealth. High above the rest of Night Citys Japantown, even the dead now look down on the living peasants of Night City...",
+    "status": "published",
+    "added_at": "2026-03-21T11:47:38.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

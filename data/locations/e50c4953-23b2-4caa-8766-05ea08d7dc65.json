@@ -1,0 +1,24 @@
+{
+    "id": "e50c4953-23b2-4caa-8766-05ea08d7dc65",
+    "name": "Dogtown Sewer Hideout",
+    "nexus_id": "24246",
+    "category": "new-location",
+    "coordinates": [
+        -2062.1663,
+        -2536.4302,
+        23.007
+    ],
+    "yaw": 38.65,
+    "tags": [
+        "apartment",
+        "entropism",
+        "streetkid"
+    ],
+    "authors": [
+        "bigpoppajuan"
+    ],
+    "description": "Adds a new player home with interactions. Since this is Dogtown, you live in the gutter, literally. And no, Panam doesn't want to stay at your house... Oh well, it still beats waiting for elevators, and nobody expects you to pay rent!",
+    "status": "published",
+    "added_at": "2026-03-19T01:16:36.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

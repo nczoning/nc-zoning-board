@@ -1,0 +1,20 @@
+{
+    "id": "8a5c6a36-bdc3-4f93-992d-9d5a76ab9770",
+    "name": "Dogtown Longshore vendor fixes",
+    "nexus_id": "27593",
+    "category": "other",
+    "coordinates": [
+        -2392.9,
+        -2672.8,
+        22.1895
+    ],
+    "yaw": -116.4219,
+    "tags": [],
+    "authors": [
+        "LiquidBronze"
+    ],
+    "description": "This is a minimal mod that fixes some things with two of the background street vendors in Dogtown.",
+    "status": "published",
+    "added_at": "2026-03-12T23:45:35.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

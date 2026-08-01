@@ -1,0 +1,24 @@
+{
+    "id": "d41ea958-e4e5-4350-9576-b1a226e389cd",
+    "name": "Heavy Heart Vip Room Appartment",
+    "nexus_id": "22643",
+    "category": "new-location",
+    "coordinates": [
+        -1568.323,
+        -2331.8086,
+        57.8963
+    ],
+    "yaw": -151,
+    "tags": [
+        "apartment",
+        "corpo",
+        "neokitsch"
+    ],
+    "authors": [
+        "8eartic"
+    ],
+    "description": "Heavy Heart Vip Room Appartment Heavy Earth – Just across from Mr. Hand’s Room, Night City.",
+    "status": "published",
+    "added_at": "2026-03-20T18:53:13.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

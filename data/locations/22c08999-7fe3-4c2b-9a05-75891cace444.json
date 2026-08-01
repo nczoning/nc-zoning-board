@@ -1,0 +1,23 @@
+{
+    "id": "22c08999-7fe3-4c2b-9a05-75891cace444",
+    "name": "NC Track Circuits - Ovals and Rings",
+    "nexus_id": "25410",
+    "category": "new-location",
+    "coordinates": [
+        -509.99042,
+        -2886.1313,
+        32.394943
+    ],
+    "yaw": -0.13441841,
+    "tags": [
+        "infrastructure",
+        "streetkid"
+    ],
+    "authors": [
+        "Kaoziun"
+    ],
+    "description": "3 toggleable racing tracks. Want to just rev up the engine and do some laps ? I gotchu choom.",
+    "status": "published",
+    "added_at": "2026-03-12T02:57:43.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

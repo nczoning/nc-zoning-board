@@ -1,0 +1,23 @@
+{
+    "id": "7e4ac849-a1e6-4c5e-a685-6c3edc9402d7",
+    "name": "End of the Road Garage and Hangout",
+    "nexus_id": "17903",
+    "category": "new-location",
+    "coordinates": [
+        -2237.1501,
+        3609.5208,
+        7.525
+    ],
+    "yaw": 87.254,
+    "tags": [
+        "apartment",
+        "infrastructure"
+    ],
+    "authors": [
+        "Ronusti"
+    ],
+    "description": "New Garage and Hangout to kick back in, because why not. AMM",
+    "status": "published",
+    "added_at": "2026-04-18T11:54:00.000Z",
+    "modified_at": "2026-04-18T11:54:00.000Z"
+}

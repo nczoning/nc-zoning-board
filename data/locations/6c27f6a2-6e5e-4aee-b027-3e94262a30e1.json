@@ -1,0 +1,22 @@
+{
+    "id": "6c27f6a2-6e5e-4aee-b027-3e94262a30e1",
+    "name": "Rooftop Pool Party",
+    "nexus_id": "22163",
+    "category": "location-overhaul",
+    "coordinates": [
+        -740.62115,
+        940.5494,
+        294.689
+    ],
+    "yaw": 173.8703,
+    "tags": [
+        "entertainment"
+    ],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "Finally ! You can now Party at one of Night City’s most Exclusive spots! This Rooftop Pool Party is the perfect place to take in Night City’s phenomenal views and to reminisce on your close calls down below in the streets of NC.",
+    "status": "published",
+    "added_at": "2026-03-21T12:07:14.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

@@ -1,0 +1,23 @@
+{
+    "id": "bda4565c-c63e-4d1f-93a8-4ba124cbb599",
+    "name": "West Wind Estate Beach House",
+    "nexus_id": "22569",
+    "category": "new-location",
+    "coordinates": [
+        -2987.484,
+        -2610.4092,
+        9.351
+    ],
+    "yaw": -52.4384,
+    "tags": [
+        "house",
+        "neokitsch"
+    ],
+    "authors": [
+        "8eartic"
+    ],
+    "description": "West Wind Estate Beach House End of the road – West Wind Estate, Pacifica, Night City.",
+    "status": "published",
+    "added_at": "2026-03-21T03:31:40.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

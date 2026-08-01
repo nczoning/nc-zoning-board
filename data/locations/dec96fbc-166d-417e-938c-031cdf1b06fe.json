@@ -1,0 +1,22 @@
+{
+    "id": "dec96fbc-166d-417e-938c-031cdf1b06fe",
+    "name": "Riot Club Unlocked and Remastered",
+    "nexus_id": "27261",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1637.8081,
+        1018.9681,
+        24.86
+    ],
+    "yaw": 3.61,
+    "tags": [
+        "entertainment"
+    ],
+    "authors": [
+        "Roxterfox"
+    ],
+    "description": "Riot Club unlocked and enhanced.",
+    "status": "published",
+    "added_at": "2026-03-21T12:15:33.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+}

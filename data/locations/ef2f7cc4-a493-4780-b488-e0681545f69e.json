@@ -1,0 +1,23 @@
+{
+    "id": "ef2f7cc4-a493-4780-b488-e0681545f69e",
+    "name": "Satellite Tower Apartment (in trailer park)",
+    "nexus_id": "30114",
+    "category": "new-location",
+    "coordinates": [
+        1176.7655,
+        -558.0649,
+        42.6665
+    ],
+    "yaw": 17.8999,
+    "tags": [
+        "apartment",
+        "entropism"
+    ],
+    "authors": [
+        "Mazamp"
+    ],
+    "description": "Did you ever want to live in an abandoned communications tower in a trailer park? Well of course not, but now you can! \nTurns out you're too stinky even for the trailer park. Thankfully the good people gave you this abandoned place.",
+    "status": "published",
+    "added_at": "2026-05-30T21:14:40.000Z",
+    "modified_at": "2026-05-30T21:14:40.000Z"
+}

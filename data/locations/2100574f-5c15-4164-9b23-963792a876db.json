@@ -1,0 +1,22 @@
+{
+    "id": "2100574f-5c15-4164-9b23-963792a876db",
+    "name": "H10_PINK_Apartment",
+    "nexus_id": "26785",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1382.787,
+        1270.6815,
+        123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "77reye"
+    ],
+    "description": "Overhaul of the H10 apartment. Features Archive XL for install and Native Interactions for injecting interactions. Redesigns key sections of the apartment.",
+    "status": "published",
+    "added_at": "2026-03-21T06:50:37.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

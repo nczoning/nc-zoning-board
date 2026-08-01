@@ -1,0 +1,22 @@
+{
+    "id": "7aafd7f1-75ae-483b-928e-9a83fba2f981",
+    "name": "Viktor Vektor clinic overhaul and opened garage ramp",
+    "nexus_id": "25704",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1562.6539,
+        1269.5852,
+        11.887
+    ],
+    "yaw": 164.55,
+    "tags": [
+        "infrastructure"
+    ],
+    "authors": [
+        "BlazingTommy"
+    ],
+    "description": "Vik's ripper clinic is one of the biggest interior spaces there is in game, made to be both a clinic and a garage. So, why not let us also drive right into it, maybe avoid having to ask Misty \"how's business doing?\" for her to tell us we are her first client in weeks.",
+    "status": "published",
+    "added_at": "2026-03-19T23:13:32.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

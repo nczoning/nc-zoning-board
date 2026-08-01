@@ -1,0 +1,23 @@
+{
+    "id": "51620707-0534-43bb-857e-7a2943935aed",
+    "name": "Rancho Car Parts Garage",
+    "nexus_id": "25979",
+    "category": "location-overhaul",
+    "coordinates": [
+        233.004,
+        -1463.6902,
+        9.5692
+    ],
+    "yaw": -35,
+    "tags": [
+        "entropism",
+        "streetkid"
+    ],
+    "authors": [
+        "8eartic"
+    ],
+    "description": "Small House In Rancho with the essential .",
+    "status": "published",
+    "added_at": "2026-03-21T02:43:12.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

@@ -1,0 +1,22 @@
+{
+    "id": "ca612abd-ab82-4ff0-af11-d575f88c0b0e",
+    "name": "Dandelion Cocktail Bar Enhanced",
+    "nexus_id": "22516",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1005.4378,
+        -35.4143,
+        11.403
+    ],
+    "yaw": 175.4794,
+    "tags": [
+        "entertainment"
+    ],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "This is a SMALL but awesome little mod Enhancing the Dandelion Cocktail Bar I found one day running around Night City ! Now it STANDS OUT with the matching Green Lights, Arcade Machines and even a Player Stash ! The New Decorations and Native interactions now makes this lil Bar feel like an actual spot to visit now !",
+    "status": "published",
+    "added_at": "2026-03-21T12:08:41.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

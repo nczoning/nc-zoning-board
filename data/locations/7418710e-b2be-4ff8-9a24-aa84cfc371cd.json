@@ -1,0 +1,23 @@
+{
+    "id": "7418710e-b2be-4ff8-9a24-aa84cfc371cd",
+    "name": "northside garage flat",
+    "nexus_id": "28911",
+    "category": "new-location",
+    "coordinates": [
+        -1717.1772,
+        2045.8051,
+        18.1563
+    ],
+    "yaw": 28.5252,
+    "tags": [
+        "apartment",
+        "infrastructure"
+    ],
+    "authors": [
+        "thumbsuckerr"
+    ],
+    "description": "flat above a garage in northside",
+    "status": "published",
+    "added_at": "2026-04-15T16:46:04.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+}

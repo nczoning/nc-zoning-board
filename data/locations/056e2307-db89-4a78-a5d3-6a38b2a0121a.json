@@ -1,0 +1,24 @@
+{
+    "id": "056e2307-db89-4a78-a5d3-6a38b2a0121a",
+    "name": "Kerry Glen Apartment",
+    "nexus_id": "23166",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1447.6444,
+        -1040.7858,
+        77.5513
+    ],
+    "yaw": 89.338,
+    "tags": [
+        "apartment",
+        "corpo",
+        "neokitsch"
+    ],
+    "authors": [
+        "8eartic"
+    ],
+    "description": "A Rockstar’s RefugeAfter years dodging fame and flame, Kerry finally settled down in this Glen apartment.\nStylish, personal, and now... unlocked.\nThanks to some subtle tweaks, you now have full access to his private space.\nAnd if you wish, you can even share the vibe with the legend himself.",
+    "status": "published",
+    "added_at": "2026-03-21T03:17:51.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

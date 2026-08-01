@@ -1,0 +1,114 @@
+[
+    {
+        "slug": "entropism",
+        "name": null,
+        "description": "The look of poverty that derives from humans grappling with and struggling against technology and its unforgiving advance. It denotes a lack of design blending with a general poverty of means and ideas.",
+        "sort_order": 1,
+        "created_at": "2026-07-26T00:00:00Z",
+        "updated_at": "2026-07-26T00:00:00Z"
+    },
+    {
+        "slug": "kitsch",
+        "name": null,
+        "description": "The look of a long lost golden age on people entirely unwilling or unable to forget it. It's flashy, bold and usually cheap - filled with gold-plated cyberware, implants encased in brightly colored plastic and larger-than-life makeup.",
+        "sort_order": 2,
+        "created_at": "2026-07-26T00:00:00Z",
+        "updated_at": "2026-07-26T00:00:00Z"
+    },
+    {
+        "slug": "neomilitarism",
+        "name": null,
+        "description": "The look of global conflict and corporations jockeying for power. Cold, sharp and modern. Making everyone look as if they are ready to drop out of an AV's cargo door and head straight into combat.",
+        "sort_order": 3,
+        "created_at": "2026-07-26T00:00:00Z",
+        "updated_at": "2026-07-26T00:00:00Z"
+    },
+    {
+        "slug": "neokitsch",
+        "name": null,
+        "description": "The look of infinite wealth and vanity. Synonymous with luxury, it has been blossoming among Night City's wealthiest elites - those who can afford to buy anything, who can afford to be anything they want to be.",
+        "sort_order": 4,
+        "created_at": "2026-07-26T00:00:00Z",
+        "updated_at": "2026-07-26T00:00:00Z"
+    },
+    {
+        "slug": "shop",
+        "name": null,
+        "description": "A retail location to purchase weapons, clothing, items, etc.",
+        "sort_order": 5,
+        "created_at": "2026-07-26T00:00:00Z",
+        "updated_at": "2026-07-26T00:00:00Z"
+    },
+    {
+        "slug": "infrastructure",
+        "name": null,
+        "description": "Roads, bridges, parking structures, and public works.",
+        "sort_order": 6,
+        "created_at": "2026-07-26T00:00:00Z",
+        "updated_at": "2026-07-26T00:00:00Z"
+    },
+    {
+        "slug": "entertainment",
+        "name": null,
+        "description": "Bars, clubs, casinos, and nightlife venues.",
+        "sort_order": 7,
+        "created_at": "2026-07-26T00:00:00Z",
+        "updated_at": "2026-07-26T00:00:00Z"
+    },
+    {
+        "slug": "apartment",
+        "name": null,
+        "description": "A player housing unit, usually a smaller dwelling within a megabuilding or high-rise.",
+        "sort_order": 8,
+        "created_at": "2026-07-26T00:00:00Z",
+        "updated_at": "2026-07-26T00:00:00Z"
+    },
+    {
+        "slug": "house",
+        "name": null,
+        "description": "A standalone player dwelling or safehouse structure.",
+        "sort_order": 9,
+        "created_at": "2026-07-26T00:00:00Z",
+        "updated_at": "2026-07-26T00:00:00Z"
+    },
+    {
+        "slug": "quest",
+        "name": null,
+        "description": "A location closely tied to custom gigs, missions, or storylines.",
+        "sort_order": 10,
+        "created_at": "2026-07-26T00:00:00Z",
+        "updated_at": "2026-07-26T00:00:00Z"
+    },
+    {
+        "slug": "streetkid",
+        "name": null,
+        "description": "Environments resonating with gang culture, neon lights, and urban survival.",
+        "sort_order": 11,
+        "created_at": "2026-07-26T00:00:00Z",
+        "updated_at": "2026-07-26T00:00:00Z"
+    },
+    {
+        "slug": "corpo",
+        "name": null,
+        "description": "High-end corporate architecture, slick aesthetics, and security-focused areas.",
+        "sort_order": 12,
+        "created_at": "2026-07-26T00:00:00Z",
+        "updated_at": "2026-07-26T00:00:00Z"
+    },
+    {
+        "slug": "nomad",
+        "name": null,
+        "description": "Off-the-grid, scrapyard, desert, or vehicular-based habitats.",
+        "sort_order": 13,
+        "created_at": "2026-07-26T00:00:00Z",
+        "updated_at": "2026-07-26T00:00:00Z"
+    },
+    {
+        "slug": "photos",
+        "name": null,
+        "description": "Scenic or atmospheric locations well-suited for virtual photography.",
+        "sort_order": 14,
+        "created_at": "2026-07-26T00:00:00Z",
+        "updated_at": "2026-07-26T00:00:00Z"
+    }
+]

@@ -1,0 +1,22 @@
+{
+    "id": "7f505943-25dc-4747-a813-177568e9610d",
+    "name": "Church From Hell - Devils Luck",
+    "nexus_id": "29542",
+    "category": "new-location",
+    "coordinates": [
+        -3458.1965,
+        -4038.4612,
+        74.8636
+    ],
+    "yaw": 42.4,
+    "tags": [
+        "entertainment"
+    ],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "Fully Decorated Church Interior, Lit Up and with Custom Teleport Interactions Traveling To and From The Church for Repeated Communal Confessions",
+    "status": "published",
+    "added_at": "2026-05-24T12:10:38.000Z",
+    "modified_at": "2026-05-24T12:10:38.000Z"
+}

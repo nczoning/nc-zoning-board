@@ -1,0 +1,24 @@
+{
+    "id": "1ad9c631-2d11-4ac1-8c56-e1d754352273",
+    "name": "Rocky Ridge Safehouse",
+    "nexus_id": "24587",
+    "category": "new-location",
+    "coordinates": [
+        2578.363,
+        -81.1889,
+        81.0385
+    ],
+    "yaw": 109.5,
+    "tags": [
+        "entropism",
+        "house",
+        "nomad"
+    ],
+    "authors": [
+        "Chivved"
+    ],
+    "description": "\"EL CAPITAN\" will text you the details of the place. Low price for a place to stay low.",
+    "status": "published",
+    "added_at": "2026-03-21T04:09:47.000Z",
+    "modified_at": "2026-04-07T09:16:12.000Z"
+}

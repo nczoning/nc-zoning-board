@@ -1,0 +1,24 @@
+{
+    "id": "b80e448a-3924-46f4-ab1f-ac634c28aef3",
+    "name": "V's Mansion Redux - NeoZen",
+    "nexus_id": "17300",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1343.9843,
+        1204.115,
+        114.8
+    ],
+    "yaw": 0.24361488,
+    "tags": [
+        "corpo",
+        "house",
+        "neokitsch"
+    ],
+    "authors": [
+        "ProximaDust"
+    ],
+    "description": "A noir neokitsch mansion for your V !",
+    "status": "published",
+    "added_at": "2026-03-20T19:10:34.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

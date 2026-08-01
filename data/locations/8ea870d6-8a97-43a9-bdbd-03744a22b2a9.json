@@ -1,0 +1,22 @@
+{
+    "id": "8ea870d6-8a97-43a9-bdbd-03744a22b2a9",
+    "name": "Night City Flooded",
+    "nexus_id": "25770",
+    "category": "location-overhaul",
+    "coordinates": [
+        1014.8014,
+        -2582.2385,
+        207.77574
+    ],
+    "yaw": 0.92545646,
+    "tags": [
+        "photos"
+    ],
+    "authors": [
+        "Kaoziun"
+    ],
+    "description": "Add various bodies of water across the game world at non-intrusive locations, fully customizable experience through Native Settings UI now !",
+    "status": "published",
+    "added_at": "2026-03-13T18:03:36.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

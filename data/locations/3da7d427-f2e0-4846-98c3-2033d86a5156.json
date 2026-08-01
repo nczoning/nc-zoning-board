@@ -1,0 +1,23 @@
+{
+    "id": "3da7d427-f2e0-4846-98c3-2033d86a5156",
+    "name": "Lakeview Cottage Retreat with Native Interactions",
+    "nexus_id": "23523",
+    "category": "location-overhaul",
+    "coordinates": [
+        1112.9989,
+        -3464.958,
+        180.4531
+    ],
+    "yaw": -162.65,
+    "tags": [
+        "apartment",
+        "entropism"
+    ],
+    "authors": [
+        "Sirandar888"
+    ],
+    "description": "Overhaul for Judy's Laguna Bend cottage.",
+    "status": "published",
+    "added_at": "2026-03-19T22:34:43.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

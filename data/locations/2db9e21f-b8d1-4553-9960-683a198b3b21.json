@@ -1,0 +1,24 @@
+{
+    "id": "2db9e21f-b8d1-4553-9960-683a198b3b21",
+    "name": "Afterlife unit a - apartment",
+    "nexus_id": "28425",
+    "category": "new-location",
+    "coordinates": [
+        -1458.9739,
+        1037.459,
+        32.2907
+    ],
+    "yaw": 95.8628,
+    "tags": [
+        "apartment",
+        "entertainment",
+        "entropism"
+    ],
+    "authors": [
+        "thumbsuckerr"
+    ],
+    "description": "Apartment above Afterlife club.",
+    "status": "published",
+    "added_at": "2026-03-25T21:25:55.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+}

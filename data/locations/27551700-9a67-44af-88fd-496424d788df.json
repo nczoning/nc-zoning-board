@@ -1,0 +1,23 @@
+{
+    "id": "27551700-9a67-44af-88fd-496424d788df",
+    "name": "Forest Canyon Campsite",
+    "nexus_id": "27141",
+    "category": "location-overhaul",
+    "coordinates": [
+        5320.874,
+        -240.78528,
+        97.97386
+    ],
+    "yaw": -0.8929913,
+    "tags": [
+        "apartment",
+        "nomad"
+    ],
+    "authors": [
+        "Sirandar888"
+    ],
+    "description": "Adds a simple campsite to the mod Outdoor V - Canyon Forest by Kaoziun.",
+    "status": "published",
+    "added_at": "2026-03-19T22:39:48.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

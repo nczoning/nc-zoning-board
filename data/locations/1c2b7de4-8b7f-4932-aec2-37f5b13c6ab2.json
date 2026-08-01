@@ -1,0 +1,22 @@
+{
+    "id": "1c2b7de4-8b7f-4932-aec2-37f5b13c6ab2",
+    "name": "Pacifica Enhanced",
+    "nexus_id": "21848",
+    "category": "location-overhaul",
+    "coordinates": [
+        -2068.9492,
+        -2195.9773,
+        39.999992
+    ],
+    "yaw": 0.57583404,
+    "tags": [
+        "infrastructure"
+    ],
+    "authors": [
+        "WhiteRabbit0110"
+    ],
+    "description": "Adds various props to some empty areas of Pacifica making the area feel more lived in / believable.",
+    "status": "published",
+    "added_at": "2026-03-21T05:51:50.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

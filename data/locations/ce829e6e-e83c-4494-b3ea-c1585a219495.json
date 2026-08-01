@@ -1,0 +1,26 @@
+{
+    "id": "ce829e6e-e83c-4494-b3ea-c1585a219495",
+    "name": "The Zenitex Military Store",
+    "nexus_id": "21735",
+    "category": "new-location",
+    "coordinates": [
+        37.888023,
+        115.85715,
+        14.7604
+    ],
+    "yaw": -119.188,
+    "tags": [
+        "corpo",
+        "neomilitarism",
+        "shop"
+    ],
+    "authors": [
+        "ScorpionTank",
+        "krat0es",
+        "Saltypigloaf"
+    ],
+    "description": "Welcome to Zenitex. Adds a lore-friendly faction with a unique aesthetic, interior location, vendors, NPCs and collectible data. Purchase Zenitex equipment at up to 50% discount.",
+    "status": "published",
+    "added_at": "2026-03-21T12:33:13.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

@@ -1,0 +1,22 @@
+{
+    "id": "nexus-27618",
+    "name": "Atari Canyon - Blade Runner",
+    "nexus_id": "27618",
+    "category": "other",
+    "coordinates": [
+        -1647.5304,
+        436.9953,
+        43.1649
+    ],
+    "tags": [
+        "entertainment"
+    ],
+    "authors": [
+        "ellios2normandie"
+    ],
+    "credits": "Hologram ads created by BillZarro",
+    "description": "A bit more Blade Runner. Adds Atari hologram ads created by BillZarro﻿ to several locations in the City Center.",
+    "status": "published",
+    "added_at": "2026-07-26T05:46:29.225Z",
+    "modified_at": "2026-07-26T05:46:29.225Z"
+}

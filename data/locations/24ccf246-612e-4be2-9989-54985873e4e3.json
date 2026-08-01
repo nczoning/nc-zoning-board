@@ -1,0 +1,23 @@
+{
+    "id": "24ccf246-612e-4be2-9989-54985873e4e3",
+    "name": "Glen Apartment Garage",
+    "nexus_id": "24407",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1536.1792,
+        -990.8159,
+        9.2653
+    ],
+    "yaw": 2.2257,
+    "tags": [
+        "apartment",
+        "infrastructure"
+    ],
+    "authors": [
+        "Chivved"
+    ],
+    "description": "Adds a BAREBONES garage right beside the entrance to the Glen apartment, direct entrance to lobby. World Builder JSON provided.",
+    "status": "published",
+    "added_at": "2026-03-21T04:19:23.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+}

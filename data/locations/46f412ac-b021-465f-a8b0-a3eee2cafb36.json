@@ -1,0 +1,24 @@
+{
+    "id": "46f412ac-b021-465f-a8b0-a3eee2cafb36",
+    "name": "DvS's Garage Car Shop",
+    "nexus_id": "24713",
+    "category": "location-overhaul",
+    "coordinates": [
+        -716.1071,
+        2940.1138,
+        27.3555
+    ],
+    "yaw": -169.65,
+    "tags": [
+        "apartment",
+        "infrastructure",
+        "shop"
+    ],
+    "authors": [
+        "DvSiNt3nTiOnS"
+    ],
+    "description": "Garage Car Shop modification and Player Home.",
+    "status": "published",
+    "added_at": "2026-03-21T03:55:58.000Z",
+    "modified_at": "2026-04-08T23:01:57.000Z"
+}

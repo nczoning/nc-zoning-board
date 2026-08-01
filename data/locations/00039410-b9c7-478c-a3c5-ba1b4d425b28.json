@@ -1,0 +1,23 @@
+{
+    "id": "00039410-b9c7-478c-a3c5-ba1b4d425b28",
+    "name": "Hayling - Home",
+    "nexus_id": "26046",
+    "category": "new-location",
+    "coordinates": [
+        -2229.5732,
+        3618.9644,
+        12.2151
+    ],
+    "yaw": -121.2,
+    "tags": [
+        "house",
+        "neokitsch"
+    ],
+    "authors": [
+        "B1W"
+    ],
+    "description": "Custom standalone home.",
+    "status": "published",
+    "added_at": "2026-03-12T12:26:09.000Z",
+    "modified_at": "2026-04-06T07:55:08.000Z"
+}

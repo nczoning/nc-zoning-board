@@ -1,0 +1,23 @@
+{
+    "id": "a545be13-1029-4481-b87a-9427dffaf6d8",
+    "name": "NeonShard Drug Lab",
+    "nexus_id": "24741",
+    "category": "location-overhaul",
+    "coordinates": [
+        674.18896,
+        -470.34335,
+        -5.3425
+    ],
+    "yaw": 62.1804,
+    "tags": [
+        "entropism",
+        "streetkid"
+    ],
+    "authors": [
+        "lubiejescpapier1"
+    ],
+    "description": "Small underground drug lab.",
+    "status": "published",
+    "added_at": "2026-03-21T02:28:53.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

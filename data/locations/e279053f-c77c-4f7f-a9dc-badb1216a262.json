@@ -1,0 +1,24 @@
+{
+    "id": "e279053f-c77c-4f7f-a9dc-badb1216a262",
+    "name": "Arroyo Safehouse",
+    "nexus_id": "29732",
+    "category": "new-location",
+    "coordinates": [
+        -685.7589,
+        -914.7684,
+        8.0033
+    ],
+    "yaw": -126.2372,
+    "tags": [
+        "apartment",
+        "house",
+        "neokitsch"
+    ],
+    "authors": [
+        "skrittleskittie"
+    ],
+    "description": "An unassuming safehouse right in the middle of Arroyo, right past Red Dirt bar. Need to be purchased first on the terminal right by the front door",
+    "status": "published",
+    "added_at": "2026-05-17T15:51:07.000Z",
+    "modified_at": "2026-05-17T17:15:52.000Z"
+}

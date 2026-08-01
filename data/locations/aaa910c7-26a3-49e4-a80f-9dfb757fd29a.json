@@ -1,0 +1,23 @@
+{
+    "id": "aaa910c7-26a3-49e4-a80f-9dfb757fd29a",
+    "name": "Nomad Trailer Apartment",
+    "nexus_id": "27369",
+    "category": "new-location",
+    "coordinates": [
+        1949.0994,
+        2364.854,
+        191.3913
+    ],
+    "yaw": 28.1514,
+    "tags": [
+        "apartment",
+        "nomad"
+    ],
+    "authors": [
+        "Kaelu2077"
+    ],
+    "description": "A peaceful, fully interactive Nomad \"Apartment\" – On the plateau of the Aldecaldos camp. This Trailer is your quiet home between the chaos.",
+    "status": "published",
+    "added_at": "2026-03-12T11:21:34.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

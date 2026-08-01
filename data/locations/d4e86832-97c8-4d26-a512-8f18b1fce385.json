@@ -1,0 +1,22 @@
+{
+    "id": "d4e86832-97c8-4d26-a512-8f18b1fce385",
+    "name": "EL Cojote Cojo Unlocked",
+    "nexus_id": "27123",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1257.1562,
+        -999.8193,
+        12.0372
+    ],
+    "yaw": -148.7,
+    "tags": [
+        "entertainment"
+    ],
+    "authors": [
+        "Roxterfox"
+    ],
+    "description": "Unlocked the locked areas in the bar with minor fixes. Unlocked Jackie's garage as an option.",
+    "status": "published",
+    "added_at": "2026-03-21T13:18:31.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

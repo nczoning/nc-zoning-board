@@ -1,0 +1,24 @@
+{
+    "id": "8981d6d8-ae7d-4ebf-b842-f35c27f2cf48",
+    "name": "Watson Tattoo Shops: Northside Tattoo & Body Mods",
+    "nexus_id": "23896",
+    "category": "new-location",
+    "coordinates": [
+        -1771.9393,
+        2170.6707,
+        18.4501
+    ],
+    "yaw": -60,
+    "tags": [
+        "entropism",
+        "shop",
+        "streetkid"
+    ],
+    "authors": [
+        "LordTrilobite"
+    ],
+    "description": "Adds a Maelstrom themed Tattoo Shop in Watson, Northside with character customization.",
+    "status": "published",
+    "added_at": "2026-03-13T01:12:33.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

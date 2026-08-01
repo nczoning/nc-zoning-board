@@ -1,0 +1,26 @@
+{
+    "id": "bb79e638-8481-4c0d-b662-53d002d24fb6",
+    "name": "Casino Reforged - Phase 1 : Access areas and fixes",
+    "nexus_id": "25430",
+    "category": "new-location",
+    "coordinates": [
+        834.0293,
+        1434.8807,
+        210.0864
+    ],
+    "yaw": -117.0652,
+    "tags": [
+        "entertainment",
+        "infrastructure",
+        "neokitsch"
+    ],
+    "authors": [
+        "Kaoziun",
+        "Oranje3"
+    ],
+    "credits": "CRF team",
+    "description": "A collaborative project between multiple mods and authors to restore the North Oak Casino district. This mod grants physical access for V to the zone and introduces several area fixes and improvements.",
+    "status": "published",
+    "added_at": "2026-03-07T00:53:22.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

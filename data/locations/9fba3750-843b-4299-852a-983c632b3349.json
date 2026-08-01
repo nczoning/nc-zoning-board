@@ -1,0 +1,23 @@
+{
+    "id": "9fba3750-843b-4299-852a-983c632b3349",
+    "name": "Kabuki Central Nights (Apartment)",
+    "nexus_id": "30360",
+    "category": "new-location",
+    "coordinates": [
+        -1144.9467,
+        1364.5614,
+        33.7405
+    ],
+    "yaw": -84.3502,
+    "tags": [
+        "apartment",
+        "kitsch"
+    ],
+    "authors": [
+        "Mazamp"
+    ],
+    "description": "I always fantasized about the idea that there is something real behind those fake reflections in the windows. So I made it true in Kabuki, with my favorite view: the Japantown skyline.",
+    "status": "published",
+    "added_at": "2026-06-12T23:15:48.000Z",
+    "modified_at": "2026-06-12T23:15:48.000Z"
+}

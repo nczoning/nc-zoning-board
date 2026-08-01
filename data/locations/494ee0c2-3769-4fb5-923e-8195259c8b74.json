@@ -1,0 +1,24 @@
+{
+    "id": "494ee0c2-3769-4fb5-923e-8195259c8b74",
+    "name": "moxxx lair - apartment",
+    "nexus_id": "26255",
+    "category": "new-location",
+    "coordinates": [
+        -624.67114,
+        880.32336,
+        32.9839
+    ],
+    "yaw": 97.7499,
+    "tags": [
+        "apartment",
+        "kitsch",
+        "streetkid"
+    ],
+    "authors": [
+        "thumbsuckerr"
+    ],
+    "description": "colorful neon apartment fit for a mox with an extra hideout on the roof",
+    "status": "published",
+    "added_at": "2026-03-13T03:27:39.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+}

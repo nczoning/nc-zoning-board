@@ -1,0 +1,24 @@
+{
+    "id": "6ed5cba0-902d-4ce9-a609-1b6a9fdef2b0",
+    "name": "Trailer home in the Badlands",
+    "nexus_id": "23122",
+    "category": "new-location",
+    "coordinates": [
+        3278.9236,
+        368.14096,
+        111.7834
+    ],
+    "yaw": -155.303,
+    "tags": [
+        "entropism",
+        "house",
+        "nomad"
+    ],
+    "authors": [
+        "eddfou"
+    ],
+    "description": "Adds a trailer home in the Badlands with a view on Rocky Ridge and the Night City skyline.",
+    "status": "published",
+    "added_at": "2026-03-19T10:47:35.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

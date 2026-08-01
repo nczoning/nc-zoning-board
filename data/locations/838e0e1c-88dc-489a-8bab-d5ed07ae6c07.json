@@ -1,0 +1,23 @@
+{
+    "id": "838e0e1c-88dc-489a-8bab-d5ed07ae6c07",
+    "name": "Petrochem Dam Apartment",
+    "nexus_id": "24739",
+    "category": "new-location",
+    "coordinates": [
+        554.5476,
+        -2180.8003,
+        34.0876
+    ],
+    "yaw": 75.1385,
+    "tags": [
+        "apartment",
+        "entropism"
+    ],
+    "authors": [
+        "scornthegreat"
+    ],
+    "description": "This mod adds a new, standalone apartment in a run down neighborhood near the Petrochem Dam in Rancho Coronado !",
+    "status": "published",
+    "added_at": "2026-03-13T17:14:39.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

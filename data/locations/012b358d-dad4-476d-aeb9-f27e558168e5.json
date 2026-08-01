@@ -1,0 +1,24 @@
+{
+    "id": "012b358d-dad4-476d-aeb9-f27e558168e5",
+    "name": "NC Beats Pacifica - Player Home and Custom Radio Station",
+    "nexus_id": "27419",
+    "category": "new-location",
+    "coordinates": [
+        -1888.7188,
+        -1826.6836,
+        40.3663
+    ],
+    "yaw": -68.5,
+    "tags": [
+        "apartment",
+        "entertainment",
+        "entropism"
+    ],
+    "authors": [
+        "Seracen"
+    ],
+    "description": "A curated Radio EXT station with stream-safe music and original DJ voice work. Featuring a fully realized club and player home in Pacifica, built with World Builder. Optional lightweight AMM version included.",
+    "status": "published",
+    "added_at": "2026-03-16T03:00:46.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+}

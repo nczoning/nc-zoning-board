@@ -1,0 +1,23 @@
+{
+    "id": "70d62c52-3414-463a-ae80-b82cffbecea6",
+    "name": "Glen Glass Den",
+    "nexus_id": "30207",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1525.4438,
+        -968.4882,
+        86.9683
+    ],
+    "yaw": 176.9297,
+    "tags": [
+        "apartment",
+        "neokitsch"
+    ],
+    "authors": [
+        "LordBLKRamen"
+    ],
+    "description": "Glass themed glen apartment where repairs can become expensive.",
+    "status": "published",
+    "added_at": "2026-06-02T18:06:06.000Z",
+    "modified_at": "2026-06-02T18:06:06.000Z"
+}

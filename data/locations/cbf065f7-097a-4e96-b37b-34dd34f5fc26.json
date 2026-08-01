@@ -1,0 +1,25 @@
+{
+    "id": "cbf065f7-097a-4e96-b37b-34dd34f5fc26",
+    "name": "Japantown North Verticality Expanded",
+    "nexus_id": "25441",
+    "category": "location-overhaul",
+    "coordinates": [
+        -407.59,
+        1514.09,
+        79.65
+    ],
+    "tags": [
+        "corpo",
+        "infrastructure",
+        "kitsch",
+        "photos",
+        "streetkid"
+    ],
+    "authors": [
+        "LordTrilobite"
+    ],
+    "description": "Drastically expands the vertical space in the north of Japantown by connecting several existing pedestrian walkways to the main game world and adding new interior spaces in between.",
+    "status": "published",
+    "added_at": "2026-05-18T13:56:01.000Z",
+    "modified_at": "2026-05-18T13:56:01.000Z"
+}

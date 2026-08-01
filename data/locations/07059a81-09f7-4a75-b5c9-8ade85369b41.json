@@ -1,0 +1,24 @@
+{
+    "id": "07059a81-09f7-4a75-b5c9-8ade85369b41",
+    "name": "Safehouses of Night City - Dogtown Barghest Stash",
+    "nexus_id": "25975",
+    "category": "new-location",
+    "coordinates": [
+        -2045.511,
+        -2531.4382,
+        65.4604
+    ],
+    "yaw": 44.1288,
+    "tags": [
+        "apartment",
+        "entropism",
+        "neomilitarism"
+    ],
+    "authors": [
+        "evafan84"
+    ],
+    "description": "A hidden weapons stash belonging to a couple of enterprising Barghest soldiers who thought they could sell guns right from under their boss's nose.",
+    "status": "published",
+    "added_at": "2026-03-12T04:53:54.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

@@ -1,0 +1,21 @@
+{
+    "id": "fd71c89f-6955-4a1d-93ba-e83865f2019d",
+    "name": "Charterhill Skatepark",
+    "nexus_id": "16319",
+    "category": "new-location",
+    "coordinates": [
+        425.58658,
+        -58.21237,
+        24.0065
+    ],
+    "yaw": 1.4351,
+    "tags": [],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "credits": "Kaoizun",
+    "description": "The Skatepark is open 24/7 for REAL CYBERPSYCHOS to go berserk in! Happily funded by the Adverts of Night City, provides City Wide Access all year round for all residents! (; The Skatepark Features multiple different ramp types to ride and do Stunts on!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

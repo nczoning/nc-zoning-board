@@ -1,0 +1,24 @@
+{
+    "id": "6575bd5a-8672-4ed6-b2ac-1fb8afe6326f",
+    "name": "Watson Tattoo Shops: Little China Pink Ink",
+    "nexus_id": "23896",
+    "category": "new-location",
+    "coordinates": [
+        -1279.1998,
+        1404.5665,
+        21.1161
+    ],
+    "yaw": 85.7,
+    "tags": [
+        "kitsch",
+        "shop",
+        "streetkid"
+    ],
+    "authors": [
+        "LordTrilobite"
+    ],
+    "description": "Adds a Mox themed Tattoo Shop in Watson, Little China with character customization.",
+    "status": "published",
+    "added_at": "2026-03-13T01:07:39.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

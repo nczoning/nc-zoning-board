@@ -1,0 +1,20 @@
+{
+    "id": "971b95ba-0d02-4e44-ba8f-7f10506457ac",
+    "name": "The Moth Bar Lair",
+    "nexus_id": "22207",
+    "category": "location-overhaul",
+    "coordinates": [
+        -2429.0085,
+        -2664.9116,
+        9.8
+    ],
+    "yaw": -33.6083,
+    "tags": [],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "The Moth Lair GOT AN UPGRADE! The Bars Secret Lair has been fitted for WAR with every Gun you could think of, all the Mechs and every bit of Information on Dogtown displayed from the Master Control Center!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

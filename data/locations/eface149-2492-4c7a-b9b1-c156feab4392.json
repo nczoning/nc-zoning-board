@@ -1,0 +1,22 @@
+{
+    "id": "eface149-2492-4c7a-b9b1-c156feab4392",
+    "name": "Japantown Garage",
+    "nexus_id": "19850",
+    "category": "location-overhaul",
+    "coordinates": [
+        -787.8556,
+        965.8151,
+        12.0253
+    ],
+    "yaw": -47.3554,
+    "tags": [
+        "infrastructure"
+    ],
+    "authors": [
+        "Sammmy1036"
+    ],
+    "description": "Adds a two car garage to V's Japantown Apartment. Removes construction debris and adds an accessible door inside added garage.",
+    "status": "published",
+    "added_at": "2026-03-21T04:26:43.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

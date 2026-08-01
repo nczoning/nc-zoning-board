@@ -1,0 +1,22 @@
+{
+    "id": "bf0b8bda-a891-4d21-baf6-ea83e2b10d33",
+    "name": "H10 Enhanced",
+    "nexus_id": "20892",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1449.1093,
+        1282.1422,
+        123.0824
+    ],
+    "yaw": 0.8092075,
+    "tags": [
+        "infrastructure"
+    ],
+    "authors": [
+        "WhiteRabbit0110"
+    ],
+    "description": "Pretty much just fills out some of the empty spaces and adds some lights in MegaBuilding H-10 so it doesn't feel as empty and dark.",
+    "status": "published",
+    "added_at": "2026-03-21T05:52:35.000Z",
+    "modified_at": "2026-04-08T11:27:55.000Z"
+}

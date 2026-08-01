@@ -1,0 +1,22 @@
+{
+    "id": "592ffe29-2a2d-476a-a4a9-6a545ff3411f",
+    "name": "Vik's Recovery",
+    "nexus_id": "26403",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1548.6864,
+        1232.2092,
+        11.5202
+    ],
+    "yaw": 90,
+    "tags": [
+        "photos"
+    ],
+    "authors": [
+        "1bells"
+    ],
+    "description": "Adds a small bed / recovery area in Vik's clinic. Mostly for photography purposes.",
+    "status": "published",
+    "added_at": "2026-03-19T23:15:16.000Z",
+    "modified_at": "2026-04-08T11:27:55.000Z"
+}

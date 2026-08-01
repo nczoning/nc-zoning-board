@@ -1,0 +1,22 @@
+{
+    "id": "2f9abfec-82df-4e3a-a1a4-4bf447e6e1a7",
+    "name": "H10 Apartment Wooden Recolor",
+    "nexus_id": "25426",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1382.787,
+        1270.6815,
+        123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "Celestria129"
+    ],
+    "description": "A wood recolor/texture of the all redesigns of V's H10 Apartment.",
+    "status": "published",
+    "added_at": "2026-03-19T23:19:13.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

@@ -1,0 +1,22 @@
+{
+    "id": "a3dba0df-92d2-4ba3-b9c1-a0e465d064e0",
+    "name": "Megabuilding H10 Ultimate Experience",
+    "nexus_id": "20986",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1449.1093,
+        1282.1422,
+        123.0824
+    ],
+    "yaw": 0.8092075,
+    "tags": [
+        "infrastructure"
+    ],
+    "authors": [
+        "NicolasBsst"
+    ],
+    "description": "This mod improve the overhaul experience of the Megabuilding H10 by adding a tone of props and bring life in some of the dead areas of the building.\n\nThis is in addition to the H10 Megabuilding Unlocked and H10 Enhanced mod.",
+    "status": "published",
+    "added_at": "2026-03-21T05:50:07.000Z",
+    "modified_at": "2026-04-08T11:27:55.000Z"
+}

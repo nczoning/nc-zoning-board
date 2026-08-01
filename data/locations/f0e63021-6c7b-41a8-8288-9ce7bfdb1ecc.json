@@ -1,0 +1,23 @@
+{
+    "id": "f0e63021-6c7b-41a8-8288-9ce7bfdb1ecc",
+    "name": "The Glen Windows addon - Interactive Shutters",
+    "nexus_id": "27286",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1521.956,
+        -973.40356,
+        86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+        "apartment",
+        "neokitsch"
+    ],
+    "authors": [
+        "Kaoziun"
+    ],
+    "description": "Small addition to have some interactive shutters at every windows from The Glen apartment. Compatible with most if not every Glen overhaul mods. With switches to control all shutters at once.",
+    "status": "published",
+    "added_at": "2026-03-12T04:18:24.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

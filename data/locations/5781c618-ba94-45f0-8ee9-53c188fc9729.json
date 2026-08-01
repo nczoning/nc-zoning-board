@@ -1,0 +1,23 @@
+{
+    "id": "5781c618-ba94-45f0-8ee9-53c188fc9729",
+    "name": "Glen Apartment Expanded - Redux",
+    "nexus_id": "24075",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1525.6667,
+        -978.3817,
+        86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+        "apartment",
+        "infrastructure"
+    ],
+    "authors": [
+        "ThaFunktopus"
+    ],
+    "description": "Vanilla themed overhaul with added garage, landing pad, and balcony",
+    "status": "published",
+    "added_at": "2026-03-12T06:45:11.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

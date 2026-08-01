@@ -1,0 +1,23 @@
+{
+    "id": "af1400fe-bba4-4eb4-99ef-f6e259fe1242",
+    "name": "OnShore - Home",
+    "nexus_id": "22362",
+    "category": "new-location",
+    "coordinates": [
+        -2704.004,
+        3551.6392,
+        4.1097
+    ],
+    "yaw": -178.9004,
+    "tags": [
+        "house",
+        "neokitsch"
+    ],
+    "authors": [
+        "B1W"
+    ],
+    "description": "Custom home for V at the shore.",
+    "status": "published",
+    "added_at": "2026-03-12T12:15:42.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

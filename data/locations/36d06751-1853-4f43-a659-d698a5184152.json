@@ -1,0 +1,22 @@
+{
+    "id": "36d06751-1853-4f43-a659-d698a5184152",
+    "name": "Canyon Fixes",
+    "nexus_id": "25918",
+    "category": "location-overhaul",
+    "coordinates": [
+        4528.514,
+        589.7748,
+        223.8003
+    ],
+    "yaw": -32.2148,
+    "tags": [
+        "infrastructure"
+    ],
+    "authors": [
+        "Kaoziun"
+    ],
+    "description": "Collection of various visual fixes to correct the eastern Badlands canyon and map border. Entirely customizable through Native Settings UI.",
+    "status": "published",
+    "added_at": "2026-03-12T13:27:36.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

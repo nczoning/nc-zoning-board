@@ -1,0 +1,23 @@
+{
+    "id": "963bac62-258f-475a-a550-0cb6f9cb841e",
+    "name": "Under the bridge",
+    "nexus_id": "25492",
+    "category": "location-overhaul",
+    "coordinates": [
+        -123.2152,
+        607.8815,
+        63.9817
+    ],
+    "yaw": -67.0455,
+    "tags": [
+        "entropism",
+        "streetkid"
+    ],
+    "authors": [
+        "yaba08211"
+    ],
+    "description": "A new location for my quest project based on the Strange Insight radio.",
+    "status": "published",
+    "added_at": "2026-03-14T23:53:32.000Z",
+    "modified_at": "2026-04-06T20:03:35.000Z"
+}

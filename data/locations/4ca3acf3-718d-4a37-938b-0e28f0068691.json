@@ -1,0 +1,24 @@
+{
+    "id": "4ca3acf3-718d-4a37-938b-0e28f0068691",
+    "name": "Eden Plaza - Charter Hill Player Penthouse",
+    "nexus_id": "25409",
+    "category": "new-location",
+    "coordinates": [
+        -115.73483,
+        -208.03392,
+        104.1474
+    ],
+    "yaw": -67.5915,
+    "tags": [
+        "corpo",
+        "house",
+        "neokitsch"
+    ],
+    "authors": [
+        "Magicman010"
+    ],
+    "description": "Live in luxury in Charter Hill. Spoil yourself and forget about the filth living below as you look down from your new Penthouse suite, offering spectacular waterfront views.",
+    "status": "published",
+    "added_at": "2026-03-12T05:10:47.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

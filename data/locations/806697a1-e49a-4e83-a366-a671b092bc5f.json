@@ -1,0 +1,23 @@
+{
+    "id": "806697a1-e49a-4e83-a366-a671b092bc5f",
+    "name": "V's Edgerunners Mansion Reloaded",
+    "nexus_id": "26023",
+    "category": "new-location",
+    "coordinates": [
+        -2455.6133,
+        109.1816,
+        36.4526
+    ],
+    "yaw": 171.1977,
+    "tags": [
+        "house",
+        "neokitsch"
+    ],
+    "authors": [
+        "Kaoziun"
+    ],
+    "description": "V's Edgerunners mansion relocated and edited.",
+    "status": "published",
+    "added_at": "2026-03-07T00:53:22.000Z",
+    "modified_at": "2026-04-08T23:01:57.000Z"
+}

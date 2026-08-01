@@ -1,0 +1,23 @@
+{
+    "id": "7c963e30-e470-4867-b0ae-8a6c9d514b00",
+    "name": "Sheng Noods Ramenshop",
+    "nexus_id": "25294",
+    "category": "new-location",
+    "coordinates": [
+        -402.56494,
+        1276.3997,
+        37.4164
+    ],
+    "yaw": 166.6981,
+    "tags": [
+        "entertainment",
+        "shop"
+    ],
+    "authors": [
+        "Kaoziun"
+    ],
+    "description": "A fully featured ramen restaurant with numerous NPCs, including custom characters, each with intricate schedules, interactions, vendors, and plenty of hidden Easter eggs.",
+    "status": "published",
+    "added_at": "2026-03-12T01:19:19.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

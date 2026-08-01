@@ -1,0 +1,24 @@
+{
+    "id": "25dcc964-fc45-4a65-a741-401e53d9e9a4",
+    "name": "NorthSide Garage House",
+    "nexus_id": "22290",
+    "category": "location-overhaul",
+    "coordinates": [
+        -832.6134,
+        2771.8362,
+        39.3294
+    ],
+    "yaw": 125.5153,
+    "tags": [
+        "apartment",
+        "entropism",
+        "streetkid"
+    ],
+    "authors": [
+        "8eartic"
+    ],
+    "description": "Northside Garage and House.",
+    "status": "published",
+    "added_at": "2026-03-23T18:49:26.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+}

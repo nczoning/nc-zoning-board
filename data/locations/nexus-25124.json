@@ -1,0 +1,24 @@
+{
+    "id": "nexus-25124",
+    "name": "H10 - Tidy Your Trash - Modular Apartment Makeover",
+    "nexus_id": "25124",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1382.3882,
+        1270.984,
+        123.0649
+    ],
+    "yaw": -79.1,
+    "tags": [
+        "apartment",
+        "kitsch",
+        "streetkid"
+    ],
+    "authors": [
+        "Spuddeh"
+    ],
+    "description": "Another attempt to tidy up the H10 apartment. The aim of this one wasn't to remove all the trash, but instead to make it look like V can walk to a bin every once in a while.The mod also includes options to redecorate, allowing you to",
+    "status": "published",
+    "added_at": "2026-07-26T05:46:29.225Z",
+    "modified_at": "2026-07-26T05:46:29.225Z"
+}

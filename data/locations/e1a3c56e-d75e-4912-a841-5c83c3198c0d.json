@@ -1,0 +1,24 @@
+{
+    "id": "e1a3c56e-d75e-4912-a841-5c83c3198c0d",
+    "name": "Santo Domingo Garage Home",
+    "nexus_id": "24483",
+    "category": "new-location",
+    "coordinates": [
+        581.5887,
+        -2195.1768,
+        46.1298
+    ],
+    "yaw": 35.0064,
+    "tags": [
+        "apartment",
+        "entropism",
+        "streetkid"
+    ],
+    "authors": [
+        "bigpoppajuan"
+    ],
+    "description": "WE'RE LIVIN' IN SANTO DOMINGO CHOOMBA!!! This mod reworks what was a closed off and destroyed building right by the gun store and ripperdoc at the bottom of the SanDom dam. Has native interactions.",
+    "status": "published",
+    "added_at": "2026-03-18T20:44:07.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

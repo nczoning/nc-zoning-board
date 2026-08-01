@@ -1,0 +1,22 @@
+{
+    "id": "nexus-27888",
+    "name": "Kujira - Rafale-F22-F35",
+    "nexus_id": "27888",
+    "category": "other",
+    "coordinates": [
+        -3701.5332,
+        1655.634,
+        24.6071
+    ],
+    "tags": [
+        "entertainment"
+    ],
+    "authors": [
+        "ellios2normandie"
+    ],
+    "credits": "For B1W’s Kujira supercarrier",
+    "description": "New aircraft models for B1W’s Kujira supercarrier : Rafale, F-22, and F-35. Variant with F117s.",
+    "status": "published",
+    "added_at": "2026-07-26T05:46:29.225Z",
+    "modified_at": "2026-07-26T05:46:29.225Z"
+}

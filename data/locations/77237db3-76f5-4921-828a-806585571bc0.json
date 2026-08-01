@@ -1,0 +1,23 @@
+{
+    "id": "77237db3-76f5-4921-828a-806585571bc0",
+    "name": "Japantown North Penthouse - Player Apartment",
+    "nexus_id": "26587",
+    "category": "new-location",
+    "coordinates": [
+        -399.0492,
+        1517.7688,
+        173.0869
+    ],
+    "yaw": -129.9002,
+    "tags": [
+        "house",
+        "neokitsch"
+    ],
+    "authors": [
+        "LordTrilobite"
+    ],
+    "description": "A luxurious Japanese penthouse in the north tip of Japantown. This property hosts of many features, interactions, customization and is fully integrated into the game world with lower floors of the building.",
+    "status": "published",
+    "added_at": "2026-03-13T00:15:15.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

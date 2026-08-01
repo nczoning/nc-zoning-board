@@ -1,0 +1,20 @@
+{
+    "id": "2e468bec-c0b9-4324-91be-f1259e43e6ee",
+    "name": "Pew Pew Plaza Enhanced",
+    "nexus_id": "22586",
+    "category": "location-overhaul",
+    "coordinates": [
+        -830.96027,
+        -267.41006,
+        7.4902
+    ],
+    "yaw": 49.2266,
+    "tags": [],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "This is another Smaller Mod that Enhances an Arcade area! This area even has a little Event going on with Non-Hostile Enemies around the Arcade! Come on in, Play some Arcade Games and have a good time admiring the NEW Colorful Arcade Lights!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

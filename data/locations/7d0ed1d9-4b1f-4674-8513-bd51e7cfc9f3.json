@@ -1,0 +1,20 @@
+{
+    "id": "7d0ed1d9-4b1f-4674-8513-bd51e7cfc9f3",
+    "name": "Dogtown Airship ( with Apartment and NPC Party Below )",
+    "nexus_id": "19363",
+    "category": "new-location",
+    "coordinates": [
+        -2152.0488,
+        -2828.1619,
+        149.1273
+    ],
+    "yaw": -31.6369,
+    "tags": [],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "The Floating Behemoth now has collision to the floors and walls! My main idea was making Cyberpunks version of the Prydwen from Fallout 4 equipped with AV landing pads, Guards and a Custom Interior! Below the Airship is a NPC Party with Decorations and Lights!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

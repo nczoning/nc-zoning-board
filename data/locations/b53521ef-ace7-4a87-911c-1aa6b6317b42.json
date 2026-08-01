@@ -1,0 +1,24 @@
+{
+    "id": "b53521ef-ace7-4a87-911c-1aa6b6317b42",
+    "name": "Dark Neon - Glen Apartment Overhaul",
+    "nexus_id": "19030",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1521.956,
+        -973.40356,
+        86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+        "apartment",
+        "corpo",
+        "neomilitarism"
+    ],
+    "authors": [
+        "Scourched"
+    ],
+    "description": "The Glen Apartment designed with a bit of a maximalist take to give a real cyberpunk vibe. This is for mercs with a busy life of running and gunning, who focus more on their gear then on pretty furniture.",
+    "status": "published",
+    "added_at": "2026-03-21T13:36:44.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

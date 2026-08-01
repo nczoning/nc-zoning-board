@@ -1,0 +1,24 @@
+{
+    "id": "5925958b-7794-4b90-9d16-9d5619ea0a37",
+    "name": "Santo Serenity Residence",
+    "nexus_id": "30483",
+    "category": "new-location",
+    "coordinates": [
+        533.1677,
+        -1797.6965,
+        29.2349
+    ],
+    "yaw": 153.773,
+    "tags": [
+        "apartment",
+        "house",
+        "kitsch"
+    ],
+    "authors": [
+        "ex1k"
+    ],
+    "description": "A modern and peaceful player home located in Santo Domingo, featuring a spacious garden, private pool, custom interior, and all the amenities needed to call it home.",
+    "status": "published",
+    "added_at": "2026-06-15T00:37:13.000Z",
+    "modified_at": "2026-06-15T00:37:13.000Z"
+}

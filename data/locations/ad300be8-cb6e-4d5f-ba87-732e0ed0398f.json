@@ -1,0 +1,22 @@
+{
+    "id": "ad300be8-cb6e-4d5f-ba87-732e0ed0398f",
+    "name": "Ho-Oh Casino Unlocked And Remastered",
+    "nexus_id": "27426",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1031.4825,
+        1344.5405,
+        5.284561
+    ],
+    "yaw": 0.6276565,
+    "tags": [
+        "entertainment"
+    ],
+    "authors": [
+        "Roxterfox"
+    ],
+    "description": "Unlocked all the locked doors in The OH-HO Casino. Minor remaster.",
+    "status": "published",
+    "added_at": "2026-03-19T22:30:52.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

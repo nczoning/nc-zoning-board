@@ -1,0 +1,23 @@
+{
+    "id": "1d16d80a-aeac-41e4-b926-aa52bb43bd66",
+    "name": "Outdoor V - City Camps",
+    "nexus_id": "26542",
+    "category": "new-location",
+    "coordinates": [
+        -2325.8926,
+        -2000.3291,
+        67.89406
+    ],
+    "tags": [
+        "apartment",
+        "nomad",
+        "photos"
+    ],
+    "authors": [
+        "Kaoziun"
+    ],
+    "description": "8 mini hideouts spread across all districts, with customization options. Several new vertical access points and striking landscapes, jump of faith pools. Reclusive V is now a cat.",
+    "status": "published",
+    "added_at": "2026-03-13T18:09:52.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

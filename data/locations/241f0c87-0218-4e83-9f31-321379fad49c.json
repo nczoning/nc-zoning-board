@@ -1,0 +1,22 @@
+{
+    "id": "241f0c87-0218-4e83-9f31-321379fad49c",
+    "name": "Sea Wall Towers Detailed",
+    "nexus_id": "31924",
+    "category": "location-overhaul",
+    "coordinates": [
+        -5782.011,
+        1781.279,
+        195.898
+    ],
+    "tags": [
+        "infrastructure",
+        "photos"
+    ],
+    "authors": [
+        "LordTrilobite"
+    ],
+    "description": "Adds details and collision to the normally low detail towers at the edge of the bay of Night City.",
+    "status": "published",
+    "added_at": "2026-07-26T15:39:10.000Z",
+    "modified_at": "2026-07-26T15:39:10.000Z"
+}

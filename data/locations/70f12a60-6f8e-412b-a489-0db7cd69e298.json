@@ -1,0 +1,24 @@
+{
+    "id": "70f12a60-6f8e-412b-a489-0db7cd69e298",
+    "name": "Terminal Motel Northside Apartment Mod",
+    "nexus_id": "26985",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1506.1044,
+        2231.2832,
+        22.2
+    ],
+    "yaw": 36.55,
+    "tags": [
+        "apartment",
+        "entropism",
+        "kitsch"
+    ],
+    "authors": [
+        "hnovak1"
+    ],
+    "description": "Space/Motel themed mod for V's Northside Apartment, entropy/kitsch style.",
+    "status": "published",
+    "added_at": "2026-03-19T22:50:11.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

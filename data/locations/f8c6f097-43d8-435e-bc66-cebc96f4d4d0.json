@@ -1,0 +1,23 @@
+{
+    "id": "f8c6f097-43d8-435e-bc66-cebc96f4d4d0",
+    "name": "Talent Academy Enhanced",
+    "nexus_id": "29791",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1997.8904,
+        -2990.7563,
+        84.5199
+    ],
+    "yaw": -131.273,
+    "tags": [
+        "entertainment",
+        "quest"
+    ],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "WELCOME BACK to the Talent Academy! After V's Deal with Fiona Vargas, she has given you access to her Personal Apartment below the Club! Feel Free to visit whenever, grab a drink and HOPEFULLY see some New, Next Level Talent formed...if they ever fix that Display case from Tommy....",
+    "status": "published",
+    "added_at": "2026-05-30T21:14:17.000Z",
+    "modified_at": "2026-05-30T21:14:17.000Z"
+}

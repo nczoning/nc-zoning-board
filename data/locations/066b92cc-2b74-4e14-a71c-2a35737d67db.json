@@ -1,0 +1,23 @@
+{
+    "id": "066b92cc-2b74-4e14-a71c-2a35737d67db",
+    "name": "Outdoor V - Canyon Forest",
+    "nexus_id": "27131",
+    "category": "new-location",
+    "coordinates": [
+        5321.252,
+        -226.151,
+        99.817
+    ],
+    "yaw": 0.46743628,
+    "tags": [
+        "nomad",
+        "photos"
+    ],
+    "authors": [
+        "Kaoziun"
+    ],
+    "description": "Extensive forest with multiple customization options and its custom fast travel point, get to the green !",
+    "status": "published",
+    "added_at": "2026-03-07T00:53:22.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

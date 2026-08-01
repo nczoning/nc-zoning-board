@@ -1,0 +1,24 @@
+{
+    "id": "95acccee-8026-4f4a-b619-c52864f83b95",
+    "name": "Chill Heywood Apartment",
+    "nexus_id": "26263",
+    "category": "new-location",
+    "coordinates": [
+        -1875.4535,
+        -1037.4564,
+        40.6079
+    ],
+    "yaw": -91.8323,
+    "tags": [
+        "apartment",
+        "entropism",
+        "shop"
+    ],
+    "authors": [
+        "DesertPirate77"
+    ],
+    "description": "A new apartment now available in Heywood. Featuring several custom interactable items and a store located on the ground floor.",
+    "status": "published",
+    "added_at": "2026-03-12T06:20:37.000Z",
+    "modified_at": "2026-04-06T09:33:50.000Z"
+}

@@ -1,0 +1,22 @@
+{
+    "id": "d7ab72f5-0567-4aff-b960-a8b30f658445",
+    "name": "Corpo Plaza Garage - Redux",
+    "nexus_id": "24148",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1654.1001,
+        354.56592,
+        8.1902
+    ],
+    "yaw": -87.6405,
+    "tags": [
+        "infrastructure"
+    ],
+    "authors": [
+        "BlazingTommy"
+    ],
+    "description": "Among the benefits of urban planning is taking trouble spots and turning them into amenities for our hard-working citizens. Why live next to trash, dirt, rust and gang graffities when you can take away an underutilized space and give it back to the most important group of our community: rich tenants.",
+    "status": "published",
+    "added_at": "2026-03-21T06:09:40.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

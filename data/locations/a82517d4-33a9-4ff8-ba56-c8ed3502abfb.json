@@ -1,0 +1,23 @@
+{
+    "id": "a82517d4-33a9-4ff8-ba56-c8ed3502abfb",
+    "name": "Neon Zen H10 Apartment",
+    "nexus_id": "26736",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1382.787,
+        1270.6815,
+        123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+        "apartment",
+        "neokitsch"
+    ],
+    "authors": [
+        "hnovak1"
+    ],
+    "description": "My Version of V's Original H10 Apartment in Watson. I removed most of the trash, added a kitchen area, a little window garden, custom made cat furniture for Nibbles and interactions for a more immersive gameplay.",
+    "status": "published",
+    "added_at": "2026-03-19T22:46:59.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

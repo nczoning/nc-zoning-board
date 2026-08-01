@@ -1,0 +1,22 @@
+{
+    "id": "d3d4b0d0-ae06-4282-aac3-c14b09883ff5",
+    "name": "Bliss club Jigjig Street Changes",
+    "nexus_id": "19133",
+    "category": "location-overhaul",
+    "coordinates": [
+        -621.1278,
+        879.801,
+        23.906
+    ],
+    "yaw": 145,
+    "tags": [
+        "entertainment"
+    ],
+    "authors": [
+        "LiquidBronze"
+    ],
+    "description": "This is a minimal mod that changes some things with the Bliss club on Jigjig street.",
+    "status": "published",
+    "added_at": "2026-03-12T23:35:37.000Z",
+    "modified_at": "2026-04-08T11:27:55.000Z"
+}

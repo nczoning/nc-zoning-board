@@ -1,0 +1,23 @@
+{
+    "id": "54c5a677-d134-4458-a2d1-d7681d69c3e2",
+    "name": "Militech Regional Headquarters (Militech Tower)",
+    "nexus_id": "24779",
+    "category": "new-location",
+    "coordinates": [
+        -1272.2385,
+        -261.805,
+        55.7316
+    ],
+    "yaw": -20.7352,
+    "tags": [
+        "corpo",
+        "neomilitarism"
+    ],
+    "authors": [
+        "LiquidBronze"
+    ],
+    "description": "Militech regional headquarters has opened its top floor lounge, showroom and AV Port to the people of Night City!",
+    "status": "published",
+    "added_at": "2026-03-12T23:53:26.000Z",
+    "modified_at": "2026-04-08T23:01:57.000Z"
+}

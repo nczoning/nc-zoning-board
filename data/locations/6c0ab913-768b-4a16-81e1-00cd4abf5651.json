@@ -1,0 +1,22 @@
+{
+    "id": "6c0ab913-768b-4a16-81e1-00cd4abf5651",
+    "name": "Arroyo Petrochem Backlot",
+    "nexus_id": "31332",
+    "category": "location-overhaul",
+    "coordinates": [
+        -248.26,
+        -696.44,
+        7.36
+    ],
+    "tags": [
+        "entropism",
+        "neomilitarism"
+    ],
+    "authors": [
+        "LordTrilobite"
+    ],
+    "description": "Adds collision and details to the lot behind the three big Petrochem buildings in Arroyo.",
+    "status": "published",
+    "added_at": "2026-07-09T10:49:46.000Z",
+    "modified_at": "2026-07-09T10:49:46.000Z"
+}

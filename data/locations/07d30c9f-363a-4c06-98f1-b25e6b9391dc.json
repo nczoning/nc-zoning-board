@@ -1,0 +1,23 @@
+{
+    "id": "07d30c9f-363a-4c06-98f1-b25e6b9391dc",
+    "name": "Dogtown Apartment _VDB",
+    "nexus_id": "22679",
+    "category": "new-location",
+    "coordinates": [
+        -1642.22,
+        -2599.9695,
+        82.991
+    ],
+    "tags": [
+        "apartment",
+        "corpo",
+        "neokitsch"
+    ],
+    "authors": [
+        "8eartic"
+    ],
+    "description": "DogTown Apartment – New Version (Standalone) Night City – DogTown",
+    "status": "published",
+    "added_at": "2026-03-23T18:45:34.000Z",
+    "modified_at": "2026-04-06T07:55:08.000Z"
+}

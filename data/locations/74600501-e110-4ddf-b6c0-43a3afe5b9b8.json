@@ -1,0 +1,22 @@
+{
+    "id": "74600501-e110-4ddf-b6c0-43a3afe5b9b8",
+    "name": "The Secret Chic Atelier",
+    "nexus_id": "15300",
+    "category": "new-location",
+    "coordinates": [
+        -1715.6635,
+        169.74834,
+        43.7
+    ],
+    "yaw": 59.2,
+    "tags": [
+        "shop"
+    ],
+    "authors": [
+        "downsource"
+    ],
+    "description": "The Virtual Atelier Coiffeur for your pubic hair styles.",
+    "status": "published",
+    "added_at": "2026-03-21T12:49:11.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

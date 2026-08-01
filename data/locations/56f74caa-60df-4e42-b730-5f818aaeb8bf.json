@@ -1,0 +1,23 @@
+{
+    "id": "56f74caa-60df-4e42-b730-5f818aaeb8bf",
+    "name": "North Oak Safe Base Enchanced",
+    "nexus_id": "22439",
+    "category": "location-overhaul",
+    "coordinates": [
+        285.4598,
+        1468.6056,
+        162.9839
+    ],
+    "yaw": 120,
+    "tags": [
+        "apartment",
+        "neokitsch"
+    ],
+    "authors": [
+        "8eartic"
+    ],
+    "description": "North Oak Safe Base Enchanced.",
+    "status": "published",
+    "added_at": "2026-03-23T18:48:17.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

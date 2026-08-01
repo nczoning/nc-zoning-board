@@ -1,0 +1,22 @@
+{
+    "id": "2999ef0c-300a-4401-943c-c88d569d2ffa",
+    "name": "7th Hell Club Unlocked and Remastered",
+    "nexus_id": "27207",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1932.2175,
+        -42.149864,
+        -1.5324
+    ],
+    "yaw": -92.7,
+    "tags": [
+        "entertainment"
+    ],
+    "authors": [
+        "Roxterfox"
+    ],
+    "description": "Unlocked all the locked areas of the club, removed and fixed the broken stuff and added some.",
+    "status": "published",
+    "added_at": "2026-03-21T12:23:54.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+}

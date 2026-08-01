@@ -1,0 +1,23 @@
+{
+    "id": "70aa56c8-c7fa-48df-828c-2fd9b0181293",
+    "name": "V's H10 Garage - with Hidden Bunker",
+    "nexus_id": "8542",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1377.5641,
+        1273.8601,
+        23.5778
+    ],
+    "yaw": -177.8,
+    "tags": [
+        "apartment",
+        "infrastructure"
+    ],
+    "authors": [
+        "ThaFunktopus"
+    ],
+    "description": "Private H10 garage with a hidden bunker apartment",
+    "status": "published",
+    "added_at": "2026-03-12T07:04:49.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

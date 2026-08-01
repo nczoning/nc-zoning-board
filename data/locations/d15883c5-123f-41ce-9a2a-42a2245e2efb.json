@@ -1,0 +1,22 @@
+{
+    "id": "d15883c5-123f-41ce-9a2a-42a2245e2efb",
+    "name": "The Atlantis - Restored",
+    "nexus_id": "20072",
+    "category": "location-overhaul",
+    "coordinates": [
+        -775.3824,
+        1108.1885,
+        61
+    ],
+    "yaw": 0.35631442,
+    "tags": [
+        "entertainment"
+    ],
+    "authors": [
+        "brocreate"
+    ],
+    "description": "Reopens The Atlantis from Johnny's flashback. Unlocks club entrance, adds real NPC, interactable bartenders, and fast travel point to the location.",
+    "status": "published",
+    "added_at": "2026-03-14T08:58:37.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

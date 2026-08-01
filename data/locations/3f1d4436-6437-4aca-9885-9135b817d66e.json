@@ -1,0 +1,22 @@
+{
+    "id": "3f1d4436-6437-4aca-9885-9135b817d66e",
+    "name": "Heavy Hearts Club Unlocked",
+    "nexus_id": "27108",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1597.0299,
+        -2341.358,
+        43.2503
+    ],
+    "yaw": 52.4,
+    "tags": [
+        "entertainment"
+    ],
+    "authors": [
+        "Roxterfox"
+    ],
+    "description": "Unlocked the areas that were not accessible.",
+    "status": "published",
+    "added_at": "2026-03-21T13:13:18.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

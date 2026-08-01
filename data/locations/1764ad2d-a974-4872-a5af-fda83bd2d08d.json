@@ -1,0 +1,20 @@
+{
+    "id": "1764ad2d-a974-4872-a5af-fda83bd2d08d",
+    "name": "Dirty Burger Bar",
+    "nexus_id": "22275",
+    "category": "location-overhaul",
+    "coordinates": [
+        -816.7329,
+        1336.7057,
+        34.3268
+    ],
+    "yaw": 70.3737,
+    "tags": [],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "The Dirty Burger Bar has Re-Opened after Renovations! The Bar itself has Brand New Themed Lighting with better Decorated Walkways. Taking the NEW side Staircase to the Lower Level is where the BRAND NEW Shops have been added and Restored with Parking Spaces!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

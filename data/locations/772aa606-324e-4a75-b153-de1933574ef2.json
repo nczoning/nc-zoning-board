@@ -1,0 +1,23 @@
+{
+    "id": "772aa606-324e-4a75-b153-de1933574ef2",
+    "name": "PENT_FLOW_Apartment",
+    "nexus_id": "21417",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1343.9843,
+        1204.115,
+        114.8
+    ],
+    "yaw": -0.22282475,
+    "tags": [
+        "apartment",
+        "house"
+    ],
+    "authors": [
+        "77reye"
+    ],
+    "description": "Edit of the V's Edgerunners Mansion mod using Archive XL for plug-and-play install. Part of reye's redesign repository (rrr).",
+    "status": "published",
+    "added_at": "2026-03-21T06:56:19.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

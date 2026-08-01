@@ -1,0 +1,22 @@
+{
+    "id": "6ffd4ff3-c516-407a-8ea3-cf252c526161",
+    "name": "Dogtown Car Meet ( with Apartment )",
+    "nexus_id": "16252",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1948.215,
+        -2731.905,
+        84.7373
+    ],
+    "yaw": -2.6396,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "All the Dogtown rats link up at the Broken Globe for a Car Meet. Black Market Dealers, Addicts, Gamblers and Undercover Barghest NPCs attend this Meet. The area is FULLY DECKED OUT with Cars, Lights, Smoke, NPCs, Decorations AND a House even THEY don't know about...",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

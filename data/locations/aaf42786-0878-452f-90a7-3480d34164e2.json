@@ -1,0 +1,22 @@
+{
+    "id": "aaf42786-0878-452f-90a7-3480d34164e2",
+    "name": "Totentanz Club Unlocked",
+    "nexus_id": "27333",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1716.1333,
+        2202.5403,
+        86.211624
+    ],
+    "yaw": 0.18180656,
+    "tags": [
+        "entertainment"
+    ],
+    "authors": [
+        "Roxterfox"
+    ],
+    "description": "Unlocked all the closed areas of the Totentanz Club",
+    "status": "published",
+    "added_at": "2026-03-19T21:51:49.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

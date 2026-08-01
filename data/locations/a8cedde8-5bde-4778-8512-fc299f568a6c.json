@@ -1,0 +1,23 @@
+{
+    "id": "a8cedde8-5bde-4778-8512-fc299f568a6c",
+    "name": "pacifica pier hideout - apartment",
+    "nexus_id": "26964",
+    "category": "new-location",
+    "coordinates": [
+        -1930.3829,
+        -1675.9966,
+        12.9459
+    ],
+    "yaw": 66.3221,
+    "tags": [
+        "entropism",
+        "house"
+    ],
+    "authors": [
+        "thumbsuckerr"
+    ],
+    "description": "grungey hideout at pacifica pier",
+    "status": "published",
+    "added_at": "2026-03-13T03:40:31.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+}

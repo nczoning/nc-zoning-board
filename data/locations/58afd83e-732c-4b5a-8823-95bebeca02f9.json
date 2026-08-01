@@ -1,0 +1,22 @@
+{
+    "id": "58afd83e-732c-4b5a-8823-95bebeca02f9",
+    "name": "H10_BONE_Apartment",
+    "nexus_id": "26731",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1382.787,
+        1270.6815,
+        123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "77reye"
+    ],
+    "description": "Updated overhaul of my H10 apartment design. Features Archive XL for install and Native Interactions for injecting interactions. Redesigns key sections of the apartment. More smart frames addon available under optional files",
+    "status": "published",
+    "added_at": "2026-03-21T06:51:21.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

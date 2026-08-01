@@ -1,0 +1,23 @@
+{
+    "id": "7af40c70-5b95-4644-b161-15364d978f3f",
+    "name": "Japantown Apartment - Neokitsch",
+    "nexus_id": "22095",
+    "category": "location-overhaul",
+    "coordinates": [
+        -786.4785,
+        978.493,
+        28.2095
+    ],
+    "yaw": 97.6499,
+    "tags": [
+        "apartment",
+        "neokitsch"
+    ],
+    "authors": [
+        "PixieMattel"
+    ],
+    "description": "A Japantown apartment edit, Neokitsch style.",
+    "status": "published",
+    "added_at": "2026-03-19T23:22:16.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

@@ -1,0 +1,20 @@
+{
+    "id": "46293fba-083d-4097-b0d3-7a3068d4b3cd",
+    "name": "Ash - Memorial for a Friend",
+    "nexus_id": "26096",
+    "category": "other",
+    "coordinates": [
+        228.42104,
+        592.8148,
+        121.95119
+    ],
+    "yaw": 0.23810945,
+    "tags": [],
+    "authors": [
+        "FiendishAmy"
+    ],
+    "description": "A memorial for a friend, located in the North Oak Columbarium.",
+    "status": "published",
+    "added_at": "2026-03-12T19:21:02.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

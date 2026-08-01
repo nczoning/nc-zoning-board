@@ -1,0 +1,23 @@
+{
+    "id": "f08ea2fc-4c05-4894-b3a9-f30632d4dfab",
+    "name": "Cliffside Abode Player Home",
+    "nexus_id": "26488",
+    "category": "new-location",
+    "coordinates": [
+        4512.6216,
+        25.654678,
+        159.11772
+    ],
+    "yaw": 0.99002445,
+    "tags": [
+        "apartment",
+        "neokitsch"
+    ],
+    "authors": [
+        "Sirandar888"
+    ],
+    "description": "This mod adds a Corpo style retreat player home on a cliffside overlooking a canyon. It has Native Interactions and was inspired by Outdoor V Canyon by Ka0ziun. Version 10 adds a dockside area. Special thanks to MorganLeFaye79 for her props mod Victorian Style Sofa",
+    "status": "published",
+    "added_at": "2026-03-19T22:37:17.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

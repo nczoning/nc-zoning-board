@@ -1,0 +1,22 @@
+{
+    "id": "8eb62679-9c3d-497e-b859-b9de0f22d007",
+    "name": "Baskin Office Location - Japantown",
+    "nexus_id": "29646",
+    "category": "new-location",
+    "coordinates": [
+        -467.9308,
+        843.791,
+        32.6726
+    ],
+    "yaw": 143.0992,
+    "tags": [
+        "corpo"
+    ],
+    "authors": [
+        "MrCole"
+    ],
+    "description": "Adds a small office space intended to be used with the Baskin Job mod but can be used as standalone.",
+    "status": "published",
+    "added_at": "2026-05-17T20:11:00.000Z",
+    "modified_at": "2026-05-17T20:11:00.000Z"
+}

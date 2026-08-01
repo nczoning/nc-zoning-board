@@ -1,0 +1,25 @@
+{
+    "id": "07ca4667-020a-4cc0-bbb6-ed21e6a37e35",
+    "name": "Hotel Raito - Akulov Penthouse Revamped",
+    "nexus_id": "30980",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1205.425,
+        1398.5217,
+        109.4014
+    ],
+    "yaw": -8.5066,
+    "tags": [
+        "apartment",
+        "corpo",
+        "neokitsch",
+        "quest"
+    ],
+    "authors": [
+        "skrittleskittie"
+    ],
+    "description": "The Psycho Penthouse in Kabuki that once belonged to a Russian fixer.",
+    "status": "published",
+    "added_at": "2026-07-06T21:37:01.000Z",
+    "modified_at": "2026-07-06T21:37:01.000Z"
+}

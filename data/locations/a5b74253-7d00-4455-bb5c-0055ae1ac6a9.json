@@ -1,0 +1,24 @@
+{
+    "id": "a5b74253-7d00-4455-bb5c-0055ae1ac6a9",
+    "name": "Impoverished Kabuki Apartment",
+    "nexus_id": "27976",
+    "category": "new-location",
+    "coordinates": [
+        -1080.4222,
+        1670.4395,
+        18.3993
+    ],
+    "yaw": -169,
+    "tags": [
+        "apartment",
+        "entropism",
+        "streetkid"
+    ],
+    "authors": [
+        "yoimflying"
+    ],
+    "description": "Ever wanted to rp truly feel like you're living in an actual dystopian hellscape where rent is high, your environment is disgusting, you walk outside, and the smell of piss smacks you in the face? Well lucky for you i created this apartment JUST FOR YOU.",
+    "status": "published",
+    "added_at": "2026-03-19T21:26:43.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

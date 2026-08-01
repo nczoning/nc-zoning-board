@@ -1,0 +1,23 @@
+{
+    "id": "9c47e4a5-20c4-458e-9235-f7515ec393f8",
+    "name": "DGT Arena Garage Safe Base",
+    "nexus_id": "22518",
+    "category": "new-location",
+    "coordinates": [
+        -1629.2701,
+        -2112.9873,
+        39.0378
+    ],
+    "yaw": -48.9816,
+    "tags": [
+        "apartment",
+        "neokitsch"
+    ],
+    "authors": [
+        "8eartic"
+    ],
+    "description": "Secret Garage Apartment.",
+    "status": "published",
+    "added_at": "2026-03-23T18:46:28.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

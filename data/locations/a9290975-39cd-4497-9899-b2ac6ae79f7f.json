@@ -1,0 +1,23 @@
+{
+    "id": "a9290975-39cd-4497-9899-b2ac6ae79f7f",
+    "name": "LongShore Hide out",
+    "nexus_id": "26546",
+    "category": "location-overhaul",
+    "coordinates": [
+        -2338.5393,
+        -2705.1479,
+        34.565
+    ],
+    "yaw": -145,
+    "tags": [
+        "apartment",
+        "entropism"
+    ],
+    "authors": [
+        "8eartic"
+    ],
+    "description": "LongShore Hide out, Hasan hide out enhancement.",
+    "status": "published",
+    "added_at": "2026-03-20T19:00:33.000Z",
+    "modified_at": "2026-04-08T11:27:55.000Z"
+}

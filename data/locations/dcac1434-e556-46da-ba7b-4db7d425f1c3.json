@@ -1,0 +1,23 @@
+{
+    "id": "dcac1434-e556-46da-ba7b-4db7d425f1c3",
+    "name": "Regina's NCPD Headquarters",
+    "nexus_id": "22429",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1149.4181,
+        1579.973,
+        71.7124
+    ],
+    "yaw": -131.5084,
+    "tags": [
+        "corpo",
+        "neomilitarism"
+    ],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "It seems helping Regina with the Cyberphyscos problem REALLY DID pay off in the end: She’s been “Hired” by the NCPD and the “Official” Headquarters is now FULLY DECKED OUT with NCPD Tracking Equipment, Display Screens and even a BRAND NEW AV Landing Pad on the Roof for easy access to the HQ ! Night City WILL, BE SAVE UNDER OUR EYES !",
+    "status": "published",
+    "added_at": "2026-03-21T12:04:46.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

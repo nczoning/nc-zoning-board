@@ -1,0 +1,23 @@
+{
+    "id": "09b3b7c1-1ab2-49ed-9649-c5fc6db83158",
+    "name": "Corpo Plaza Rooftop Hideout",
+    "nexus_id": "30665",
+    "category": "new-location",
+    "coordinates": [
+        -1621.7606,
+        -45.0897,
+        97.3348
+    ],
+    "yaw": 27.9975,
+    "tags": [
+        "apartment",
+        "corpo"
+    ],
+    "authors": [
+        "hnovak1"
+    ],
+    "description": "A small but cozy and free place for V in the heart of Corpo Plaza",
+    "status": "published",
+    "added_at": "2026-06-22T17:25:39.000Z",
+    "modified_at": "2026-06-22T17:25:39.000Z"
+}

@@ -1,0 +1,21 @@
+{
+    "id": "c4ca8c21-91d6-4453-ae52-5203109b6b49",
+    "name": "Drive In Theater ( Working Movie Screen )",
+    "nexus_id": "19729",
+    "category": "location-overhaul",
+    "coordinates": [
+        -85.1499,
+        1952.4254,
+        100.6728
+    ],
+    "yaw": 143.9554,
+    "tags": [],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "credits": "dmiitryx",
+    "description": "This Mod Re-Opens the Drive in for all the Movie-Goers who needed that escape from the harsh reality of Night City! The Drive-In is now FULLY PACKED with Cars, People, Vegetation and a stocked Concession Stand! Enjoy your Movie viewing!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

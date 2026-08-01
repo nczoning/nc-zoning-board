@@ -1,0 +1,23 @@
+{
+    "id": "f49bccfc-2546-4b6d-8733-a99977f95243",
+    "name": "Denny's Villa Enchanced",
+    "nexus_id": "24614",
+    "category": "location-overhaul",
+    "coordinates": [
+        486.96082,
+        1298.1526,
+        234.4587
+    ],
+    "yaw": 91.349,
+    "tags": [
+        "house",
+        "neokitsch"
+    ],
+    "authors": [
+        "8eartic"
+    ],
+    "description": "Unlock Denny's villa and add some interaction and nex rooms.",
+    "status": "published",
+    "added_at": "2026-03-21T02:48:14.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+}

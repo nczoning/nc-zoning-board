@@ -1,0 +1,26 @@
+{
+    "id": "efa15c8f-8354-47ab-a319-871f720f12d6",
+    "name": "Casino Reforged - Phase 2 : Access Road and Entrance",
+    "nexus_id": "25556",
+    "category": "new-location",
+    "coordinates": [
+        1062.8049,
+        1534.3431,
+        218.6555
+    ],
+    "yaw": 111.2147,
+    "tags": [
+        "entertainment",
+        "infrastructure",
+        "neokitsch"
+    ],
+    "authors": [
+        "Oranje3",
+        "Kaoziun"
+    ],
+    "credits": "CRF Team",
+    "description": "North Oaks Resort and Casino. All new interior, updated access road, car park and Casino entrance - Phase 2 of the Casino Reforged project",
+    "status": "published",
+    "added_at": "2026-03-07T00:53:22.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

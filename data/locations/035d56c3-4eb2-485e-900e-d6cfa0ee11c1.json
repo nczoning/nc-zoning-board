@@ -1,0 +1,24 @@
+{
+    "id": "035d56c3-4eb2-485e-900e-d6cfa0ee11c1",
+    "name": "Luxury Palm St. Apartment",
+    "nexus_id": "24912",
+    "category": "location-overhaul",
+    "coordinates": [
+        4.0898056,
+        6.0512314,
+        134.8439
+    ],
+    "yaw": 147.1,
+    "tags": [
+        "apartment",
+        "corpo",
+        "neokitsch"
+    ],
+    "authors": [
+        "1bells"
+    ],
+    "description": "After the gig \"Until Death Do Us Part\", this apartment on Palm Street, Charter Hill, was redecorated and is now available for purchase! Featuring 45+ interactions, a remodeled kitchen, an aquarium and much more, it's among the most luxurious apartments currently on the market in Night City. Made using world builder and NIF.",
+    "status": "published",
+    "added_at": "2026-03-21T03:49:33.000Z",
+    "modified_at": "2026-04-09T06:43:38.000Z"
+}

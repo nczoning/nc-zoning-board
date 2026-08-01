@@ -1,0 +1,24 @@
+{
+    "id": "nexus-4371",
+    "name": "Stone Manor Player Home",
+    "nexus_id": "4371",
+    "category": "new-location",
+    "coordinates": [
+        2036.4189,
+        2797.0078,
+        42.918
+    ],
+    "yaw": 3.7095,
+    "tags": [
+        "corpo",
+        "house",
+        "photos"
+    ],
+    "authors": [
+        "JamieCross1477"
+    ],
+    "description": "Once belonging to an heir of Arasaka, This house is looking for its third owner. It's Paradise.",
+    "status": "published",
+    "added_at": "2026-07-26T05:46:29.225Z",
+    "modified_at": "2026-07-26T05:46:29.225Z"
+}

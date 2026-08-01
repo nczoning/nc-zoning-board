@@ -1,0 +1,22 @@
+{
+    "id": "e90cca11-cfad-4b7d-99ca-2a5f1a18b7a9",
+    "name": "JUNGLE RUNNER - H10 Apartment",
+    "nexus_id": "17796",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1382.787,
+        1270.6815,
+        123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "brocreate"
+    ],
+    "description": "Space themed decoration for Apartment H10. Designed for a netrunner who loves plants. Available standalone or as AMM preset.",
+    "status": "published",
+    "added_at": "2026-03-14T09:18:38.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

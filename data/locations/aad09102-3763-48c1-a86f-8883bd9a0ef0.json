@@ -1,0 +1,24 @@
+{
+    "id": "aad09102-3763-48c1-a86f-8883bd9a0ef0",
+    "name": "Mr. Blue Eyes and Akira Bodyguard (Dark Matter Club)",
+    "nexus_id": "22696",
+    "category": "location-overhaul",
+    "coordinates": [
+        -320.1562,
+        229.5967,
+        213.07407
+    ],
+    "yaw": 0.82415396,
+    "tags": [
+        "corpo",
+        "neomilitarism",
+        "shop"
+    ],
+    "authors": [
+        "Jmolinares03"
+    ],
+    "description": "Add one of the most influential and enigmatic characters in all of Night City (Mr. Blue Eyes) along with his bodyguard Akira, offering you the entire iconic arsenal (ranged weapons and melee weapons).",
+    "status": "published",
+    "added_at": "2026-03-13T23:39:50.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

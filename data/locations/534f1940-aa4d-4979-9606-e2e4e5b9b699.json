@@ -1,0 +1,23 @@
+{
+    "id": "534f1940-aa4d-4979-9606-e2e4e5b9b699",
+    "name": "Be Hot Sex Shop",
+    "nexus_id": "27915",
+    "category": "new-location",
+    "coordinates": [
+        -2350.3,
+        -376.7,
+        12.9854
+    ],
+    "yaw": 1.2771,
+    "tags": [
+        "entertainment",
+        "shop"
+    ],
+    "authors": [
+        "LiquidBronze"
+    ],
+    "description": "The \"Be Hot\" sex shop is located in the Heywood district and now has an interior along with potential for modder collaboration!",
+    "status": "published",
+    "added_at": "2026-03-12T23:51:57.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

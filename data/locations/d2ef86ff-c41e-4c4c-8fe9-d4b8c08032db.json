@@ -1,0 +1,22 @@
+{
+    "id": "d2ef86ff-c41e-4c4c-8fe9-d4b8c08032db",
+    "name": "V's Modest Netrunner Apartment",
+    "nexus_id": "7923",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1381.9185,
+        1271.4558,
+        123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "ThaFunktopus"
+    ],
+    "description": "Overhaul of V's H10 apartment with additional netrunning room",
+    "status": "published",
+    "added_at": "2026-03-12T07:00:16.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

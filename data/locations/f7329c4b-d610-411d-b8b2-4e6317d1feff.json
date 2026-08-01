@@ -1,0 +1,24 @@
+{
+    "id": "f7329c4b-d610-411d-b8b2-4e6317d1feff",
+    "name": "Crystal Palace Resort",
+    "nexus_id": "26683",
+    "category": "new-location",
+    "coordinates": [
+        322.9296,
+        -1017.5965,
+        1524.5823
+    ],
+    "yaw": -80.4172,
+    "tags": [
+        "entertainment",
+        "kitsch"
+    ],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "credits": "Kaoziun",
+    "description": "WELCOME! The Crystal Palace Resort is now OPEN 24/7 hovering over Night City waiting for your arrival! The Resort has everything a RICH CORPO needs for a getaway, Shopping Strip, Casino/Resort, Pools and an Outdoor Kitchen! Feel free to Fly A Vehicle up to the Resort Landing Strip anytime OR take the NEW Fast Travel Station via Street Level !",
+    "status": "published",
+    "added_at": "2026-03-21T11:37:17.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

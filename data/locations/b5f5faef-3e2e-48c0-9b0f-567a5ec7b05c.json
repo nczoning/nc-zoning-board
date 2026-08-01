@@ -1,0 +1,24 @@
+{
+    "id": "b5f5faef-3e2e-48c0-9b0f-567a5ec7b05c",
+    "name": "NC Track Circuits - Mount Choombatta (Touge drift)",
+    "nexus_id": "25586",
+    "category": "new-location",
+    "coordinates": [
+        414.7662,
+        3232.6902,
+        243.40591
+    ],
+    "yaw": 0.9230425,
+    "tags": [
+        "infrastructure",
+        "nomad",
+        "streetkid"
+    ],
+    "authors": [
+        "Kaoziun"
+    ],
+    "description": "Touge type racing track on an activation toggle. Deja vu ! I've just been in this place before !",
+    "status": "published",
+    "added_at": "2026-03-12T03:06:50.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

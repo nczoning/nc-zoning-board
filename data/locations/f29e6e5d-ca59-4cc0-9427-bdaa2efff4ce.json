@@ -1,0 +1,24 @@
+{
+    "id": "f29e6e5d-ca59-4cc0-9427-bdaa2efff4ce",
+    "name": "Hobo's El Coyote Dumpster crib",
+    "nexus_id": "29400",
+    "category": "new-location",
+    "coordinates": [
+        -1223.9955,
+        -1001.8901,
+        14.9385
+    ],
+    "yaw": -174.4171,
+    "tags": [
+        "entropism",
+        "nomad",
+        "streetkid"
+    ],
+    "authors": [
+        "HoboOfFerelden"
+    ],
+    "description": "Visit one of my digs by El Coyote. :) (first attempt at WB/NIF mods) :)))",
+    "status": "published",
+    "added_at": "2026-05-03T13:51:54.000Z",
+    "modified_at": "2026-05-03T13:51:54.000Z"
+}

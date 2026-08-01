@@ -1,0 +1,25 @@
+{
+    "id": "1b7aab35-38f2-4b36-981f-76af7fb59371",
+    "name": "Badlands Farmhouse",
+    "nexus_id": "30094",
+    "category": "location-overhaul",
+    "coordinates": [
+        1822.4675,
+        -1070.8601,
+        58.8573
+    ],
+    "yaw": 86.1352,
+    "tags": [
+        "apartment",
+        "entropism",
+        "house",
+        "quest"
+    ],
+    "authors": [
+        "hnovak1"
+    ],
+    "description": "This is the place where V spends a night with Panam and Saul during the Riders of the Storm quest. Now V can use it as a fully functional home with garage.",
+    "status": "published",
+    "added_at": "2026-05-29T15:41:32.000Z",
+    "modified_at": "2026-05-29T15:41:32.000Z"
+}

@@ -1,0 +1,22 @@
+{
+    "id": "1e3426f7-3965-4eed-b2e2-d7d06c02330d",
+    "name": "Lizzie's Bar Overhaul",
+    "nexus_id": "30128",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1190.954,
+        1566.4596,
+        22.9151
+    ],
+    "yaw": -94.0445,
+    "tags": [
+        "entertainment"
+    ],
+    "authors": [
+        "LordBLKRamen"
+    ],
+    "description": "Shhheeeee's baaaaaack !! Better than ever !!",
+    "status": "published",
+    "added_at": "2026-05-30T21:13:58.000Z",
+    "modified_at": "2026-05-30T21:13:58.000Z"
+}

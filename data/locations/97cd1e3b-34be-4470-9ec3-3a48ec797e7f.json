@@ -1,0 +1,23 @@
+{
+    "id": "97cd1e3b-34be-4470-9ec3-3a48ec797e7f",
+    "name": "NCPD Precinct",
+    "nexus_id": "26929",
+    "category": "location-overhaul",
+    "coordinates": [
+        134.66187,
+        -1587.7252,
+        8.256683
+    ],
+    "yaw": -0.9650959,
+    "tags": [
+        "corpo",
+        "neomilitarism"
+    ],
+    "authors": [
+        "FamilyOfSoul"
+    ],
+    "description": "The Precinct in 2076. Before Vega and his C-team.",
+    "status": "published",
+    "added_at": "2026-03-19T22:44:44.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

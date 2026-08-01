@@ -1,0 +1,22 @@
+{
+    "id": "5c5a4028-41c7-41e3-b2e4-4e671cbea17e",
+    "name": "The Empathy Club Unlocked",
+    "nexus_id": "27380",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1628.5947,
+        385.0413,
+        7.6949844
+    ],
+    "yaw": -0.17811729,
+    "tags": [
+        "entertainment"
+    ],
+    "authors": [
+        "Roxterfox"
+    ],
+    "description": "Unlocked all the closed sections of The Empathy Club with optional visual Remaster.",
+    "status": "published",
+    "added_at": "2026-03-21T12:25:44.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

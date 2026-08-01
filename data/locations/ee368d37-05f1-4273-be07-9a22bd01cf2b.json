@@ -1,0 +1,22 @@
+{
+    "id": "ee368d37-05f1-4273-be07-9a22bd01cf2b",
+    "name": "Handsome Squidward (Brainporium - Dogtown)",
+    "nexus_id": "27412",
+    "category": "other",
+    "coordinates": [
+        -1724.6251,
+        -2404.615,
+        86.94687
+    ],
+    "yaw": 0.9561772,
+    "tags": [
+        "entertainment"
+    ],
+    "authors": [
+        "MisterChedda"
+    ],
+    "description": "Replaces the Brainporium sculpture building in Dogtown with Handsome Squidward.",
+    "status": "published",
+    "added_at": "2026-03-12T11:54:42.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

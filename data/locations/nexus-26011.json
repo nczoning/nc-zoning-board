@@ -1,0 +1,23 @@
+{
+    "id": "nexus-26011",
+    "name": "Glen - Tidy Your Trash - Modular Apartment Makeover",
+    "nexus_id": "26011",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1525.8024,
+        -974.0538,
+        86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+        "apartment",
+        "entropism"
+    ],
+    "authors": [
+        "Spuddeh"
+    ],
+    "description": "Another attempt to tidy up the Glen apartment. The aim of this one wasn't to remove all the trash, but instead to make it look like V can walk to a bin every once in a while.The mod also includes options to redecorate certain areas.",
+    "status": "published",
+    "added_at": "2026-07-26T05:46:29.225Z",
+    "modified_at": "2026-07-26T05:46:29.225Z"
+}

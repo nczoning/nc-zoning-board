@@ -1,0 +1,23 @@
+{
+    "id": "fd105a52-717b-4c3f-8d74-d98e915a21c1",
+    "name": "Petrel st unit - apartment",
+    "nexus_id": "27849",
+    "category": "new-location",
+    "coordinates": [
+        -892.55206,
+        136.5025,
+        17.2291
+    ],
+    "yaw": -148.6441,
+    "tags": [
+        "apartment",
+        "streetkid"
+    ],
+    "authors": [
+        "thumbsuckerr"
+    ],
+    "description": "cozy brick rocker apartment",
+    "status": "published",
+    "added_at": "2026-03-13T03:13:18.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+}

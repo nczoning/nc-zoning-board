@@ -1,0 +1,23 @@
+{
+    "id": "e4d9d20a-2d8c-4ba1-812c-e53dff5122b7",
+    "name": "Hanami - japantown (japanese restaurant)",
+    "nexus_id": "30272",
+    "category": "new-location",
+    "coordinates": [
+        -881.6379,
+        792.1102,
+        23.3377
+    ],
+    "yaw": 110.0701,
+    "tags": [
+        "corpo",
+        "entertainment"
+    ],
+    "authors": [
+        "thumbsuckerr"
+    ],
+    "description": "japanese restaurant in japantown",
+    "status": "published",
+    "added_at": "2026-06-12T23:30:57.000Z",
+    "modified_at": "2026-06-12T23:30:57.000Z"
+}

@@ -1,0 +1,22 @@
+{
+    "id": "b5b555bf-af91-4b32-9608-c101c59fefe5",
+    "name": "Watson Northside Garage - Workshop",
+    "nexus_id": "28859",
+    "category": "new-location",
+    "coordinates": [
+        -626.7283,
+        2047.3363,
+        36.3254
+    ],
+    "yaw": 90.3998,
+    "tags": [
+        "infrastructure"
+    ],
+    "authors": [
+        "jokaj"
+    ],
+    "description": "This mod will add a new garage to your game. Located in Watson Northside",
+    "status": "published",
+    "added_at": "2026-04-13T07:06:16.000Z",
+    "modified_at": "2026-04-13T07:06:16.000Z"
+}

@@ -1,0 +1,24 @@
+{
+    "id": "9e707cfd-8d48-4af7-a2ae-ff509f8b159e",
+    "name": "Dogtown Nomad Hideout Apartment - ArchiveXL",
+    "nexus_id": "28378",
+    "category": "location-overhaul",
+    "coordinates": [
+        -2230.1956,
+        -2562.3433,
+        80.301
+    ],
+    "yaw": -130.15,
+    "tags": [
+        "apartment",
+        "entropism",
+        "nomad"
+    ],
+    "authors": [
+        "hnovak1"
+    ],
+    "description": "A hideout for nomads (and city nomads) in Dogtown, where they can fuel and repair their bikes.",
+    "status": "published",
+    "added_at": "2026-03-23T18:43:51.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

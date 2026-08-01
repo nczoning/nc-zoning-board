@@ -1,0 +1,23 @@
+{
+    "id": "32eeb3f7-1d5b-4867-90d6-a209a6264d9c",
+    "name": "V's Pacifica Cabana Hideout",
+    "nexus_id": "10566",
+    "category": "new-location",
+    "coordinates": [
+        -2011.4167,
+        -2010.3208,
+        22.5533
+    ],
+    "yaw": -120,
+    "tags": [
+        "apartment",
+        "photos"
+    ],
+    "authors": [
+        "ThaFunktopus"
+    ],
+    "description": "Small garage/apartment and rooftop cabana",
+    "status": "published",
+    "added_at": "2026-03-12T06:31:25.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+}

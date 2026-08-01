@@ -1,0 +1,23 @@
+{
+    "id": "3a920f1f-9498-49b8-8a44-b34be0aeebe0",
+    "name": "South Japantown Home",
+    "nexus_id": "23480",
+    "category": "new-location",
+    "coordinates": [
+        -489.81705,
+        289.4191,
+        60.3793
+    ],
+    "yaw": 3.8464,
+    "tags": [
+        "house",
+        "neokitsch"
+    ],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "On top of the shutdown Hotel, lies V’s Beautiful Escape from the Night City Streets, YOUR NEW SOUTH JAPANTOWN HOME ! Your New 2 Story Home features a Stunning Interior and Upstairs Bedroom. Outside you’ll find the AV Landing Pad and also a Ladder taking you to the Roof/ 3rd and 4th Floor Viewing spaces ! You can now even go on the NCART Tracks !",
+    "status": "published",
+    "added_at": "2026-03-21T11:45:16.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

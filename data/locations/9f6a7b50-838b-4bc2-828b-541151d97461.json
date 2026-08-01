@@ -1,0 +1,24 @@
+{
+    "id": "9f6a7b50-838b-4bc2-828b-541151d97461",
+    "name": "Peralez Penthouse",
+    "nexus_id": "23424",
+    "category": "location-overhaul",
+    "coordinates": [
+        -78.23038,
+        -117.377304,
+        111.1668
+    ],
+    "yaw": 145.8,
+    "tags": [
+        "apartment",
+        "corpo",
+        "neokitsch"
+    ],
+    "authors": [
+        "8eartic"
+    ],
+    "description": "After the events with SSI and their election win, the Peralezes decided it was time for a change.\nThey moved to a new home, leaving this one behind… and in a gesture of gratitude, gifted it to you, V, for all you did.\nIt’s yours now — a quiet place in the hills… mostly quiet.\nBut tell me, have you noticed that he is watching",
+    "status": "published",
+    "added_at": "2026-03-21T03:12:51.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+}

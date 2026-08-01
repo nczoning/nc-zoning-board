@@ -1,0 +1,21 @@
+{
+    "id": "61d55c48-747e-45e6-b74b-4d0aec9f67ca",
+    "name": "Viktor Vektors Garage ( Working Car Mods and Repair )",
+    "nexus_id": "20793",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1530.388,
+        1265.0466,
+        17.8003
+    ],
+    "yaw": 36.7844,
+    "tags": [],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "credits": "dmiitryx, Deberara",
+    "description": "This Mod adds in Viks Cut Vehicle Garage, letting you access his place even EASIER than before! HUGE THANKS for other Modders for making the Mod Extensions of this garage that allows you to Customize and Repair your vehicles!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

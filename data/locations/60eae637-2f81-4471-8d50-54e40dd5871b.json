@@ -1,0 +1,24 @@
+{
+    "id": "60eae637-2f81-4471-8d50-54e40dd5871b",
+    "name": "laguna oasis (apartment house)",
+    "nexus_id": "26855",
+    "category": "new-location",
+    "coordinates": [
+        944.7812,
+        -3452.2825,
+        185.2488
+    ],
+    "yaw": -1.1804,
+    "tags": [
+        "house",
+        "neokitsch",
+        "photos"
+    ],
+    "authors": [
+        "thumbsuckerr"
+    ],
+    "description": "japanese style luxury home on laguna bend",
+    "status": "published",
+    "added_at": "2026-03-13T03:37:25.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+}

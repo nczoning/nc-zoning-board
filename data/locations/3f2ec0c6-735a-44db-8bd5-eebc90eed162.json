@@ -1,0 +1,24 @@
+{
+    "id": "3f2ec0c6-735a-44db-8bd5-eebc90eed162",
+    "name": "esoterica tech den apartment",
+    "nexus_id": "25954",
+    "category": "new-location",
+    "coordinates": [
+        -1542.6659,
+        1168.9929,
+        25.9911
+    ],
+    "yaw": -168.1427,
+    "tags": [
+        "apartment",
+        "kitsch",
+        "streetkid"
+    ],
+    "authors": [
+        "thumbsuckerr"
+    ],
+    "description": "cluttered netrunner's apartment above Misty's",
+    "status": "published",
+    "added_at": "2026-03-13T03:44:22.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+}

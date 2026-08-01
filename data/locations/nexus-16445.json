@@ -1,0 +1,26 @@
+{
+    "id": "nexus-16445",
+    "name": "Safehouses of Night City - V's Northside Autoshop",
+    "nexus_id": "16445",
+    "category": "new-location",
+    "coordinates": [
+        -853.5757,
+        2777.656,
+        38.5754
+    ],
+    "yaw": 69.2034,
+    "tags": [
+        "apartment",
+        "house",
+        "kitsch",
+        "nomad",
+        "streetkid"
+    ],
+    "authors": [
+        "evafan84"
+    ],
+    "description": "It’s a garage in a warehouse in the Northside part of the Watson district.Now includes more interactions including smartframes, arcade machines, basketball, sleep, shower, ect.",
+    "status": "published",
+    "added_at": "2026-07-26T05:46:29.225Z",
+    "modified_at": "2026-07-26T05:46:29.225Z"
+}

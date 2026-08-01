@@ -1,0 +1,25 @@
+{
+    "id": "f0235e7b-6587-4d4a-968f-7155017c7a64",
+    "name": "JUNGLE RUNNER - H10 Apt - Enhanced",
+    "nexus_id": "22061",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1382.787,
+        1270.6815,
+        123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+        "apartment",
+        "entropism",
+        "streetkid"
+    ],
+    "authors": [
+        "ellios2normandie"
+    ],
+    "credits": "Brocreate  (Jungle Runner is a remix of Brocreate’s DIGITAL OASIS)",
+    "description": "Space greenhouse decor for apartment H10. Adding 5 new Smart Frames (7 total available) and 10 interactions : drink coffee and tea, eat yakitori, play guitar, use netrunner chair, meditate, etc.",
+    "status": "published",
+    "added_at": "2026-03-12T04:45:24.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

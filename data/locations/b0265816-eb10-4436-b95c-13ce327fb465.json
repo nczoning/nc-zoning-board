@@ -1,0 +1,23 @@
+{
+    "id": "b0265816-eb10-4436-b95c-13ce327fb465",
+    "name": "Rocky Ridge Garage Safehouse",
+    "nexus_id": "27675",
+    "category": "location-overhaul",
+    "coordinates": [
+        2568.414,
+        -11.57634,
+        80.9719
+    ],
+    "yaw": -49,
+    "tags": [
+        "entropism",
+        "nomad"
+    ],
+    "authors": [
+        "fluffyking888"
+    ],
+    "description": "Add a new home/garage in Rocky Ridge.",
+    "status": "published",
+    "added_at": "2026-03-19T22:18:34.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

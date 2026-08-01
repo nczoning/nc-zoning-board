@@ -1,0 +1,23 @@
+{
+    "id": "d05c6f9c-4a33-450f-9977-42b240b68774",
+    "name": "H10 Elevator Expanded",
+    "nexus_id": "19792",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1375.9819,
+        1287.8365,
+        123.0824
+    ],
+    "yaw": -95.3,
+    "tags": [
+        "infrastructure",
+        "photos"
+    ],
+    "authors": [
+        "ThaFunktopus"
+    ],
+    "description": "Overhauls megabuilding H10's exterior elevator, adding additional stops and floors",
+    "status": "published",
+    "added_at": "2026-03-12T06:57:36.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

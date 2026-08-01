@@ -1,0 +1,22 @@
+{
+    "id": "5e1e1897-e104-446c-8958-badaf466fdc1",
+    "name": "Pacifica Apartment",
+    "nexus_id": "16045",
+    "category": "location-overhaul",
+    "coordinates": [
+        -2476.6553,
+        -2440.4321,
+        17.5875
+    ],
+    "yaw": -71.0413,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "Across From 2nd Amendment is a COMPLETELY PIMPED OUT Apartment and Bedroom! Outside on the right is an AV landing pad and on the left I added a garage, with a 2nd floor to hold off from Police and MaxTac!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

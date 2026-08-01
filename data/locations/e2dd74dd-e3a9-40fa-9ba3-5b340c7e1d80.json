@@ -1,0 +1,23 @@
+{
+    "id": "e2dd74dd-e3a9-40fa-9ba3-5b340c7e1d80",
+    "name": "Tengu Garage and Dojo",
+    "nexus_id": "17902",
+    "category": "new-location",
+    "coordinates": [
+        -786.9177,
+        959.5507,
+        12.0103
+    ],
+    "yaw": -79.9501,
+    "tags": [
+        "apartment",
+        "infrastructure"
+    ],
+    "authors": [
+        "Ronusti"
+    ],
+    "description": "A tight bike garage with a hangout and a touch of Zen. AMM",
+    "status": "published",
+    "added_at": "2026-04-19T00:13:18.000Z",
+    "modified_at": "2026-04-19T00:13:18.000Z"
+}

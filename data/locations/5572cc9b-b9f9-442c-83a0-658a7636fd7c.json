@@ -1,0 +1,22 @@
+{
+    "id": "5572cc9b-b9f9-442c-83a0-658a7636fd7c",
+    "name": "North Oak Impala Automatics Climbable Tower",
+    "nexus_id": "29786",
+    "category": "location-overhaul",
+    "coordinates": [
+        243.93,
+        1491.18,
+        405.2
+    ],
+    "tags": [
+        "infrastructure",
+        "photos"
+    ],
+    "authors": [
+        "LordTrilobite"
+    ],
+    "description": "Makes the big tower in the North Oak Impala Automatics area climbable by adding ladders and catwalks all the way to the top.",
+    "status": "published",
+    "added_at": "2026-05-18T13:52:07.000Z",
+    "modified_at": "2026-05-18T13:52:07.000Z"
+}

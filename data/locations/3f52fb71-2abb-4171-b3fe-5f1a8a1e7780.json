@@ -1,0 +1,23 @@
+{
+    "id": "3f52fb71-2abb-4171-b3fe-5f1a8a1e7780",
+    "name": "V's Sierra Sonora Villa",
+    "nexus_id": "8442",
+    "category": "new-location",
+    "coordinates": [
+        4676.289,
+        -2320.3206,
+        269.4234
+    ],
+    "yaw": 70.7929,
+    "tags": [
+        "house",
+        "photos"
+    ],
+    "authors": [
+        "ThaFunktopus"
+    ],
+    "description": "Scenic player home in the badlands",
+    "status": "published",
+    "added_at": "2026-03-12T06:50:12.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

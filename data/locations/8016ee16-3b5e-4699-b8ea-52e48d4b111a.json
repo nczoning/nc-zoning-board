@@ -1,0 +1,24 @@
+{
+    "id": "8016ee16-3b5e-4699-b8ea-52e48d4b111a",
+    "name": "Impoverished Chinatown Apartment",
+    "nexus_id": "28658",
+    "category": "new-location",
+    "coordinates": [
+        -1560.2471,
+        1116.7795,
+        17.1549
+    ],
+    "yaw": 93.1194,
+    "tags": [
+        "apartment",
+        "entropism",
+        "streetkid"
+    ],
+    "authors": [
+        "yoimflying"
+    ],
+    "description": "This is an apartment mod for Chinatown, to help you feel immersed in the true poverty of Night City, let's get into the detes below. This apartment is located near Vicks Clinic in the bustling streets of Chinatown. Here, you will find all types of debauchery !",
+    "status": "published",
+    "added_at": "2026-04-12T19:47:08.000Z",
+    "modified_at": "2026-04-13T07:05:21.000Z"
+}

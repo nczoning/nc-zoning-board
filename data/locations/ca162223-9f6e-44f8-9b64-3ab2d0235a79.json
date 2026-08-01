@@ -1,0 +1,24 @@
+{
+    "id": "ca162223-9f6e-44f8-9b64-3ab2d0235a79",
+    "name": "Dogtown - The Moth's rooftop apartment",
+    "nexus_id": "28709",
+    "category": "new-location",
+    "coordinates": [
+        -2427.5952,
+        -2672.7024,
+        27.9911
+    ],
+    "yaw": 121.9699,
+    "tags": [
+        "apartment",
+        "house",
+        "streetkid"
+    ],
+    "authors": [
+        "barbedvvire"
+    ],
+    "description": "This mod adds an apartment on the empty floor above The Moth's bar in Dogtown, fully refurbished and with native interactions.",
+    "status": "published",
+    "added_at": "2026-04-12T16:00:02.000Z",
+    "modified_at": "2026-04-12T16:00:02.000Z"
+}

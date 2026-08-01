@@ -1,0 +1,23 @@
+{
+    "id": "f55fac03-3fc8-4134-944e-ed18f27f3fc7",
+    "name": "Santo Domingo Overlook - Artistic Safehouse",
+    "nexus_id": "24131",
+    "category": "new-location",
+    "coordinates": [
+        429.69156,
+        -2254.4045,
+        50.5552
+    ],
+    "yaw": 140.6134,
+    "tags": [
+        "apartment",
+        "entropism"
+    ],
+    "authors": [
+        "Guitarsolo"
+    ],
+    "description": "Flip an unfinished, empty room in a backwater building in Santo Domingo, turn it into an artistic apartment/safehouse.",
+    "status": "published",
+    "added_at": "2026-03-13T17:05:38.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

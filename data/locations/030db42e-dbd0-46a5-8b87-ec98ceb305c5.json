@@ -1,0 +1,23 @@
+{
+    "id": "030db42e-dbd0-46a5-8b87-ec98ceb305c5",
+    "name": "Judy's Apartment Improved",
+    "nexus_id": "31144",
+    "category": "location-overhaul",
+    "coordinates": [
+        -906.4348,
+        1868.7872,
+        42.36
+    ],
+    "yaw": -99.5407,
+    "tags": [
+        "apartment",
+        "kitsch"
+    ],
+    "authors": [
+        "ThaFunktopus"
+    ],
+    "description": "Vanilla themed renovation of Judy's apartment with QOL improvements for post Judy questline",
+    "status": "published",
+    "added_at": "2026-07-05T05:52:12.000Z",
+    "modified_at": "2026-07-05T05:52:12.000Z"
+}

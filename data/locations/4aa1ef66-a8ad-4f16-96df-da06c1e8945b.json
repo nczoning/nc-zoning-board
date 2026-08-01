@@ -1,0 +1,22 @@
+{
+    "id": "4aa1ef66-a8ad-4f16-96df-da06c1e8945b",
+    "name": "Dark Matter Club ( with Apartment )",
+    "nexus_id": "19905",
+    "category": "location-overhaul",
+    "coordinates": [
+        -331.03992,
+        223.58023,
+        188.918
+    ],
+    "yaw": -32.7456,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "The Dark Matter Club has RE-OPENED with a Vibrant Redesign and has been fitted with lights, NPCs and Vending machines to catch your attention when driving by! The Main Club AND The Top Floor is now FULL with NPCs, Decorations and even an AV Landing Pad!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}

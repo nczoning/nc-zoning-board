@@ -1,0 +1,24 @@
+{
+    "id": "72ca7aff-8999-4287-9929-302589ca6361",
+    "name": "V's Kabuki Compound",
+    "nexus_id": "22546",
+    "category": "new-location",
+    "coordinates": [
+        -1018.585,
+        1789.1313,
+        45.6686
+    ],
+    "yaw": 59.6,
+    "tags": [
+        "apartment",
+        "entropism",
+        "neomilitarism"
+    ],
+    "authors": [
+        "ProximaDust"
+    ],
+    "description": "A highly modular hideout home for V made using World Builder.",
+    "status": "published",
+    "added_at": "2026-03-20T19:05:33.000Z",
+    "modified_at": "2026-04-08T11:27:55.000Z"
+}

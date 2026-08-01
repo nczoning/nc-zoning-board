@@ -1,0 +1,24 @@
+{
+    "id": "75564ef9-dfd1-4d22-ad52-b00e03f6bc7b",
+    "name": "Megabuilding H8 Dojo - World Edit",
+    "nexus_id": "26453",
+    "category": "new-location",
+    "coordinates": [
+        -705.10754,
+        804.5818,
+        132.2625
+    ],
+    "yaw": 12.5761,
+    "tags": [
+        "corpo",
+        "neomilitarism",
+        "streetkid"
+    ],
+    "authors": [
+        "evafan84"
+    ],
+    "description": "This adds a martial arts dojo (with some customisable décor options) to the inside of Megabuilding H8 in Japantown.\nThe dojo can be found inside Megabuilding H8, just ride the lift to clouds, and go up the stairs on the left when you come out of the lift.",
+    "status": "published",
+    "added_at": "2026-03-12T04:40:14.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+}

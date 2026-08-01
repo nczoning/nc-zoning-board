@@ -1,0 +1,24 @@
+{
+    "id": "2edaee32-9516-423a-9dec-a11982767990",
+    "name": "Dogtown Hideout Remake - Authentic",
+    "nexus_id": "26694",
+    "category": "location-overhaul",
+    "coordinates": [
+        -2230.1956,
+        -2562.3433,
+        80.301
+    ],
+    "yaw": -130.15,
+    "tags": [
+        "apartment",
+        "entropism",
+        "streetkid"
+    ],
+    "authors": [
+        "Kaelu2077"
+    ],
+    "description": "A faithful overhaul of the original Dogtown hideout, rebuilt with enhanced detail, atmosphere and story-accurate adjustments.",
+    "status": "published",
+    "added_at": "2026-03-12T19:23:55.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

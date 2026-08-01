@@ -1,0 +1,23 @@
+{
+    "id": "cd0f7870-1e5f-4480-8ff9-fce9431e2dae",
+    "name": "Glen Rockerboy Apartment (world edit)",
+    "nexus_id": "21596",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1521.956,
+        -973.40356,
+        86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+        "apartment",
+        "neokitsch"
+    ],
+    "authors": [
+        "evafan84"
+    ],
+    "description": "The Glen apartment has had a makeover to fit music lovers, in particular Rockerboys. Features new décor, memorabilia, and interactions.",
+    "status": "published",
+    "added_at": "2026-03-19T23:08:43.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

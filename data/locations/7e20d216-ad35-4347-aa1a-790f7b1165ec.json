@@ -1,0 +1,23 @@
+{
+    "id": "7e20d216-ad35-4347-aa1a-790f7b1165ec",
+    "name": "Outdoor V - Canyon Camp",
+    "nexus_id": "25924",
+    "category": "new-location",
+    "coordinates": [
+        4512.355,
+        25.611,
+        159.12648
+    ],
+    "tags": [
+        "apartment",
+        "nomad",
+        "quest"
+    ],
+    "authors": [
+        "Kaoziun"
+    ],
+    "description": "Fully functional free outdoor apartment set inside a grotto. Shower under the waterfall and sleep in a bedroll. Includes Nibbles and Johnny integration. Packed with features and extensive in-game customization options, plus a pretty sweet secret area to discover.",
+    "status": "published",
+    "added_at": "2026-03-07T00:53:22.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

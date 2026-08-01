@@ -1,0 +1,24 @@
+{
+    "id": "293c15f0-a2b9-4f31-94fb-936194cb9e9d",
+    "name": "Badlands Garage",
+    "nexus_id": "28630",
+    "category": "new-location",
+    "coordinates": [
+        -1288.348,
+        -4230.471,
+        62.6615
+    ],
+    "yaw": 157.4,
+    "tags": [
+        "apartment",
+        "entropism",
+        "nomad"
+    ],
+    "authors": [
+        "ValerieOSD"
+    ],
+    "description": "\"Choom ! This new preem garage on the outskirts of town just appeared on the market, it's near those solar plants, it's all yours for only 25,000 eds !\"\nThis adds a new purchasable garage with living area in the Solar Farms region of the Badlands.",
+    "status": "published",
+    "added_at": "2026-04-04T09:53:36.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

@@ -1,0 +1,23 @@
+{
+    "id": "3b127491-1cd1-461f-ace5-517091c95dae",
+    "name": "Modern H10 Apartment - ArchiveXL Preset",
+    "nexus_id": "27518",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1382.787,
+        1270.6815,
+        123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+        "apartment",
+        "neokitsch"
+    ],
+    "authors": [
+        "DeVaughnDawn"
+    ],
+    "description": "An Archive preset of V's Apartment (Modern)﻿ by rexxgta, updating its warm and modern design.",
+    "status": "published",
+    "added_at": "2026-03-19T22:26:05.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

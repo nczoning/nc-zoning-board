@@ -1,0 +1,24 @@
+{
+    "id": "8ae1ae78-7290-424b-8cd0-c009d8132b88",
+    "name": "I Cacciatori Restaurant",
+    "nexus_id": "23885",
+    "category": "new-location",
+    "coordinates": [
+        -1211.6,
+        -545,
+        9.009903
+    ],
+    "yaw": -0.9486697,
+    "tags": [
+        "corpo",
+        "entertainment",
+        "shop"
+    ],
+    "authors": [
+        "LiquidBronze"
+    ],
+    "description": "The I Cacciatori restaurant is now open! Welcome to Night City’s newest minimalist modern restaurant, located right outside Corpo Plaza.",
+    "status": "published",
+    "added_at": "2026-03-12T23:43:39.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

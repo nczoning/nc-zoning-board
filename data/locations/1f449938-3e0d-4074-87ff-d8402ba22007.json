@@ -1,0 +1,22 @@
+{
+    "id": "1f449938-3e0d-4074-87ff-d8402ba22007",
+    "name": "Luxor Heights Penthouse (DogTown)",
+    "nexus_id": "18331",
+    "category": "new-location",
+    "coordinates": [
+        -1672.9697,
+        -2755.2627,
+        210.099
+    ],
+    "yaw": -36.3333,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "Ronusti"
+    ],
+    "description": "DogTown Penthouse AMM",
+    "status": "published",
+    "added_at": "2026-04-18T09:48:39.000Z",
+    "modified_at": "2026-04-18T09:48:39.000Z"
+}

@@ -1,0 +1,24 @@
+{
+    "id": "6f407d55-b427-465d-a318-590241448823",
+    "name": "Arasaka Villa Enchanced",
+    "nexus_id": "22263",
+    "category": "location-overhaul",
+    "coordinates": [
+        303.73785,
+        1035.5779,
+        233.92534
+    ],
+    "yaw": 0.71141267,
+    "tags": [
+        "corpo",
+        "neokitsch",
+        "neomilitarism"
+    ],
+    "authors": [
+        "8eartic"
+    ],
+    "description": "An enhanced version of the North Oak Arasaka Estate.",
+    "status": "published",
+    "added_at": "2026-03-21T02:51:30.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+}

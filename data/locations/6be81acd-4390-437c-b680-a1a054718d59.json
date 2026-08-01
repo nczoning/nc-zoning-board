@@ -1,0 +1,24 @@
+{
+    "id": "6be81acd-4390-437c-b680-a1a054718d59",
+    "name": "DIGITAL OASIS - H10 Apartment",
+    "nexus_id": "10925",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1382.787,
+        1270.6815,
+        123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+        "apartment",
+        "kitsch",
+        "streetkid"
+    ],
+    "authors": [
+        "brocreate"
+    ],
+    "description": "Kitschy maximalist H10 Apartment. Extra interactions : sit, drink tea, netrunning chair. Adds a radio, netrunning chair, tub, kitchenette, washer/dryer, playable arcade machine, plenty of neons, plants, clutter, stickers, etc",
+    "status": "published",
+    "added_at": "2026-03-12T04:47:38.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+}

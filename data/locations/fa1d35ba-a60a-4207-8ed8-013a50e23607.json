@@ -1,0 +1,23 @@
+{
+    "id": "fa1d35ba-a60a-4207-8ed8-013a50e23607",
+    "name": "Biotechnica Hotel Enhanced ( with Apartment )",
+    "nexus_id": "22502",
+    "category": "location-overhaul",
+    "coordinates": [
+        -2137.6067,
+        480.3441,
+        89.4722
+    ],
+    "yaw": 94.5737,
+    "tags": [
+        "apartment",
+        "corpo"
+    ],
+    "authors": [
+        "TheRealJonCross"
+    ],
+    "description": "After the \"Mysterious\" passing of Joanne Koch, the Biotechnica Hotel has Enhanced their entire Hotel with Better Visibility and even started letting Clients back to rent a room again ! BIOTECHNICA WELCOMES YOU BACK and even invites you to Joanne's old room! The NEW AV Landing Pad added on the Roof will let Clients come and go as they please !",
+    "status": "published",
+    "added_at": "2026-03-21T12:02:18.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+}
