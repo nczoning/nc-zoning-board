@@ -183,7 +183,7 @@ loses the record as well as the notification. The two steps fail independently:
 a failed D1 write still notifies, and a failed Discord post still leaves the
 alert in the dashboard's **Alerts** tab, where it can be acknowledged.
 
-Alerts come from four sources, and the `source` column names them:
+Alerts come from five sources, and the `source` column names them:
 
 | Source | Raised by | When |
 | --- | --- | --- |
@@ -191,6 +191,7 @@ Alerts come from four sources, and the `source` column names them:
 | `refresh` | `worker/src/refresh.js`, on the 5-minute cron | A dataset rebuild failed (amber: last-known-good is still served), and the matching all-clear when one later succeeds |
 | `submissions` | `worker/src/submissions.js` | A submission reached the review queue. A plain "one is waiting" post linking to the dashboard, deliberately not the old edit-in-place embed |
 | `quota` | `worker/src/quota.js`, hourly on the cron | A free-tier cap passed 80% for the UTC day. Checked on one tick an hour, and suppressed to once per cap per UTC day |
+| `export` | `export-d1-snapshot.yml`, nightly | The registry backup to the `data-snapshots` branch did not complete. Its own source rather than folded into `refresh`: the 5-minute dataset cron and the nightly git mirror fail for unrelated reasons and are fixed in different places. See [`infrastructure-map.md`](infrastructure-map.md) |
 
 **In-Worker producers call `raiseAlert()` directly** rather than making an HTTP
 request to their own Worker. `/internal/alerts` is the remote entry point to the

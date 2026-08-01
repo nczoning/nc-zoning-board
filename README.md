@@ -84,6 +84,7 @@ full field reference.
 | [Submission Pipeline](docs/submission-pipeline.md) | What happens between pressing Submit and the pin appearing |
 | [Coordinate System](docs/coordinate-system.md) | CET ↔ Leaflet transform, calibration data |
 | [Architecture](docs/architecture.md) | File structure, data flow, tech stack |
+| [Infrastructure Map](docs/infrastructure-map.md) | What each Pages project, Worker, database and branch is, and which one to look at when something breaks |
 | [Tile Generation](docs/tile-generation.md) | Map tiling, source images, upgrading resolution |
 | [Roadmap](https://github.com/orgs/nczoning/projects/1) | Current status and planned work. The project board is the roadmap |
 
