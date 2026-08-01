@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- The admin dashboard says "the registry", never "D1", in every string a person reads: the stats panel, the health rows and the rebuild banner.
+- The audit log renders field names and enum values in English, with the verbatim record kept one fold deeper so the sentence stays checkable.
+
+### Added
+
+- A mobile layout for the dashboard: a nav drawer that keeps its badge counts on the closed button, a collapsing header, touch-sized rows, and a list-to-editor view switch that the Android back gesture closes.
+
 ## [2.3.0] - 2026-08-02
 
 The folder of location files in git is gone. It had been read by nothing since
