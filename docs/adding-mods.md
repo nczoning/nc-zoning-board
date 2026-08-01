@@ -17,7 +17,7 @@ you submit, and what each one means:
     "authors": ["AuthorName", "CoAuthor"],
     "coordinates": [CET_X, CET_Y, CET_Z],
     "nexus_id": "12345",
-    "category": "apartment",
+    "category": "new-location",
     "tags": ["apartment", "neokitsch"],
     "description": "Brief description of what the mod does (max 500 chars).",
     "yaw": 180.0
@@ -32,7 +32,7 @@ you submit, and what each one means:
 | `coordinates` | [number, number, number] | `[CET_X, CET_Y, CET_Z]`, in-game coordinates from CET (X=east/west, Y=north/south, Z=height) |
 | `yaw` | number | (Optional) Player facing direction in degrees from CET |
 | `nexus_id` | string | Numeric Nexus ID (Used to automatically fetch thumbnails/images via API), or "WIP" / "Dummy" |
-| `category` | string | `location-overhaul`, `new-location`, or `other` |
+| `category` | string | Exactly one of `location-overhaul`, `new-location`, `other`. Not a tag: `apartment` and the rest belong in `tags` |
 | `tags` | array[string] | Tags from `data/tags.json` (see [Tag Registry](tags.md) for the full list) |
 | `description` | string | Max 500 characters |
 | `credits` | string | (Optional) Team name or secondary acknowledgements |
