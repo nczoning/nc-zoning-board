@@ -2263,6 +2263,7 @@
     refresh: 'Dataset refresh',
     submissions: 'Submission queue',
     quota: 'Free-tier quota',
+    export: 'Nightly data snapshot',
   };
 
   async function acknowledgeAlert(id, button) {
