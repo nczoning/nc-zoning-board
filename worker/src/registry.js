@@ -184,8 +184,11 @@ export async function insertLocation(env, payload, nowIso = new Date().toISOStri
  * caller has already established the row exists, so the only way to miss is a
  * stale `ifMatch`.
  *
- * Omitting `ifMatch` is an unguarded write, which is correct for a caller that
- * genuinely means "apply this regardless" (see review.js).
+ * Omitting `ifMatch` is an unguarded write. That is correct only for a caller
+ * that genuinely means "apply this regardless": approving a REMOVAL, which
+ * pulls the pin whatever else changed, and restoring a hidden record, which has
+ * no competing version to lose. Approving an EDIT is guarded like any other
+ * write, on the version the submission was made against; see review.js.
  */
 export async function patchLocation(
   env, id, payload, nowIso = new Date().toISOString(), { ifMatch = null } = {},

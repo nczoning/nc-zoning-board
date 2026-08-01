@@ -247,6 +247,152 @@ test('approving a removal hides the location and keeps the record', async () => 
   assert.equal(rows[0].status, 'hidden');
 });
 
+// ---------------------------------------------- the concurrency guard (#898) ---
+//
+// A submission sits in the queue while the registry keeps moving. Approving an
+// edit must not reapply the submitter's older values over an admin's change
+// made meanwhile. Every case here asserts the ROW, not just the status: a guard
+// that returns 409 and writes anyway is the failure being ruled out.
+
+/** The record after an admin edited it, past the version the submitter saw. */
+const MOVED = {
+  ...LOCATION, name: 'Admin Fixed Loft', modified_at: '2026-02-02T00:00:00Z',
+};
+
+/** An edit written against LOCATION as it stood on 2026-01-01. */
+const editOf = (over = {}) => submission({
+  kind: 'edit',
+  location_id: 'loc-1',
+  payload: JSON.stringify({ name: 'Submitter Name', yaw: 45 }),
+  base_modified_at: '2026-01-01T00:00:00Z',
+  ...over,
+});
+
+const approveOf = (env) => `/admin/submissions/${firstId(env)}/approve`;
+
+test('an edit applies when the record has not moved since it was made', async () => {
+  const env = envFor({ submissions: [editOf()] });
+  const res = await hit(env, 'POST', approveOf(env));
+  assert.equal(res.status, 200);
+
+  const row = locRows(env)[0];
+  assert.equal(row.name, 'Submitter Name');
+  assert.equal(row.yaw, 45);
+  assert.equal(subRows(env)[0].status, 'approved');
+});
+
+test('an edit is refused when the record moved, and the admin\'s values survive', async () => {
+  const env = envFor({ locations: [MOVED], submissions: [editOf()] });
+  const res = await hit(env, 'POST', approveOf(env));
+  assert.equal(res.status, 409);
+
+  const body = await res.json();
+  assert.equal(body.error, 'stale_submission');
+  assert.equal(body.current.name, 'Admin Fixed Loft',
+    'the record as it stands, so the reviewer can see what they would overwrite');
+
+  const row = locRows(env)[0];
+  assert.equal(row.name, 'Admin Fixed Loft', 'the write must not have landed');
+  assert.equal(row.yaw, 90);
+  assert.equal(row.modified_at, '2026-02-02T00:00:00Z', 'and modified_at must not have moved');
+  assert.equal(auditRows(env).length, 0, 'nothing was written, so nothing is logged');
+});
+
+test('a refused edit stays pending, and can be approved against the version the reviewer saw', async () => {
+  const env = envFor({ locations: [MOVED], submissions: [editOf()] });
+  const refused = await hit(env, 'POST', approveOf(env));
+  assert.equal(refused.status, 409);
+  assert.equal(subRows(env)[0].status, 'pending',
+    'a submission that could not be applied has not been reviewed');
+
+  // What the dashboard does next: reload the record, show the diff against its
+  // current values, and re-send with the version the reviewer has now read.
+  const current = (await refused.json()).current;
+  const res = await hit(env, 'POST', approveOf(env), { base_modified_at: current.modified_at });
+  assert.equal(res.status, 200);
+
+  const row = locRows(env)[0];
+  assert.equal(row.name, 'Submitter Name');
+  assert.equal(subRows(env)[0].status, 'approved');
+
+  const approval = auditRows(env).find((r) => r.action === 'submission.approve');
+  assert.equal(JSON.parse(approval.after).base_override, true,
+    'approving over a newer record is a decision, and the log has to say so');
+});
+
+test('a stale base_modified_at is refused too, so a rebase cannot lose a third write', async () => {
+  // The retry is guarded, not forced. A write landing between the refusal and
+  // the second approve is exactly what a bare force flag would lose.
+  const env = envFor({ locations: [MOVED], submissions: [editOf()] });
+  const res = await hit(env, 'POST', approveOf(env),
+    { base_modified_at: '2026-01-15T00:00:00Z' });
+  assert.equal(res.status, 409);
+  assert.equal((await res.json()).error, 'stale_submission');
+  assert.equal(locRows(env)[0].name, 'Admin Fixed Loft');
+});
+
+test('an edit with no recorded base applies unguarded', async () => {
+  // Every submission accepted before migration 0008, and one that refused would
+  // be unapprovable forever.
+  const env = envFor({
+    locations: [MOVED], submissions: [editOf({ base_modified_at: null })],
+  });
+  const res = await hit(env, 'POST', approveOf(env));
+  assert.equal(res.status, 200);
+  assert.equal(locRows(env)[0].name, 'Submitter Name');
+});
+
+test('approving a removal is unguarded even when the record moved', async () => {
+  // An approved removal pulls the pin regardless of what else changed, which is
+  // the point of approving it.
+  const env = envFor({
+    locations: [MOVED],
+    submissions: [submission({
+      kind: 'remove',
+      location_id: 'loc-1',
+      payload: JSON.stringify({ reason: 'mod was pulled' }),
+      base_modified_at: '2026-01-01T00:00:00Z',
+    })],
+  });
+  const res = await hit(env, 'POST', approveOf(env));
+  assert.equal(res.status, 200);
+  assert.equal(locRows(env)[0].status, 'hidden');
+});
+
+test('base_modified_at is refused on anything but approving an edit', async () => {
+  // A create inserts and a removal is unguarded on purpose, so neither has a
+  // base to rebase onto. Accepting it there would read as a guard not running.
+  const env = envFor({
+    submissions: [
+      submission(),
+      submission({ kind: 'remove', location_id: 'loc-1', payload: JSON.stringify({ reason: 'x' }) }),
+      editOf(),
+    ],
+  });
+  const [create, remove, edit] = subRows(env);
+
+  for (const row of [create, remove]) {
+    const res = await hit(env, 'POST', `/admin/submissions/${row.id}/approve`,
+      { base_modified_at: '2026-01-01T00:00:00Z' });
+    assert.equal(res.status, 400, `kind ${row.kind} must refuse a base`);
+  }
+  const onReject = await hit(env, 'POST', `/admin/submissions/${edit.id}/reject`,
+    { reason: 'no', base_modified_at: '2026-01-01T00:00:00Z' });
+  assert.equal(onReject.status, 400);
+
+  assert.equal(subRows(env).filter((r) => r.status === 'pending').length, 3);
+  assert.equal(locRows(env).length, 1);
+});
+
+test('base_modified_at must be a non-empty string', async () => {
+  const env = envFor({ submissions: [editOf()] });
+  for (const value of [42, '', null]) {
+    const res = await hit(env, 'POST', approveOf(env), { base_modified_at: value });
+    assert.equal(res.status, 400, `${JSON.stringify(value)} must be refused`);
+  }
+  assert.equal(subRows(env)[0].status, 'pending');
+});
+
 test('approval revalidates against the tag registry as it stands now', async () => {
   // A tag can be deleted between submission and review. Applying the payload
   // anyway would write a location whose join rows silently go missing.

@@ -154,11 +154,19 @@ function checkText(value, { field, max, required = false }) {
   return [];
 }
 
-/** Does this location exist? An edit or removal of nothing is a mistake, not a queue item. */
-async function locationExists(env, id) {
-  if (typeof id !== 'string' || !id) return false;
-  const row = await env.DB.prepare('SELECT id FROM locations WHERE id = ?').bind(id).first();
-  return Boolean(row);
+/**
+ * The location this submission acts on, or null if there is no such record. An
+ * edit or removal of nothing is a mistake, not a queue item.
+ *
+ * Returns `modified_at` as well as existence, because the two are one question
+ * asked at one moment: the version the submitter's payload was written against
+ * is the version that was there when the submission was accepted. Reading it in
+ * a second query would let the record move between the check and the capture,
+ * and store a base the submitter never saw.
+ */
+async function readLocationBase(env, id) {
+  if (typeof id !== 'string' || !id) return null;
+  return env.DB.prepare('SELECT id, modified_at FROM locations WHERE id = ?').bind(id).first();
 }
 
 /**
@@ -210,6 +218,9 @@ async function create(request, env, { fetchImpl = fetch, nowMs = Date.now() } = 
     ...checkText(body.submitter_contact, { field: 'submitter_contact', max: CONTACT_MAX }),
   ];
   let stored = null;
+  // The version of the record this submission is written against. NULL for a
+  // create, which has no base: see migration 0008.
+  let baseModifiedAt = null;
 
   if (kind === 'create') {
     const tagNames = await readTagSlugs(env);
@@ -217,8 +228,11 @@ async function create(request, env, { fetchImpl = fetch, nowMs = Date.now() } = 
     errors.push(...checked.errors);
     stored = checked.values ?? null;
   } else {
-    if (!await locationExists(env, body.location_id)) {
+    const base = await readLocationBase(env, body.location_id);
+    if (!base) {
       errors.push('location_id must be an existing location');
+    } else {
+      baseModifiedAt = base.modified_at ?? null;
     }
     if (kind === 'edit') {
       const tagNames = await readTagSlugs(env);
@@ -245,8 +259,8 @@ async function create(request, env, { fetchImpl = fetch, nowMs = Date.now() } = 
   const result = await env.DB.prepare(
     `INSERT INTO submissions
        (kind, location_id, payload, status, submitter_note, submitter_contact,
-        submitter_ip_hash, created_at)
-     VALUES (?, ?, ?, 'pending', ?, ?, ?, ?)`,
+        submitter_ip_hash, created_at, base_modified_at)
+     VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?)`,
   ).bind(
     kind,
     kind === 'create' ? null : body.location_id,
@@ -255,6 +269,7 @@ async function create(request, env, { fetchImpl = fetch, nowMs = Date.now() } = 
     body.submitter_contact ?? null,
     ipHash,
     createdAt,
+    baseModifiedAt,
   ).run();
 
   const id = result?.meta?.last_row_id ?? null;
