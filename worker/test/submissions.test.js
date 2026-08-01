@@ -91,6 +91,32 @@ test('a valid create is queued as pending and nothing reaches the map', async ()
   );
 });
 
+test('an edit records the version of the record it was written against', async () => {
+  // The value the approval is guarded on (#898). Captured here because this is
+  // the only moment it is knowable: the record keeps moving while the
+  // submission sits in the queue.
+  const env = envFor();
+  await submit(env, {
+    kind: 'edit', location_id: 'loc-1', payload: { yaw: 45 }, turnstile_token: 't',
+  });
+  assert.equal(rows(env)[0].base_modified_at, '2026-01-01T00:00:00Z');
+});
+
+test('a removal records its base too, and a create has none', async () => {
+  // A create has no base by construction: there is no record to be stale
+  // against. A removal is approved unguarded, and the value is still the honest
+  // answer to what the submitter saw.
+  const env = envFor();
+  await submit(env, {
+    kind: 'remove', location_id: 'loc-1', reason: 'the mod was pulled', turnstile_token: 't',
+  });
+  await submit(env, { kind: 'create', payload: VALID, turnstile_token: 't' });
+
+  const [removal, create] = rows(env);
+  assert.equal(removal.base_modified_at, '2026-01-01T00:00:00Z');
+  assert.equal(create.base_modified_at, null);
+});
+
 test('every accepted submission produces an audit row', async () => {
   const env = envFor();
   await submit(env, { kind: 'create', payload: VALID, turnstile_token: 't' });

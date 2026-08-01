@@ -275,6 +275,14 @@
           return ['error', 'This record changed after you opened it, so nothing was saved. '
             + 'The current version has been loaded; reapply your change and save again.'];
         }
+        // The fallback only. An approval refused this way is handled where it
+        // happens, because the submission is still pending and the reviewer can
+        // approve it over the current record; see staleSubmission.
+        if (res.body?.error === 'stale_submission') {
+          return ['warn', 'The location changed after this submission was made, so nothing was '
+            + 'applied and the submission is still pending. Reload and review it against the '
+            + 'current record.'];
+        }
         return ['error', res.body?.error === 'tag_exists'
           ? `A tag with the slug "${res.body.slug}" already exists.`
           : res.body?.detail || 'Conflict. Nothing was changed.'];
@@ -1549,15 +1557,56 @@
       reasonEl.focus();
       return banner('warn', 'Give a reason. It is the only record of why this was turned down, and "no" on its own is not one.');
     }
+    return sendReview(sub, action, reason ? { reason } : {}, button);
+  }
 
+  /**
+   * The record moved after the submission was made, so the approval was
+   * refused and nothing was written. The submission is still pending.
+   *
+   * Reloading first is not politeness: the diff is drawn against the location
+   * list, so until that is refreshed the reviewer is reading the approval
+   * against the very values it was refused for. Apply anyway re-sends against
+   * the version now on screen, which means a third admin saving in between is
+   * still caught rather than silently overwritten.
+   */
+  async function staleSubmission(sub, action, body, current) {
+    await loadLocations();
+    await loadQueue();
+    // Clears the banner, so the banner is set after it. Same trap as saveLocation.
+    selectSubmission(sub.id);
+
+    const onScreen = state.locations.find((l) => l.id === current.id) ?? current;
+    banner('warn',
+      `"${onScreen.name}" changed after this submission was made, so nothing was applied. `
+      + 'What it changes now compares against the current record. ',
+      h('button', {
+        class: 'btn', type: 'button', text: 'Apply anyway',
+        title: 'Approves this submission over the record as it stands now, which replaces whatever changed.',
+        onclick: (e) => sendReview(
+          sub, action, { ...body, base_modified_at: onScreen.modified_at }, e.currentTarget,
+        ),
+      }));
+  }
+
+  /**
+   * One review request and everything that follows from the answer.
+   *
+   * Split out from reviewAction because the stale-submission retry re-sends the
+   * same decision after the queue has been reloaded, and by then the textarea
+   * the reason was typed into no longer exists.
+   */
+  async function sendReview(sub, action, body, button) {
     button.disabled = true;
-    const res = await api(`/admin/submissions/${sub.id}/${action}`, {
-      method: 'POST',
-      body: reason ? { reason } : {},
-    });
+    const res = await api(`/admin/submissions/${sub.id}/${action}`, { method: 'POST', body });
     button.disabled = false;
 
     if (!res.ok) {
+      // Its own path rather than a message: nothing was written, the submission
+      // is still pending, and there is something the reviewer can do about it.
+      if (res.body?.error === 'stale_submission' && res.body.current) {
+        return staleSubmission(sub, action, body, res.body.current);
+      }
       const [kind, message] = describeFailure(res);
       banner(kind, message);
       // Someone else got there first, or the payload can no longer be applied.
@@ -2196,7 +2245,12 @@
           return ['approved submission #', target, ' by restoring ',
             quoted(name ?? 'a hidden record'), ' rather than creating a second one'];
         }
-        return ['approved submission #', target, name ? [', applied to ', quoted(name)] : ''];
+        return ['approved submission #', target, name ? [', applied to ', quoted(name)] : '',
+          // The reviewer approved over a record that had moved since the
+          // submission was made. The before/after pair says what changed; this
+          // says it was a decision rather than the silent overwrite this
+          // approval would have been before the guard existed.
+          after.base_override ? ', over a newer version of the record' : ''];
       }
       case 'submission.reject': {
         const note = shortNote(after.review_note);

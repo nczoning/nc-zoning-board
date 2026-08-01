@@ -1,6 +1,6 @@
 # Tag Registry
 
-Tags are used to describe the aesthetic, function, or intended audience of a location mod. They appear as filterable badges on the map and as checkboxes in the submission issue form.
+Tags describe the aesthetic, function, or intended audience of a location mod. They appear as filterable badges on the map and as options in the submit form.
 
 ---
 
