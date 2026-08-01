@@ -74,7 +74,7 @@ The Nexus API silently truncates `modsByUid` responses for large batches:
 - **Fixed 2026-03-13:** If the `count` variable is omitted, only the first 20 results are returned regardless of UID count. Mitigation: always pass `count: validIds.length`.
 - **Fixed 2026-05-04:** Even with `count` set correctly, batches of ~250 UIDs return only a partial subset of nodes, manifesting as missing pin thumbnails on first page load that "self-heal" on subsequent reloads (incremental cache fills the gaps as each retry sends a smaller batch). Mitigation: chunk into 50-UID batches before dispatch. Live testing showed *residual* per-UID flakiness even at chunk sizes well below 50, so each chunk also gets a single in-flight retry of just the dropped UIDs before the result is returned. Two warnings are logged for visibility:
   - `Thumbnails: chunk dropped X/Y UIDs (...); retrying`: first attempt dropped some UIDs; will be retried automatically.
-  - `Thumbnails: N UIDs still missing after retry (...); likely deleted or hidden on Nexus`: both attempts failed for these UIDs. Persistent appearance of the same UIDs across reloads indicates a stale `nexus_id` in `data/locations/*.json` (mod hidden or deleted).
+  - `Thumbnails: N UIDs still missing after retry (...); likely deleted or hidden on Nexus`: both attempts failed for these UIDs. Persistent appearance of the same UIDs across reloads indicates a stale `nexus_id` on a D1 record (mod hidden or deleted).
 
 **Caching:** Handled server-side by the Data API cron (the browser no longer caches Nexus responses); see [Caching Strategy](#caching-strategy) below.
 
@@ -154,7 +154,7 @@ The Nexus API does not document pagination for the `mods` query, but it supports
 > having no block is the normal case, so the list is now close to a restatement
 > of the dashboard's candidates panel and is kept only as an informational field.
 
-The function returns `{ mods, meta }` where `meta` contains image/timestamp data for manually registered mods that are also NCZoning-tagged. In the worker's merge step ([`worker/src/merge.js`](../worker/src/merge.js)), `meta` is folded into each manual mod's thumbnail/`updated_at` fields without a separate `modsByUid` call. Mods covered by `meta` are excluded from the `modsByUid` batch.
+The function returns `{ mods, meta }` where `meta` contains image/timestamp data for registered mods that are also NCZoning-tagged. Server-side, the cron folds both channels into `nexus_cache` in one sweep ([`worker/src/nexus-cache.js`](../worker/src/nexus-cache.js)) and the materializer reads images from there, so a mod covered by the tagged query is not fetched again by `modsByUid`.
 
 **Implementation:** [`fetchNexusTaggedMods()` in worker/src/nexus.js](../worker/src/nexus.js)
 
@@ -311,5 +311,5 @@ These Nexus calls now run only inside the Data API cron (`worker/`), not the bro
 
 - **Nexus GraphQL API Docs:** https://graphql.nexusmods.com/
 - **The NCZoning tag:** See [`docs/nczoning-auto-discovery.md`](./nczoning-auto-discovery.md) for what tagging prefills, and what it no longer does
-- **Nexus fetch implementation (server-side):** [`worker/src/nexus.js`](../worker/src/nexus.js), merge in [`worker/src/merge.js`](../worker/src/merge.js), block parser in [`worker/src/parse.js`](../worker/src/parse.js)
+- **Nexus fetch implementation (server-side):** [`worker/src/nexus.js`](../worker/src/nexus.js), image/archive sweep in [`worker/src/nexus-cache.js`](../worker/src/nexus-cache.js), dataset build in [`worker/src/materialize.js`](../worker/src/materialize.js). The `merge.js` static-build path and the `parse.js` block parser were deleted at Phase 6.
 - **Site data loader:** `fetchLocationsFromApi()` in [`assets/js/services.js`](../assets/js/services.js)

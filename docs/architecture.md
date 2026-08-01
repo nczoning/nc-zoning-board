@@ -10,11 +10,14 @@ This document explains how the NC Zoning Board is organised and how data flows t
 nc-zoning-board/
 ├── index.html              # Single-page app entry point
 ├── data/
-│   ├── locations/          # Individual mod JSON files (tracked by Git)
-│   └── tags.json           # Registry of all valid tags and definitions
-├── mods.json               # Compiled registry (Git-ignored, built in CI)
-├── mods.schema.json        # JSON Schema for compiled data
-├── package.json            # Node.js deps (sharp, build scripts)
+│   ├── tags.json           # Registry of all valid tags and definitions
+│   ├── subdistricts.json   # District polygons, fetched by the Worker cron
+│   └── excluded_mods.json  # Legacy exclusions (D1 dismissals supersede these)
+├── mods.schema.json        # JSON Schema for a stored location record.
+│                           # Nothing reads it at runtime: it is the cross-check
+│                           # worker/test/validate.test.js runs ajv against, so
+│                           # the hand-rolled Worker validator cannot drift.
+├── package.json            # Node.js deps (sharp, tile/GLB scripts)
 │
 ├── assets/
 │   ├── css/style.css       # Cyberpunk-themed styles (Orbitron + Rajdhani fonts)
@@ -28,9 +31,8 @@ nc-zoning-board/
 │       └── {z}/{x}/{y}.webp
 │
 ├── scripts/
-│   ├── build_mods.js       # Compiles data/locations/*.json -> mods.json
-│   ├── validate_tags.js    # Validates tags in data/ against tags.json
-│   └── generate_tiles.js   # Slices 16k source image into 256×256 WebP tiles
+│   ├── generate_tiles.js   # Slices 16k source image into 256×256 WebP tiles
+│   └── export_d1_snapshot.mjs  # Nightly D1 -> data-snapshots branch backup
 │
 ├── raw maps/               # Source map images (not committed - too large)
 │   ├── 4k/night_city.png   # 4096×4096, 27 MB
@@ -44,7 +46,11 @@ nc-zoning-board/
 │   │   ├── feature_request.yml     # from an issue form. The submission
 │   │   └── feedback.yml            # templates retired at the D1 cutover.
 │   └── workflows/
-│       └── validate-mods.yml            # CI: validates mods.json against schema
+│       └── validate-mods.yml            # CI: the `validate-json` job required by
+│                                        # main's ruleset. Location data lives in D1
+│                                        # and is validated on the Worker write path,
+│                                        # so this only guards against the deleted
+│                                        # files reappearing. Keep the job id.
 │                                        # (deploys via Cloudflare Pages Git integration, not a workflow)
 │
 └── docs/                   # You are here
@@ -142,7 +148,8 @@ The 3D scene ships on `main`. These are the other five files:
 - **Attributes**: `id` (UUID, or `nexus-<id>` for the nine legacy auto-discovered records), `name`, `authors` (array), `coordinates` ([X, Y, Z]), `yaw`, `nexus_id` (ID string, "WIP" or "Dummy"), `category`, `tags` (via the `location_tags` join), `description`, `credits`, `status` and `admin_notes`.
 - **Never served**: `admin_notes` is admin-only and is deliberately withheld from `/v1`.
 - **Validation** happens on the write path in the Worker, so a bad value is refused at submission rather than caught in CI afterwards.
-- `data/locations/*.json` remains in the repo as the pre-cutover record and is read by nothing. It goes at Phase 6.
+- **The registry is not in git.** `data/locations/*.json`, `mods.json` and `build_mods.js` were deleted at Phase 6. The backup is the nightly export to the `data-snapshots` branch, plus D1 Time Travel's 30 days.
+- A frozen copy of 297 records lives at `worker/test/fixtures/locations-corpus.json`. It is a **test fixture**, not a backup: it does not track the registry and is not restored from.
 
 ### Styling (`style.css`)
 

@@ -13,8 +13,7 @@
  * unit-testable with a fake KV + fake fetch.
  */
 
-import { fetchTaggedModNodes, fetchModsByUidThumbs } from './nexus.js';
-import { buildDataset } from './merge.js';
+import { fetchTaggedModNodes } from './nexus.js';
 import { materializeFromD1, attachArchives } from './materialize.js';
 import { refreshNexusCache, refreshArchives, readNexusIndex } from './nexus-cache.js';
 import {
@@ -90,13 +89,11 @@ async function sweepNexusCache(env, fetchImpl, nexusNodes, nowIso) {
     }
     return await readNexusIndex(env);
   } catch (err) {
-    // While production still builds from mods.json, D1 is not on its critical
-    // path and must not become so ahead of the cutover: a database problem may
-    // cost that environment its archives, never its freshness. Under
-    // DATA_SOURCE=d1 the registry read throws on its own account anyway.
-    if (env.DATA_SOURCE === 'd1') throw err;
-    console.warn('nexus_cache sweep failed (non-fatal on mods.json):', String(err).slice(0, 200));
-    return new Map();
+    // D1 is on the critical path: it holds the registry AND the image cache,
+    // so a database problem costs freshness, not just archives. Rethrow and
+    // let runRefresh keep last-known-good. Swallowing this would serve a
+    // dataset with no images, which materializeFromD1 refuses to build anyway.
+    throw err;
   }
 }
 
@@ -127,80 +124,43 @@ async function fillArchives(env, fetchImpl, full, index, nowIso) {
 }
 
 /**
- * Build the dataset from whichever source this environment is pointed at.
+ * Build the dataset from D1.
  *
- * `DATA_SOURCE=d1` reads the registry from D1; anything else (including unset)
- * reads the compiled mods.json from the site origin. **Unset means mods.json on
- * purpose** — a missing var must not silently switch production onto a new
- * source, which is the same "absent config read as permissive" trap that
- * attached every MCP connection to a scheduled agent.
+ * There is one source. `DATA_SOURCE` is gone: the `mods.json` path, its
+ * `buildDataset` merge and the `parity-ab` harness that diffed the two were
+ * deleted at Phase 6, once the nightly `data-snapshots` export replaced
+ * `data/locations/` as the registry's backup. A config var that could still
+ * select the removed path would only be able to select a 404.
  *
- * It is a var rather than a code branch so the Phase 2 cutover, and more
- * importantly its rollback, is a config change on a known-good build instead of
- * a revert-and-redeploy under pressure.
- *
- * Both paths take the same Nexus inputs and the same clock, and both return the
- * same `{ full, meta }` shape, which is what lets parity-ab.mjs diff them
- * head-to-head. tags/subdistricts still come from the site origin in both —
- * they move to D1 at Phase 4.
+ * Subdistricts still come from the site origin; tags come from D1.
  *
  * `nexusNodes` and `nexusIndex` are passed in rather than fetched here: the
  * sweep needs both before this runs, and the tagged query is one of the two
  * expensive calls in the tick.
  */
 async function sourceAndBuild(env, fetchImpl, origin, nowMs, { nexusNodes, nexusIndex }) {
-  const useD1 = env.DATA_SOURCE === 'd1';
   const subdistricts = await fetchJson(fetchImpl, origin, '/data/subdistricts.json');
   const districts = subdistricts.districts;
 
-  // The tag registry. From D1 once it owns tags, from the file otherwise — but
-  // EITHER WAY the served payload is the array shape. The public contract must
-  // not depend on an internal source flag, or /v1/tags would silently change
-  // shape when DATA_SOURCE flips. `tagsDict` stays a slug->description map for
-  // block validation, which is all the parsers need.
-  const tagsList = useD1
-    ? await readTags(env)
-    : Object.entries(await fetchJson(fetchImpl, origin, '/data/tags.json'))
-      .map(([slug, description], i) => ({
-        slug, name: slug, description, sort_order: i + 1,
-      }));
-  const tagsDict = Object.fromEntries(tagsList.map((t) => [t.slug, t.description]));
+  const tagsList = await readTags(env);
 
-  if (useD1) {
-    const [rows, dismissed, locationTags] = await Promise.all([
-      readLocationRows(env),
-      readDismissedIds(env),
-      readLocationTags(env),
-    ]);
-    // Checked here rather than at the sweep, so an empty registry reports
-    // itself first and this reads as what it is: there are records to serve and
-    // no images for any of them. Serving them anyway would pass the content
-    // hash and replace a good dataset with a stripped one. On the mods.json
-    // path this cannot arise, because merge.js images from its own modsByUid
-    // channel and an empty index costs only archives, which have always been
-    // allowed to degrade to `[]`.
-    if (nexusIndex.size === 0) {
-      throw new Error('nexus_cache is empty -- refusing to serve a dataset with no images');
-    }
-    // No modsByUid call here any more: the sweep has already resolved every
-    // published record's images into nexus_cache, including the auto-discovered
-    // ones, which are rows like any other under D1.
-    const built = materializeFromD1({
-      rows, dismissed, tagsDict, nexusNodes, districts, nexusIndex, locationTags, nowMs,
-    });
-    return { ...built, tagsList, districts };
-  }
-
-  const [manualMods, excluded] = await Promise.all([
-    fetchJson(fetchImpl, origin, '/mods.json'),
-    fetchJson(fetchImpl, origin, '/data/excluded_mods.json').catch(() => ({})),
+  const [rows, dismissed, locationTags] = await Promise.all([
+    readLocationRows(env),
+    readDismissedIds(env),
+    readLocationTags(env),
   ]);
-  const manualNumericIds = manualMods
-    .map((m) => String(m.nexus_id))
-    .filter((id) => /^\d+$/.test(id));
-  const manualThumbs = await fetchModsByUidThumbs(fetchImpl, manualNumericIds);
-  const built = buildDataset({
-    manualMods, tagsDict, excluded, nexusNodes, districts, manualThumbs, nowMs,
+  // Checked here rather than at the sweep, so an empty registry reports itself
+  // first and this reads as what it is: there are records to serve and no
+  // images for any of them. Serving them anyway would pass the content hash
+  // and replace a good dataset with a stripped one.
+  if (nexusIndex.size === 0) {
+    throw new Error('nexus_cache is empty -- refusing to serve a dataset with no images');
+  }
+  // No modsByUid call here: the sweep has already resolved every published
+  // record's images into nexus_cache, including the auto-discovered ones,
+  // which are rows like any other.
+  const built = materializeFromD1({
+    rows, dismissed, nexusNodes, districts, nexusIndex, locationTags, nowMs,
   });
   return { ...built, tagsList, districts };
 }
@@ -216,7 +176,7 @@ export async function runRefresh(env, fetchImpl = fetch) {
   // This cron cycle's wall-clock instant. Serves two distinct roles: it's the
   // content `generated_at` on a cycle that actually rewrites the dataset, AND
   // the `last_refresh_at` liveness heartbeat. The heartbeat is the "when did the
-  // cron last RUN" signal the freshness monitor watches — distinct from
+  // cron last RUN" signal the freshness monitor watches, distinct from
   // generated_at, which only advances on content change and so can legitimately
   // be hours old. A frozen heartbeat means scheduled() has stopped executing
   // (issue #849).
@@ -303,7 +263,7 @@ export async function runRefresh(env, fetchImpl = fetch) {
         discovery_stale: true,
         last_error: String(err).slice(0, 300),
         last_error_at: generatedAt,
-        // The cron still RAN (Nexus just didn't answer) — advance the heartbeat
+        // The cron still RAN (Nexus just didn't answer), so advance the heartbeat
         // so this reads as "stale data" (discovery_stale), not "wedged cron".
         last_refresh_at: generatedAt,
       });

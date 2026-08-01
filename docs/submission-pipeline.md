@@ -93,6 +93,10 @@ deliberate action.
 
 ## 🛡️ What still runs in CI
 
-`validate-mods.yml` validates `mods.json` against `mods.schema.json` on any PR
-touching `data/`. `mods.json` is still built and **nothing reads it**; it exists
-so the cutover stays revertible. Both retire at Phase 6.
+`validate-mods.yml` no longer validates location data: `mods.json`,
+`build_mods.js` and `data/locations/` went at Phase 6, and a submission is
+validated on the Worker write path before it reaches D1 at all.
+
+The workflow stays because its `validate-json` job is a **required status check
+on main's ruleset**. Delete the file and every PR waits forever on a check that
+can never report. It now only asserts the deleted files have not come back.

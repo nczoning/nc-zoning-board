@@ -4,8 +4,6 @@
   "description": "**An interactive web map and coordinate registry for Cyberpunk 2077 location mods — helping the community track what's been built and where.**",
   "main": "index.js",
   "scripts": {
-    "build": "node scripts/build_mods.js",
-    "validate": "node scripts/validate_tags.js",
     "encode-meshopt": "node scripts/encode_glbs_meshopt.js",
     "build-lut": "node scripts/build_lut.js",
     "test": "node --test \"test/**/*.test.js\""

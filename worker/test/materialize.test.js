@@ -97,7 +97,7 @@ test('records are ordered by name, matching the live array order', () => {
   assert.deepEqual(Object.values(full).map((r) => r.name), ['alpha', 'Bravo', 'Charlie']);
 });
 
-test('nothing auto-publishes: a tagged mod with a valid block is not a location', () => {
+test('nothing auto-publishes: a tagged mod carrying a block is a candidate, not a location', () => {
   const nexusNodes = [{
     modId: 999, name: 'Brand New Mod', summary: 'shiny',
     description: 'NCZoning:\ncoords=100,100\ncategory=other',
@@ -105,11 +105,13 @@ test('nothing auto-publishes: a tagged mod with a valid block is not a location'
   }];
   const { full, meta } = build([row()], { nexusNodes });
   assert.deepEqual(Object.keys(full), ['aaaa-1111'], 'must not create a record');
-  // A valid block is a candidate, so it is not "skipped" either.
-  assert.deepEqual(meta.skipped, []);
+  // The block parser went at Phase 6. A block no longer marks a mod as
+  // anything, so this one is listed alongside every other open candidate
+  // rather than being filtered out of the reviewer's list.
+  assert.deepEqual(meta.skipped, [{ nexus_id: '999', name: 'Brand New Mod' }]);
 });
 
-test('a tagged mod with NO valid block is still surfaced as skipped', () => {
+test('a tagged mod with no block is surfaced as a candidate too', () => {
   const nexusNodes = [{ modId: 888, name: 'Mistagged', summary: '', description: 'no block here' }];
   const { meta } = build([row()], { nexusNodes });
   assert.deepEqual(meta.skipped, [{ nexus_id: '888', name: 'Mistagged' }]);

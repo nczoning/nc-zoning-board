@@ -94,14 +94,12 @@ export async function loadAdminRecordById(env, id) {
  * Rebuild the KV read path from D1 after a write, so an approved change appears
  * in seconds rather than at the next cron tick.
  *
- * GATED ON DATA_SOURCE. If the cron is still sourcing from mods.json, a
- * write-through materialize would overwrite KV with D1-derived content and
- * silently perform the Phase 2 cutover as a side effect of an admin edit. So
- * when DATA_SOURCE is not 'd1' the write lands in D1 and the map keeps showing
- * mods.json, which is correct, and is what "nothing reads D1 yet" means.
+ * Unconditional: D1 is the only source, so every admin write is a write to
+ * what the map serves. Do not reintroduce a source gate here. One existed to
+ * stop an admin write performing the cutover as a side effect, and with a
+ * single source it can only switch the write-through off.
  */
 export function materializeAfterWrite(env, ctx) {
-  if (env.DATA_SOURCE !== 'd1') return;
   // Fire-and-forget: the admin gets their response immediately, and a failed
   // rebuild leaves last-known-good in place exactly as a failed cron does.
   ctx?.waitUntil?.(runRefresh(env).catch((err) => {

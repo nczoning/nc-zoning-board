@@ -174,7 +174,7 @@ sections at `.three-popup`, `.three-tooltip-anchor`, etc.
 Both views share, by design:
 
 - **Mod data**: the `/v1/locations` response, fetched once, fed into both layers.
-  (Not `mods.json` — the site has read the Data API since v1.4.1.)
+  (The site has read the Data API since v1.4.1; `mods.json` no longer exists.)
 - **Filter logic**: `NCZ.computeVisibleMods(mods, filterState)` returns a `Set<modId>` consumed by both views' `applyFilters`.
 - **Popup HTML**: `NCZ.buildPopupHtml(mod, catStyle, nexusThumbs, tagsDict)`.
 - **Cluster panel DOM**: `#cluster-panel` in `index.html`, populated by `populateClusterPanel(modsList, opts)`.
