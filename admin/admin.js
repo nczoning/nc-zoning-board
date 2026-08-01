@@ -77,6 +77,10 @@
     selectedLocation: null,   // id, or '' for a new record
     selectedTag: null,        // slug, or '' for a new tag
     selectedSubmission: null, // submission id
+    // Which tab's detail pane the stacked layout is currently showing, so the
+    // one back control and the one history entry know what to close. Null on a
+    // wide screen, where the pane is beside the list rather than over it.
+    detailTab: null,          // 'locations' | 'tags' | 'queue' | null
     queueStatus: 'pending',   // '' for every status
     // The queue's mini-map, held so it can be torn down before its container
     // is replaced. A Leaflet map on a removed node keeps its resize and zoom
@@ -839,6 +843,9 @@
     }
     banner('ok', `Deleted "${loc.name}". The record is in the audit log if you need it back.`);
     state.selectedLocation = null;
+    // This clears the pane itself rather than going through selectLocation, so
+    // it has to unwind the stacked-layout view switch on its own.
+    closeDetail();
     await loadLocations();
     replace($('#loc-editor'), h('p', { class: 'muted', text: 'Select a location to view it, or create a new one.' }));
   }
@@ -911,6 +918,7 @@
     state.editing = id === '';   // a new record has nothing to view
     clearBanner();
     if (id === null) {
+      closeDetail();
       renderLocations();
       return replace($('#loc-editor'),
         h('p', { class: 'muted', text: 'Select a location to view it, or create a new one.' }));
@@ -920,7 +928,10 @@
     const loc = id === ''
       ? { ...BLANK_LOCATION, ...(prefill || {}) }
       : state.locations.find((l) => l.id === id);
+    // Nothing to show, so nothing to navigate to: a stacked layout that switched
+    // view here would leave the reader on an empty pane with no list behind it.
     if (!loc) return;
+    openDetail('locations');
     if (state.editing) renderLocationEditor(loc);
     else renderLocationDetail(loc);
   }
@@ -1146,6 +1157,7 @@
     state.selectedTag = slug;
     clearBanner();
     if (slug === null) {
+      closeDetail();
       renderTags();
       return replace($('#tag-editor'),
         h('p', { class: 'muted', text: 'Select a tag to view it, or create a new one.' }));
@@ -1153,6 +1165,7 @@
     renderTags();
     const tag = slug === '' ? { ...BLANK_TAG } : state.tags.find((t) => t.slug === slug);
     if (!tag) return;
+    openDetail('tags');
     // A new tag has nothing to view, so it opens straight in the form.
     if (slug === '') renderTagEditor(tag);
     else renderTagDetail(tag);
@@ -1246,6 +1259,7 @@
     // Only a non-zero count earns a badge: a "0" beside the tab is a standing
     // invitation to check a queue that has nothing in it.
     $('#queue-count').textContent = pending ? String(pending) : '';
+    syncNavBadge();
   }
 
   async function loadQueue() {
@@ -1533,13 +1547,16 @@
     state.selectedSubmission = id;
     clearBanner();
     if (id === null) {
+      closeDetail();
       releaseReviewMap();
       renderQueue();
       return replace($('#queue-review'), h('p', { class: 'muted', text: 'Select a submission to review it.' }));
     }
     renderQueue();
     const sub = state.submissions.find((s) => s.id === id);
-    if (sub) renderSubmissionReview(sub);
+    if (!sub) return;
+    openDetail('queue');
+    renderSubmissionReview(sub);
   }
 
   const REVIEW_VERB = { approve: 'Approved', reject: 'Rejected', hold: 'Put on hold' };
@@ -1741,6 +1758,7 @@
     $('#candidates-note').textContent =
       `${candidates.length} waiting, ${dismissed.length} dismissed.`;
     $('#candidates-count').textContent = candidates.length ? String(candidates.length) : '';
+    syncNavBadge();
   }
 
   async function loadCandidates() {
@@ -1843,7 +1861,20 @@
     return results.every(Boolean);
   }
 
-  /** Rebuild the served dataset from whatever DATA_SOURCE says. */
+  /**
+   * The store a dataset was built from, in words.
+   *
+   * The Worker records and returns the machine token `d1` (`worker/src/admin.js`,
+   * both the `/admin/refresh` response and the `dataset.refresh` audit target).
+   * "D1" is the name of a Cloudflare product, not a thing an admin has any
+   * reason to know. Two call sites read it (the rebuild banner and the audit
+   * sentence), so it is one map. A token this page has not been taught renders
+   * as itself rather than as a blank.
+   */
+  const DATASET_SOURCE_LABEL = { d1: 'the registry' };
+  const datasetSource = (s) => DATASET_SOURCE_LABEL[s] ?? s;
+
+  /** Rebuild the served dataset from the registry. */
   async function rebuildDataset(button) {
     button.disabled = true;
     button.textContent = 'Rebuilding…';
@@ -1871,8 +1902,8 @@
     // If the admin just edited a record and the rebuild reports no change,
     // that is worth knowing rather than smoothing over.
     banner('ok', res.body.changed
-      ? `Rebuilt from ${res.body.source}, and reloaded this page's data. New dataset version ${res.body.dataset_version}.`
-      : `Rebuilt from ${res.body.source}, and reloaded this page's data. The content hash was unchanged, so nothing was rewritten.`);
+      ? `Rebuilt from ${datasetSource(res.body.source)}, and reloaded this page's data. New dataset version ${res.body.dataset_version}.`
+      : `Rebuilt from ${datasetSource(res.body.source)}, and reloaded this page's data. The content hash was unchanged, so nothing was rewritten.`);
   }
 
   // ------------------------------------------------------------ overview --
@@ -1970,7 +2001,7 @@
     const untagged = records.filter((r) => !r.tags.length).length;
 
     replace($('#stat-registry'),
-      stat(records.length, 'in D1', null, {}),
+      stat(records.length, 'records', null, {}),
       stat(published.length, 'published', 'good', { status: 'published' }),
       stat(hidden, 'hidden', hidden ? 'warn' : null, { status: 'hidden' }),
       stat(records.filter((r) => r.status === 'draft').length, 'draft', null, { status: 'draft' }),
@@ -2056,10 +2087,12 @@
       ds === true ? 'bad' : ds === false ? 'ok' : null));
     }
 
-    // Two independent counts of the same thing.
-    rows.push(kvRow('registry (D1)', String(records.length)));
-    rows.push(kvRow('published in D1', String(published.length)));
-    rows.push(kvRow('served by /v1', servedCount === null ? 'unknown' : String(servedCount),
+    // Two independent counts of the same thing. The pair is the point: what the
+    // registry holds against what the public API hands the map. Renaming them
+    // must not collapse them into one number.
+    rows.push(kvRow('in the registry', String(records.length)));
+    rows.push(kvRow('published in the registry', String(published.length)));
+    rows.push(kvRow('served to the map', servedCount === null ? 'unknown' : String(servedCount),
       servedCount === null ? null : servedCount === published.length ? 'ok' : 'bad'));
     if (servedCount !== null && servedCount !== published.length) {
       rows.push(kvRow('drift',
@@ -2143,7 +2176,133 @@
   // --------------------------------------------------------------- audit --
 
   /** Field-level diff between two audit snapshots. */
-  function renderDiff(before, after) {
+  /**
+   * Column name -> what the field IS, in words.
+   *
+   * The audit sentence is prose; the record expanded under it is column names.
+   * `granted_by: "apply"` is the stored shape and it means nothing to anyone who
+   * has not read `worker/src/review.js`.
+   *
+   * Deliberately incomplete, and `fieldLabel` falls back to the raw key: a
+   * column added to the Worker must show up here as itself rather than
+   * disappear. A label map that silently drops unknown fields would make this
+   * log quietly lie by omission, which is the one thing it cannot do.
+   */
+  const FIELD_LABEL = {
+    // A location record.
+    id: 'ID',
+    name: 'Name',
+    nexus_id: 'Nexus mod ID',
+    category: 'Category',
+    coordinates: 'Coordinates',
+    yaw: 'Facing',
+    description: 'Description',
+    credits: 'Credits',
+    authors: 'Authors',
+    tags: 'Tags',
+    status: 'Status',
+    admin_notes: 'Admin notes',
+    added_at: 'Added',
+    modified_at: 'Last changed',
+    // Three different dates that would otherwise read as interchangeable.
+    nexus_updated_at: 'Mod last updated on Nexus',
+
+    // A tag record.
+    slug: 'Tag ID',
+    sort_order: 'Sort order',
+    created_at: 'Created',
+    updated_at: 'Last changed',
+
+    // A submission, and a review decision on one.
+    kind: 'Kind of request',
+    location_id: 'Location',
+    payload: 'What was submitted',
+    review_note: 'Reviewer note',
+    granted_by: 'How it was applied',
+    base_override: 'Approved over a newer version',
+    reason: 'Reason',
+    dismissed_by: 'Dismissed by',
+    owner_id: 'Owner',
+  };
+
+  const fieldLabel = (key) => FIELD_LABEL[key] ?? key;
+
+  /**
+   * The same label, for the middle of a sentence.
+   *
+   * `FIELD_LABEL` is written for a column heading, so it is capitalised. Dropped
+   * into "updated X (name, status)" that reads as a list of proper nouns. Any
+   * label carrying a capital past the first character is a real one (Nexus,
+   * ID) and is left exactly as it is.
+   */
+  const fieldPhrase = (key) => {
+    const label = fieldLabel(key);
+    return /[A-Z]/.test(label.slice(1)) ? label : label.charAt(0).toLowerCase() + label.slice(1);
+  };
+
+  /**
+   * Machine token -> English, per field.
+   *
+   * Only for fields whose values are a closed set. A name, a note or a reason is
+   * already prose and must be shown exactly as recorded, never "tidied".
+   */
+  const VALUE_LABEL = {
+    granted_by: {
+      apply: 'applied to the existing record',
+      restore: 'put a hidden record back, rather than creating a second one',
+    },
+    status: {
+      published: 'on the map',
+      hidden: 'off the map',
+      draft: 'draft',
+      pending: 'waiting for review',
+      approved: 'approved',
+      rejected: 'rejected',
+      held: 'on hold',
+    },
+    kind: {
+      create: 'a new pin',
+      edit: 'an edit to a pin',
+      remove: 'a request to take a pin off the map',
+    },
+  };
+
+  /**
+   * One diff value, for reading rather than for parsing.
+   *
+   * Absent, `null` and `''` are three different facts, so each gets its own
+   * word rather than one shared rendering. Objects stay as JSON: a submission
+   * payload is a nested record, and there is no flat rendering of one that is
+   * not simply a worse JSON.
+   */
+  function humanValue(key, v) {
+    if (v === undefined) return 'not recorded';
+    if (v === null) return 'not set';
+    if (typeof v === 'boolean') return v ? 'yes' : 'no';
+    if (Array.isArray(v)) return v.length ? v.join(', ') : 'none';
+    if (typeof v === 'object') return JSON.stringify(v);
+    return VALUE_LABEL[key]?.[String(v)] ?? (v === '' ? 'empty' : String(v));
+  }
+
+  /**
+   * The verbatim values, one fold deeper.
+   *
+   * Everything above this is a TRANSLATION, and a translated audit log has to
+   * stay checkable or it is only a claim. Same reasoning as the raw `action`
+   * string kept beside the sentence: what was stored must remain reachable, not
+   * merely have been stored. Collapsed, so it costs nothing until it is wanted.
+   */
+  function rawValues(before, after, label) {
+    if (!before && !after) return null;
+    const payload = {};
+    if (before) payload.before = before;
+    if (after) payload.after = after;
+    return h('details', { class: 'raw-record' },
+      h('summary', { text: label }),
+      h('pre', { text: JSON.stringify(payload, null, 2) }));
+  }
+
+  function renderDiff(before, after, rawLabel = 'Show the raw values') {
     const keys = [...new Set([...Object.keys(before || {}), ...Object.keys(after || {})])].sort();
     const rows = [];
     for (const key of keys) {
@@ -2154,19 +2313,28 @@
       if (key === 'modified_at') continue;
       if (sameValue(from, to)) continue;
       rows.push(h('div', {},
-        h('span', { class: 'k', text: `${key}: ` }),
-        before ? h('span', { class: 'from', text: JSON.stringify(from) }) : null,
+        h('span', { class: 'k', text: `${fieldLabel(key)}: ` }),
+        before ? h('span', { class: 'from', text: humanValue(key, from) }) : null,
         before && after ? ' → ' : null,
-        after ? h('span', { class: 'to', text: JSON.stringify(to) }) : null));
+        after ? h('span', { class: 'to', text: humanValue(key, to) }) : null));
     }
-    return rows.length ? h('div', { class: 'diff' }, rows) : h('p', { class: 'muted', text: 'No field changes recorded.' });
+    return h('div', { class: 'diff-block' },
+      rows.length
+        ? h('div', { class: 'diff' }, rows)
+        : h('p', { class: 'muted', text: 'No field changes recorded.' }),
+      rawValues(before, after, rawLabel));
   }
 
-  /** Fields that actually moved between two audit snapshots. */
+  /**
+   * Fields that actually moved between two audit snapshots, named the way the
+   * expanded record names them. The sentence and the diff under it have to call
+   * the same field the same thing, or the sentence stops being a summary of it.
+   */
   function changedFields(before, after) {
     if (!before || !after) return [];
     return [...new Set([...Object.keys(before), ...Object.keys(after)])]
       .filter((k) => k !== 'modified_at' && !sameValue(before[k], after[k]))
+      .map(fieldPhrase)
       .sort();
   }
 
@@ -2224,8 +2392,11 @@
           ' to ', h('code', { text: target })];
       case 'tag.delete': return ['deleted the tag ', h('code', { text: target })];
 
+      // The stored target is the machine token `d1`. Mapped here rather than at
+      // the write: the audit log is append-only and the stored value is what was
+      // true at the time. Rewriting history to read better is not an option.
       case 'dataset.refresh':
-        return [`rebuilt the served dataset from ${target || 'its source'}`];
+        return [`rebuilt the served dataset from ${target ? datasetSource(target) : 'its source'}`];
 
       // Written by the public route, so the actor is 'anonymous'.
       case 'submission.create':
@@ -2295,7 +2466,8 @@
           // The machine-readable pair, kept visible so the sentence above can
           // always be checked against what was actually recorded.
           h('code', { class: 'action', title: `recorded as ${e.action} on ${e.target ?? 'nothing'}`, text: e.action })),
-        h('details', {}, h('summary', { text: 'The full record' }), renderDiff(e.before, e.after))))
+        h('details', {}, h('summary', { text: 'The full record' }),
+          renderDiff(e.before, e.after, 'Show exactly what was recorded'))))
       : h('p', { class: 'muted', text: 'No entries yet.' }));
   }
 
@@ -2384,6 +2556,7 @@
 
     // Same rule as the queue badge: only a non-zero count earns one.
     $('#alerts-count').textContent = unacknowledged ? String(unacknowledged) : '';
+    syncNavBadge();
 
     state.alerts = alerts;
     state.alertsUnacknowledged = unacknowledged;
@@ -2433,11 +2606,129 @@
       }, total > SHOWN ? `See all ${total} open alerts` : 'Open the Alerts tab'));
   }
 
+  // -------------------------------------------------- narrow-screen nav --
+
+  /**
+   * The two widths admin.css changes shape at, read back here so the two files
+   * agree. 70rem is where `.split` stacks; 60rem is where the tabs fold into the
+   * drawer. Both are `matchMedia` rather than a resize handler, so crossing a
+   * breakpoint is one event instead of a hundred.
+   *
+   * If either number moves in the stylesheet it moves here in the same commit.
+   * The stylesheet decides what the reader sees; this decides whether the back
+   * gesture has anything to dismiss. Disagreement means back leaves the page.
+   */
+  const NARROW = window.matchMedia('(max-width: 70rem)');
+  const MENU = window.matchMedia('(max-width: 60rem)');
+
+  /**
+   * What is open OVER the page, held as session history.
+   *
+   * Two things can cover what is behind them: the nav drawer, and, once the
+   * split has stacked, a record's editor. On Android the back gesture is how
+   * both get dismissed, and a plain CSS class would take the reader out of the
+   * dashboard rather than out of the thing they opened.
+   *
+   * So each is a real history entry, and `applyOverlays` is the ONLY function
+   * that touches the classes. It runs from `popstate`, or from the push that
+   * created the entry, so the DOM and the history stack cannot drift apart.
+   * Every close route (the Close button, the backdrop, Escape, a tab switch)
+   * unwinds through history rather than clearing a class directly.
+   *
+   * The stack is only ever `[]`, `['menu']`, `['detail']` or `['detail','menu']`:
+   * the backdrop covers the whole viewport, so no row can be tapped while the
+   * drawer is open. That is why `popOverlay` can assume the thing it is asked to
+   * close is the top entry.
+   */
+  let overlays = [];
+  // Set while a popstate is being applied, so the select* call that closes a
+  // pane does not try to unwind the very entry that is already unwinding.
+  let unwinding = false;
+
+  const CLOSE_DETAIL = {
+    locations: () => selectLocation(null),
+    tags: () => selectTag(null),
+    queue: () => selectSubmission(null),
+  };
+
+  function applyOverlays(next) {
+    const was = overlays;
+    overlays = next;
+
+    const menu = next.includes('menu');
+    const detail = next.includes('detail');
+
+    document.body.classList.toggle('menu-open', menu);
+    document.body.classList.toggle('detail-open', detail);
+    $('#nav-toggle').setAttribute('aria-expanded', String(menu));
+    $('#nav-backdrop').hidden = !menu;
+    $('#detail-back').hidden = !detail;
+
+    // The entry went, so the pane it stood for goes with it.
+    if (was.includes('detail') && !detail) {
+      unwinding = true;
+      CLOSE_DETAIL[state.detailTab]?.();
+      state.detailTab = null;
+      unwinding = false;
+    }
+  }
+
+  function pushOverlay(kind) {
+    if (overlays.includes(kind)) return;
+    const next = [...overlays, kind];
+    history.pushState({ ncz: next }, '');
+    applyOverlays(next);
+  }
+
+  const popOverlay = (kind) => { if (overlays.includes(kind)) history.back(); };
+
+  /** One `go`, so the whole stack unwinds in a single popstate. */
+  const closeOverlays = () => { if (overlays.length) history.go(-overlays.length); };
+
+  const toggleMenu = () => (overlays.includes('menu') ? popOverlay('menu') : pushOverlay('menu'));
+
+  /**
+   * A record was opened.
+   *
+   * Below 70rem that is a navigation: the editor replaces the list, so there has
+   * to be something to come back to. Above it the editor fills a pane that is
+   * already on screen, and nothing is pushed, because selecting a row on a
+   * desktop is not a place anyone should be able to press Back out of.
+   */
+  function openDetail(tab) {
+    state.detailTab = tab;
+    if (unwinding || !NARROW.matches) return;
+    pushOverlay('detail');
+  }
+
+  function closeDetail() {
+    if (unwinding) return;
+    state.detailTab = null;
+    popOverlay('detail');
+  }
+
+  /**
+   * The number on the closed menu button.
+   *
+   * Summed from the tab badges already rendered, not recomputed from state. Two
+   * independent counts of the same thing is how #823 happened, and this has no
+   * reason to be a second consumer of anything.
+   */
+  function syncNavBadge() {
+    const total = ['#queue-count', '#candidates-count', '#alerts-count']
+      .reduce((n, sel) => n + (Number($(sel).textContent) || 0), 0);
+    $('#nav-count').textContent = total ? String(total) : '';
+  }
+
   // ---------------------------------------------------------------- tabs --
 
   const TABS = ['overview', 'locations', 'queue', 'candidates', 'tags', 'alerts', 'audit'];
 
   function switchTab(name) {
+    // A tab is a different place, so nothing opened over the old one survives
+    // the move. Without this, opening the drawer over an open record and tapping
+    // Queue lands on a queue showing its review pane with nothing selected.
+    closeOverlays();
     for (const btn of document.querySelectorAll('nav.tabs button')) {
       btn.setAttribute('aria-selected', String(btn.dataset.tab === name));
     }
@@ -2479,6 +2770,31 @@
     for (const btn of document.querySelectorAll('nav.tabs button')) {
       btn.onclick = () => switchTab(btn.dataset.tab);
     }
+
+    // The overlay layer. `popstate` is the only applier; everything else either
+    // pushes an entry or asks history to unwind one. See the note on `overlays`.
+    window.addEventListener('popstate', (e) => applyOverlays(
+      Array.isArray(e.state?.ncz) ? e.state.ncz : [],
+    ));
+    $('#nav-toggle').onclick = toggleMenu;
+    $('#nav-backdrop').onclick = () => popOverlay('menu');
+    $('#detail-back').onclick = () => popOverlay('detail');
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && overlays.length) history.back();
+    });
+    // A rotation can cross the split breakpoint with a record already open.
+    // Wide to narrow leaves the editor covering the screen with no entry behind
+    // it, so back would leave the dashboard; push one. Narrow to wide leaves an
+    // entry for a pane that covers nothing, which is harmless: back deselects.
+    NARROW.addEventListener('change', (e) => {
+      if (e.matches && state.detailTab && !overlays.includes('detail')) pushOverlay('detail');
+    });
+    MENU.addEventListener('change', (e) => { if (!e.matches) popOverlay('menu'); });
+    // The header gives its wordmark back once the page has moved. A threshold
+    // rather than any scroll at all, so a touch bounce does not flicker it.
+    window.addEventListener('scroll', () => {
+      document.body.classList.toggle('scrolled', window.scrollY > 24);
+    }, { passive: true });
     // The inputs write into the filter state rather than being read from it,
     // so the Overview tiles and the controls cannot disagree about what the
     // list is showing.

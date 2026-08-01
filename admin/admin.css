@@ -108,7 +108,20 @@ a { color: var(--secondary); }
     line-height: 1;
 }
 
-.topbar .spacer { flex: 1; }
+/* Everything that is not navigation: rebuild, who is signed in, sign out.
+   `margin-left: auto` rather than a spacer element, so the same markup can be
+   lifted into the drawer below the nav breakpoint without leaving an orphan. */
+.topbar-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-lg);
+    flex-wrap: wrap;
+    margin-left: auto;
+}
+
+/* Above the nav breakpoint the drawer is not a box at all: its children become
+   direct flex items of the top bar and lay out as though it were not there. */
+.topbar-drawer { display: contents; }
 
 .who { color: var(--tertiary); font-weight: 600; }
 
@@ -151,6 +164,47 @@ nav.tabs button[aria-selected="true"] {
     border-color: var(--secondary-30);
     background: var(--secondary-05);
 }
+
+/* ------------------------------------------------------------ nav drawer -- */
+
+/*
+ * Two breakpoints, and they are deliberately different numbers.
+ *
+ * 70rem is where `.split` stacks, so it is where opening a record stops meaning
+ * "fill the pane beside the list" and starts meaning "replace the list".
+ * 60rem is where eight uppercase tabs stop fitting on one row: they measure
+ * around 55rem on their own, before the wordmark and the freshness pill. So the
+ * nav folds at 60rem, and between the two widths you get stacked panes under a
+ * full tab row.
+ *
+ * admin.js reads both numbers back (NARROW, MENU). If either moves here, move it
+ * there in the same commit: this file decides what the reader sees, that one
+ * decides whether the back gesture has anything to dismiss, and a disagreement
+ * means back walks out of the dashboard.
+ */
+
+/* No button above the nav breakpoint: the tabs are all visible. */
+.nav-toggle { display: none; }
+
+.nav-backdrop { display: none; }
+
+.detail-back {
+    display: none;
+    flex-basis: 100%;
+    background: transparent;
+    border: none;
+    border-top: var(--ui-border-thin) solid var(--secondary-20);
+    margin: var(--space-xs) calc(var(--space-lg) * -1) calc(var(--space-md) * -1);
+    padding: var(--space-sm) var(--space-lg);
+    color: var(--secondary);
+    font-size: var(--fs-ui);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+    text-align: left;
+    cursor: pointer;
+}
+
+.detail-back::before { content: "← "; }
 
 main { padding: var(--space-lg); }
 
@@ -691,6 +745,17 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 
     .split > .panel { overflow: visible; max-height: none; }
     .split .table-wrap { overflow-x: auto; }
+
+    /*
+     * Stacked, the editor is not beside the list, it is below it and off the
+     * bottom of the screen. Selecting a row has to REPLACE the list or the tap
+     * appears to do nothing at all.
+     *
+     * `body.detail-open` is set from a popstate handler, never written directly,
+     * so the class and the session history cannot disagree. See admin.js.
+     */
+    body.detail-open .split > .panel:first-child { display: none; }
+    body.detail-open .detail-back { display: block; }
 }
 
 .field { margin-bottom: var(--space-lg); }
@@ -907,6 +972,171 @@ button.breakdown-row:hover .k { color: var(--secondary); }
     .candidate { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* ----------------------------------------------------------- narrow nav -- */
+
+/* Below here the tabs do not fit a row. See the note above `.nav-toggle`. */
+@media (max-width: 60rem) {
+    /*
+     * `backdrop-filter: none` is load-bearing, not a visual preference.
+     *
+     * A backdrop-filter (like a filter or a transform) makes the element a
+     * containing block for its `position: fixed` descendants. With the blur on,
+     * the drawer below resolves `bottom: 0` against the TOP BAR rather than the
+     * viewport and renders as a sliver a few pixels tall.
+     *
+     * So the bar goes solid here instead. `--surface-panel` is 95% opaque, which
+     * is what the blur was buying: text scrolling under a sticky bar that is
+     * only 80% opaque and no longer blurred would read through it.
+     */
+    .topbar {
+        gap: var(--space-md);
+        padding: var(--space-sm) var(--space-md);
+        background: var(--surface-panel);
+        backdrop-filter: none;
+        transition: padding 0.15s ease;
+    }
+
+    .topbar h1 { font-size: var(--fs-ui); }
+
+    /* Collapsed, the wordmark is what goes. The menu badge and the freshness
+       pill are the two things in this bar that report something, and a header
+       that reclaims its height by dropping those has saved the wrong pixels. */
+    body.scrolled .topbar { padding-block: var(--space-2xs); }
+    body.scrolled .topbar h1 { display: none; }
+
+    .nav-toggle {
+        display: inline-flex;
+        position: relative;
+        flex: 0 0 auto;
+        align-items: center;
+        justify-content: center;
+        /* 44px. Anything under this is a tap target that misses. */
+        width: 2.75rem;
+        height: 2.75rem;
+        padding: 0;
+        background: transparent;
+        border: var(--ui-border-thin) solid var(--secondary-30);
+        border-radius: var(--ui-radius-sm);
+        cursor: pointer;
+    }
+
+    .nav-toggle-bars { position: relative; }
+
+    .nav-toggle-bars,
+    .nav-toggle-bars::before,
+    .nav-toggle-bars::after {
+        display: block;
+        width: 1.25rem;
+        height: 2px;
+        background: var(--secondary);
+    }
+
+    .nav-toggle-bars::before,
+    .nav-toggle-bars::after { content: ""; position: absolute; left: 0; }
+    .nav-toggle-bars::before { top: -6px; }
+    .nav-toggle-bars::after { top: 6px; }
+
+    /* The count the closed menu still reports. Absolutely positioned because
+       the button is a fixed square and a two-digit badge must not resize it. */
+    .nav-toggle .tab-count {
+        position: absolute;
+        top: -0.4rem;
+        right: -0.4rem;
+        margin: 0;
+    }
+
+    .topbar-drawer {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-lg);
+        position: fixed;
+        top: var(--topbar-h, 4rem);
+        right: 0;
+        bottom: 0;
+        width: min(22rem, 85vw);
+        padding: var(--space-lg);
+        /* Fully opaque, not `--surface-panel`. The drawer covers most of the
+           screen, and at 95% the table behind it ghosts through the tab labels. */
+        background: var(--primary);
+        border-left: var(--ui-border-thin) solid var(--secondary-30);
+        overflow-y: auto;
+        transform: translateX(100%);
+        transition: transform 0.18s ease;
+        z-index: 12;
+    }
+
+    body.menu-open .topbar-drawer { transform: none; }
+
+    /* The page behind a full-height drawer must not scroll under it. */
+    body.menu-open { overflow: hidden; }
+
+    nav.tabs { flex-direction: column; }
+    nav.tabs button { text-align: left; padding: var(--space-md) var(--space-lg); }
+
+    /* Pinned to the bottom of the drawer: sign-out and rebuild are the two
+       things here that should never be reachable by an accidental thumb on the
+       way to a tab. */
+    .topbar-meta {
+        margin: auto 0 0;
+        flex-direction: column;
+        align-items: stretch;
+        gap: var(--space-md);
+    }
+
+    .topbar-meta .btn { justify-content: center; }
+
+    .nav-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        background: rgb(0 0 0 / 0.5);
+        z-index: 11;
+    }
+}
+
+/* ---------------------------------------------------------- narrow body -- */
+
+@media (max-width: 50rem) {
+    main { padding: var(--space-md); }
+    .panel { padding: var(--space-md); }
+
+    /* Tap targets. The default cell padding gives rows about 30px tall, which
+       puts two records inside one thumb. */
+    th, td { padding: var(--space-md) var(--space-sm); }
+
+    /*
+     * The list answers "which record"; the editor answers everything else.
+     *
+     * Four of the seven columns are detail the editor already shows in full, and
+     * keeping them here buys a sideways scroll on the one screen where a
+     * sideways scroll is most easily read as the end of the row. Nothing is
+     * lost: every hidden column is one tap away.
+     */
+    #loc-table th:nth-child(3), #loc-table td:nth-child(3),   /* Tags */
+    #loc-table th:nth-child(5), #loc-table td:nth-child(5),   /* Added */
+    #loc-table th:nth-child(6), #loc-table td:nth-child(6),   /* Modified */
+    #loc-table th:nth-child(7), #loc-table td:nth-child(7) {  /* Nexus */
+        display: none;
+    }
+
+    /* Stacked and full width. Side by side these are three controls too narrow
+       to read the options in. */
+    .toolbar input[type="search"],
+    .toolbar select,
+    .toolbar > .btn { width: 100%; }
+
+    .toolbar > .btn { justify-content: center; }
+
+    .detail dl { grid-template-columns: minmax(0, 1fr); gap: 0 0; }
+    .detail dt { padding-top: var(--space-sm); }
+
+    .editor-actions .btn { flex: 1 1 auto; justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .topbar, .topbar-drawer { transition: none; }
+}
+
 /* ----------------------------------------------------------------- audit -- */
 
 .audit-entry {
@@ -1043,11 +1273,42 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 
 #overview-alerts .btn { margin-top: var(--space-xs); }
 
-.diff { margin: var(--space-xs) 0 0; font-size: var(--fs-code); }
-.diff div { padding: var(--space-2xs) 0; font-family: ui-monospace, monospace; line-height: var(--lh-tight); }
+/* The diff renders field names and enum values in English, so it is prose and
+   set in the body face. The verbatim record below it is JSON, and is the only
+   part here that takes the monospace. */
+.diff { margin: var(--space-xs) 0 0; font-size: var(--fs-ui); }
+.diff div { padding: var(--space-2xs) 0; line-height: var(--lh-body); overflow-wrap: anywhere; }
 .diff .k { color: var(--gray); }
 .diff .from { color: var(--status-critical); }
 .diff .to { color: var(--status-ok); }
+
+/* Everything above this is a translation, and a translated audit log has to stay
+   checkable or it is only a claim. Collapsed and muted so it costs nothing until
+   it is wanted; present so the friendly rendering can always be verified against
+   what the Worker actually stored. Same contract as `.audit-head .action`. */
+.raw-record { margin-top: var(--space-xs); }
+
+.raw-record summary {
+    cursor: pointer;
+    color: var(--text-dim);
+    font-size: var(--fs-label);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-label);
+}
+
+.raw-record summary:hover { color: var(--secondary); }
+
+.raw-record pre {
+    margin: var(--space-xs) 0 0;
+    padding: var(--space-sm);
+    background: var(--black-30);
+    border-radius: var(--ui-radius-xs);
+    font-family: ui-monospace, monospace;
+    font-size: var(--fs-code);
+    line-height: var(--lh-tight);
+    color: var(--text-subtle);
+    overflow-x: auto;
+}
 
 /* ---------------------------------------------------------------- gate -- */
 
