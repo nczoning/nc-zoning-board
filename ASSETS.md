@@ -54,8 +54,9 @@ If you have questions about specific uses of game assets or need an exception to
 Coordinate data and metadata submitted by community members. The location
 registry lives in a Cloudflare D1 database and is served publicly at
 `https://api.nczoning.net/v1/locations`; `data/subdistricts.json` (world geometry
-derived from the game) stays in this repository. `data/locations/` remains in the
-repository as the pre-cutover record and is no longer where submissions land.
+derived from the game) stays in this repository. The per-location files were
+removed from the repository at Phase 6; the registry is backed up nightly to the
+`data-snapshots` branch.
 
 The terms are unchanged by where the data is stored. This data is:
 - **Original contributor work**: contributors retain ownership

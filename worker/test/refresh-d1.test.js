@@ -4,9 +4,11 @@ import { runRefresh } from '../src/refresh.js';
 import { KEYS } from '../src/store.js';
 import { sqliteD1 } from '../test-support/d1-sqlite.mjs';
 
-// Phase 2: the cron sourcing from D1 instead of mods.json. The load-bearing
-// test here is `both sources produce an identical dataset` -- the unit-scale
-// version of what parity-check.mjs does against production.
+// Where the dataset comes FROM, and what the cron refuses to serve. The cron
+// mechanics (heartbeat, stale/recovery, archive budgeting) are in
+// refresh.test.js. D1 is the only source, so the negative cases here carry the
+// weight the two-source parity gate used to: a build that cannot be compared
+// against a second implementation has to be pinned by what it rejects.
 
 function fakeKV(initial = {}) {
   const store = new Map(Object.entries(initial));
@@ -20,8 +22,6 @@ function fakeKV(initial = {}) {
   };
 }
 
-const TAGS = { apartment: 'a place', corpo: 'suits' };
-const EXCLUDED = { 777: 'mistagged' };
 const SUBDISTRICTS = {
   districts: [
     {
@@ -35,16 +35,8 @@ const SUBDISTRICTS = {
   ],
 };
 
-const MODS = [
-  {
-    id: 'm1', name: 'Manual Loft', authors: ['Spud'], coordinates: [250, 250, 10],
-    nexus_id: '12345', description: 'x', category: 'new-location', tags: ['apartment'],
-  },
-];
-
-// The D1 equivalent of MODS *plus* the auto entry the mods.json path derives
-// from Nexus node 888 -- because under D1 nothing auto-publishes and that
-// record is a row like any other.
+// `nexus-888` arrived through auto-discovery before the cutover and is a row
+// like any other now. Nothing auto-publishes, so a tagged node cannot add one.
 const ROWS = [
   {
     id: 'm1', name: 'Manual Loft', nexus_id: '12345', category: 'new-location',
@@ -83,20 +75,16 @@ const NEXUS_PAGE = {
 };
 
 /**
+ * Subdistricts are the only source file the cron still fetches. mods.json,
+ * tags.json and excluded_mods.json have no branch, so a request for one hits
+ * the throw at the bottom and fails the test by name.
+ *
  * @param {object} opts
- * @param {boolean} opts.banModsJson  throw if /mods.json is fetched -- proves
- *   the D1 path does not quietly keep reading the file it replaced.
  * @param {boolean} opts.nexusKnowsNothing  Nexus answers both queries with an
  *   empty node list, so nothing lands in nexus_cache.
  */
-function fakeFetch({ banModsJson = false, nexusKnowsNothing = false } = {}) {
+function fakeFetch({ nexusKnowsNothing = false } = {}) {
   return async (url, init) => {
-    if (url.includes('/mods.json')) {
-      if (banModsJson) throw new Error('D1 mode must not fetch mods.json');
-      return { ok: true, json: async () => MODS };
-    }
-    if (url.includes('/tags.json')) return { ok: true, json: async () => TAGS };
-    if (url.includes('/excluded_mods.json')) return { ok: true, json: async () => EXCLUDED };
     if (url.includes('/subdistricts.json')) return { ok: true, json: async () => SUBDISTRICTS };
     if (url.includes('api-router.nexusmods.com')) return { ok: false, status: 503 };
     if (url.includes('file-metadata.nexusmods.com')) return { ok: false, status: 503 };
@@ -125,9 +113,7 @@ function fakeFetch({ banModsJson = false, nexusKnowsNothing = false } = {}) {
 // count behaves as D1 does.
 //
 // `apartment` is a real registry slug, so migration 0002 already seeds it and
-// location_tags.tag_slug (a real foreign key here) resolves. Those 14 rows also
-// mean the D1 path serves a longer /v1/tags than the mods.json fixture; the
-// parity test below compares the record set, which is unaffected.
+// location_tags.tag_slug (a real foreign key here) resolves.
 function fakeD1({
   rows = ROWS, dismissed = [{ nexus_id: '777' }], count, fail = false,
 } = {}) {
@@ -154,54 +140,44 @@ function fakeD1({
   };
 }
 
-test('DATA_SOURCE=d1 builds the dataset from D1, not mods.json', async () => {
-  const env = {
-    DATASET: fakeKV(), DB: fakeD1(), SITE_ORIGIN: 'https://x', DATA_SOURCE: 'd1',
-  };
-  const r = await runRefresh(env, fakeFetch({ banModsJson: true }));
+test('the dataset is built from D1, and mods.json is never fetched', async () => {
+  const env = { DATASET: fakeKV(), DB: fakeD1(), SITE_ORIGIN: 'https://x' };
+  const r = await runRefresh(env, fakeFetch());
   assert.equal(r.changed, true);
   const full = await env.DATASET.get(KEYS.full, 'json');
   assert.deepEqual(Object.keys(full).sort(), ['m1', 'nexus-888']);
 });
 
-test('both sources produce an IDENTICAL dataset (the parity gate, in miniature)', async () => {
-  const fromMods = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
-  const fromD1 = {
-    DATASET: fakeKV(), DB: fakeD1(), SITE_ORIGIN: 'https://x', DATA_SOURCE: 'd1',
-  };
-  await runRefresh(fromMods, fakeFetch());
-  await runRefresh(fromD1, fakeFetch());
+test('a row change moves the content hash (the build is not a fixed payload)', async () => {
+  // What the two-source parity gate used to prove, minus the second source.
+  // Without this, every "unchanged content" assertion elsewhere could hold for
+  // the wrong reason: a build that always emits the same bytes.
+  const base = { DATASET: fakeKV(), DB: fakeD1(), SITE_ORIGIN: 'https://x' };
+  await runRefresh(base, fakeFetch());
+  const a = await base.DATASET.get(KEYS.full, 'json');
+  assert.ok(Object.keys(a).length > 0, 'an empty dataset would compare equal for free');
 
-  const a = await fromMods.DATASET.get(KEYS.full, 'json');
-  const b = await fromD1.DATASET.get(KEYS.full, 'json');
-  // Byte comparison, exactly as the real gate does -- key order included.
-  assert.equal(JSON.stringify(b), JSON.stringify(a));
-  assert.ok(Object.keys(a).length > 0, 'two empty datasets would compare equal for free');
-
-  // Negative control: the comparison above is worth nothing unless it can go
-  // red. Same reasoning as parity-check.mjs, at unit scale.
   const mutated = {
     DATASET: fakeKV(),
     DB: fakeD1({ rows: [{ ...ROWS[0], name: 'Manual Loft ' }, ROWS[1]] }),
     SITE_ORIGIN: 'https://x',
-    DATA_SOURCE: 'd1',
   };
   await runRefresh(mutated, fakeFetch());
   const c = await mutated.DATASET.get(KEYS.full, 'json');
   assert.notEqual(JSON.stringify(c), JSON.stringify(a), 'a changed name must be detected');
 });
 
-test('an unset DATA_SOURCE stays on mods.json (absent config is never permissive)', async () => {
+test('no DB binding fails the refresh rather than serving a locationless map', async () => {
+  // There is no static file to degrade to, so the failure must be loud.
   const env = { DATASET: fakeKV(), SITE_ORIGIN: 'https://x' };
-  // No DB binding at all: if the default silently switched to D1 this throws.
   const r = await runRefresh(env, fakeFetch());
-  assert.equal(r.changed, true);
-  assert.equal(r.stale, false);
+  assert.equal(r.stale, true);
+  assert.equal(r.version, null);
 });
 
 test('a D1 failure keeps last-known-good and flags stale, never an empty map', async () => {
   const env = {
-    DATASET: fakeKV(), DB: fakeD1(), SITE_ORIGIN: 'https://x', DATA_SOURCE: 'd1',
+    DATASET: fakeKV(), DB: fakeD1(), SITE_ORIGIN: 'https://x',
   };
   await runRefresh(env, fakeFetch());                 // seed a good dataset
   const before = await env.DATASET.get(KEYS.full, 'json');
@@ -216,12 +192,34 @@ test('a D1 failure keeps last-known-good and flags stale, never an empty map', a
   assert.equal(meta.discovery_stale, true);
 });
 
+test('a failed nexus_cache sweep is reported as itself, not as an empty cache', async () => {
+  // The sweep rethrows rather than degrading to an empty index. Both spellings
+  // end in `stale`, so the assertion that distinguishes them is the REPORTED
+  // ERROR: swallowing the sweep failure makes the refresh blame
+  // "nexus_cache is empty", which sends the next reader to the wrong table.
+  const db = fakeD1();
+  const env = {
+    DATASET: fakeKV(),
+    DB: {
+      ...db,
+      prepare(sql) {
+        if (sql.includes('nexus_cache')) throw new Error('nexus_cache write refused');
+        return db.prepare(sql);
+      },
+    },
+    SITE_ORIGIN: 'https://x',
+  };
+  const r = await runRefresh(env, fakeFetch());
+  assert.equal(r.stale, true);
+  assert.match(r.error, /nexus_cache write refused/);
+  assert.doesNotMatch(r.error, /nexus_cache is empty/, 'the symptom must not replace the cause');
+});
+
 test('a truncated result set fails the refresh rather than shrinking the map', async () => {
   const env = {
     DATASET: fakeKV(),
     DB: fakeD1({ rows: [ROWS[0]], count: 2 }), // returned 1, COUNT(*) says 2
     SITE_ORIGIN: 'https://x',
-    DATA_SOURCE: 'd1',
   };
   const r = await runRefresh(env, fakeFetch());
   assert.equal(r.stale, true);
@@ -234,7 +232,7 @@ test('an empty nexus_cache is refused rather than served image-less', async () =
   // would replace a good dataset with a stripped one, so it must fail into
   // last-known-good instead.
   const env = {
-    DATASET: fakeKV(), DB: fakeD1(), SITE_ORIGIN: 'https://x', DATA_SOURCE: 'd1',
+    DATASET: fakeKV(), DB: fakeD1(), SITE_ORIGIN: 'https://x',
   };
   const r = await runRefresh(env, fakeFetch({ nexusKnowsNothing: true }));
   assert.equal(r.stale, true);
@@ -243,7 +241,7 @@ test('an empty nexus_cache is refused rather than served image-less', async () =
 
 test('an empty locations table is refused, not materialized', async () => {
   const env = {
-    DATASET: fakeKV(), DB: fakeD1({ rows: [] }), SITE_ORIGIN: 'https://x', DATA_SOURCE: 'd1',
+    DATASET: fakeKV(), DB: fakeD1({ rows: [] }), SITE_ORIGIN: 'https://x',
   };
   const r = await runRefresh(env, fakeFetch());
   assert.equal(r.stale, true);
@@ -255,7 +253,6 @@ test('dismissed candidates keep a mod off the map under D1', async () => {
     DATASET: fakeKV(),
     DB: fakeD1({ dismissed: [] }), // 777 no longer dismissed
     SITE_ORIGIN: 'https://x',
-    DATA_SOURCE: 'd1',
   };
   await runRefresh(env, fakeFetch());
   const full = await env.DATASET.get(KEYS.full, 'json');

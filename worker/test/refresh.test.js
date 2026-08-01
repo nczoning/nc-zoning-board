@@ -23,16 +23,44 @@ function fakeKV(initial = {}) {
   };
 }
 
-// Production binds D1 in every environment, including the one still building
-// from mods.json: the cron sweeps `nexus_cache` either way, and archive
-// listings persist there rather than in KV. An env without DB is a separate
-// case, asserted in refresh-d1.test.js.
+// This file covers the CRON MECHANICS: the content-hash gate, the heartbeat,
+// stale/recovery, alerts and archive budgeting. What the dataset is built FROM
+// is covered in refresh-d1.test.js. Both run against real SQLite on the real
+// migrations, because D1 is the only source.
+//
+// `apartment` is a real registry slug seeded by migration 0002, so the
+// location_tags foreign key resolves.
+const ROWS = [
+  {
+    id: 'm1', name: 'Manual Loft', nexus_id: '12345', category: 'new-location',
+    x: 250, y: 250, z: 10, yaw: null, description: 'x', credits: null,
+    authors: '["Spud"]', status: 'published',
+    admin_notes: null, owner_id: null,
+    added_at: '2026-01-01T00:00:00Z', modified_at: '2026-01-01T00:00:00Z',
+  },
+  {
+    id: 'nexus-888', name: 'Auto Bar', nexus_id: '888', category: 'other',
+    x: 600, y: 600, z: null, yaw: null, description: 'auto', credits: null,
+    authors: '["Up888"]', status: 'published',
+    admin_notes: null, owner_id: null,
+    added_at: '2026-01-01T00:00:00Z', modified_at: '2026-01-01T00:00:00Z',
+  },
+];
+
+// 777 is dismissed rather than absent, so it stays off the map and out of
+// `skipped`, which is what excluded_mods.json used to do on the static path.
+function seededD1() {
+  const db = sqliteD1({ locations: ROWS, locationTags: [['m1', 'apartment']] });
+  db._db.prepare(
+    'INSERT INTO dismissed_candidates (nexus_id, reason, dismissed_by, dismissed_at) VALUES (?, ?, ?, ?)',
+  ).run('777', null, 'test', '2026-01-01T00:00:00Z');
+  return db;
+}
+
 const newEnv = (over = {}) => ({
-  DATASET: fakeKV(), DB: sqliteD1(), SITE_ORIGIN: 'https://x', ...over,
+  DATASET: fakeKV(), DB: seededD1(), SITE_ORIGIN: 'https://x', ...over,
 });
 
-const TAGS = { apartment: 'a place', corpo: 'suits' };
-const EXCLUDED = { 777: 'mistagged' };
 const SUBDISTRICTS = {
   districts: [
     {
@@ -45,14 +73,8 @@ const SUBDISTRICTS = {
     { id: 'badlands', name: 'Badlands', subdistricts: [] },
   ],
 };
-const MODS = [
-  {
-    id: 'm1', name: 'Manual Loft', authors: ['Spud'], coordinates: [250, 250, 10],
-    nexus_id: '12345', description: 'x', category: 'new-location', tags: ['apartment'],
-  },
-];
-
-// GraphQL response with one valid auto mod (888) and the excluded 777.
+// GraphQL response with the tagged mod already on the map (888) and the
+// dismissed 777.
 const NEXUS_PAGE = {
   data: {
     mods: {
@@ -76,13 +98,11 @@ const NEXUS_PAGE = {
 // fetch stub keyed by URL substring; nexus POST returns the page. `archiveCalls`
 // (optional) records each archive subrequest so tests can assert on budgeting
 // and cache reuse; `failArchives` makes the modFiles call fail.
-function fakeFetch({ failNexus = false, failMods = false, discordSink, archiveCalls, failArchives = false } = {}) {
+function fakeFetch({ failNexus = false, discordSink, archiveCalls, failArchives = false } = {}) {
   return async (url, init) => {
-    if (url.includes('/mods.json')) {
-      return failMods ? { ok: false, status: 500 } : { ok: true, json: async () => MODS };
-    }
-    if (url.includes('/tags.json')) return { ok: true, json: async () => TAGS };
-    if (url.includes('/excluded_mods.json')) return { ok: true, json: async () => EXCLUDED };
+    // Subdistricts are the only source file left. mods.json, tags.json and
+    // excluded_mods.json have no branch here on purpose: a request for one
+    // falls through to the throw at the bottom and fails the test loudly.
     if (url.includes('/subdistricts.json')) return { ok: true, json: async () => SUBDISTRICTS };
     // Archive-name endpoints (installed-mod detection). Checked before the
     // generic api.nexusmods.com branch: "api-router.nexusmods.com" and
@@ -258,8 +278,10 @@ test('Nexus failure keeps last-known-good and flags stale + alerts Discord', asy
 });
 
 test('failure with no prior dataset returns stale with null version, no crash', async () => {
-  const env = newEnv();
-  const r = await runRefresh(env, fakeFetch({ failMods: true }));
+  // An empty registry is the trigger: readLocationRows refuses to materialize
+  // an empty map. What matters is the shape of the failure, not its cause.
+  const env = { DATASET: fakeKV(), DB: sqliteD1(), SITE_ORIGIN: 'https://x' };
+  const r = await runRefresh(env, fakeFetch());
   assert.equal(r.stale, true);
   assert.equal(r.version, null);
   assert.equal(await env.DATASET.get(KEYS.full, 'json'), null);
@@ -309,16 +331,20 @@ test('archive fetch failure degrades to [] and never marks the dataset stale', a
 });
 
 test('archive refresh is budgeted per run and cold-fills over multiple runs', async () => {
-  // 20 manual mods, all numeric nexus_ids, cold cache → all stale at once.
+  // 20 published rows, all numeric nexus_ids, cold cache → all stale at once.
   const many = Array.from({ length: 20 }, (_, i) => ({
-    id: `m${i}`, name: `Mod ${String(i).padStart(2, '0')}`, authors: ['A'],
-    coordinates: [250, 250, 10], nexus_id: String(1000 + i), description: 'x',
-    category: 'other', tags: [],
+    id: `m${i}`, name: `Mod ${String(i).padStart(2, '0')}`, nexus_id: String(1000 + i),
+    category: 'other', x: 250, y: 250, z: 10, yaw: null, description: 'x', credits: null,
+    authors: '["A"]', status: 'published', admin_notes: null, owner_id: null,
+    added_at: '2026-01-01T00:00:00Z', modified_at: '2026-01-01T00:00:00Z',
+  }));
+  // modsByUid must answer for all 20: an empty nexus_cache is refused outright,
+  // so a stub that returns nothing would fail the refresh before the archive
+  // pass this test is about ever runs.
+  const thumbs = many.map((r) => ({
+    modId: Number(r.nexus_id), pictureUrl: 'p', thumbnailUrl: 't', updatedAt: '2026-07-08',
   }));
   const impl = (archiveCalls) => async (url, init) => {
-    if (url.includes('/mods.json')) return { ok: true, json: async () => many };
-    if (url.includes('/tags.json')) return { ok: true, json: async () => TAGS };
-    if (url.includes('/excluded_mods.json')) return { ok: true, json: async () => ({}) };
     if (url.includes('/subdistricts.json')) return { ok: true, json: async () => SUBDISTRICTS };
     if (url.includes('api-router.nexusmods.com')) {
       archiveCalls.push('router');
@@ -330,14 +356,14 @@ test('archive refresh is budgeted per run and cold-fills over multiple runs', as
     }
     if (url.includes('api.nexusmods.com')) {
       if (JSON.parse(init.body).query.includes('modsByUid')) {
-        return { ok: true, json: async () => ({ data: { modsByUid: { nodes: [] } } }) };
+        return { ok: true, json: async () => ({ data: { modsByUid: { nodes: thumbs } } }) };
       }
       return { ok: true, json: async () => ({ data: { mods: { nodes: [], totalCount: 0 } } }) };
     }
     throw new Error(`unexpected fetch: ${url}`);
   };
 
-  const env = newEnv();
+  const env = { DATASET: fakeKV(), DB: sqliteD1({ locations: many }), SITE_ORIGIN: 'https://x' };
   const run1 = [];
   await runRefresh(env, impl(run1));
   const refreshed1 = run1.filter((c) => c === 'router').length;

@@ -22,7 +22,7 @@ The dev branch exists from **before Phase 0 started** through the eventual merge
 | Production | `main` | [nczoning.net](https://nczoning.net) | Cloudflare Pages (native Git integration) |
 | Staging | `dev` | [dev.nczoning.net](https://dev.nczoning.net) | Cloudflare Pages (native Git integration) |
 
-Both environments are separate Cloudflare Pages projects on the same repo (prod builds `main`, staging builds `dev`). Cloudflare runs `node scripts/build_mods.js` on every push to the project's branch and deploys the result. No GitHub Actions secrets or tokens needed. Cloudflare's GitHub integration handles authentication itself.
+Both environments are separate Cloudflare Pages projects on the same repo (prod builds `main`, staging builds `dev`). The build command is empty since Phase 6: Cloudflare uploads the repo as it stands on every push to the project's branch. No GitHub Actions secrets or tokens needed. Cloudflare's GitHub integration handles authentication itself.
 
 **Location data is the same on both.** dev.nczoning.net reads the production Data API, so the two sites differ in *code*, never in the mods shown. This means a `dev` branch that is behind `main` on merged locations no longer displays a stale map — that drift was only ever visible because the dev site used to read the staging API. See [`dev-environment.md`](dev-environment.md).
 
@@ -184,8 +184,8 @@ npx serve .   # Serve the repo root
 localhost included, so there is nothing to build first. `?api=dev` points at
 staging when you are testing an API change.
 
-`mods.json` is still built on every Cloudflare deploy and nothing reads it; it
-keeps the D1 cutover revertible and retires at Phase 6.
+There is no build step. `mods.json` and `data/locations/` went at Phase 6, so a
+deploy is an upload.
 
 ## Troubleshooting
 

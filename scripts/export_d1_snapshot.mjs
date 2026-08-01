@@ -2,10 +2,11 @@
 /**
  * Nightly D1 → git snapshot (Part C).
  *
- * WHY THIS EXISTS, IN ONE LINE: since the cutover, `data/locations/*.json` is a
- * mirror of 288 of 297 records: the nine auto-discovered `nexus-<id>` rows have
- * never existed as files. The registry's only off-Cloudflare backup is already
- * incomplete, today, before Phase 6 deletes anything.
+ * WHY THIS EXISTS, IN ONE LINE: this is the registry's only off-Cloudflare
+ * backup. Phase 6 deleted the `data/locations/` mirror in `main`, which had
+ * only ever covered 288 of 297 records (the nine auto-discovered `nexus-<id>`
+ * rows never existed as files). The paths written below are on the orphan
+ * `data-snapshots` branch and share nothing with `main`.
  *
  * Writes a *working tree*, not a commit. The workflow decides whether the diff
  * is worth committing (`git diff --quiet || commit`), so a quiet night produces

@@ -25,9 +25,9 @@ Tags describe the aesthetic, function, or intended audience of a location mod. T
 
 > **The tag registry lives in D1 and is served at `/v1/tags`.** It is edited in the
 > dashboard, and a mistyped tag is refused on write rather than caught in CI
-> afterwards. `data/tags.json` survives only as the site's fallback if the API is
-> unreachable, and as the file `scripts/validate_tags.js` checks `mods.json`
-> against while `mods.json` is still built. Both retire at Phase 6.
+> afterwards. `data/tags.json` survives as the site's fallback if the API is
+> unreachable. `scripts/validate_tags.js` went at Phase 6 with the location
+> files it checked; it would have passed green over an empty directory.
 
 ---
 

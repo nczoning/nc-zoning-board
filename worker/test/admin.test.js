@@ -55,9 +55,6 @@ const SUBDISTRICTS = {
 function refreshFetch() {
   return async (url, init) => {
     const u = String(url);
-    if (u.includes('/mods.json')) return { ok: true, json: async () => [] };
-    if (u.includes('/tags.json')) return { ok: true, json: async () => ({ apartment: 'a place' }) };
-    if (u.includes('/excluded_mods.json')) return { ok: true, json: async () => ({}) };
     if (u.includes('/subdistricts.json')) return { ok: true, json: async () => SUBDISTRICTS };
     // Non-fatal by construction in refresh.js: a miss leaves images null.
     if (u.includes('api-router.nexusmods.com')) return { ok: false, status: 503 };
@@ -92,14 +89,13 @@ const FRESH_USER = (collab = 1) => ({
 });
 
 function envFor({
-  collab = 1, dataSource = 'mods', locations = [ROW],
+  collab = 1, locations = [ROW],
   locationTags = [['loc-1', 'apartment']], checkedAt,
 } = {}) {
   const user = FRESH_USER(collab);
   if (checkedAt) user.checked_at = checkedAt;
   return {
     SESSION_SECRET: SECRET,
-    DATA_SOURCE: dataSource,
     DATASET: fakeKv(),
     DB: sqliteD1({ locations, locationTags, users: [user] }),
   };
@@ -580,31 +576,14 @@ test('the audit feed comes back newest first', async () => {
   assert.equal(entries[0].target, 'second-one');
 });
 
-// ------------------------------------------------- write-through gating ---
+// ------------------------------------------------------- write-through ---
 
-test('a write does NOT materialize while DATA_SOURCE is mods', async () => {
-  // Otherwise an admin edit would silently overwrite KV with D1-derived data
-  // and perform the Phase 2 cutover as a side effect.
-  const env = envFor({ dataSource: 'mods' });
-  const waited = [];
-  await hit(env, 'POST', '/admin/locations', VALID, { waitUntil: (p) => waited.push(p) });
-  assert.equal(waited.length, 0, 'must not rebuild KV while mods.json is the source');
-});
-
-test('a tag write does NOT materialize while DATA_SOURCE is mods either', async () => {
-  const env = envFor({ dataSource: 'mods' });
-  const waited = [];
-  await hit(env, 'POST', '/admin/tags', { slug: 'rooftop', description: 'Up top.' },
-    { waitUntil: (p) => waited.push(p) });
-  assert.equal(waited.length, 0);
-});
-
-test('a write DOES materialize once DATA_SOURCE is d1', async () => {
+test('a write materializes unconditionally, with no source gate to switch it off', async () => {
   // Asserts KV actually gained the dataset, not merely that waitUntil was
   // handed a promise. materializeAfterWrite catches its own errors, so the
   // bare `await waited[0]` cannot fail: a rebuild that fails on every record
   // satisfies it as readily as one that works.
-  const env = refreshableEnv({ dataSource: 'd1' });
+  const env = refreshableEnv();
   const waited = [];
   await hit(env, 'POST', '/admin/locations', VALID, { waitUntil: (p) => waited.push(p) });
   assert.equal(waited.length, 1, 'the read path must be rebuilt write-through');
@@ -622,8 +601,8 @@ function refreshableEnv(opts = {}) {
   return env;
 }
 
-test('POST /admin/refresh rebuilds and says which source it used', async () => {
-  const env = refreshableEnv({ dataSource: 'd1' });
+test('POST /admin/refresh rebuilds and reports the source', async () => {
+  const env = refreshableEnv();
   const res = await hit(env, 'POST', '/admin/refresh');
   assert.equal(res.status, 200);
   const body = await res.json();
@@ -634,19 +613,8 @@ test('POST /admin/refresh rebuilds and says which source it used', async () => {
   assert.equal(auditRows(env).at(-1).action, 'dataset.refresh');
 });
 
-test('a manual refresh runs even while DATA_SOURCE is mods', async () => {
-  // Unlike the write-through materialize, which is skipped there. The gate on
-  // that one avoids spending a KV write rebuilding from a source the write did
-  // not touch; this route is someone explicitly asking, and runRefresh honours
-  // DATA_SOURCE either way, so it cannot flip the cutover.
-  const env = refreshableEnv({ dataSource: 'mods' });
-  const res = await hit(env, 'POST', '/admin/refresh');
-  assert.equal(res.status, 200);
-  assert.equal((await res.json()).source, 'mods');
-});
-
 test('an unchanged rebuild reports changed:false, which is still a success', async () => {
-  const env = refreshableEnv({ dataSource: 'd1' });
+  const env = refreshableEnv();
   assert.equal((await (await hit(env, 'POST', '/admin/refresh')).json()).changed, true);
   const second = await (await hit(env, 'POST', '/admin/refresh')).json();
   assert.equal(second.refreshed, true);
@@ -659,7 +627,7 @@ test('a failed rebuild is a 500 that says so, not a reported success', async () 
   // call every failed rebuild a win. An empty registry is the trigger
   // here (readLocationRows refuses to materialize an empty map); the shape of
   // the failure is what matters, not its cause.
-  const env = refreshableEnv({ dataSource: 'd1', locations: [], locationTags: [] });
+  const env = refreshableEnv({ locations: [], locationTags: [] });
   const res = await hit(env, 'POST', '/admin/refresh');
   assert.equal(res.status, 500);
   const body = await res.json();
@@ -669,7 +637,7 @@ test('a failed rebuild is a 500 that says so, not a reported success', async () 
 });
 
 test('a tag write rebuilds the read path too, since /v1/tags serves it', async () => {
-  const env = envFor({ dataSource: 'd1' });
+  const env = envFor();
   const waited = [];
   await hit(env, 'PATCH', '/admin/tags/corpo', { name: 'Corpo' },
     { waitUntil: (p) => waited.push(p) });

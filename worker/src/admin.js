@@ -134,12 +134,6 @@ export async function handleAdmin(request, env, ctx) {
 
   // ---- rebuild the read path ---------------------------------------------
   //
-  // Deliberately NOT gated on DATA_SOURCE, unlike materializeAfterWrite. That
-  // gate exists so an admin write does not spend a KV write rebuilding from a
-  // source the write did not touch; this route is someone explicitly asking for
-  // a rebuild, and runRefresh honours DATA_SOURCE either way: from mods.json in
-  // production, from D1 on staging. It cannot flip the cutover.
-  //
   // It exists because staging has NO CRON (removed to stay inside the 1,000
   // KV writes/day free-tier cap), so nothing there re-materializes on its own.
   // Staging has no cron, so its KV changes only when a rebuild is requested
@@ -148,7 +142,6 @@ export async function handleAdmin(request, env, ctx) {
   // Awaited rather than fire-and-forget: the caller asked for a rebuild, so the
   // response has to say whether they got one.
   if (url.pathname === '/admin/refresh' && method === 'POST') {
-    const source = env.DATA_SOURCE ?? 'mods';
     let result;
     try {
       result = await runRefresh(env);
@@ -168,12 +161,14 @@ export async function handleAdmin(request, env, ctx) {
       }, 500);
     }
 
-    await writeAudit(env, { actor, action: 'dataset.refresh', target: source });
+    await writeAudit(env, { actor, action: 'dataset.refresh', target: 'd1' });
     // `changed: false` is a success: the content hash matched, so there was
     // nothing to write. Distinct from a failure, and the caller is told which.
     return json(request, {
       refreshed: true,
-      source,
+      // Constant since Phase 6 left one source. Kept in the response so the
+      // dashboard's rebuild panel does not have to change shape.
+      source: 'd1',
       changed: result?.changed === true,
       dataset_version: result?.version ?? null,
     });
