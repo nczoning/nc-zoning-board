@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-08-02
+
+The folder of location files in git is gone. It had been read by nothing since
+the registry moved into the database in 2.0.0, and it was never a complete copy
+of it; the nightly backup added in 2.2.0 is, so the half-copy could go. Nothing
+about the map changes.
+
+### Removed
+
+- **The static location build is gone**: `data/locations/`, `mods.json`, `build_mods.js`, `validate_tags.js` and the two coordinate-import scripts. D1 has been the registry since 2.0.0 and the nightly export has been the backup since 2.2.0.
+- `DATA_SOURCE`, with the `mods.json` code path it selected (`merge.js`, `parse.js`, `parity-ab.mjs`). Rolling back to the static build is now a revert of the release, not a config change.
+- The Cloudflare Pages build command, on both projects. A deploy uploads the repo as it stands.
+
+### Changed
+
+- API `0.5.0` to `0.5.1`. `/v1/meta.skipped` now lists every open candidate; it used to hide the ones whose description carried a metadata block, which nothing reads any more.
+- `mods.schema.json` accepts the `nexus-<modId>` ids of the nine pre-cutover records. It never did, and nothing caught it because those nine were the records missing from the git mirror.
+
 ## [2.2.1] - 2026-08-01
 
 Approving a submission no longer quietly undoes an admin's work. A submission can

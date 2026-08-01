@@ -17,8 +17,8 @@
         "properties": {
             "id": {
                 "type": "string",
-                "description": "UUID v4 — auto-generated, do not set manually",
-                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+                "description": "Server-generated, never set by a submitter. A UUID v4, or 'nexus-<modId>' for the nine records imported from auto-discovery before the cutover. The legacy form is a closed set: nothing mints a new one.",
+                "pattern": "^([0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|nexus-\\d+)$"
             },
             "name": {
                 "type": "string",

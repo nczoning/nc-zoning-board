@@ -1,17 +1,16 @@
 /**
  * Write-path validation for admin location mutations.
  *
- * `mods.schema.json` was the CI gate on `data/locations/*.json`. Once writes
- * arrive through the API instead of through pull requests, that gate has to
- * move here or it simply disappears — the validation does not leave with the
- * workflow.
+ * This IS the gate. Writes arrive through the API rather than through pull
+ * requests, so nothing in CI sees a location before it is stored;
+ * `mods.schema.json` describes the stored shape but is read by no runtime code.
  *
  * Hand-rolled rather than ajv-in-the-Worker: ajv is heavy and its default mode
  * compiles with `new Function`, which Workers refuses. The link back to the
- * real schema is therefore a TEST, not an import — test/validate.test.js runs
- * ajv over `mods.schema.json` and asserts it agrees with this file across all
- * 287 live records plus crafted invalid ones. If the schema changes and this
- * does not, that test fails. That is the whole mechanism, and it is the reason
+ * real schema is therefore a TEST, not an import. test/validate.test.js runs
+ * ajv over `mods.schema.json` and asserts it agrees with this file across the
+ * 297-record frozen corpus plus crafted invalid ones. If the schema changes and
+ * this does not, that test fails. That is the whole mechanism, and it is the reason
  * the duplication is safe rather than a slow drift.
  *
  * Differences from the file schema, deliberately:

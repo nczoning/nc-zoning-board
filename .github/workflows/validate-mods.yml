@@ -1,5 +1,18 @@
 name: Validate Mod Data
 
+# The `validate-json` job below is a REQUIRED status check on main's ruleset
+# (13449449). Renaming the job, or deleting this workflow, leaves every future
+# PR waiting on a check that can never report. Keep the job id even when it has
+# nothing left to validate.
+#
+# What it used to do: build mods.json from data/locations/*.json, run ajv
+# against mods.schema.json, and check tags. All three went at Phase 6 with the
+# files they read. Location data is in D1 and is validated on the write path by
+# worker/src/validate.js, which is where a bad value is now refused.
+#
+# mods.schema.json survives as the cross-check that worker/test/validate.test.js
+# runs ajv against, so it is still checked, by the Worker suite rather than here.
+
 on:
   pull_request:
     branches: [ main ]
@@ -12,39 +25,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Check for data file changes
-        id: changes
+      - name: Confirm no location data has come back
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.event.pull_request.base.sha }}"
-          else
-            BASE="${{ github.event.before }}"
+          if [ -e data/locations ]; then
+            echo "::error::data/locations/ is back. The registry is D1; see docs/architecture.md."
+            exit 1
           fi
-          CHANGED=$(git diff --name-only "$BASE" "${{ github.sha }}" 2>/dev/null \
-            | grep -E '^(data/locations/|data/tags\.json|mods\.schema\.json)' || true)
-          if [ -n "$CHANGED" ]; then
-            echo "data_changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "data_changed=false" >> $GITHUB_OUTPUT
+          if [ -e scripts/build_mods.js ]; then
+            echo "::error::build_mods.js is back. mods.json is not built or read any more."
+            exit 1
           fi
-
-      - name: Setup Node.js
-        if: steps.changes.outputs.data_changed == 'true'
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-
-      - name: Build mods.json
-        if: steps.changes.outputs.data_changed == 'true'
-        run: node scripts/build_mods.js
-
-      - name: Validate JSON Schema against Data
-        if: steps.changes.outputs.data_changed == 'true'
-        run: npx -y ajv-cli validate -s mods.schema.json -d mods.json
-
-      - name: Validate Tags consistency
-        if: steps.changes.outputs.data_changed == 'true'
-        run: node scripts/validate_tags.js
+          echo "No re-added location files or build script."

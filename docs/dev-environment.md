@@ -56,7 +56,7 @@ The staging deployment is hosted on Cloudflare Pages under the project `nc-zonin
 | Project name | `nc-zoning-board-dev` |
 | Connected repository | `nczoning/nc-zoning-board` |
 | Production branch | `dev` |
-| Build command | `node scripts/build_mods.js` |
+| Build command | *(empty)*: the site is static, nothing is compiled at deploy |
 | Build output directory | `/` |
 | Custom domain | `dev.nczoning.net` |
 
@@ -67,9 +67,8 @@ No GitHub Actions secrets or API tokens are required. Cloudflare's native Git in
 1. Cloudflare detects the push via GitHub webhook
 2. Clones the repository at the pushed commit
 3. Runs `npm clean-install` (installs dependencies from `package.json`)
-4. Runs `node scripts/build_mods.js`: generates `mods.json` from `data/locations/*.json`
-5. Uploads all files (including the generated `mods.json`) to Cloudflare's global network
-6. Site is live at `dev.nczoning.net` within ~60 seconds of pushing
+4. Uploads the files as they are in the repo to Cloudflare's global network
+5. Site is live at `dev.nczoning.net` within ~60 seconds of pushing
 
 ### Cloudflare Pages dashboard
 
@@ -133,9 +132,9 @@ from every origin, localhost included, so locations are always live and there is
 nothing to rebuild. Use `?api=dev` to point at staging when testing an API
 change.
 
-`mods.json` is still built on every Cloudflare deploy and **nothing reads it**.
-It exists so the D1 cutover stays revertible, and it retires at Phase 6.
-Rebuilding it locally does not affect what the map shows.
+There is nothing to build. `mods.json`, `build_mods.js` and `data/locations/`
+went at Phase 6, and the Pages build command is empty. A deploy uploads the
+repo as it stands.
 
 ---
 

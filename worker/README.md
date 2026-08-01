@@ -71,9 +71,10 @@ deployed env returns `503 not_ready` until its first cron tick seeds KV.
 ## Dataset refresh (cron)
 
 Every 5 minutes (production only) the `scheduled` handler runs `runRefresh`
-(`src/refresh.js`): fetch `mods.json` + tags + exclusions + `subdistricts.json`
-from `SITE_ORIGIN`, run the Nexus auto-discovery merge with district
-enrichment, and write to KV **only when the content hash changes**. On any
+(`src/refresh.js`): read the registry and tags from D1, fetch
+`subdistricts.json` from `SITE_ORIGIN`, sweep Nexus for images and archive
+names with district enrichment, and write to KV **only when the content hash
+changes**. On any
 source failure it keeps the last-known-good dataset, sets `discovery_stale` in
 the meta record, and (if configured) posts a Discord alert. It never serves an
 empty or partial dataset.
@@ -93,8 +94,9 @@ KV keys: `dataset:v1:full`, `dataset:v1:districts`, `dataset:v1:tags`,
 
 ## D1 (`DB` binding)
 
-The location registry. **Phase 1 only populates and verifies it — nothing reads
-it yet**, and the cron still sources from `mods.json`.
+The location registry, and the only source of locations and tags. There is no
+static fallback: `mods.json`, `build_mods.js` and `data/locations/` went at
+Phase 6, and the backup is the nightly `data-snapshots` export.
 
 Two databases, because named Wrangler environments inherit nothing: production
 is `nczoning-data`, staging is `nczoning-data-staging`. **Every migration must
@@ -114,9 +116,10 @@ database does not exist as far as the command is concerned and you get
 `Couldn't find a D1 DB with the name or binding` — which is the mechanism by
 which "apply it to both" quietly becomes "applied to one".
 
-Unlike KV, this content is **not derived** — losing it loses data. D1 Time
-Travel covers 30 days; `data/locations/` in git is the longer backstop until
-the nightly export lands.
+Unlike KV, this content is **not derived**: losing it loses data. D1 Time
+Travel covers 30 days, and the nightly `data-snapshots` export
+(`.github/workflows/export-d1-snapshot.yml`) is the longer backstop. It is the
+only backstop now that `data/locations/` is gone.
 
 ### What staging is for (and what it is not)
 
@@ -143,17 +146,16 @@ npx wrangler d1 execute nczoning-data-staging --env staging --remote --file .imp
 `--table` and `--no-schema` are both load-bearing: a full export carries the
 schema and the `d1_migrations` table, which staging already has, so it conflicts.
 
-**Do not reseed staging with `import-locations.mjs`.** That script regenerates
-from `data/locations/` plus the live API, which produces *equivalent* data, not
-a *copy* — it stamps `created_at`/`updated_at` with the import time and knows
-nothing about the D1-only columns (`admin_notes`, `owner_id`, dismissal reasons,
-`audit_log`). Seeding staging that way left it holding the same 296 records as
-production under a `created_at` almost three hours adrift.
+**Reseed staging from an export, not by regenerating.** `import-locations.mjs`
+run against a stale directory produces *equivalent* data, not a *copy*: it
+stamps the dates with the import time and knows nothing about the D1-only
+columns (`admin_notes`, `owner_id`, dismissal reasons, `audit_log`). Seeding
+staging that way once left it holding the same records as production under a
+`created_at` almost three hours adrift.
 
-Those columns are not served on `/v1`, so this does not affect the parity gates
-today. It will matter from **Phase 4**, when D1 becomes the source of truth and
-`data/locations/` goes stale — at which point regenerating from the repo would
-actively produce wrong data.
+Point it at a checkout of the `data-snapshots` branch with
+`--files-only --data <the checkout's data dir>`, which carries the dates and
+the dismissals as exported.
 
 `import-locations.mjs` remains the right tool for exactly one job: the initial
 seed of an empty database, or a rebuild from git if D1 is ever lost.
@@ -218,33 +220,27 @@ databases**: it holds the hand-built listings from `scripts/archive-seeds.json`
 for mods whose Nexus file preview is broken, and a refetch replaces those with
 nothing.
 
-### Switching the source (`DATA_SOURCE`)
+### There is no source switch any more
 
-`DATA_SOURCE` in `wrangler.jsonc` decides where the cron reads the registry
-from: `mods` (the compiled `mods.json`) or `d1`. **Anything other than `d1`
-means `mods`, including unset** — absent config must never read as "switch
-production onto the new source".
+`DATA_SOURCE` was removed at Phase 6, with `mods.json` and the `buildDataset`
+merge it selected. D1 is the registry unconditionally, and a missing `DB`
+binding fails the refresh loudly rather than degrading to a static file.
 
-The Phase 2 cutover is that one word, and so is the rollback. That is the point
-of it being a var: reverting is a config change on a build already known to
-work, not a revert-and-redeploy while production is wrong.
+Rolling back to the static build is a revert of the release, not a config
+change. `parity-ab.mjs` went with the second code path it existed to diff.
 
 ```bash
-node scripts/parity-ab.mjs      # both code paths, swept clock  <- run this first
 node scripts/parity-check.mjs   # D1 vs the live API, byte-for-byte
 ```
 
-**`parity-ab.mjs` is the one to trust for the cutover.** `parity-check.mjs`
-compares against the live API, which only changes when the content hash does —
-so on a quiet day re-running it compares the same bytes for hours and cannot
-fail. `parity-ab.mjs` instead runs `buildDataset` and `materializeFromD1`
-head-to-head on identical Nexus input, then sweeps the clock ±365 days across
-the `recently_updated` boundary. It exercises the drift a multi-day soak was
-hoping to stumble into, in seconds, and it **fails if the swept field never
-varied** — a sweep that changed nothing tested nothing.
+**`parity-check.mjs` can no longer fail**, and is kept only as a shape check.
+It diffs `materializeFromD1` against the live API, and the live API *is* this
+database now, so it compares a thing to itself. It was a real gate only while
+two sources existed.
 
-Waiting is not a test. Do not gate the cutover on elapsed time; gate it on both
-scripts green.
+What replaced it is in the test suite: `a row change moves the content hash`
+(`test/refresh-d1.test.js`) is the unit-scale version of the same claim, and it
+can go red.
 
 ## Admin auth (Phase 3)
 
@@ -364,26 +360,23 @@ KV was found 14 hours stale, still serving the pre-4b `/v1/tags` map shape, with
 nothing to notice it. `POST /admin/refresh` is the fix, and the dashboard shows
 dataset age in the top bar so the state is visible rather than assumed.
 
-Unlike the write-through materialize, it is **not** gated on `DATA_SOURCE`. That
-gate exists so an admin write does not spend a KV write rebuilding from a source
-the write did not touch; this route is someone explicitly asking, and
-`runRefresh` honours `DATA_SOURCE` either way: from `mods.json` in production,
-from D1 on staging. It cannot flip the cutover.
-
 **`runRefresh` does not throw on failure.** It catches, keeps last-known-good,
 flags `discovery_stale` and *returns* `{stale: true}`. So the route branches on
 that return value, not on whether the call threw. Treating "it did not throw" as
 success would report every failed rebuild as a win. `changed: false` is a
 success, meaning the content hash matched and nothing needed rewriting.
 
-### Getting `data/locations/` into D1
+### There is no git path into D1
 
-`scripts/sync-locations.mjs` existed to close a gap that no longer exists:
-submissions used to arrive as an issue, become a PR, merge to `main` as a new
-`data/locations/<uuid>.json`, and reach `mods.json` while **D1 heard nothing**.
-It was deleted at the D1 cutover along with the issue forms and their workflows,
-because keeping git as a second source of truth is the redundant-representation
-problem the migration removes.
+`scripts/sync-locations.mjs` closed a gap that no longer exists: a submission
+arriving as an issue, becoming a PR, merging to `main` as a location file and
+reaching the map while **D1 heard nothing**. It went at the cutover with the
+issue forms and their workflows; the files themselves went at Phase 6. Git as a
+second source of truth is the redundant-representation problem the migration
+removes, so do not add a path back.
+
+`import-locations.mjs` remains, for restoring from an export into an empty
+database. That is a recovery tool, not a sync.
 
 Locations are submitted from the map now and land in D1 directly. The only
 remaining path from files into D1 is `scripts/import-locations.mjs`, which is the
@@ -640,8 +633,8 @@ Every mutation writes an audit row, and an approval writes **two**: the queue
 moved and so did the registry. Reading a location's history must not depend on
 knowing which route created it.
 
-Approvals rebuild the read path through the same `DATA_SOURCE`-gated
-`materializeAfterWrite` as every other admin write. A rejection rebuilds
+Approvals rebuild the read path through the same `materializeAfterWrite` as
+every other admin write. A rejection rebuilds
 nothing: no record changed, and a KV write with nothing to write is a wasted
 unit of the daily free-tier cap.
 

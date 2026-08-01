@@ -48,10 +48,9 @@ const submission = (over = {}) => ({
   ...over,
 });
 
-function envFor({ collab = 1, dataSource = 'mods', locations = [LOCATION], ...seed } = {}) {
+function envFor({ collab = 1, locations = [LOCATION], ...seed } = {}) {
   return {
     SESSION_SECRET: SECRET,
-    DATA_SOURCE: dataSource,
     DATASET: fakeKv(),
     DB: sqliteD1({
       locations,
@@ -533,7 +532,7 @@ test('restore_location_id is refused on anything but approving a create', async 
 
 test('a restore materializes, because a record did change', async () => {
   const env = envFor({
-    dataSource: 'd1', locations: [LOCATION, HIDDEN], submissions: [resubmission()],
+    locations: [LOCATION, HIDDEN], submissions: [resubmission()],
   });
   const waited = [];
   await hit(env, 'POST', `/admin/submissions/${firstId(env)}/approve`,
@@ -605,28 +604,18 @@ test('an unknown submission is a 404, not a silent success', async () => {
   }
 });
 
-// ------------------------------------------------------ write-through gating ---
+// ------------------------------------------------------------ write-through ---
 
-test('an approval does NOT materialize while DATA_SOURCE is mods', async () => {
-  // Same rule as every other admin write: a rebuild here would overwrite KV
-  // with D1-derived content and perform the Phase 2 cutover as a side effect.
-  const env = envFor({ dataSource: 'mods', submissions: [submission()] });
-  const waited = [];
-  await hit(env, 'POST', `/admin/submissions/${firstId(env)}/approve`, undefined,
-    { waitUntil: (p) => waited.push(p) });
-  assert.equal(waited.length, 0);
-});
-
-test('an approval DOES materialize once DATA_SOURCE is d1', async () => {
-  const env = envFor({ dataSource: 'd1', submissions: [submission()] });
+test('an approval materializes: an approved change must reach the map', async () => {
+  const env = envFor({ submissions: [submission()] });
   const waited = [];
   await hit(env, 'POST', `/admin/submissions/${firstId(env)}/approve`, undefined,
     { waitUntil: (p) => waited.push(p) });
   assert.equal(waited.length, 1, 'an approved change must reach the map write-through');
 });
 
-test('a rejection materializes nothing even on d1: no record changed', async () => {
-  const env = envFor({ dataSource: 'd1', submissions: [submission()] });
+test('a rejection materializes nothing: no record changed', async () => {
+  const env = envFor({ submissions: [submission()] });
   const waited = [];
   await hit(env, 'POST', `/admin/submissions/${firstId(env)}/reject`, { reason: 'no' },
     { waitUntil: (p) => waited.push(p) });

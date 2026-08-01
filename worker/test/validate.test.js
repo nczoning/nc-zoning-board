@@ -21,12 +21,32 @@ const TAG_NAMES = new Set(Object.keys(tagsDict));
 const ajv = new Ajv({ allErrors: true });
 const ajvValidateOne = ajv.compile(schema.items);
 
-const RECORDS = fs.readdirSync(path.join(REPO, 'data', 'locations'))
-  .filter((f) => f.endsWith('.json'))
-  .map((f) => JSON.parse(fs.readFileSync(path.join(REPO, 'data', 'locations', f), 'utf8')));
+// A FROZEN corpus of 297 real records, taken from the data-snapshots export on
+// 2026-08-01, the day before Phase 6 deleted data/locations/ from the repo. It
+// does not track the registry and is not a backup: D1 is the registry and the
+// nightly export is the backup. It is here because these tests need realistic
+// records, and realistic does not mean current. Regenerate only to add a shape
+// the corpus lacks, and say which shape in the commit message.
+//
+// Shapes it covers: 297 records, all 3 categories, 3-element coordinates
+// throughout, 284 with yaw, 18 with credits, 25 untagged, 9 legacy `nexus-`
+// ids, 1 WIP/Dummy nexus_id. It has NO 2-element `[x, y]` coordinate, which
+// the schema and validate.js both still permit; the MUTATIONS below are what
+// cover coordinate arity.
+const RECORDS = JSON.parse(
+  fs.readFileSync(path.join(REPO, 'worker', 'test', 'fixtures', 'locations-corpus.json'), 'utf8'),
+);
 
-/** The write path never accepts `id`; strip it before comparing. */
-const asInput = (rec) => { const { id, ...rest } = rec; return rest; };
+/**
+ * The stored shape is not the input shape. `id` and the two dates are set by
+ * the server and refused on the write path, so strip them before handing a
+ * stored record to validateLocationInput. ajv still sees the full record,
+ * because mods.schema.json describes what is stored.
+ */
+const asInput = (rec) => {
+  const { id, added_at: _a, modified_at: _m, ...rest } = rec;
+  return rest;
+};
 
 // ---------------------------------------------------------------------------
 // This is the link between validate.js and mods.schema.json. validate.js is
@@ -35,8 +55,8 @@ const asInput = (rec) => { const { id, ...rest } = rec; return rest; };
 // the schema without changing validate.js and they fail.
 // ---------------------------------------------------------------------------
 
-test('every live record is accepted by BOTH ajv and validate.js', () => {
-  assert.ok(RECORDS.length > 200, `expected the real corpus, got ${RECORDS.length}`);
+test('every record in the frozen corpus is accepted by BOTH ajv and validate.js', () => {
+  assert.equal(RECORDS.length, 297, `expected the frozen corpus, got ${RECORDS.length}`);
   for (const rec of RECORDS) {
     assert.equal(ajvValidateOne(rec), true, `ajv rejected ${rec.id}: ${ajv.errorsText(ajvValidateOne.errors)}`);
     const mine = validateLocationInput(asInput(rec), { tagNames: TAG_NAMES });

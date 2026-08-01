@@ -46,33 +46,13 @@
 		// package.json, then run `npm run version:lock` —
 		// test/api-version.test.js enforces all four. There is no monotonicity
 		// check, so a decrease passes provided all four move together.
-		"API_VERSION": "0.5.0",
-		// Origin the cron pulls source files from (mods.json, tags, subdistricts).
+		"API_VERSION": "0.5.1",
+		// Origin the cron pulls subdistricts from. Locations and tags are in D1;
+		// this is the last thing served as a static file.
 		"SITE_ORIGIN": "https://nczoning.net",
-		// Where the LOCATION REGISTRY is read from: "mods" (the compiled
-		// mods.json on SITE_ORIGIN) or "d1" (the DB binding above).
-		//
-		// The Phase 2 cutover is this one word, and so is its rollback -- a
-		// config change on a build already known to work, rather than a revert
-		// and redeploy while production is wrong.
-		//
-		// Anything other than "d1" means mods.json, INCLUDING unset. Absent
-		// config must never read as "switch production to the new source".
-		//
-		// FLIPPED 2026-07-31 (#888 stage 5). Both gates were green against
-		// production D1 first: parity-check byte-for-byte identical on 297
-		// records with 9/9 negative controls, and parity-ab agreeing at all 10
-		// swept clocks with recently_updated actually varying. Note that
-		// parity-check can no longer fail from here, because the live API it
-		// diffs against IS this database now.
-		//
-		// ROLLBACK IS THIS WORD. Set it back to "mods" and production serves
-		// exactly what it served before, off a build already known to work.
-		// mods.json is still built and still unread, which is what keeps that
-		// true; it goes at Phase 6, not before.
-		//
-		// Tags and subdistricts still come from SITE_ORIGIN either way.
-		"DATA_SOURCE": "d1",
+		// `DATA_SOURCE` was removed at Phase 6, along with mods.json and the
+		// merge path it selected. D1 is the only registry. Rolling back to the
+		// static build now means reverting the release, not setting a var.
 		// --- Admin auth (Phase 3) -------------------------------------------
 		// Not secrets: an App id and an OAuth client id are both public. The
 		// private key and client secret are Worker secrets — see README.
@@ -100,11 +80,10 @@
 			"id": "2f547f4c22ab4d5fb2cf4636e50a2559"
 		}
 	],
-	// Location registry (source of truth from Phase 2; Phase 1 imports and
-	// verifies it while mods.json is still the live source). Unlike KV, this
-	// content is NOT derived — losing it loses data, so it is never "recreate
-	// at any time". D1 Time Travel covers 30 days; the git mirror of
-	// data/locations/ is the longer backstop until Part C's nightly export.
+	// The location registry, and the only source. Unlike KV, this content is
+	// NOT derived: losing it loses data, so it is never "recreate at any
+	// time". D1 Time Travel covers 30 days, and the nightly export to the
+	// data-snapshots branch is the longer backstop. There is no git mirror.
 	//
 	// STAGING HAS ITS OWN DATABASE (see env.staging). Named environments do not
 	// inherit bindings, so `wrangler d1 migrations apply` must be run against
@@ -171,7 +150,7 @@
 			],
 			"vars": {
 				// Pre-1.0 window — see the production block above.
-				"API_VERSION": "0.5.0",
+				"API_VERSION": "0.5.1",
 				"SITE_ORIGIN": "https://dev.nczoning.net",
 				// STAGING IS THE D1 CANARY: it runs the D1 path while production
 				// stays on mods.json, so the binding, the reads and the whole
@@ -188,9 +167,8 @@
 				// Space repeat triggers ~60s apart: KV reads are eventually
 				// consistent, so back-to-back cycles re-read the pre-write
 				// archive cache and appear to stall.
-				// Seed its database first — an empty `locations` is refused, by
+				// Seed its database first: an empty `locations` is refused, by
 				// design, rather than materialized as an empty map.
-				"DATA_SOURCE": "d1",
 				// Admin auth — see the production block. One App carries BOTH
 				// callback URLs (api.nczoning.net and api-dev.nczoning.net), so
 				// it serves both environments. SESSION_SECRET must DIFFER

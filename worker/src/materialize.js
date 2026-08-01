@@ -1,28 +1,21 @@
 /**
  * Materializer: D1 `locations` rows -> the served /v1 record map.
  *
- * The D1-sourced counterpart to buildDataset() in merge.js. Phase 1 only
- * *verifies* it (scripts/parity-check.mjs diffs its output against the live
- * API byte-for-byte); the cron does not call it until Phase 2.
+ * The only builder of the served dataset. Every location is a D1 row,
+ * including the 9 that arrived via auto-discovery before the cutover.
  *
- * WHAT CHANGES vs merge.js, and why the shape does not:
- * - Locations no longer come from mods.json + parsed Nexus blocks. They all
- *   come from D1, including the 9 records that arrived via
- *   auto-discovery (imported at Phase 1, `source='auto'` preserved).
- * - Nothing auto-publishes any more. A tagged Nexus mod with a valid block is
- *   a *candidate*, not a location. So the Nexus loop here only ever backfills
- *   images and collects `skipped`; it never creates a record. That is the
- *   plan's model, and it is why `dismissed_candidates` alone replaces the dual
- *   role excluded_mods.json used to play.
+ * Nothing auto-publishes. A tagged Nexus mod is a *candidate*, not a location,
+ * so the Nexus loop here only backfills images and collects `skipped`; it
+ * never creates a record. That is why `dismissed_candidates` alone replaces
+ * the dual role excluded_mods.json played.
  *
- * The record key ORDER below is load-bearing: /v1 responses are compared
- * byte-for-byte at the Phase 1 gate, and JSON.stringify emits insertion order.
- * It mirrors merge.js:141-157 deliberately, and the parity diff is what proves
- * the mirror is faithful. `archives` is appended afterwards by attachArchives
- * below, so it is absent from the literal by design, not by omission.
+ * The record key ORDER below is load-bearing: JSON.stringify emits insertion
+ * order, and the /v1 payload is a public contract that was fixed by a
+ * byte-for-byte parity gate at the cutover. `archives` is appended afterwards
+ * by attachArchives below, so it is absent from the literal by design, not by
+ * omission.
  */
 
-import { parseNcZoningBlock } from './parse.js';
 import { assignDistrict } from './districts.js';
 import { RECENTLY_UPDATED_DAYS } from './config.js';
 
@@ -80,7 +73,6 @@ function resolveTags(row, locationTags) {
  * @param {object} input
  * @param {Array}  input.rows          D1 `locations` rows (all statuses; filtered here)
  * @param {Set|Array} input.dismissed  nexus_ids from `dismissed_candidates`
- * @param {object} input.tagsDict      data/tags.json, for block validation
  * @param {Array}  input.nexusNodes    raw nodes from the NCZoning GraphQL query
  * @param {Array}  input.districts     data/subdistricts.json `districts[]`
  * @param {Map}    [input.nexusIndex]  readNexusIndex(): the Nexus-derived fields
@@ -91,10 +83,9 @@ function resolveTags(row, locationTags) {
  * @returns {{full: Object<string, object>, meta: object}}
  */
 export function materializeFromD1({
-  rows, dismissed, tagsDict, nexusNodes, districts, nexusIndex = new Map(),
+  rows, dismissed, nexusNodes, districts, nexusIndex = new Map(),
   locationTags = null, nowMs = Date.now(),
 }) {
-  const validTagNames = new Set(Object.keys(tagsDict));
   const dismissedIds = dismissed instanceof Set ? dismissed : new Set(dismissed || []);
 
   // Only published records reach the map. `hidden` keeps the row but pulls the
@@ -117,11 +108,12 @@ export function materializeFromD1({
     // Already on the map. Its images come from the index like every other
     // record's, so the node has nothing left to contribute here.
     if (existingNexusIds.has(nexusId)) continue;
-    // Not a location and not dismissed: a candidate. Surfaced on /v1/meta as
-    // `skipped` exactly as before when it has no valid block. A mod WITH a
-    // valid block is also not published here -- see the header note.
-    const parsed = parseNcZoningBlock(node.description, validTagNames);
-    if (!parsed) skipped.push({ nexus_id: nexusId, name: node.name || 'Unknown Mod' });
+    // Not a location and not dismissed: a candidate, surfaced on /v1/meta as
+    // `skipped`. Every such mod is listed. The block parser used to filter this
+    // list down to the ones that failed to parse; nothing publishes from a
+    // block any more, so a mod carrying one is a candidate like any other and
+    // hiding it would only hide it from the reviewer.
+    skipped.push({ nexus_id: nexusId, name: node.name || 'Unknown Mod' });
   }
 
   const all = published
