@@ -5,7 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.4.0] - 2026-08-02
+
+The admin dashboard works on a phone, and says what it means. Nothing about
+the map changes. "D1" was the name of a Cloudflare product showing through in
+labels an admin reads, and the audit log's expanded record was column names and
+JSON; both now read as English, with the verbatim record kept one fold deeper so
+a friendlier log is still a checkable one. The dashboard had two media queries
+and no mobile design: eight tabs on one row, and an editor that opened below the
+table and off the bottom of the screen.
 
 ### Changed
 
