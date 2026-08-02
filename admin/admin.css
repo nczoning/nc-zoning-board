@@ -1051,16 +1051,19 @@ button.breakdown-row:hover .k { color: var(--secondary); }
         gap: var(--space-lg);
         position: fixed;
         top: var(--topbar-h, 4rem);
-        right: 0;
+        /* Slides out from under its own button, which is the first thing in the
+           bar. A drawer that opens on the far side of the screen from the
+           control that opened it reads as an unrelated panel. */
+        left: 0;
         bottom: 0;
         width: min(22rem, 85vw);
         padding: var(--space-lg);
         /* Fully opaque. The drawer covers most of the screen and the tab labels
            are the only thing on it, so nothing behind it should be legible. */
         background: var(--primary);
-        border-left: var(--ui-border-thin) solid var(--secondary-30);
+        border-right: var(--ui-border-thin) solid var(--secondary-30);
         overflow-y: auto;
-        transform: translateX(100%);
+        transform: translateX(-100%);
         transition: transform 0.18s ease;
         z-index: 12;
     }
