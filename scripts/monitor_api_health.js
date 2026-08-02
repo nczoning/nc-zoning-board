@@ -47,6 +47,10 @@
  *          map-alerts channel, so the dashboard keeps a history of everything
  *          this monitor has said. Prints a preview instead of sending if the
  *          secret is unset. NCZ_API_BASE defaults to https://api.nczoning.net.
+ *          Every run's alert is recorded; the `notify` flag on the payload
+ *          decides whether it also reaches Discord. An outage and an exhausted
+ *          self-heal do; a wedged cron whose redeploy was dispatched, an
+ *          all-clear and a soft signal do not. See postHealthAlert.
  * Self-heal env: API_HEALTH_SELF_HEAL=true + GH_TOKEN (+ GITHUB_REPOSITORY,
  *          GITHUB_API_URL — set by Actions). Absent → alert only.
  * Exit:    0 when every target is serving fresh data; 1 on any outage, a wedged
@@ -331,13 +335,21 @@ async function postHealthAlert(results, { recovered = false, selfHeal: heal = nu
   // wedged but auto-heal dispatched, page ORANGE), recovery (all-clear edge),
   // warning (soft). Outage wins if anything is down; recovery only applies when
   // this run is fully clean (no outage AND no staleness).
-  let title, description, color;
+  //
+  // `notify` decides Discord; every branch is recorded in the dashboard either
+  // way. The line it draws is whether a person changes anything by reading it.
+  // An outage and an exhausted self-heal need someone. A wedged cron that a
+  // redeploy was just dispatched for does not: that loop closes by itself in
+  // one tick, and its own failure mode (the redeploy not clearing it) already
+  // has the louder alert two branches up.
+  let title, description, color, notify;
   if (down.length) {
     title = `🔴 Data API outage — ${down.length} environment${down.length === 1 ? "" : "s"} not serving`;
     description =
       "The API is not usable by consumers (in-game mods have no fallback). " +
       "The website may look fine via its client-side fallback — this is that hidden failure surfacing.";
     color = 15158332; /* red */
+    notify = true;
   } else if (frozen.length && escalatedAny) {
     const n = heal.escalated.length;
     title = `🔴 Data API stale — self-heal exhausted on ${n} environment${n === 1 ? "" : "s"}`;
@@ -345,6 +357,7 @@ async function postHealthAlert(results, { recovered = false, selfHeal: heal = nu
       "The refresh cron is wedged and automatic redeploys have not cleared it — " +
       "manual intervention is needed (see below). Consumers are being served a frozen snapshot.";
     color = 15158332; /* red */
+    notify = true;
   } else if (frozen.length) {
     title = `🟠 Data API stale — refresh cron wedged on ${frozen.length} environment${frozen.length === 1 ? "" : "s"}`;
     description =
@@ -352,16 +365,25 @@ async function postHealthAlert(results, { recovered = false, selfHeal: heal = nu
       "so consumers (in-game mods have no fallback) are getting a frozen snapshot. See issue #849." +
       (heal ? "" : " Interim fix: redeploy the Worker to revive the cron.");
     color = 16753920; /* orange */
+    // Silent only when a redeploy was actually dispatched for every stale
+    // target. Self-heal switched off, unmapped, or partly failed leaves nothing
+    // working the problem, and then this alert IS the response.
+    notify = (heal?.healed || []).length < frozen.length;
   } else if (recovered) {
     title = `✅ Data API recovered — serving normally again`;
     description =
       "The earlier outage has cleared: every target is serving again." +
       (anyWarning ? " One soft signal is still active (see below)." : "");
     color = 3066993; /* green */
+    // An all-clear asks nothing of anyone. The run going green says it too.
+    notify = false;
   } else {
     title = `🟠 Data API warning`;
     description = "The API is serving but a soft signal fired (see below).";
     color = 15105570; /* amber */
+    // discovery_stale is the only soft signal, and the cron raises its own
+    // alert about it with its own escalation. Repeating it here is duplication.
+    notify = false;
   }
 
   // Fold the self-heal outcome into the alert body (one post per run).
@@ -380,6 +402,7 @@ async function postHealthAlert(results, { recovered = false, selfHeal: heal = nu
     // repeated here; the emoji in `title` above is stripped for the same reason.
     title: title.replace(/^[^\p{L}\d]+/u, "").trim(),
     body: detail ? `${description}\n\n${detail}` : description,
+    notify,
   });
 }
 
@@ -396,10 +419,10 @@ async function postHealthAlert(results, { recovered = false, selfHeal: heal = nu
  * the other end. Same name, two separate stores, and setting one does not set
  * the other. See learnings/discord-webhook-two-secret-stores.
  */
-async function sendAlert({ severity, title, body }) {
+async function sendAlert({ severity, title, body, notify = true }) {
   const base = process.env.NCZ_API_BASE || "https://api.nczoning.net";
   const secret = process.env.ALERTS_INGEST_SECRET;
-  const payload = { source: "api-health", severity, title, body };
+  const payload = { source: "api-health", severity, title, body, notify };
 
   if (!secret) {
     console.log("\n--- ALERTS_INGEST_SECRET not set — preview of the alert that would be sent ---");
@@ -415,11 +438,15 @@ async function sendAlert({ severity, title, body }) {
   });
   if (!res.ok) throw new Error(`Alert ingest HTTP ${res.status}: ${await res.text()}`);
 
-  // The endpoint reports the two halves separately. A recorded-but-not-forwarded
-  // alert is in the dashboard and not in Discord, which is worth saying out loud
-  // in the job log rather than reading as a clean run.
+  // The endpoint reports the halves separately, and the two ways an alert can
+  // fail to reach Discord are different problems. Not notifying is this run's
+  // own routing decision; notifying and not being forwarded is the webhook
+  // being broken, which is worth saying out loud rather than reading as a clean
+  // run.
   const result = await res.json().catch(() => ({}));
-  if (result.forwarded === false) {
+  if (result.notified === false) {
+    console.log("Alert recorded (log-only: nothing here needs a human).");
+  } else if (result.forwarded === false) {
     console.log("Alert recorded, but Discord did not accept it (check the Worker's webhook secret).");
   } else {
     console.log("Alert recorded and forwarded.");

@@ -2680,14 +2680,28 @@
     return out;
   }
 
+  // `notify = 0` means the producer decided this one needed recording but not
+  // interrupting. Marked rather than hidden: this tab is where a log-only alert
+  // is meant to be readable, and an unmarked one would read as a Discord post
+  // somebody missed.
+  const isLogOnly = (a) => a.notify === 0 || a.notify === false;
+
   function alertCard(a) {
     const severity = SEVERITY_LABEL[a.severity] ? a.severity : 'info';
     const acknowledged = Boolean(a.acknowledged_at);
+    const logOnly = isLogOnly(a);
     return h('div', { class: `alert-entry sev-${severity}${acknowledged ? ' acknowledged' : ''}` },
       h('div', { class: 'alert-head' },
         h('span', { class: 'alert-sev', text: SEVERITY_LABEL[severity] }),
         h('strong', { class: 'alert-title' }, alertTitleNodes(a.title)),
         h('span', { class: 'spacer', style: 'flex:1' }),
+        logOnly
+          ? h('span', {
+            class: 'badge',
+            title: 'Recorded here only. Nothing was posted to Discord, because nothing here needs a person.',
+            text: 'log only',
+          })
+          : null,
         h('span', { class: 'muted', text: SOURCE_LABEL[a.source] ?? a.source }),
         timeEl(a.at)),
       // Pre-wrap: the body is plain text assembled with newlines by the
@@ -2695,17 +2709,22 @@
       // innerHTML, so a Discord-flavoured body still cannot become markup here.
       a.body ? h('p', { class: 'alert-body' }, bodyNodes(a.body)) : null,
       h('div', { class: 'alert-foot' },
+        // No Acknowledge on a log-only alert. Acknowledging clears something
+        // from the open count, and a log-only alert was never in it, so the
+        // button would be a control that visibly does nothing.
         acknowledged
           ? h('span', { class: 'muted' },
             'Acknowledged by ',
             h('span', { class: 'who', text: a.acknowledged_by || 'someone' }),
             ' ',
             timeEl(a.acknowledged_at))
-          : h('button', {
-            type: 'button',
-            class: 'btn secondary',
-            onclick: (e) => acknowledgeAlert(a.id, e.currentTarget),
-          }, 'Acknowledge')));
+          : logOnly
+            ? h('span', { class: 'muted', text: 'Nothing to acknowledge.' })
+            : h('button', {
+              type: 'button',
+              class: 'btn secondary',
+              onclick: (e) => acknowledgeAlert(a.id, e.currentTarget),
+            }, 'Acknowledge')));
   }
 
   async function loadAlerts() {
@@ -2754,7 +2773,10 @@
     const box = $('#overview-alerts');
     if (!box) return;
 
-    const open = state.alerts.filter((a) => !a.acknowledged_at);
+    // Log-only alerts are excluded, matching `total`, which the server counts
+    // the same way. A panel listing rows the count beside it does not include
+    // reads as a broken number.
+    const open = state.alerts.filter((a) => !a.acknowledged_at && !isLogOnly(a));
     const total = state.alertsUnacknowledged;
 
     if (!total) {

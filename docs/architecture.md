@@ -201,7 +201,7 @@ Alerts come from five sources, and the `source` column names them:
 | Source | Raised by | When |
 | --- | --- | --- |
 | `api-health` | `monitor-api-health.yml`, every 15 min | The Data API (`/v1`) is not serving, **or** its refresh cron has wedged (a frozen `/v1/health.last_refresh_at` heartbeat older than 45 min; the API can serve stale data silently, see #849). On a wedged cron it also **self-heals**: it dispatches `deploy-api.yml` to redeploy the affected Worker (re-registers the Cron Trigger), capped at 2 redeploys/env/hour before escalating for a human |
-| `refresh` | `worker/src/refresh.js`, on the 5-minute cron | A dataset rebuild failed (amber: last-known-good is still served), and the matching all-clear when one later succeeds |
+| `refresh` | `worker/src/refresh.js`, on the 5-minute cron | A dataset rebuild failed (amber: last-known-good is still served), and the matching all-clear when one later succeeds. Both are recorded every time; see [what reaches Discord](#what-reaches-discord) for which of them are posted |
 | `submissions` | `worker/src/submissions.js` | A submission reached the review queue. A plain "one is waiting" post linking to the dashboard, deliberately not the old edit-in-place embed |
 | `quota` | `worker/src/quota.js`, hourly on the cron | A free-tier cap passed 80% for the UTC day. Checked on one tick an hour, and suppressed to once per cap per UTC day |
 | `export` | `export-d1-snapshot.yml`, nightly | The registry backup to the `data-snapshots` branch did not complete. Its own source rather than folded into `refresh`: the 5-minute dataset cron and the nightly git mirror fail for unrelated reasons and are fixed in different places. See [`infrastructure-map.md`](infrastructure-map.md) |
@@ -209,6 +209,34 @@ Alerts come from five sources, and the `source` column names them:
 **In-Worker producers call `raiseAlert()` directly** rather than making an HTTP
 request to their own Worker. `/internal/alerts` is the remote entry point to the
 same function, and exists because a GitHub Action cannot hold a session.
+
+#### What reaches Discord
+
+Every alert is recorded. The `notify` flag on the alert decides whether it is
+also posted, so the channel carries only what a person has to act on and the
+dashboard keeps everything (log-only rows are marked "log only", and are left
+out of the unacknowledged badge because nothing can clear them).
+
+| Posted | Log-only |
+| --- | --- |
+| The API is not serving | A wedged cron that self-heal has already dispatched a redeploy for |
+| Self-heal exhausted, so a human must redeploy | Every all-clear: refresh recovered, API recovered |
+| A refresh failing for 3 consecutive cycles, then once every 3 hours | The first two consecutive refresh failures |
+| A pinned mod hidden or deleted on Nexus | A mod returning to Nexus with nothing left to do |
+| A mod returning to Nexus while a record is still hidden by hand | `discovery_stale` reported as context by the health monitor |
+| A quota cap past 80%, once per cap per UTC day | |
+| A submission waiting in the queue | |
+
+Two rules keep this from going wrong:
+
+- **The producer decides.** Routing on severity or on a title match would put the
+  decision where it cannot see the context: a `recovery` is silent unless a
+  record was hidden by hand, and a wedged cron is silent only because a redeploy
+  was actually dispatched. `notify` is part of the `/internal/alerts` payload for
+  the same reason, so the remote producer keeps the same say as the local ones.
+- **The default is to notify.** Omitting `notify` means true, so a producer that
+  has not considered routing is noisy rather than silent. Silence is the
+  expensive failure.
 
 **Why `/internal/` and not `/admin/`.** Every `/admin/*` route is gated on GitHub
 collaborator status, and `index.js` states that as an invariant. The machine

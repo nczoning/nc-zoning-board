@@ -27,7 +27,7 @@ import { HEARTBEAT_MIN_INTERVAL_MS } from './config.js';
 import {
   KEYS, contentHash, readMeta, writeDataset, writeMeta,
 } from './store.js';
-import { raiseAlert, alertedSinceUtcMidnight } from './alerts.js';
+import { raiseAlert, alertedSinceUtcMidnight, alertStreak } from './alerts.js';
 import { jsonOrThrow } from './json.js';
 import { checkQuotaThresholds } from './quota.js';
 
@@ -48,6 +48,28 @@ async function fetchJson(fetchImpl, origin, path) {
   return jsonOrThrow(res, url);
 }
 
+const REFRESH_FAILED_TITLE = 'Data API refresh failed';
+const REFRESH_RECOVERED_TITLE = 'Data API refresh recovered';
+
+/**
+ * How many consecutive failures before a person is told, and how often after.
+ *
+ * A single failed tick is almost always an upstream blip that the next tick
+ * clears by itself: the dataset never stopped being served, nothing is asked of
+ * anyone, and posting it trained everyone to scroll past the channel. Three
+ * ticks (~15 min) is long enough that it is not a blip.
+ *
+ * The repeat matters as much as the threshold. Notifying ONLY on the third
+ * would mean an outage lasting all afternoon gets one message at the start and
+ * silence after, which reads exactly like a problem that resolved. So it
+ * repeats every 36th failure afterwards -- 3 hours at 5-minute ticks.
+ */
+const REFRESH_FAILURE_NOTIFY_AT = 3;
+const REFRESH_FAILURE_NOTIFY_EVERY = 36;
+
+const notifyOnFailureStreak = (n) => n >= REFRESH_FAILURE_NOTIFY_AT
+  && (n - REFRESH_FAILURE_NOTIFY_AT) % REFRESH_FAILURE_NOTIFY_EVERY === 0;
+
 /**
  * Refresh failed: keep serving last-known-good and say so.
  *
@@ -55,16 +77,35 @@ async function fetchJson(fetchImpl, origin, path) {
  * dashboard gets a history row as well as the channel getting a message. That
  * call never throws, which preserves the rule this function has always had:
  * alerting must never mask the original failure.
+ *
+ * Recorded every time, forwarded to Discord only once the failure has persisted
+ * (see the constants above). The row is written either way, so the dashboard
+ * and `wrangler tail` still show every single failed tick -- what changes is
+ * only whether it interrupts anyone.
  */
 async function alertRefreshFailed(env, fetchImpl, reason) {
+  // +1 counts THIS failure: the streak is read before the row is written.
+  // A D1 failure answering it lands in the catch as `notify: true` -- if the
+  // database cannot say whether this is a blip, it is not a blip.
+  let streak = null;
+  try {
+    streak = await alertStreak(env, {
+      source: 'refresh', title: REFRESH_FAILED_TITLE, resetTitle: REFRESH_RECOVERED_TITLE,
+    }) + 1;
+  } catch {
+    streak = null;
+  }
+
   await raiseAlert(env, {
     source: 'refresh',
     // warn, not error: the dataset is still being served. A failed refresh
     // degrades freshness (discovery_stale=true) and takes nothing down, which
     // is why this embed has always been amber. `error` is for not serving.
     severity: 'warn',
-    title: 'Data API refresh failed',
-    body: `${String(reason).slice(0, 1200)}\n\nServing last-known-good dataset (discovery_stale=true).`,
+    title: REFRESH_FAILED_TITLE,
+    body: `${String(reason).slice(0, 1200)}\n\nServing last-known-good dataset (discovery_stale=true).`
+      + (streak === null ? '' : `\n\nConsecutive failed cycles: ${streak}.`),
+    notify: streak === null || notifyOnFailureStreak(streak),
   }, { fetchImpl });
 }
 
@@ -72,13 +113,19 @@ async function alertRefreshFailed(env, fetchImpl, reason) {
  * The previous cycle marked the dataset discovery_stale and this cycle rebuilt
  * it cleanly, so this is the down to up edge. Fires once (the next successful
  * cycle sees discovery_stale=false and stays quiet).
+ *
+ * Log-only. Nobody is asked to do anything by an all-clear, and the pair of
+ * posts ("failed", then "recovered" five minutes later) was the single largest
+ * source of channel noise that resolved itself before anyone read it. The row
+ * still lands, which is what makes the streak above countable.
  */
 async function alertRefreshRecovered(env, fetchImpl) {
   await raiseAlert(env, {
     source: 'refresh',
     severity: 'recovery',
-    title: 'Data API refresh recovered',
+    title: REFRESH_RECOVERED_TITLE,
     body: 'A refresh succeeded after an earlier failure. The dataset is fresh again (discovery_stale=false).',
+    notify: false,
   }, { fetchImpl });
 }
 
@@ -146,6 +193,11 @@ const storyFor = (status) => STATUS_STORY[status] ?? STATUS_STORY.default;
  * would each see the same crossing before either had written, and the alerts
  * table is the only thing that can see across them.
  *
+ * Notifies. This is the archetype of an alert that needs a person: nothing here
+ * can tell a deletion from a moderation hold from an author mid-upload, only
+ * the reason on the mod page can, and until someone reads it the flag sits in
+ * the dashboard unresolved.
+ *
  * Never throws: an alert about a deleted mod must not cost the dataset a cycle.
  */
 async function alertModStatus(env, fetchImpl, flagged, nowMs) {
@@ -167,6 +219,9 @@ async function alertModStatus(env, fetchImpl, flagged, nowMs) {
         + `separate events, so no more than ${MAX_WITHHELD} pins are ever withheld `
         + 'at once: past that the map is left exactly as it is and this alert is '
         + 'the whole of the response. Check the dashboard.',
+      // The cap declining to act means the response IS this alert. Nothing else
+      // happens until a person looks.
+      notify: true,
     }, { fetchImpl, nowMs });
     return;
   }
@@ -189,6 +244,9 @@ async function alertModStatus(env, fetchImpl, flagged, nowMs) {
         + `${row?.first_seen_at ?? 'this sweep'} (${row?.streak ?? 1} consecutive sweeps).\n\n`
         + `${modPageUrl(id)}\n\n`
         + `Pins affected: ${describePins(row)}.\n\n${story.detail}`,
+      // Only the reason on the mod page distinguishes these three cases, and
+      // the flag stays open until someone reads it.
+      notify: true,
     }, { fetchImpl, nowMs });
   }
 }
@@ -207,13 +265,24 @@ async function alertModStatus(env, fetchImpl, flagged, nowMs) {
  * the common case and one edit in the case that would otherwise go unnoticed
  * for as long as nobody happened to look.
  *
+ * What is left to do also decides the routing, which severity cannot: this is a
+ * `recovery` exactly as `alertRefreshRecovered` is, and sometimes the only
+ * notice anyone gets of a hidden record that can now be republished.
+ * `hiddenByHand` is the test. Nothing left to do is log-only; a record still
+ * hidden notifies, because nothing else raises it again.
+ *
  * Mirrors alertRefreshRecovered: same `recovery` severity, same fires-once-on-
  * the-edge shape. Never throws.
  */
+
+/** Pins a person still has to deal with: hidden by hand while the mod was down. */
+const hiddenByHand = (r) => (r.locations ?? []).filter((l) => l.status !== 'published');
+
 async function alertModRecovered(env, fetchImpl, recovered, nowMs) {
   if (recovered.length > STATUS_ALERT_MAX) {
     const title = `${recovered.length} pinned mods are published on Nexus again`;
     if (await alertedSinceUtcMidnight(env, { source: 'refresh', title }, nowMs)) return;
+    const stillHidden = recovered.filter((r) => hiddenByHand(r).length);
     await raiseAlert(env, {
       source: 'refresh',
       severity: 'recovery',
@@ -221,7 +290,14 @@ async function alertModRecovered(env, fetchImpl, recovered, nowMs) {
       body: `${recovered.map((r) => `${r.nexus_id}: was ${r.was}`).join('\n')}\n\n`
         + 'Any withheld pins are served again from this build. Records that were '
         + 'hidden by hand stay hidden: the registry does not un-hide anything on '
-        + 'its own. Check the dashboard.',
+        + 'its own. Check the dashboard.'
+        + (stillHidden.length
+          ? `\n\n${stillHidden.length} of these still have a record hidden in the `
+            + 'registry that only a person can republish.'
+          : ''),
+      // Same rule as the single case: silent unless a hand-hidden record is
+      // waiting, which in a batch means any one of them.
+      notify: stillHidden.length > 0,
     }, { fetchImpl, nowMs });
     return;
   }
@@ -233,7 +309,7 @@ async function alertModRecovered(env, fetchImpl, recovered, nowMs) {
     // The pins a person still has to deal with. `published` needs nothing; a
     // record someone hid while the mod was down is the whole reason this alert
     // exists, and naming it is the difference between a notification and a task.
-    const needsAHand = (r.locations ?? []).filter((l) => l.status !== 'published');
+    const needsAHand = hiddenByHand(r);
     const todo = needsAHand.length
       ? `Still hidden in the registry: ${needsAHand.map((l) => `${l.name} (${l.status})`).join(', ')}.\n`
         + 'Nothing here changes a location\'s status, so that stays as it is until '
@@ -248,6 +324,8 @@ async function alertModRecovered(env, fetchImpl, recovered, nowMs) {
         + `${storyFor(r.was).headline}.\n\n${modPageUrl(r.nexus_id)}\n\n`
         + `${r.wasWithheld ? 'Its pin was withheld and is restored automatically. ' : ''}`
         + todo,
+      // The withheld pin restored itself; a hand-hidden record does not.
+      notify: needsAHand.length > 0,
     }, { fetchImpl, nowMs });
   }
 }
