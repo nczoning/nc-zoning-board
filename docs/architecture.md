@@ -150,6 +150,7 @@ The 3D scene ships on `main`. These are the other five files:
 - **Validation** happens on the write path in the Worker, so a bad value is refused at submission rather than caught in CI afterwards.
 - **The registry is not in git.** `data/locations/*.json`, `mods.json` and `build_mods.js` were deleted at Phase 6. The backup is the nightly export to the `data-snapshots` branch, plus D1 Time Travel's 30 days.
 - A frozen copy of 297 records lives at `worker/test/fixtures/locations-corpus.json`. It is a **test fixture**, not a backup: it does not track the registry and is not restored from.
+- **A pin whose mod has been deleted from Nexus is flagged, never hidden.** The cron sweep already asks Nexus about every pinned mod; `nexus_missing` counts how many consecutive sweeps came back with nothing for each one. A day of them raises one alert and lists the pin on the Overview's review list. Only a person writes `status` (#900).
 
 ### Styling (`style.css`)
 

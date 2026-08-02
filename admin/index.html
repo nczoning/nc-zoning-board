@@ -119,6 +119,16 @@
       <div id="overview-alerts"></div>
     </div>
 
+    <!-- Pins whose mod is no longer on Nexus. Beside the alerts, because it is
+         the other thing on this page asking for a decision rather than
+         reporting a number, and collapses to one muted line the same way. The
+         cron only ever flags: nothing here has been hidden, and nothing here
+         will be until someone says so. -->
+    <div class="panel" style="grid-column: 1 / -1">
+      <h2>Missing from Nexus</h2>
+      <div id="overview-missing"></div>
+    </div>
+
     <div class="panel">
       <h2>Registry</h2>
       <div id="stat-registry" class="stat-grid"></div>

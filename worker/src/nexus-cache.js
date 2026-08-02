@@ -71,6 +71,7 @@
 
 import { fetchTaggedModNodes, fetchModsByUidThumbs, fetchModArchiveNames } from './nexus.js';
 import { readArchives } from './store.js';
+import { recordSweep, sweepLooksUnreliable } from './nexus-missing.js';
 
 /** Columns compared to decide whether a row needs writing. */
 const TRACKED = [
@@ -412,12 +413,19 @@ export async function refreshNexusCache(env, { fetchImpl = fetch, nowIso, tagged
     .map((r) => String(r.nexus_id))
     .filter((id) => isRealNexusId(id) && !incoming.has(id));
 
+  // Ids this sweep asked Nexus about and did not get back. Populated below;
+  // folded into nexus_missing at the end, once it is known whether the sweep
+  // can be trusted at all.
+  let missingIds = [];
+
   if (needBackfill.length) {
     // Do not wrap this in a try/catch: fetchModsByUidThumbs never throws, it
     // returns {} on failure because images are cosmetic. That empty object is
     // indistinguishable from a successful call that found nothing, so the only
     // usable signal is the count against what was requested.
     const thumbs = await fetchModsByUidThumbs(fetchImpl, needBackfill);
+    const returned = new Set(Object.keys(thumbs ?? {}).map(String));
+    missingIds = needBackfill.filter((id) => !returned.has(id));
     for (const [id, t] of Object.entries(thumbs ?? {})) {
       incoming.set(String(id), {
         nexus_id: String(id),
@@ -450,5 +458,44 @@ export async function refreshNexusCache(env, { fetchImpl = fetch, nowIso, tagged
 
   const writes = diffRows([...incoming.values()], existing);
   summary.written = await writeRows(env, writes, stamp);
+  summary.missing = await trackMissing(env, { missingIds, needBackfill, summary, stamp });
   return summary;
+}
+
+/**
+ * Fold this sweep's unanswered ids into `nexus_missing` (#900).
+ *
+ * Runs after the cache write, and never fails the sweep: a mod that vanished
+ * from Nexus is worth telling someone about, and it is not worth costing the
+ * dataset its freshness when the bookkeeping for it hits a D1 error. Same
+ * posture as archives.
+ *
+ * Two reasons to skip a sweep entirely, and both are the difference between a
+ * useful flag and one Nexus outage flagging the whole registry:
+ *
+ *   * `summary.stale` -- the all-or-nothing case detected above. Asked for
+ *     some, got none: that is Nexus, not the mods.
+ *   * `sweepLooksUnreliable` -- the partial case the stale flag cannot see.
+ *     modsByUid is chunked and a chunk that fails after its retry returns {}
+ *     for its whole share, which looks like a simultaneous mass deletion.
+ *
+ * Skipping leaves the stored streaks untouched rather than resetting them: a
+ * mod that really is gone keeps the count it has earned, and picks up again on
+ * the next sweep worth believing.
+ */
+async function trackMissing(env, { missingIds, needBackfill, summary, stamp }) {
+  if (summary.stale) return { skipped: 'stale', flagged: [] };
+  if (sweepLooksUnreliable({ missing: missingIds.length, requested: needBackfill.length })) {
+    console.warn(
+      `nexus_missing: ignoring sweep, ${missingIds.length} of ${needBackfill.length} `
+      + 'ids came back empty (reads as a Nexus failure, not a deletion)',
+    );
+    return { skipped: 'unreliable', flagged: [] };
+  }
+  try {
+    return await recordSweep(env, { missing: missingIds, nowIso: stamp });
+  } catch (err) {
+    console.warn('nexus_missing tracking failed (non-fatal):', String(err).slice(0, 200));
+    return { skipped: 'error', flagged: [], error: String(err).slice(0, 200) };
+  }
 }

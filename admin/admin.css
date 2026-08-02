@@ -1292,6 +1292,15 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 
 #overview-alerts .btn { margin-top: var(--space-xs); }
 
+/* A missing-mod card's foot carries one control per pin plus the dismissal,
+   where an alert's has only ever had one. Scoped to the panel so the Alerts tab
+   keeps the layout it was reviewed with. */
+#overview-missing .alert-foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+}
+
 /* The diff renders field names and enum values in English, so it is prose and
    set in the body face. The verbatim record below it is JSON, and is the only
    part here that takes the monospace. */

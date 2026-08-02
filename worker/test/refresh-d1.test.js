@@ -215,6 +215,49 @@ test('a failed nexus_cache sweep is reported as itself, not as an empty cache', 
   assert.doesNotMatch(r.error, /nexus_cache is empty/, 'the symptom must not replace the cause');
 });
 
+test('a pin whose mod has been gone for a day raises one alert, and hides nothing', async () => {
+  // The end of #900, through the real cron: the sweep asks Nexus about both
+  // pinned mods, gets one back, and the one it does not get has been missing
+  // long enough to be worth telling someone about.
+  const gone = {
+    ...ROWS[0], id: 'm2', name: 'Deleted Mod Pin', nexus_id: '99999',
+  };
+  const db = fakeD1({ rows: [...ROWS, gone] });
+  db._db.prepare(
+    `INSERT INTO nexus_missing (nexus_id, miss_streak, missing_since, last_missed_at)
+     VALUES (?, ?, ?, ?)`,
+  ).run('99999', 5, new Date(Date.now() - 25 * 3600_000).toISOString(),
+    new Date(Date.now() - 3600_000).toISOString());
+
+  const env = { DATASET: fakeKV(), DB: db, SITE_ORIGIN: 'https://x' };
+  const r = await runRefresh(env, fakeFetch());
+  assert.equal(r.stale, false, 'one mod being gone is not a broken refresh');
+
+  const alerts = db.rows('SELECT * FROM alerts');
+  assert.equal(alerts.length, 1, 'one alert for one disappearance');
+  assert.equal(alerts[0].source, 'refresh');
+  assert.equal(alerts[0].severity, 'warn');
+  assert.match(alerts[0].title, /99999/);
+  assert.match(alerts[0].body, /Deleted Mod Pin/, 'the body has to name the pin, not just the mod id');
+
+  assert.ok(db.one('SELECT flagged_at FROM nexus_missing WHERE nexus_id = ?', '99999').flagged_at);
+  assert.equal(db.one('SELECT status FROM locations WHERE id = ?', 'm2').status, 'published',
+    'flagged, not hidden');
+
+  // Second tick, same day: the flag is already raised, so nothing is said again.
+  await runRefresh(env, fakeFetch());
+  assert.equal(db.rows('SELECT * FROM alerts').length, 1,
+    'alerting every five minutes is how a channel gets muted');
+
+  // And with the stored flag taken away -- which is what two overlapping cron
+  // runs look like, each crossing the threshold before the other has written --
+  // the alerts table is the only thing left that can see the duplicate.
+  db._db.prepare('UPDATE nexus_missing SET flagged_at = NULL WHERE nexus_id = ?').run('99999');
+  await runRefresh(env, fakeFetch());
+  assert.equal(db.rows('SELECT * FROM alerts').length, 1,
+    'alertedSinceUtcMidnight is the backstop when the flag itself cannot dedup');
+});
+
 test('a truncated result set fails the refresh rather than shrinking the map', async () => {
   const env = {
     DATASET: fakeKV(),

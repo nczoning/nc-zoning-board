@@ -16,6 +16,7 @@
 import { fetchTaggedModNodes } from './nexus.js';
 import { materializeFromD1, attachArchives } from './materialize.js';
 import { refreshNexusCache, refreshArchives, readNexusIndex } from './nexus-cache.js';
+import { readMissing, FLAG_MIN_AGE_MS } from './nexus-missing.js';
 import {
   readLocationRows, readDismissedIds, readTags, readLocationTags,
 } from './d1.js';
@@ -24,7 +25,7 @@ import { HEARTBEAT_MIN_INTERVAL_MS } from './config.js';
 import {
   KEYS, contentHash, readMeta, writeDataset, writeMeta,
 } from './store.js';
-import { raiseAlert } from './alerts.js';
+import { raiseAlert, alertedSinceUtcMidnight } from './alerts.js';
 import { checkQuotaThresholds } from './quota.js';
 
 const SCHEMA_VERSION = 1;
@@ -71,6 +72,81 @@ async function alertRefreshRecovered(env, fetchImpl) {
 }
 
 /**
+ * Beyond this many mods flagged on one sweep, say it once instead of once each.
+ *
+ * Twenty separate embeds is a channel nobody reads afterwards, and a flag this
+ * broad is a different story anyway: mods do not disappear in batches, so the
+ * batch itself is the thing worth looking at.
+ */
+const MISSING_ALERT_MAX = 5;
+
+/** "Deleted Mod (12345)", or just the id when Nexus never gave us a name. */
+const describeMod = (row, id) => (row?.mod_name ? `${row.mod_name} (${id})` : `mod ${id}`);
+
+/** "Cliffside Abode, Kabuki Ripper" -- the pins that point at the missing mod. */
+const describePins = (row) => (row?.locations?.length
+  ? row.locations.map((l) => l.name).join(', ')
+  : 'no pins (the location was removed since it was flagged)');
+
+/**
+ * Pinned mods Nexus has stopped returning for a day straight (#900).
+ *
+ * Raised here rather than in the sweep for the reason every other alert is:
+ * nexus-cache.js does D1 and Nexus, this file does the fan-out. The sweep hands
+ * back the ids that crossed the threshold ON THIS TICK, so a mod alerts once
+ * and then lives in the dashboard's review list until a person deals with it.
+ *
+ * `alertedSinceUtcMidnight` is still checked on top of that. The stored
+ * `flagged_at` already makes this once-per-disappearance, but two overlapping
+ * cron runs would each see the same crossing before either had written, and the
+ * alerts table is the only thing that can see across them.
+ *
+ * Never throws: an alert about a missing mod must not cost the dataset a cycle.
+ */
+async function alertMissingMods(env, fetchImpl, flagged, nowMs) {
+  const days = Math.round(FLAG_MIN_AGE_MS / 86400000);
+  const tracked = await readMissing(env);
+  const byId = new Map(tracked.map((r) => [r.nexus_id, r]));
+  const advice = 'Nothing has been hidden: the pins are still on the map. '
+    + 'The registry never changes a location\'s status on its own -- open the '
+    + 'dashboard to hide the record, or dismiss the flag if the mod is only '
+    + 'temporarily unpublished.';
+
+  if (flagged.length > MISSING_ALERT_MAX) {
+    const title = `${flagged.length} pinned mods missing from Nexus`;
+    if (await alertedSinceUtcMidnight(env, { source: 'refresh', title }, nowMs)) return;
+    await raiseAlert(env, {
+      source: 'refresh',
+      severity: 'warn',
+      title,
+      body: `Nexus has not returned these for ${days} day(s) of consecutive sweeps:\n`
+        + `${flagged.map((id) => describeMod(byId.get(id), id)).join('\n')}\n\n`
+        + `A batch this size is more likely a Nexus change than ${flagged.length} `
+        + `deletions. ${advice}`,
+    }, { fetchImpl, nowMs });
+    return;
+  }
+
+  for (const id of flagged) {
+    const row = byId.get(id);
+    // The title is the dedup key, so it carries the id and nothing that moves
+    // between sweeps. The streak belongs in the body: putting it in the title
+    // would make every tick a new alert.
+    const title = `Pinned mod missing from Nexus: ${id}`;
+    if (await alertedSinceUtcMidnight(env, { source: 'refresh', title }, nowMs)) continue;
+    await raiseAlert(env, {
+      source: 'refresh',
+      severity: 'warn',
+      title,
+      body: `${describeMod(row, id)} has not been returned by Nexus since `
+        + `${row?.missing_since ?? 'this sweep'} (${row?.miss_streak ?? 1} consecutive sweeps, `
+        + `at least ${days} day(s)). It was probably deleted or hidden.\n\n`
+        + `Pins affected: ${describePins(row)}.\n\n${advice}`,
+    }, { fetchImpl, nowMs });
+  }
+}
+
+/**
  * Sweep `nexus_cache` and return the index the dataset is built against.
  *
  * The sweep never throws (a Nexus outage must leave last-known-good in place),
@@ -86,6 +162,20 @@ async function sweepNexusCache(env, fetchImpl, nexusNodes, nowIso) {
         `nexus_cache: ${sweep.written} rows written (${sweep.tagged} tagged, `
         + `${sweep.backfilled} backfilled, ${sweep.untagged} untagged)`,
       );
+    }
+    if (sweep.missing?.flagged?.length) {
+      // Its own try/catch, INSIDE the one that rethrows: a D1 failure reading
+      // the cache must keep last-known-good, and a Discord failure telling
+      // someone about a deleted mod must not. Different severities, so they
+      // cannot share a catch.
+      try {
+        const nowMs = Date.parse(nowIso);
+        await alertMissingMods(
+          env, fetchImpl, sweep.missing.flagged, Number.isFinite(nowMs) ? nowMs : Date.now(),
+        );
+      } catch (err) {
+        console.warn('missing-mod alert failed (non-fatal):', String(err).slice(0, 200));
+      }
     }
     return await readNexusIndex(env);
   } catch (err) {

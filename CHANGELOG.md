@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- A pin whose Nexus mod has been deleted or hidden is flagged for review after a day of consecutive sweeps that came back with nothing, with one alert and a list on the dashboard's Overview.
+- Nothing is hidden automatically: the flag is a prompt, and only a person changes a location's status.
+
 ## [2.4.1] - 2026-08-02
 
 ### Fixed

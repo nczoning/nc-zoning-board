@@ -74,6 +74,11 @@
     // "3 open" when it merely fetched 3 of them.
     alerts: [],
     alertsUnacknowledged: 0,
+    // Mods the cron has asked Nexus about and got nothing back for, with the
+    // pins that point at them. Server state, not derived from the locations
+    // list: the count lives in the registry because it is a fact about a run of
+    // sweeps, which nothing in the browser can see.
+    nexusMissing: [],
     selectedLocation: null,   // id, or '' for a new record
     selectedTag: null,        // slug, or '' for a new tag
     selectedSubmission: null, // submission id
@@ -1840,7 +1845,7 @@
    */
   async function refreshAll() {
     const results = await Promise.all([
-      loadTags(), loadLocations(), loadQueue(), loadCandidates(),
+      loadTags(), loadLocations(), loadQueue(), loadCandidates(), loadNexusMissing(),
     ]);
 
     // A record open in the detail pane can have gone away in the meantime.
@@ -2606,6 +2611,122 @@
       }, total > SHOWN ? `See all ${total} open alerts` : 'Open the Alerts tab'));
   }
 
+  // ------------------------------------------- mods missing from Nexus --
+
+  /**
+   * Pins whose mod Nexus has stopped returning (#900).
+   *
+   * Server state, unlike every other number on the Overview: how many
+   * consecutive sweeps a mod has gone unanswered is a fact about a run of cron
+   * ticks, and nothing in the browser can derive it from the locations list.
+   *
+   * The list is served whole, flagged rows and not, and this decides what to
+   * show. A mod that has been quiet for an hour is not news; the panel would
+   * cry wolf daily if the API had already called it one.
+   */
+  async function loadNexusMissing() {
+    const res = await api('/admin/nexus-missing');
+    if (!res.ok) {
+      const [kind, message] = describeFailure(res);
+      banner(kind, message);
+      return false;
+    }
+    state.nexusMissing = res.body.missing || [];
+    renderNexusMissing();
+    return true;
+  }
+
+  /** Whole days a mod has been missing, floored at one: it is never "0 days". */
+  function daysMissing(since) {
+    const ms = Date.now() - Date.parse(since);
+    return Number.isFinite(ms) ? Math.max(1, Math.round(ms / 86400000)) : 1;
+  }
+
+  /**
+   * One flagged mod. Borrows the Alerts tab's card rather than defining a
+   * second one: same severity stripe, same head/body/foot, and the two panels
+   * are reporting the same kind of thing.
+   */
+  function missingEntry(r) {
+    const days = daysMissing(r.missing_since);
+    return h('div', { class: 'alert-entry sev-warn' },
+      h('div', { class: 'alert-head' },
+        h('span', { class: 'alert-sev', text: 'Missing' }),
+        h('strong', { class: 'alert-title', text: r.mod_name || 'Name unknown' }),
+        nexusLink(r.nexus_id),
+        h('span', { class: 'spacer', style: 'flex:1' }),
+        h('span', { class: 'muted', text: `${r.miss_streak} sweeps` }),
+        timeEl(r.missing_since)),
+      h('p', {
+        class: 'alert-body',
+        text: `Nexus has not returned this mod for ${days} day${days === 1 ? '' : 's'}. `
+          + 'It was probably deleted or hidden by its author.',
+      }),
+      h('div', { class: 'alert-foot' },
+        // The pin, not the mod, is the thing that can be changed, so the
+        // buttons go to the record rather than to Nexus. One per pin: a mod can
+        // supply two locations, and hiding one says nothing about the other.
+        r.locations.map((l) => h('button', {
+          type: 'button',
+          class: 'btn secondary',
+          onclick: () => { switchTab('locations'); selectLocation(l.id); },
+        }, `Open ${l.name}`)),
+        h('button', {
+          type: 'button',
+          class: 'btn secondary',
+          title: 'Stop showing this. The mod stays flagged underneath, and the pin is untouched.',
+          onclick: (e) => dismissMissing(r.nexus_id, e.currentTarget),
+        }, 'Dismiss')));
+  }
+
+  /**
+   * The panel. Collapses to one muted line on a quiet day, like the alerts
+   * panel above it, and says what it is NOT showing rather than implying that
+   * the flagged rows are everything being tracked.
+   */
+  function renderNexusMissing() {
+    const box = $('#overview-missing');
+    if (!box) return;
+
+    const rows = state.nexusMissing;
+    const open = rows.filter((r) => r.flagged_at && !r.dismissed_at);
+    const dismissed = rows.filter((r) => r.dismissed_at).length;
+    const watching = rows.filter((r) => !r.flagged_at).length;
+    const aside = [
+      watching ? `${watching} not missing long enough to be sure` : null,
+      dismissed ? `${dismissed} dismissed` : null,
+    ].filter(Boolean).join(', ');
+
+    if (!open.length) {
+      replace(box, h('p', {
+        class: 'muted',
+        text: `Every pin still points at a mod Nexus answers for${aside ? ` (${aside})` : ''}.`,
+      }));
+      return;
+    }
+
+    replace(box,
+      h('p', { class: 'muted', text: 'Nothing here has been hidden. A pin only comes down when someone takes it down.' }),
+      open.map(missingEntry),
+      aside ? h('p', { class: 'muted', text: `Also tracked: ${aside}.` }) : null);
+  }
+
+  /** Clear one flag. The row and its count stay; the panel stops showing it. */
+  async function dismissMissing(nexusId, button) {
+    button.disabled = true;
+    const res = await api(`/admin/nexus-missing/${encodeURIComponent(nexusId)}`, {
+      method: 'PATCH',
+      body: { dismissed: true },
+    });
+    if (!res.ok) {
+      button.disabled = false;
+      const [kind, message] = describeFailure(res);
+      return banner(kind, message);
+    }
+    clearBanner();
+    return loadNexusMissing();
+  }
+
   // -------------------------------------------------- narrow-screen nav --
 
   /**
@@ -2845,7 +2966,7 @@
     // Both feed counts the Overview and the tab badges derive from, so they
     // load at boot rather than on first visit to their tab. A badge that only
     // appears once you have already gone looking is not a notification.
-    await Promise.all([loadQueue(), loadCandidates(), loadAlerts()]);
+    await Promise.all([loadQueue(), loadCandidates(), loadAlerts(), loadNexusMissing()]);
     await refreshFreshness();
     // Overview is the landing tab, and its numbers come from what was just
     // loaded, so it is rendered after both rather than on its own fetch.
