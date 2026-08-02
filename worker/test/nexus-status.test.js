@@ -173,6 +173,68 @@ test('the pin comes back on its own if Nexus publishes the mod again', async () 
   assert.equal((await readWithheld(env)).withhold.size, 0);
 });
 
+// ---------------------------------------------------------- the up edge ---
+// Withholding reverses itself; a record an admin hid does not. The recovery
+// report is the only moment anyone learns the second one can be undone.
+
+test('a mod returning to published is reported, with the pins it affects', async () => {
+  const env = envWith();
+  await sweeps(env, { states: { ...ALL_OK, 200: 'hidden' }, count: CONFIRM_SWEEPS, gap: 5 * MIN });
+
+  const back = await sweeps(env, { states: ALL_OK, count: 1, gap: 5 * MIN, from: HOUR });
+  assert.equal(back.modStatus.recovered.length, 1);
+  assert.equal(back.modStatus.recovered[0].nexus_id, '200');
+  assert.equal(back.modStatus.recovered[0].was, 'hidden');
+  assert.equal(back.modStatus.recovered[0].wasWithheld, false, 'hidden never withheld it');
+  assert.deepEqual(back.modStatus.recovered[0].locations.map((l) => l.name), ['Loc l2'],
+    'captured before the row is deleted, or there is nothing left to name');
+});
+
+test('a deleted mod returning says its pin was withheld', async () => {
+  const env = envWith();
+  await sweeps(env, { states: { ...ALL_OK, 200: WASTEBINNED }, count: CONFIRM_SWEEPS, gap: 5 * MIN });
+  assert.equal((await readWithheld(env)).withhold.size, 1, 'precondition: the pin is down');
+
+  const back = await sweeps(env, { states: ALL_OK, count: 1, gap: 5 * MIN, from: HOUR });
+  assert.equal(back.modStatus.recovered[0].wasWithheld, true);
+  assert.equal((await readWithheld(env)).withhold.size, 0, 'and it is already restored');
+});
+
+test('a mod that was dismissed reports no withholding to undo', async () => {
+  const env = envWith();
+  await sweeps(env, { states: { ...ALL_OK, 200: WASTEBINNED }, count: CONFIRM_SWEEPS, gap: 5 * MIN });
+  await setDismissed(env, '200', { actor: 'spuddeh', nowIso: at(HOUR) });
+
+  const back = await sweeps(env, { states: ALL_OK, count: 1, gap: 5 * MIN, from: 2 * HOUR });
+  assert.equal(back.modStatus.recovered[0].wasWithheld, false,
+    'the admin already put the pin back by hand; there is nothing to restore');
+});
+
+test('a one-sweep blink is not a recovery', async () => {
+  const env = envWith();
+  await sweeps(env, { states: { ...ALL_OK, 200: 'hidden' }, count: 1, gap: 5 * MIN });
+  assert.equal(one(env, '200').flagged_at, null, 'precondition: never confirmed');
+
+  const back = await sweeps(env, { states: ALL_OK, count: 1, gap: 5 * MIN, from: 10 * MIN });
+  assert.deepEqual(back.modStatus.recovered, [],
+    'announcing noise is how the recoveries that matter get skipped');
+  assert.equal(one(env, '200'), null, 'the row still clears');
+});
+
+test('the recovery carries the pin an admin hid, so it can be put back', async () => {
+  const env = envWith();
+  await sweeps(env, { states: { ...ALL_OK, 200: 'hidden' }, count: CONFIRM_SWEEPS, gap: 5 * MIN });
+  // What an admin does about a mod that has gone: pull the pin by hand.
+  env.DB._db.prepare('UPDATE locations SET status = ? WHERE id = ?').run('hidden', 'l2');
+
+  const back = await sweeps(env, { states: ALL_OK, count: 1, gap: 5 * MIN, from: HOUR });
+  assert.deepEqual(back.modStatus.recovered[0].locations, [
+    { id: 'l2', name: 'Loc l2', status: 'hidden' },
+  ], 'no sweep will un-hide this, so the report has to say it is still hidden');
+  assert.equal(env.DB.one('SELECT status FROM locations WHERE id = ?', 'l2').status, 'hidden',
+    'and the recovery must not un-hide it either: that write was a decision');
+});
+
 test('a hidden mod that is then deleted starts its run again', async () => {
   const env = envWith();
   await sweeps(env, { states: { ...ALL_OK, 200: 'hidden' }, count: 5, gap: 5 * MIN });

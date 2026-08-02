@@ -213,8 +213,52 @@ export async function recordSweep(env, { unavailable = new Map(), nowIso }) {
     cleared += 1;
   }
 
+  // The up edge, captured BEFORE the delete, because the row is the only record
+  // that anything was ever wrong. Only rows that were FLAGGED: a mod that
+  // looked odd for one sweep and was fine on the next is not a recovery, it is
+  // noise, and announcing it would teach people to skip the recovery alerts
+  // that matter.
+  //
+  // The pins go with it. Withholding reverses itself, but an admin who HID the
+  // record while the mod was down has made a write that no sweep will undo, and
+  // the only moment anyone can be told is this one.
+  const recovering = [...existing.values()].filter(
+    (r) => !unavailable.has(String(r.nexus_id)) && r.flagged_at,
+  );
+  const pins = recovering.length ? await readPinsForTracked(env) : new Map();
+  const recovered = recovering.map((r) => ({
+    nexus_id: String(r.nexus_id),
+    was: r.status,
+    // Dismissed means the admin already put the pin back by hand, so there is
+    // nothing for this to restore.
+    wasWithheld: r.status === WASTEBINNED && !r.dismissed_at,
+    locations: pins.get(String(r.nexus_id)) ?? [],
+  }));
+
   if (statements.length) await env.DB.batch(statements);
-  return { tracked: unavailable.size, cleared, flagged };
+  return { tracked: unavailable.size, cleared, flagged, recovered };
+}
+
+/**
+ * Pins for every currently tracked mod, keyed by nexus_id.
+ *
+ * `IN (SELECT ...)` rather than an id list, for the reason readCandidates uses
+ * it: no bound parameter per mod, no 100-parameter ceiling to grow into. Read
+ * only when something is recovering, which is rare.
+ */
+async function readPinsForTracked(env) {
+  const { results } = await env.DB.prepare(
+    `SELECT id, name, status, nexus_id FROM locations
+      WHERE nexus_id IN (SELECT nexus_id FROM nexus_mod_status)
+      ORDER BY name`,
+  ).all();
+  const byMod = new Map();
+  for (const l of results ?? []) {
+    const key = String(l.nexus_id);
+    if (!byMod.has(key)) byMod.set(key, []);
+    byMod.get(key).push({ id: l.id, name: l.name, status: l.status });
+  }
+  return byMod;
 }
 
 /**

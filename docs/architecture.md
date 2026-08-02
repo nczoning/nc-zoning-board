@@ -155,6 +155,7 @@ The 3D scene ships on `main`. These are the other five files:
   - `hidden`, confirmed over 3 sweeps: **review list only**. It covers an author mid-upload and a moderation hold equally and the API will not say which, so a person reads the reason on the mod page and decides.
   - absent from the response, 6 sweeps and 24 hours: review list only. The weakest signal, because a failed `modsByUid` chunk manufactures it.
   - Only a person writes `locations.status`. The dashboard's drift row subtracts the withheld pins, so a deliberate withdrawal is not reported as a fault.
+  - **The up edge is reported too.** A mod returning to `published` clears its row and restores any withheld pin automatically, and raises a `recovery` alert. The alert exists for the asymmetric half: withholding reverses itself, but a record an admin hid by hand does not, and this is the only moment anyone is told it can be republished. A status that was never confirmed does not produce a recovery.
 
 ### Styling (`style.css`)
 
