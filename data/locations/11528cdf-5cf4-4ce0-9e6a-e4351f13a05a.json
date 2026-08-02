@@ -1,7 +1,7 @@
 {
     "id": "11528cdf-5cf4-4ce0-9e6a-e4351f13a05a",
-    "name": "Jig Jig Revolution",
-    "nexus_id": "28736",
+    "name": "Jig Jig Unleashed - REVOLUTION",
+    "nexus_id": "16580",
     "category": "location-overhaul",
     "coordinates": [
         -640.1577,
@@ -17,8 +17,8 @@
     "authors": [
         "ProximaDust"
     ],
-    "description": "Overhaul of Jig Jig Street. Includes 100+ new thematic NPCs, dozens of interactions, a purchasable pod apartment with customization, and in-game settings to adjust the extra content to your preference",
+    "description": "Massive overhaul for the Jig Jig area, adds NPCs, neons, billboards, sex, grime, and a heavily customizable pod apartment. Also has settings to play with in the Mods menu and adds new interactions.",
     "status": "published",
     "added_at": "2026-04-25T09:21:15.000Z",
-    "modified_at": "2026-04-25T09:21:15.000Z"
+    "modified_at": "2026-08-02T07:03:08.927Z"
 }
