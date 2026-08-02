@@ -11,7 +11,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   raiseAlert, recordAlert, readAlerts, countUnacknowledged, acknowledgeAlert,
-  alertedSinceUtcMidnight, validateAlertInput, ALERT_SOURCES,
+  alertedSinceUtcMidnight, validateAlertInput, alertStreak, ALERT_SOURCES,
 } from '../src/alerts.js';
 import { handleInternal } from '../src/internal.js';
 import { sqliteD1 } from '../test-support/d1-sqlite.mjs';
@@ -99,7 +99,9 @@ test('a D1 failure still lets the notification through', async () => {
 test('raiseAlert never throws, whatever fails', async () => {
   const env = { DB: { prepare() { throw new Error('nope'); } }, NCZ_ALERTS_DISCORD_WEBHOOK_URL: WEBHOOK };
   const result = await raiseAlert(env, ALERT, { fetchImpl: fakeDiscord({ throws: true }) });
-  assert.deepEqual(result, { id: null, recorded: false, forwarded: false });
+  assert.deepEqual(result, {
+    id: null, recorded: false, notified: true, forwarded: false,
+  });
 });
 
 test('with no webhook configured the alert is still recorded', async () => {
@@ -127,6 +129,100 @@ test('severity drives the embed colour and icon', async () => {
   assert.equal(embed.title, '✅ Back up');
   assert.equal(embed.color, 0x2ecc71);
   assert.equal(embed.footer.text, 'NC Zoning Board • refresh');
+});
+
+// ------------------------------------------------------------------ routing --
+
+test('a log-only alert is recorded and never reaches Discord', async () => {
+  const env = newEnv();
+  const discord = fakeDiscord();
+
+  const result = await raiseAlert(env, { ...ALERT, notify: false }, { fetchImpl: discord });
+
+  assert.equal(result.recorded, true);
+  assert.equal(result.notified, false);
+  assert.equal(result.forwarded, false);
+  assert.equal(discord.sent.length, 0, 'the webhook must not be called at all');
+  const rows = await readAlerts(env);
+  assert.equal(rows.length, 1, 'the history is the point: quieter, not lost');
+  assert.equal(rows[0].notify, 0);
+});
+
+test('omitting notify means notify, so an unconsidered producer is noisy not silent', async () => {
+  // The default is the safety property. A producer added later that never
+  // thought about routing gets the old behaviour, and every row written before
+  // the column existed reads as what actually happened to it.
+  const env = newEnv();
+  const discord = fakeDiscord();
+  await raiseAlert(env, ALERT, { fetchImpl: discord });
+  assert.equal(discord.sent.length, 1);
+  assert.equal((await readAlerts(env))[0].notify, 1);
+});
+
+test('notified and forwarded are distinguishable, so a broken webhook still shows', async () => {
+  // The failure this separation prevents: a Discord outage reading as "we chose
+  // not to send it". They need different responses, so they need different
+  // fields.
+  const env = newEnv();
+  const result = await raiseAlert(env, ALERT, { fetchImpl: fakeDiscord({ fail: true }) });
+  assert.equal(result.notified, true, 'this alert WAS meant for a human');
+  assert.equal(result.forwarded, false, 'Discord refused it');
+});
+
+test('a log-only alert is not waiting on anyone, so it stays out of the badge', async () => {
+  // Counting one would put a number on the dashboard badge that nothing can
+  // clear: there is no Acknowledge button on a log-only alert.
+  const env = newEnv();
+  await recordAlert(env, { ...ALERT, notify: false });
+  assert.equal(await countUnacknowledged(env), 0);
+  assert.equal((await readAlerts(env, { unacknowledged: true })).length, 0);
+  assert.equal((await readAlerts(env)).length, 1, 'the full list still shows it');
+
+  await recordAlert(env, { ...ALERT, title: 'Needs a person' });
+  assert.equal(await countUnacknowledged(env), 1);
+});
+
+test('notify must be a boolean, because a truthy string would route backwards', async () => {
+  // "false" is truthy. Coercing it would forward an alert the caller asked to
+  // keep quiet, and routing bugs are silent by nature.
+  assert.equal(validateAlertInput({ ...ALERT, notify: 'false' }).ok, false);
+  assert.equal(validateAlertInput({ ...ALERT, notify: 0 }).ok, false);
+  assert.equal(validateAlertInput({ ...ALERT, notify: false }).alert.notify, false);
+  assert.equal(validateAlertInput({ ...ALERT, notify: true }).alert.notify, true);
+  assert.equal(validateAlertInput(ALERT).alert.notify, true, 'omitted means notify');
+});
+
+// ------------------------------------------------------------------ streaks --
+
+test('alertStreak counts since the last reset, not since the beginning of time', async () => {
+  const env = newEnv();
+  const failed = { source: 'refresh', severity: 'warn', title: 'Data API refresh failed' };
+  const recovered = { source: 'refresh', severity: 'recovery', title: 'Data API refresh recovered' };
+  const streak = () => alertStreak(env, {
+    source: 'refresh', title: failed.title, resetTitle: recovered.title,
+  });
+
+  await recordAlert(env, failed);
+  await recordAlert(env, failed);
+  assert.equal(await streak(), 2);
+
+  await recordAlert(env, recovered);
+  assert.equal(await streak(), 0, 'the recovery is the reset');
+
+  await recordAlert(env, failed);
+  assert.equal(await streak(), 1);
+});
+
+test('alertStreak ignores other sources and other titles', async () => {
+  const env = newEnv();
+  await recordAlert(env, { source: 'api-health', severity: 'warn', title: 'Data API refresh failed' });
+  await recordAlert(env, { source: 'refresh', severity: 'warn', title: 'Something else' });
+  assert.equal(
+    await alertStreak(env, {
+      source: 'refresh', title: 'Data API refresh failed', resetTitle: 'Data API refresh recovered',
+    }),
+    0,
+  );
 });
 
 // -------------------------------------------------------------------- dedup --
@@ -247,6 +343,25 @@ test('a correct secret records and forwards', async () => {
   const body = await res.json();
   assert.equal(body.recorded, true);
   assert.equal((await readAlerts(env)).length, 1);
+});
+
+test('the health monitor can post a log-only alert through the ingest', async () => {
+  // The remote producer needs the same routing as the in-Worker ones, or the
+  // wedged-cron alert (which self-heal already handles) keeps paging.
+  const env = ingestEnv();
+  const res = await handleInternal(post({ ...ALERT, source: 'api-health', notify: false }), env);
+  assert.equal(res.status, 202);
+  const body = await res.json();
+  assert.equal(body.notified, false);
+  assert.equal(body.forwarded, false);
+  assert.equal((await readAlerts(env))[0].notify, 0, 'recorded regardless');
+});
+
+test('a non-boolean notify is a 400, not a silently-routed alert', async () => {
+  const env = ingestEnv();
+  const res = await handleInternal(post({ ...ALERT, notify: 'no' }), env);
+  assert.equal(res.status, 400);
+  assert.equal((await readAlerts(env)).length, 0);
 });
 
 test('a wrong secret is refused and writes nothing', async () => {

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runRefresh } from '../src/refresh.js';
+import { readAlerts } from '../src/alerts.js';
 import { KEYS } from '../src/store.js';
 import { sqliteD1 } from '../test-support/d1-sqlite.mjs';
 
@@ -258,7 +259,7 @@ test('a failed refresh still advances the heartbeat (cron ran; Nexus did not ans
   assert.notEqual(meta.last_refresh_at, '2000-01-01T00:00:00.000Z'); // …but the cron is alive
 });
 
-test('Nexus failure keeps last-known-good and flags stale + alerts Discord', async () => {
+test('Nexus failure keeps last-known-good, flags stale, and records the alert', async () => {
   // Dedicated alerts channel (preferred over the legacy DISCORD_WEBHOOK_URL).
   const env = newEnv({ NCZ_ALERTS_DISCORD_WEBHOOK_URL: 'https://discord/webhook' });
   await runRefresh(env, fakeFetch()); // seed good data
@@ -273,8 +274,54 @@ test('Nexus failure keeps last-known-good and flags stale + alerts Discord', asy
   const meta = await env.DATASET.get(KEYS.meta, 'json');
   assert.equal(meta.discovery_stale, true);
   assert.match(meta.last_error, /503/);
-  assert.equal(discordSink.length, 1);
+
+  // Recorded, and NOT posted. One failed tick is a blip that the next tick
+  // usually clears, and the dataset never stopped being served. The row is what
+  // makes it reviewable; the Discord post is what is being withheld until the
+  // failure has persisted (see the streak test below).
+  const rows = await readAlerts(env);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].title, 'Data API refresh failed');
+  assert.equal(rows[0].notify, 0);
+  assert.equal(discordSink.length, 0);
+});
+
+test('the third consecutive failure is the one that reaches Discord', async () => {
+  // The threshold is the whole point of routing this alert: below it a person
+  // is not told, at it they are. Asserting only the quiet case would pass on a
+  // build that never notifies at all.
+  const env = newEnv({ NCZ_ALERTS_DISCORD_WEBHOOK_URL: 'https://discord/webhook' });
+  const discordSink = [];
+  await runRefresh(env, fakeFetch({ discordSink })); // seed good
+
+  await runRefresh(env, fakeFetch({ failNexus: true, discordSink }));
+  await runRefresh(env, fakeFetch({ failNexus: true, discordSink }));
+  assert.equal(discordSink.length, 0, 'two failures is still a blip');
+
+  await runRefresh(env, fakeFetch({ failNexus: true, discordSink }));
+  assert.equal(discordSink.length, 1, 'the third is not');
   assert.match(discordSink[0].embeds[0].title, /refresh failed/);
+  assert.match(discordSink[0].embeds[0].description, /Consecutive failed cycles: 3/);
+
+  // Every failure is recorded either way, which is what the streak counts.
+  const failures = (await readAlerts(env)).filter((a) => a.title === 'Data API refresh failed');
+  assert.equal(failures.length, 3);
+});
+
+test('a recovery resets the streak, so the next blip is quiet again', async () => {
+  // Without the reset the count would keep climbing across unrelated outages
+  // and the fourth blip of the week would page for no reason.
+  const env = newEnv({ NCZ_ALERTS_DISCORD_WEBHOOK_URL: 'https://discord/webhook' });
+  const discordSink = [];
+  await runRefresh(env, fakeFetch({ discordSink }));
+  for (let i = 0; i < 3; i += 1) {
+    await runRefresh(env, fakeFetch({ failNexus: true, discordSink }));
+  }
+  assert.equal(discordSink.length, 1, 'the third failure posted');
+
+  await runRefresh(env, fakeFetch({ discordSink }));                  // recover
+  await runRefresh(env, fakeFetch({ failNexus: true, discordSink })); // a fresh blip
+  assert.equal(discordSink.length, 1, 'the count restarted at the recovery');
 });
 
 test('failure with no prior dataset returns stale with null version, no crash', async () => {
@@ -380,18 +427,26 @@ test('archive refresh is budgeted per run and cold-fills over multiple runs', as
   assert.equal(run3.length, 0, 'once filled, steady state fetches nothing');
 });
 
-test('recovery posts a recovery alert exactly once (edge, not every cycle)', async () => {
+test('recovery records a recovery alert exactly once (edge, not every cycle)', async () => {
+  // The edge behaviour is unchanged; only the destination is. Both halves of a
+  // blip-and-recover are recorded and neither is posted, so the channel does
+  // not carry a problem and its resolution five minutes apart.
   const env = newEnv({ NCZ_ALERTS_DISCORD_WEBHOOK_URL: 'https://discord/webhook' });
   const discordSink = [];
   await runRefresh(env, fakeFetch({ discordSink }));                  // seed good
   await runRefresh(env, fakeFetch({ failNexus: true, discordSink })); // fail → stale + alert
   const r = await runRefresh(env, fakeFetch({ discordSink }));        // recover → all-clear
   assert.equal(r.recovered, true);
-  const titles = discordSink.map((m) => m.embeds[0].title);
-  assert.deepEqual(titles, ['⚠️ Data API refresh failed', '✅ Data API refresh recovered']);
+
+  const rows = (await readAlerts(env)).map((a) => [a.title, a.notify]);
+  assert.deepEqual(rows, [
+    ['Data API refresh recovered', 0],
+    ['Data API refresh failed', 0],
+  ], 'newest first, both recorded, neither posted');
+  assert.equal(discordSink.length, 0);
 
   // A subsequent healthy cycle must NOT re-announce recovery.
   const r2 = await runRefresh(env, fakeFetch({ discordSink }));
   assert.equal(r2.recovered ?? false, false);
-  assert.equal(discordSink.length, 2); // still just the fail + the one recovery
+  assert.equal((await readAlerts(env)).length, 2); // still just the fail + the one recovery
 });

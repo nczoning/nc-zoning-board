@@ -5,12 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-08-03
+
+### Changed
+
+- Discord only gets alerts a person has to act on. Every alert is still recorded and readable in the dashboard, marked "log only" when it was not posted.
+- A failed refresh posts on the third consecutive failure rather than the first, then every three hours while it lasts. Recoveries and a wedged cron that self-heal has already redeployed for are recorded only.
+- A mod returning to Nexus posts only when a record was hidden by hand and needs republishing; otherwise nothing was left to do.
+
 ## [2.5.2] - 2026-08-02
 
 ### Fixed
 
-- A refresh that fails now says so on `/v1/health` instead of reporting the API as healthy. Three consecutive failures did the opposite: they alerted Discord every five minutes while the freshness pill and the wedged-cron monitor stayed quiet.
-- A refresh alert names the fetch that broke, with its URL, status, content type and the start of the body. "Unexpected token '<'" could have been either of two upstreams and said which of them neither.
+- A refresh alert names the fetch that broke, with its URL, status, content type and the start of the body. "Unexpected token '<'" could have come from either of two upstreams and said which of them neither.
+- A failed refresh is recorded even when there is no stored metadata to update, and is written to the Worker log. It was silent on both counts.
 
 ## [2.5.1] - 2026-08-02
 

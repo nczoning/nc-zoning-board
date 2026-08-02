@@ -1254,6 +1254,11 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 .sev-error .alert-sev { color: var(--status-critical); }
 .sev-recovery .alert-sev { color: var(--status-ok); }
 
+/* "log only" reuses .badge: neutral and outlined, which is what it needs to be.
+   It qualifies an alert rather than ranking it, and the .sev-* colours above
+   are the ranking, so a second coloured treatment here would compete with
+   them. */
+
 /* Producers assemble the body as plain text with newlines, so the line breaks
    they wrote are the ones shown. */
 .alert-body {

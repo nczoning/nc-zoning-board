@@ -244,6 +244,10 @@ export async function checkQuotaThresholds(env, fetchImpl = fetch, nowMs = Date.
           + `${row.projected == null ? '' : `, projecting ${row.projected} by UTC midnight`}.`
           + `\n\nCaps are per ACCOUNT and reset at UTC midnight. Nothing degrades `
           + `until the cap is hit, at which point the cron simply stops.`,
+        // Notifies. Nothing automatic can bring usage back down, and the window
+        // to act is the rest of the UTC day; the once-a-day dedup above is
+        // already what keeps this from being noise.
+        notify: true,
       }, { fetchImpl, nowMs });
       raised.push(title);
     }
