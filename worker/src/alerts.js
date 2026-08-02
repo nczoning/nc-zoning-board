@@ -25,6 +25,27 @@
  *
  * So `raiseAlert()` never throws. An alert about a failure must not become a
  * second failure, and it must never mask the one it is reporting.
+ *
+ * ## Record everything, notify selectively
+ *
+ * Every alert is recorded. Only the ones a person can act on are forwarded, via
+ * the `notify` flag each producer sets. The channel had drifted into carrying
+ * both halves of every automatic recovery loop -- "the cron wedged", "the cron
+ * recovered", five minutes apart, with the self-heal doing the work in between
+ * -- and a channel that mostly reports things already handled stops being read,
+ * which costs the alerts that do need someone.
+ *
+ * Two rules make this safe to have:
+ *
+ * - **The producer decides, not this module.** Routing on severity or on a
+ *   title match would put the decision somewhere that cannot see the context it
+ *   depends on: a `recovery` is silent unless a record was hidden by hand, and a
+ *   wedged cron is silent only because a redeploy was actually dispatched. Only
+ *   the code raising the alert knows which case it is in.
+ * - **The default is to notify.** `notify` omitted means true, so a new producer
+ *   that has not thought about routing is noisy rather than silent, and every
+ *   row written before this existed reads correctly. Silence is the expensive
+ *   failure here; noise is the cheap one.
  */
 
 /**
@@ -86,19 +107,32 @@ export function validateAlertInput(input) {
   }
   if (!title) errors.push('title is required');
   if (title.length > 200) errors.push('title must be 200 characters or fewer');
+  // Strict, and only when present. A truthy string ("false", "0", "no") coerced
+  // by JavaScript's rules would silently route the opposite way to what the
+  // caller wrote, and a routing bug is invisible: the alert simply does not
+  // arrive. Omitting it is fine and means "notify" (see the module comment).
+  if (input?.notify != null && typeof input.notify !== 'boolean') {
+    errors.push('notify must be a boolean when present');
+  }
 
   if (errors.length) return { ok: false, errors };
-  return { ok: true, alert: { source, severity, title, body } };
+  return {
+    ok: true, alert: { source, severity, title, body, notify: input?.notify !== false },
+  };
 }
 
 /**
  * Insert the alert and return its id. Throws on a D1 failure; the caller
  * decides whether that is fatal (it is not, for `raiseAlert`).
  */
-export async function recordAlert(env, { source, severity, title, body = null }, nowMs = Date.now()) {
+export async function recordAlert(
+  env, { source, severity, title, body = null, notify = true }, nowMs = Date.now(),
+) {
   const { meta } = await env.DB.prepare(
-    'INSERT INTO alerts (at, source, severity, title, body) VALUES (?, ?, ?, ?, ?)',
-  ).bind(new Date(nowMs).toISOString(), source, severity, title, body).run();
+    'INSERT INTO alerts (at, source, severity, title, body, notify) VALUES (?, ?, ?, ?, ?, ?)',
+  ).bind(
+    new Date(nowMs).toISOString(), source, severity, title, body, notify === false ? 0 : 1,
+  ).run();
   return meta?.last_row_id ?? null;
 }
 
@@ -145,11 +179,16 @@ function toEmbed({ source, severity, title, body }) {
  * happened, so a caller that cares (the tests, and `/internal/alerts`) can tell
  * a fully successful fan-out from a half-successful one.
  *
- * @returns {Promise<{id: number|null, recorded: boolean, forwarded: boolean}>}
+ * `notified` is reported separately from `forwarded` so those two cases stay
+ * distinguishable: `notified:false` is this alert being log-only by design,
+ * `notified:true, forwarded:false` is Discord having refused a real one.
+ *
+ * @returns {Promise<{id: number|null, recorded: boolean, notified: boolean, forwarded: boolean}>}
  */
 export async function raiseAlert(env, alert, { fetchImpl = fetch, nowMs = Date.now() } = {}) {
   let id = null;
   let recorded = false;
+  const notified = alert?.notify !== false;
 
   if (env.DB) {
     try {
@@ -161,8 +200,11 @@ export async function raiseAlert(env, alert, { fetchImpl = fetch, nowMs = Date.n
     }
   }
 
-  const forwarded = await forwardToDiscord(env, alert, fetchImpl);
-  return { id, recorded, forwarded };
+  // Recording happens either way; only the Discord hop is conditional. A
+  // log-only alert is in the dashboard and in `wrangler tail`, which is the
+  // whole claim being made about it -- it is quieter, not lost.
+  const forwarded = notified ? await forwardToDiscord(env, alert, fetchImpl) : false;
+  return { id, recorded, notified, forwarded };
 }
 
 /**
@@ -189,14 +231,47 @@ export async function alertedSinceUtcMidnight(env, { source, title }, nowMs = Da
 }
 
 /**
+ * How many times `title` has been raised since the last `resetTitle` for the
+ * same source -- a down-edge count since the last up-edge.
+ *
+ * Exists so a repeating alert can be routed on how long it has been repeating
+ * rather than on the single occurrence, which is the difference between "a
+ * refresh blipped" and "the refresh has been failing all afternoon". The
+ * `alerts` table is the only durable counter available: KV meta holds
+ * `last_error_at` but not a count, and a Worker isolate holds nothing across
+ * cron ticks.
+ *
+ * Excludes the row for the alert being raised, because it is called before that
+ * row is written -- so a caller wanting "counting this one" adds 1 itself.
+ *
+ * Throws on a D1 failure. Callers routing on this MUST treat a throw as
+ * "notify": an unanswerable question about whether to speak up is answered by
+ * speaking up.
+ */
+export async function alertStreak(env, { source, title, resetTitle }) {
+  const row = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM alerts
+      WHERE source = ? AND title = ?
+        AND id > COALESCE(
+          (SELECT MAX(id) FROM alerts WHERE source = ? AND title = ?), 0)`,
+  ).bind(source, title, source, resetTitle).first();
+  return Number(row?.n ?? 0);
+}
+
+/**
  * Most recent first, matching `readAudit`. `unacknowledged` filters to the ones
  * still needing a human, which is what the dashboard badge counts.
+ *
+ * "Still needing a human" is `notify = 1` as well as unacknowledged: a log-only
+ * alert is never waiting on anybody, so counting one would put a number on the
+ * badge that nothing can clear. The unfiltered list still returns every row --
+ * the dashboard is where the log-only ones are supposed to be readable.
  */
 export async function readAlerts(env, { limit = 100, unacknowledged = false } = {}) {
   const capped = Math.min(Math.max(Number(limit) || 100, 1), 500);
-  const where = unacknowledged ? 'WHERE acknowledged_at IS NULL' : '';
+  const where = unacknowledged ? 'WHERE acknowledged_at IS NULL AND notify = 1' : '';
   const { results } = await env.DB.prepare(
-    `SELECT id, at, source, severity, title, body, acknowledged_by, acknowledged_at
+    `SELECT id, at, source, severity, title, body, notify, acknowledged_by, acknowledged_at
        FROM alerts ${where} ORDER BY id DESC LIMIT ?`,
   ).bind(capped).all();
   return results ?? [];
@@ -205,7 +280,7 @@ export async function readAlerts(env, { limit = 100, unacknowledged = false } = 
 /** How many alerts are still waiting on a human. Drives the tab's badge. */
 export async function countUnacknowledged(env) {
   const row = await env.DB.prepare(
-    'SELECT COUNT(*) AS n FROM alerts WHERE acknowledged_at IS NULL',
+    'SELECT COUNT(*) AS n FROM alerts WHERE acknowledged_at IS NULL AND notify = 1',
   ).first();
   return Number(row?.n ?? 0);
 }
@@ -226,7 +301,7 @@ export async function acknowledgeAlert(env, id, actor, nowMs = Date.now()) {
       WHERE id = ? AND acknowledged_at IS NULL`,
   ).bind(actor, new Date(nowMs).toISOString(), numeric).run();
   return env.DB.prepare(
-    `SELECT id, at, source, severity, title, body, acknowledged_by, acknowledged_at
+    `SELECT id, at, source, severity, title, body, notify, acknowledged_by, acknowledged_at
        FROM alerts WHERE id = ?`,
   ).bind(numeric).first();
 }

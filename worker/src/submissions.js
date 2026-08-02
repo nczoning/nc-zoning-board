@@ -307,6 +307,9 @@ async function create(request, env, { fetchImpl = fetch, nowMs = Date.now() } = 
     // /admin/#queue would silently open on Overview and read as a broken link.
     body: `A ${kind} submission is pending${id === null ? '' : ` (#${id})`}.`
       + `\n\nReview it in the Queue tab at ${env.SITE_ORIGIN ?? 'https://nczoning.net'}/admin/`,
+    // The doorbell. A submission sits in the queue until a human approves or
+    // rejects it, so this is the definition of actionable.
+    notify: true,
   }, { nowMs });
 
   return json({ id, kind, status: 'pending' }, 201);

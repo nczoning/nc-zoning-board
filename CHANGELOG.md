@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Discord only gets alerts a person has to act on. Every alert is still recorded and readable in the dashboard, marked "log only" when it was not posted.
+- A failed refresh posts on the third consecutive failure rather than the first, then every three hours while it lasts. Recoveries and a wedged cron that self-heal has already redeployed for are recorded only.
+- A mod returning to Nexus posts only when a record was hidden by hand and needs republishing; otherwise nothing was left to do.
+
 ## [2.5.2] - 2026-08-02
 
 ### Fixed
