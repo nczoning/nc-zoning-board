@@ -5,7 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.5.0] - 2026-08-02
+
+A mod that leaves Nexus no longer leaves its pin behind. Nexus states a
+mod's status outright and the sweep now asks for it, so a deletion is a
+fact rather than an inference. Deleted pulls the pin by itself; hidden
+never does, because the API will not say whether an author is mid-upload
+or a moderator is holding the page, and only the reason on the mod page
+answers that. Nothing changes a location's status but a person.
 
 ### Added
 
