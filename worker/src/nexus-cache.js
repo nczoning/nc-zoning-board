@@ -417,9 +417,17 @@ export async function refreshNexusCache(env, { fetchImpl = fetch, nowIso, tagged
   const { results: locRows } = await env.DB.prepare(
     'SELECT DISTINCT nexus_id FROM locations WHERE nexus_id IS NOT NULL',
   ).all();
-  const needBackfill = (locRows ?? [])
-    .map((r) => String(r.nexus_id))
-    .filter((id) => isRealNexusId(id) && !incoming.has(id));
+  const pinnedIds = (locRows ?? []).map((r) => String(r.nexus_id)).filter(isRealNexusId);
+  const needBackfill = pinnedIds.filter((id) => !incoming.has(id));
+
+  // Every pinned mod this sweep has an answer about: the ones asked via
+  // modsByUid, and the ones the tagged query already returned (which is proof
+  // of `published`, since that query serves published mods only).
+  //
+  // Load-bearing for the recovery report, NOT for the counting. A tracked mod
+  // that has dropped out of this set is one nothing points at any more, which
+  // is a different fact from the mod being fixed. See recordSweep.
+  const considered = new Set(pinnedIds);
 
   // What this sweep learned about each pinned mod that is not published:
   // nexus_id -> status, where `absent` means the response did not mention it.
@@ -475,7 +483,7 @@ export async function refreshNexusCache(env, { fetchImpl = fetch, nowIso, tagged
   const writes = diffRows([...incoming.values()], existing);
   summary.written = await writeRows(env, writes, stamp);
   summary.modStatus = await trackModStatus(
-    env, { unavailable, missingIds, needBackfill, summary, stamp },
+    env, { unavailable, considered, missingIds, needBackfill, summary, stamp },
   );
   return summary;
 }
@@ -507,7 +515,9 @@ export async function refreshNexusCache(env, { fetchImpl = fetch, nowIso, tagged
  * that really is gone keeps the count it has earned and picks up again on the
  * next sweep worth believing.
  */
-async function trackModStatus(env, { unavailable, missingIds, needBackfill, summary, stamp }) {
+async function trackModStatus(
+  env, { unavailable, considered, missingIds, needBackfill, summary, stamp },
+) {
   if (summary.stale) return { skipped: 'stale', flagged: [] };
   if (sweepLooksUnreliable({ missing: missingIds.length, requested: needBackfill.length })) {
     console.warn(
@@ -519,7 +529,7 @@ async function trackModStatus(env, { unavailable, missingIds, needBackfill, summ
   // Absence is folded in only now, so the guards above judge it first.
   for (const id of missingIds) unavailable.set(id, ABSENT);
   try {
-    return await recordSweep(env, { unavailable, nowIso: stamp });
+    return await recordSweep(env, { unavailable, considered, nowIso: stamp });
   } catch (err) {
     console.warn('nexus_mod_status tracking failed (non-fatal):', String(err).slice(0, 200));
     return { skipped: 'error', flagged: [], error: String(err).slice(0, 200) };
