@@ -53,12 +53,6 @@
 
   <h1>NC Zoning Board</h1>
 
-  <!-- What the map is actually serving right now, and how old it is. Staging
-       has no cron, so without this the read path can sit hours stale with
-       nothing to show for it. Stays in the bar at every width: it is the one
-       indicator that is worth nothing if it has to be gone looking for. -->
-  <span class="freshness" id="freshness" title="Age of the dataset the public API is serving"></span>
-
   <div class="topbar-drawer" id="topbar-drawer">
     <nav class="tabs" role="tablist" id="tablist">
       <button type="button" role="tab" data-tab="overview" aria-selected="true">Overview</button>
@@ -75,6 +69,16 @@
     </nav>
 
     <div class="topbar-meta">
+      <!-- What the map is actually serving right now, and how old it is. Staging
+           has no cron, so without this the read path can sit hours stale with
+           nothing to show for it. It sits with Rebuild because they are one job:
+           read the age, then act on it.
+
+           admin.js moves this element into the bar below the nav breakpoint,
+           where the rest of this group folds into the drawer. An indicator that
+           has to be gone looking for is worth nothing, and one element that
+           changes parent cannot disagree with itself the way two would. -->
+      <span class="freshness" id="freshness" title="Age of the dataset the public API is serving"></span>
       <button type="button" class="btn secondary" id="rebuild" title="Rebuild the served dataset from the registry">Rebuild</button>
       <span class="muted">Signed in as <span class="who" id="whoami"></span></span>
       <span class="muted" id="api-label"></span>

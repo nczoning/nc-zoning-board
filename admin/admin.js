@@ -2811,6 +2811,19 @@
     );
     measure();
     new ResizeObserver(measure).observe(topbar);
+
+    // The freshness pill lives with Rebuild, which is the control it exists to
+    // prompt. That group folds into the drawer below the nav breakpoint, and a
+    // staleness indicator behind a closed menu reports nothing, so the pill (and
+    // only the pill) comes back out into the bar. One element that changes
+    // parent, rather than two that can disagree about the same number.
+    const freshness = $('#freshness');
+    const drawer = $('#topbar-drawer');
+    const placeFreshness = (narrow) => (narrow
+      ? topbar.insertBefore(freshness, drawer)
+      : $('.topbar-meta').prepend(freshness));
+    placeFreshness(MENU.matches);
+    MENU.addEventListener('change', (e) => placeFreshness(e.matches));
     $('#loc-new').onclick = () => selectLocation('');
     $('#tag-new').onclick = () => selectTag('');
     $('#audit-refresh').onclick = loadAudit;
