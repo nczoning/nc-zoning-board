@@ -2259,6 +2259,24 @@
     reason: 'Reason',
     dismissed_by: 'Dismissed by',
     owner_id: 'Owner',
+
+    // A nexus_mod_status row. `status` is deliberately absent: it collides with
+    // the location column of the same name and is disambiguated per action, in
+    // ACTION_VALUE_LABEL and ACTION_FIELD_LABEL.
+    mod_name: 'Mod name',
+    streak: 'Consecutive sweeps',
+    first_seen_at: 'First seen',
+    last_seen_at: 'Last seen',
+    flagged_at: 'Flagged',
+    dismissed_at: 'Dismissed',
+    withheld: 'Pin withheld',
+    locations: 'Pins',
+  };
+
+  /** Field labels that only make sense for one action. Same reason as ACTION_VALUE_LABEL. */
+  const ACTION_FIELD_LABEL = {
+    'nexus_status.dismiss': { status: 'Status on Nexus' },
+    'nexus_status.restore': { status: 'Status on Nexus' },
   };
 
   const fieldLabel = (key) => FIELD_LABEL[key] ?? key;
@@ -2282,6 +2300,25 @@
    * Only for fields whose values are a closed set. A name, a note or a reason is
    * already prose and must be shown exactly as recorded, never "tidied".
    */
+  /**
+   * What Nexus says about a mod, in a word.
+   *
+   * Lives with the other label maps rather than with the panel that renders
+   * them, because the audit log's per-action overrides read it at module init
+   * and a `const` declared further down is still in its temporal dead zone.
+   *
+   * The three read differently on purpose. "Deleted" has already changed the
+   * map; "hidden" has changed nothing and needs a person to go and read why;
+   * "no answer" is the weak signal and says so.
+   */
+  const MOD_STATUS_LABEL = {
+    wastebinned: 'Deleted',
+    hidden: 'Hidden',
+    absent: 'No answer',
+  };
+
+  const modStatusLabel = (s) => MOD_STATUS_LABEL[s] ?? s;
+
   const VALUE_LABEL = {
     granted_by: {
       apply: 'applied to the existing record',
@@ -2315,8 +2352,23 @@
     if (v === undefined) return 'not recorded';
     if (v === null) return 'not set';
     if (typeof v === 'boolean') return v ? 'yes' : 'no';
-    if (Array.isArray(v)) return v.length ? v.join(', ') : 'none';
+    // An array of records, not of strings: a bare join renders every element as
+    // `[object Object]`, which is how the pins on a mod-status row read. Prefer
+    // the element's own name where it has one, and never lose the value.
+    if (Array.isArray(v)) {
+      return v.length
+        ? v.map((el) => (el && typeof el === 'object'
+          ? (el.name ?? JSON.stringify(el))
+          : String(el))).join(', ')
+        : 'none';
+    }
     if (typeof v === 'object') return JSON.stringify(v);
+    // A stored timestamp, rendered the way every other time on this page is.
+    // Matched on the column-name convention rather than by sniffing the value,
+    // so a name or a note that happens to parse as a date is left alone.
+    if (typeof v === 'string' && /_at$/.test(key) && Number.isFinite(Date.parse(v))) {
+      return formatTime(v);
+    }
     return VALUE_LABEL[key]?.[String(v)] ?? (v === '' ? 'empty' : String(v));
   }
 
@@ -2338,7 +2390,33 @@
       h('pre', { text: JSON.stringify(payload, null, 2) }));
   }
 
-  function renderDiff(before, after, rawLabel = 'Show the raw values') {
+  /**
+   * Records from different tables share field NAMES that do not share meaning.
+   *
+   * `status` is the worst of them: on a location it is the map vocabulary
+   * (`published` reads as "on the map"), and on a `nexus_mod_status` row it is
+   * what Nexus says about the mod. Rendering a mod's `hidden` as "off the map"
+   * is not an unfriendly label, it is a false statement, and it sat one line
+   * above `withheld: no` contradicting it.
+   *
+   * Scoped by the action that wrote the row, which is the only thing that knows
+   * which table the record came from. Anything not listed here falls through to
+   * the shared maps exactly as before.
+   */
+  const ACTION_VALUE_LABEL = {
+    'nexus_status.dismiss': { status: MOD_STATUS_LABEL },
+    'nexus_status.restore': { status: MOD_STATUS_LABEL },
+  };
+
+  function renderDiff(before, after, rawLabel = 'Show the raw values', action = null) {
+    const scoped = ACTION_VALUE_LABEL[action] ?? null;
+    const scopedField = ACTION_FIELD_LABEL[action] ?? null;
+    const label = (key) => scopedField?.[key] ?? fieldLabel(key);
+    const value = (key, v) => {
+      const override = scoped?.[key];
+      if (override && typeof v === 'string' && override[v]) return override[v];
+      return humanValue(key, v);
+    };
     const keys = [...new Set([...Object.keys(before || {}), ...Object.keys(after || {})])].sort();
     const rows = [];
     for (const key of keys) {
@@ -2349,10 +2427,10 @@
       if (key === 'modified_at') continue;
       if (sameValue(from, to)) continue;
       rows.push(h('div', {},
-        h('span', { class: 'k', text: `${fieldLabel(key)}: ` }),
-        before ? h('span', { class: 'from', text: humanValue(key, from) }) : null,
+        h('span', { class: 'k', text: `${label(key)}: ` }),
+        before ? h('span', { class: 'from', text: value(key, from) }) : null,
         before && after ? ' → ' : null,
-        after ? h('span', { class: 'to', text: humanValue(key, to) }) : null));
+        after ? h('span', { class: 'to', text: value(key, to) }) : null));
     }
     return h('div', { class: 'diff-block' },
       rows.length
@@ -2477,6 +2555,23 @@
       case 'candidate.restore':
         return ['put mod ', nexusLink(target), ' back in the candidates list'];
 
+      // The dismissal means two different things depending on what Nexus said,
+      // and the difference is whether a pin moved. Reading `after.status` rather
+      // than assuming: the row records what the mod's state was at the time.
+      case 'nexus_status.dismiss': {
+        const name = after.mod_name;
+        const wasDeleted = after.status === 'wastebinned';
+        return [
+          wasDeleted ? 'put the pin back for deleted mod ' : 'cleared the flag on ',
+          nexusLink(target), name ? [' ', quoted(name)] : '',
+          wasDeleted ? '' : `, ${modStatusLabel(after.status).toLowerCase()} on Nexus`,
+        ];
+      }
+      case 'nexus_status.restore':
+        return ['re-flagged mod ', nexusLink(target),
+          after.mod_name ? [' ', quoted(after.mod_name)] : '',
+          after.withheld ? ', taking its pin back off the map' : ''];
+
       // An action this page has not been taught. Say what is known rather than
       // rendering a blank line: a new server action must not vanish from view
       // just because the dashboard is behind.
@@ -2503,7 +2598,7 @@
           // always be checked against what was actually recorded.
           h('code', { class: 'action', title: `recorded as ${e.action} on ${e.target ?? 'nothing'}`, text: e.action })),
         h('details', {}, h('summary', { text: 'The full record' }),
-          renderDiff(e.before, e.after, 'Show exactly what was recorded'))))
+          renderDiff(e.before, e.after, 'Show exactly what was recorded', e.action))))
       : h('p', { class: 'muted', text: 'No entries yet.' }));
   }
 
@@ -2689,20 +2784,6 @@
 
   // ------------------------------------ mods not published on Nexus --
 
-  /**
-   * What each status means here, and what the reader is being asked to do.
-   *
-   * Three separate stories on purpose. "Deleted" has already changed the map
-   * and needs confirming; "hidden" has changed nothing and needs a person to go
-   * and read why; "no longer returned" is the weak signal and says so. Rendering
-   * them identically would flatten the one distinction the panel exists for.
-   */
-  const MOD_STATUS_LABEL = {
-    wastebinned: 'Deleted',
-    hidden: 'Hidden',
-    absent: 'No answer',
-  };
-
   const MOD_STATUS_NOTE = {
     wastebinned: 'Nexus reports this mod as deleted, so its pin is off the map. '
       + 'The record itself has not been edited. Dismiss to put the pin back.',
@@ -2713,7 +2794,6 @@
       + 'same as reporting it deleted. The pin is still up.',
   };
 
-  const modStatusLabel = (s) => MOD_STATUS_LABEL[s] ?? s;
   const modStatusNote = (s) => MOD_STATUS_NOTE[s]
     ?? `Nexus reports this mod as "${s}", which this dashboard has not been taught. `
       + 'The pin is still up.';
