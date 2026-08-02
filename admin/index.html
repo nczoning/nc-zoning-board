@@ -35,30 +35,63 @@
 </main>
 
 <header class="topbar">
+  <!--
+    The menu button, and the drawer it opens, exist only below the nav
+    breakpoint. Above it the drawer is `display: contents` and its children lay
+    out in this bar exactly as they would have without it, so there is one set
+    of controls and one set of ids at every width.
+
+    The badge is the total of the three tab counts below. It is what the closed
+    menu still says: eight tabs folded behind a button, with nothing on the
+    button, is a dashboard that has stopped reporting that there is work waiting.
+  -->
+  <button type="button" class="nav-toggle" id="nav-toggle"
+          aria-expanded="false" aria-controls="tablist" aria-label="Menu">
+    <span class="nav-toggle-bars" aria-hidden="true"></span>
+    <span class="tab-count" id="nav-count"></span>
+  </button>
+
   <h1>NC Zoning Board</h1>
-  <nav class="tabs" role="tablist">
-    <button type="button" role="tab" data-tab="overview" aria-selected="true">Overview</button>
-    <button type="button" role="tab" data-tab="locations" aria-selected="false">Locations</button>
-    <!-- The count is filled in from the rows already fetched, not from a
-         server aggregate. See the note on the Overview panel. -->
-    <button type="button" role="tab" data-tab="queue" aria-selected="false">Queue<span class="tab-count" id="queue-count"></span></button>
-    <button type="button" role="tab" data-tab="candidates" aria-selected="false">Candidates<span class="tab-count" id="candidates-count"></span></button>
-    <button type="button" role="tab" data-tab="tags" aria-selected="false">Tags</button>
-    <!-- Unacknowledged only. An alert that someone has already dealt with is
-         history, not a thing to badge. -->
-    <button type="button" role="tab" data-tab="alerts" aria-selected="false">Alerts<span class="tab-count" id="alerts-count"></span></button>
-    <button type="button" role="tab" data-tab="audit" aria-selected="false">Audit</button>
-  </nav>
-  <span class="spacer"></span>
+
   <!-- What the map is actually serving right now, and how old it is. Staging
        has no cron, so without this the read path can sit hours stale with
-       nothing to show for it. -->
+       nothing to show for it. Stays in the bar at every width: it is the one
+       indicator that is worth nothing if it has to be gone looking for. -->
   <span class="freshness" id="freshness" title="Age of the dataset the public API is serving"></span>
-  <button type="button" class="btn secondary" id="rebuild" title="Rebuild the served dataset from the current source">Rebuild</button>
-  <span class="muted">Signed in as <span class="who" id="whoami"></span></span>
-  <span class="muted" id="api-label"></span>
-  <button type="button" class="btn secondary" id="signout">Sign out</button>
+
+  <div class="topbar-drawer" id="topbar-drawer">
+    <nav class="tabs" role="tablist" id="tablist">
+      <button type="button" role="tab" data-tab="overview" aria-selected="true">Overview</button>
+      <button type="button" role="tab" data-tab="locations" aria-selected="false">Locations</button>
+      <!-- The count is filled in from the rows already fetched, not from a
+           server aggregate. See the note on the Overview panel. -->
+      <button type="button" role="tab" data-tab="queue" aria-selected="false">Queue<span class="tab-count" id="queue-count"></span></button>
+      <button type="button" role="tab" data-tab="candidates" aria-selected="false">Candidates<span class="tab-count" id="candidates-count"></span></button>
+      <button type="button" role="tab" data-tab="tags" aria-selected="false">Tags</button>
+      <!-- Unacknowledged only. An alert that someone has already dealt with is
+           history, not a thing to badge. -->
+      <button type="button" role="tab" data-tab="alerts" aria-selected="false">Alerts<span class="tab-count" id="alerts-count"></span></button>
+      <button type="button" role="tab" data-tab="audit" aria-selected="false">Audit</button>
+    </nav>
+
+    <div class="topbar-meta">
+      <button type="button" class="btn secondary" id="rebuild" title="Rebuild the served dataset from the registry">Rebuild</button>
+      <span class="muted">Signed in as <span class="who" id="whoami"></span></span>
+      <span class="muted" id="api-label"></span>
+      <button type="button" class="btn secondary" id="signout">Sign out</button>
+    </div>
+  </div>
+
+  <!-- Below the split breakpoint the editor replaces the list rather than
+       sitting beside it, so there has to be a way back that is not the
+       browser's. Rendered here, once, rather than into each of the three
+       editor panes, all of which replace their own contents wholesale. -->
+  <button type="button" class="detail-back" id="detail-back" hidden>Back to the list</button>
 </header>
+
+<!-- Catches the tap that closes the drawer. A real element rather than a
+     ::backdrop so it can also stop the page behind it being scrolled. -->
+<div class="nav-backdrop" id="nav-backdrop" hidden></div>
 
 <main>
   <div id="banner"></div>
