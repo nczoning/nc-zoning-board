@@ -998,11 +998,11 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 
     .topbar h1 { font-size: var(--fs-ui); }
 
-    /* Collapsed, the wordmark is what goes. The menu badge and the freshness
-       pill are the two things in this bar that report something, and a header
-       that reclaims its height by dropping those has saved the wrong pixels. */
+    /* Collapsed, the bar gives up padding and nothing else. Folding the tabs
+       into the drawer already bought the width, so the wordmark, the menu badge
+       and the freshness pill all stay: they are the three things in this bar
+       that say where you are and whether anything needs doing. */
     body.scrolled .topbar { padding-block: var(--space-2xs); }
-    body.scrolled .topbar h1 { display: none; }
 
     .nav-toggle {
         display: inline-flex;
@@ -1055,8 +1055,8 @@ button.breakdown-row:hover .k { color: var(--secondary); }
         bottom: 0;
         width: min(22rem, 85vw);
         padding: var(--space-lg);
-        /* Fully opaque, not `--surface-panel`. The drawer covers most of the
-           screen, and at 95% the table behind it ghosts through the tab labels. */
+        /* Fully opaque. The drawer covers most of the screen and the tab labels
+           are the only thing on it, so nothing behind it should be legible. */
         background: var(--primary);
         border-left: var(--ui-border-thin) solid var(--secondary-30);
         overflow-y: auto;
@@ -1085,12 +1085,28 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 
     .topbar-meta .btn { justify-content: center; }
 
+    /*
+     * The backdrop sits below the WHOLE top bar, not below the drawer.
+     *
+     * `.topbar` is `position: sticky` with a z-index, which makes it a stacking
+     * context, so nothing inside it can be ordered against a SIBLING of the bar.
+     * The drawer's z-index is compared with the bar's other children; the bar's
+     * own value is what the backdrop is compared with. A backdrop above the bar
+     * therefore covers the drawer, dims it, and eats every tap.
+     *
+     * 1000/999 rather than 11/10 because Leaflet's panes are z-index 400 in the
+     * root stacking context, and the queue's mini-map would otherwise draw over
+     * an open drawer. Leaving the bar undimmed is deliberate: the menu button
+     * stays lit and stays tappable, which is the shortest way back out.
+     */
+    .topbar { z-index: 1000; }
+
     .nav-backdrop {
         display: block;
         position: fixed;
         inset: 0;
         background: rgb(0 0 0 / 0.5);
-        z-index: 11;
+        z-index: 999;
     }
 }
 
