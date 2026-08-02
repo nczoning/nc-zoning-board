@@ -256,6 +256,8 @@ test('a pin whose mod Nexus calls deleted is withheld, alerted once, and never h
   assert.match(alerts[0].title, /99999/);
   assert.match(alerts[0].body, /Deleted Mod Pin/, 'the body names the pin, not just the mod id');
   assert.match(alerts[0].body, /WITHHELD/, 'and says the map has already changed');
+  assert.match(alerts[0].body, /https:\/\/www\.nexusmods\.com\/cyberpunk2077\/mods\/99999/,
+    'an alert that asks someone to go and look has to link to the thing');
 
   // Second tick, same day: the flag is already raised, so nothing is said again.
   await runRefresh(env, fakeFetch({ nexusStatus: { 99999: 'wastebinned' } }));
@@ -290,6 +292,8 @@ test('a hidden mod is alerted about and its pin stays up', async () => {
   assert.match(alerts[0].title, /hidden on Nexus/);
   assert.match(alerts[0].body, /reason the author left/,
     'the alert has to send the reader to the only place the reason exists');
+  assert.match(alerts[0].body, /https:\/\/www\.nexusmods\.com\/cyberpunk2077\/mods\/99999/,
+    'and it has to be one click away, or nobody makes the trip');
 });
 
 test('a truncated result set fails the refresh rather than shrinking the map', async () => {

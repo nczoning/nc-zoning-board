@@ -2540,20 +2540,65 @@
     return loadAlerts();
   }
 
+  /**
+   * An alert title, with a trailing Nexus mod id made clickable.
+   *
+   * Matched on shape rather than on a field, because the alerts table stores a
+   * title and a body and nothing else: adding a `link` column would mean a
+   * migration, a change to the /internal/alerts contract and a second thing for
+   * the GitHub Actions producers to fill in. The pattern is anchored tightly so
+   * it cannot catch a number that is not a mod id (`Quota 80%: KV writes`), and
+   * a title it does not recognise renders as plain text, which is what every
+   * alert did before this existed.
+   */
+  const MOD_ID_TITLE = /^(.*\bmod\b.*: )(\d+)$/i;
+
+  function alertTitleNodes(title) {
+    const m = MOD_ID_TITLE.exec(String(title ?? ''));
+    if (!m) return [String(title ?? '')];
+    return [m[1], nexusLink(m[2])];
+  }
+
+  /**
+   * Alert bodies are plain text assembled by the producers, and some of them
+   * carry a URL. Rendering it as a live link is the difference between "go and
+   * read the author's reason" and making someone copy a line out of an embed.
+   *
+   * Generic over every source rather than special-cased to one: the text is
+   * split and inserted as text nodes, so nothing here can turn a body into
+   * markup.
+   */
+  const URL_IN_TEXT = /https?:\/\/[^\s<>"')]+/g;
+
+  function bodyNodes(body) {
+    const text = String(body ?? '');
+    const out = [];
+    let last = 0;
+    for (const m of text.matchAll(URL_IN_TEXT)) {
+      if (m.index > last) out.push(text.slice(last, m.index));
+      out.push(h('a', {
+        href: m[0], target: '_blank', rel: 'noopener noreferrer', text: m[0],
+      }));
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) out.push(text.slice(last));
+    return out;
+  }
+
   function alertCard(a) {
     const severity = SEVERITY_LABEL[a.severity] ? a.severity : 'info';
     const acknowledged = Boolean(a.acknowledged_at);
     return h('div', { class: `alert-entry sev-${severity}${acknowledged ? ' acknowledged' : ''}` },
       h('div', { class: 'alert-head' },
         h('span', { class: 'alert-sev', text: SEVERITY_LABEL[severity] }),
-        h('strong', { class: 'alert-title', text: a.title }),
+        h('strong', { class: 'alert-title' }, alertTitleNodes(a.title)),
         h('span', { class: 'spacer', style: 'flex:1' }),
         h('span', { class: 'muted', text: SOURCE_LABEL[a.source] ?? a.source }),
         timeEl(a.at)),
       // Pre-wrap: the body is plain text assembled with newlines by the
-      // producers, not markup, and it is inserted as text so a Discord-flavoured
-      // body can never become HTML here.
-      a.body ? h('p', { class: 'alert-body', text: a.body }) : null,
+      // producers, not markup. Split into text nodes and anchors, never
+      // innerHTML, so a Discord-flavoured body still cannot become markup here.
+      a.body ? h('p', { class: 'alert-body' }, bodyNodes(a.body)) : null,
       h('div', { class: 'alert-foot' },
         acknowledged
           ? h('span', { class: 'muted' },
@@ -2631,7 +2676,7 @@
     replace(box,
       sorted.slice(0, SHOWN).map((a) => h('div', { class: `overview-alert sev-${SEVERITY_LABEL[a.severity] ? a.severity : 'info'}` },
         h('span', { class: 'alert-sev', text: SEVERITY_LABEL[a.severity] ?? 'Info' }),
-        h('span', { class: 'overview-alert-title', text: a.title }),
+        h('span', { class: 'overview-alert-title' }, alertTitleNodes(a.title)),
         h('span', { class: 'muted', text: SOURCE_LABEL[a.source] ?? a.source }),
         timeEl(a.at))),
       // Says what is NOT on screen. A panel capped at four that does not admit

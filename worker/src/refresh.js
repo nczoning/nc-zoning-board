@@ -13,7 +13,7 @@
  * unit-testable with a fake KV + fake fetch.
  */
 
-import { fetchTaggedModNodes } from './nexus.js';
+import { fetchTaggedModNodes, modPageUrl } from './nexus.js';
 import { materializeFromD1, attachArchives } from './materialize.js';
 import { refreshNexusCache, refreshArchives, readNexusIndex } from './nexus-cache.js';
 import {
@@ -152,8 +152,8 @@ async function alertModStatus(env, fetchImpl, flagged, nowMs) {
       title,
       body: `${flagged.map((id) => {
         const row = byId.get(id);
-        return `${describeMod(row, id)}: ${storyFor(row?.status).headline}`;
-      }).join('\n')}\n\n`
+        return `${describeMod(row, id)}: ${storyFor(row?.status).headline}\n${modPageUrl(id)}`;
+      }).join('\n\n')}\n\n`
         + `A batch this size is more likely a Nexus change than ${flagged.length} `
         + `separate events, so no more than ${MAX_WITHHELD} pins are ever withheld `
         + 'at once: past that the map is left exactly as it is and this alert is '
@@ -178,6 +178,7 @@ async function alertModStatus(env, fetchImpl, flagged, nowMs) {
       title,
       body: `${describeMod(row, id)} has been ${story.headline} since `
         + `${row?.first_seen_at ?? 'this sweep'} (${row?.streak ?? 1} consecutive sweeps).\n\n`
+        + `${modPageUrl(id)}\n\n`
         + `Pins affected: ${describePins(row)}.\n\n${story.detail}`,
     }, { fetchImpl, nowMs });
   }
