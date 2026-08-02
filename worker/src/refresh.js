@@ -28,15 +28,24 @@ import {
   KEYS, contentHash, readMeta, writeDataset, writeMeta,
 } from './store.js';
 import { raiseAlert, alertedSinceUtcMidnight } from './alerts.js';
+import { jsonOrThrow } from './json.js';
 import { checkQuotaThresholds } from './quota.js';
 
 const SCHEMA_VERSION = 1;
 
-/** Fetch a JSON file from the site origin; throws on non-200. */
+/**
+ * Fetch a JSON file from the site origin; throws on non-200, and throws
+ * something diagnosable when a 200 turns out not to be JSON.
+ *
+ * The origin is a Cloudflare Pages site, so "200 with an HTML body" is a real
+ * answer it can give: a fallback for a missing asset, or a challenge page. See
+ * jsonOrThrow.
+ */
 async function fetchJson(fetchImpl, origin, path) {
-  const res = await fetchImpl(`${origin}${path}`);
-  if (!res.ok) throw new Error(`GET ${path} → HTTP ${res.status}`);
-  return res.json();
+  const url = `${origin}${path}`;
+  const res = await fetchImpl(url);
+  if (!res.ok) throw new Error(`GET ${url} -> HTTP ${res.status}`);
+  return jsonOrThrow(res, url);
 }
 
 /**
@@ -466,18 +475,52 @@ export async function runRefresh(env, fetchImpl = fetch) {
     return { changed: true, version, stale: false, recovered };
   } catch (err) {
     // Keep last-known-good; flag stale; alert. Never wipe the dataset.
-    const prev = await readMeta(env);
-    if (prev) {
+    //
+    // Logged as well as alerted. A cycle that fails here is invisible in
+    // `wrangler tail` otherwise: runRefresh does not rethrow, so the scheduled
+    // handler reports the tick as Ok and Discord is the only place the failure
+    // appears. That is the wrong way round for anything being debugged.
+    console.error('refresh failed, serving last-known-good:', String(err).slice(0, 300));
+
+    let prev = null;
+    try {
+      prev = await readMeta(env);
+    } catch (readErr) {
+      console.error('could not read meta:', String(readErr).slice(0, 200));
+    }
+
+    // `prev` is null before the first successful cron, and ALSO whenever the
+    // KV read comes back empty or unparseable (`get(key, 'json')` answers null
+    // for both). Skipping the write in that case is what let three consecutive
+    // failures on 2026-08-02 leave `discovery_stale: false` and a frozen
+    // `last_refresh_at` behind them: the API reported itself healthy while
+    // alerting every five minutes, so the freshness pill and the wedged-cron
+    // monitor both stayed quiet. A failure has to be recorded even when there
+    // is nothing to merge it into.
+    const base = prev ?? {
+      schema: SCHEMA_VERSION,
+      generated_at: null,
+      dataset_version: null,
+      skipped: [],
+    };
+
+    // Its own try/catch, and BEFORE the alert stays after it: a KV write that
+    // throws here must not be able to swallow the notification. The alert is
+    // the last line of defence and nothing may run ahead of it that can fail.
+    try {
       await writeMeta(env, {
-        ...prev,
+        ...base,
         discovery_stale: true,
         last_error: String(err).slice(0, 300),
         last_error_at: generatedAt,
-        // The cron still RAN (Nexus just didn't answer), so advance the heartbeat
-        // so this reads as "stale data" (discovery_stale), not "wedged cron".
+        // The cron still RAN (an upstream just did not answer), so advance the
+        // heartbeat: this reads as "stale data", not as "wedged cron".
         last_refresh_at: generatedAt,
       });
+    } catch (metaErr) {
+      console.error('could not record the failure in meta:', String(metaErr).slice(0, 200));
     }
+
     await alertRefreshFailed(env, fetchImpl, err);
     return {
       changed: false,
