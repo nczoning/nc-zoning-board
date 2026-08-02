@@ -296,6 +296,62 @@ test('a hidden mod is alerted about and its pin stays up', async () => {
     'and it has to be one click away, or nobody makes the trip');
 });
 
+test('a mod coming back raises a recovery alert and restores its pin', async () => {
+  const gone = { ...ROWS[0], id: 'm2', name: 'Back From The Dead', nexus_id: '99999' };
+  const db = fakeD1({ rows: [...ROWS, gone] });
+  // Already confirmed deleted and flagged, which is the state the up edge has
+  // to fire from.
+  db._db.prepare(
+    `INSERT INTO nexus_mod_status (nexus_id, status, streak, first_seen_at, last_seen_at, flagged_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run('99999', 'wastebinned', 9, new Date(Date.now() - 3600_000).toISOString(),
+    new Date(Date.now() - 300_000).toISOString(), new Date(Date.now() - 1800_000).toISOString());
+
+  const env = { DATASET: fakeKV(), DB: db, SITE_ORIGIN: 'https://x' };
+  // Withheld first, so the restoration is a change and not a starting state.
+  await runRefresh(env, fakeFetch({ nexusStatus: { 99999: 'wastebinned' } }));
+  let full = await env.DATASET.get(KEYS.full, 'json');
+  assert.equal(full.m2, undefined, 'precondition: the pin is withheld');
+
+  // Nexus publishes it again.
+  await runRefresh(env, fakeFetch({ nexusStatus: { 99999: 'published' } }));
+  full = await env.DATASET.get(KEYS.full, 'json');
+  assert.ok(full.m2, 'the pin is served again, with nobody involved');
+  assert.equal(db.one('SELECT nexus_id FROM nexus_mod_status WHERE nexus_id = ?', '99999'), null);
+
+  const recovery = db.rows("SELECT * FROM alerts WHERE severity = 'recovery'");
+  assert.equal(recovery.length, 1, 'a silent recovery is how a hidden record stays hidden forever');
+  assert.match(recovery[0].title, /back on Nexus: 99999/);
+  assert.match(recovery[0].body, /withheld and is restored automatically/);
+  assert.match(recovery[0].body, /https:\/\/www\.nexusmods\.com\/cyberpunk2077\/mods\/99999/);
+
+  // Third tick, still published: the edge has passed and stays quiet.
+  await runRefresh(env, fakeFetch({ nexusStatus: { 99999: 'published' } }));
+  assert.equal(db.rows("SELECT * FROM alerts WHERE severity = 'recovery'").length, 1);
+});
+
+test('a recovery names a record the admin hid, because no sweep will un-hide it', async () => {
+  const hiddenRecord = {
+    ...ROWS[0], id: 'm2', name: 'Pulled By Hand', nexus_id: '99999', status: 'hidden',
+  };
+  const db = fakeD1({ rows: [...ROWS, hiddenRecord] });
+  db._db.prepare(
+    `INSERT INTO nexus_mod_status (nexus_id, status, streak, first_seen_at, last_seen_at, flagged_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+  ).run('99999', 'hidden', 9, new Date(Date.now() - 3600_000).toISOString(),
+    new Date(Date.now() - 300_000).toISOString(), new Date(Date.now() - 1800_000).toISOString());
+
+  const env = { DATASET: fakeKV(), DB: db, SITE_ORIGIN: 'https://x' };
+  await runRefresh(env, fakeFetch({ nexusStatus: { 99999: 'published' } }));
+
+  const recovery = db.rows("SELECT * FROM alerts WHERE severity = 'recovery'");
+  assert.equal(recovery.length, 1);
+  assert.match(recovery[0].body, /Still hidden in the registry: Pulled By Hand \(hidden\)/,
+    'the one thing left to do is the one thing the alert has to say');
+  assert.equal(db.one('SELECT status FROM locations WHERE id = ?', 'm2').status, 'hidden',
+    'and it is still a human decision to reverse');
+});
+
 test('a truncated result set fails the refresh rather than shrinking the map', async () => {
   const env = {
     DATASET: fakeKV(),

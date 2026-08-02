@@ -185,6 +185,65 @@ async function alertModStatus(env, fetchImpl, flagged, nowMs) {
 }
 
 /**
+ * A pinned mod is published on Nexus again (#900).
+ *
+ * The down edge is handled, the up edge was not, and the two are not
+ * symmetrical. Withholding reverses itself: the row goes, `readWithheld` stops
+ * naming the mod, and the next build serves the pin again with nobody involved.
+ * A HIDDEN RECORD DOES NOT. If an admin set `status: hidden` on the location
+ * while the mod was down, that is a human write, no sweep will undo it, and
+ * this alert is the only moment anyone finds out it can be undone.
+ *
+ * So the body is written around what is left to do, which is nothing at all in
+ * the common case and one edit in the case that would otherwise go unnoticed
+ * for as long as nobody happened to look.
+ *
+ * Mirrors alertRefreshRecovered: same `recovery` severity, same fires-once-on-
+ * the-edge shape. Never throws.
+ */
+async function alertModRecovered(env, fetchImpl, recovered, nowMs) {
+  if (recovered.length > STATUS_ALERT_MAX) {
+    const title = `${recovered.length} pinned mods are published on Nexus again`;
+    if (await alertedSinceUtcMidnight(env, { source: 'refresh', title }, nowMs)) return;
+    await raiseAlert(env, {
+      source: 'refresh',
+      severity: 'recovery',
+      title,
+      body: `${recovered.map((r) => `${r.nexus_id}: was ${r.was}`).join('\n')}\n\n`
+        + 'Any withheld pins are served again from this build. Records that were '
+        + 'hidden by hand stay hidden: the registry does not un-hide anything on '
+        + 'its own. Check the dashboard.',
+    }, { fetchImpl, nowMs });
+    return;
+  }
+
+  for (const r of recovered) {
+    const title = `Pinned mod is back on Nexus: ${r.nexus_id}`;
+    if (await alertedSinceUtcMidnight(env, { source: 'refresh', title }, nowMs)) continue;
+
+    // The pins a person still has to deal with. `published` needs nothing; a
+    // record someone hid while the mod was down is the whole reason this alert
+    // exists, and naming it is the difference between a notification and a task.
+    const needsAHand = (r.locations ?? []).filter((l) => l.status !== 'published');
+    const todo = needsAHand.length
+      ? `Still hidden in the registry: ${needsAHand.map((l) => `${l.name} (${l.status})`).join(', ')}.\n`
+        + 'Nothing here changes a location\'s status, so that stays as it is until '
+        + 'someone republishes the record in the dashboard.'
+      : 'Nothing to do. The pin is served again from this build.';
+
+    await raiseAlert(env, {
+      source: 'refresh',
+      severity: 'recovery',
+      title,
+      body: `Nexus reports mod ${r.nexus_id} as published again, after `
+        + `${storyFor(r.was).headline}.\n\n${modPageUrl(r.nexus_id)}\n\n`
+        + `${r.wasWithheld ? 'Its pin was withheld and is restored automatically. ' : ''}`
+        + todo,
+    }, { fetchImpl, nowMs });
+  }
+}
+
+/**
  * Sweep `nexus_cache` and return the index the dataset is built against.
  *
  * The sweep never throws (a Nexus outage must leave last-known-good in place),
@@ -201,16 +260,20 @@ async function sweepNexusCache(env, fetchImpl, nexusNodes, nowIso) {
         + `${sweep.backfilled} backfilled, ${sweep.untagged} untagged)`,
       );
     }
-    if (sweep.modStatus?.flagged?.length) {
-      // Its own try/catch, INSIDE the one that rethrows: a D1 failure reading
-      // the cache must keep last-known-good, and a Discord failure telling
-      // someone about a deleted mod must not. Different severities, so they
-      // cannot share a catch.
+    // Its own try/catch, INSIDE the one that rethrows: a D1 failure reading the
+    // cache must keep last-known-good, and a Discord failure telling someone
+    // about a deleted mod must not. Different severities, so they cannot share
+    // a catch.
+    if (sweep.modStatus?.flagged?.length || sweep.modStatus?.recovered?.length) {
+      const parsed = Date.parse(nowIso);
+      const nowMs = Number.isFinite(parsed) ? parsed : Date.now();
       try {
-        const nowMs = Date.parse(nowIso);
-        await alertModStatus(
-          env, fetchImpl, sweep.modStatus.flagged, Number.isFinite(nowMs) ? nowMs : Date.now(),
-        );
+        if (sweep.modStatus.flagged?.length) {
+          await alertModStatus(env, fetchImpl, sweep.modStatus.flagged, nowMs);
+        }
+        if (sweep.modStatus.recovered?.length) {
+          await alertModRecovered(env, fetchImpl, sweep.modStatus.recovered, nowMs);
+        }
       } catch (err) {
         console.warn('mod-status alert failed (non-fatal):', String(err).slice(0, 200));
       }
