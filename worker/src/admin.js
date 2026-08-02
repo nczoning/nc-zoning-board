@@ -13,6 +13,7 @@ import { adminCors } from './auth.js';
 import { validateLocationInput } from './validate.js';
 import { writeAudit, readAudit } from './audit.js';
 import { readAlerts, countUnacknowledged, acknowledgeAlert } from './alerts.js';
+import { readModStatuses, setDismissed } from './nexus-status.js';
 import { runRefresh } from './refresh.js';
 import {
   validateTagInput, readTagSlugs, readTagsWithUsage, readTagUsers, readTag,
@@ -100,6 +101,51 @@ export async function handleAdmin(request, env, ctx) {
     return json(request, { alert });
   }
   if (alertMatch) return json(request, { error: 'method_not_allowed' }, 405);
+
+  // ---- pinned mods Nexus no longer calls published (#900) ------------------
+  //
+  // Read plus a dismissal, and deliberately nothing else. The cron owns every
+  // other column: an admin who decides a flagged mod is gone for good edits the
+  // LOCATION, through the existing hidden/published control and the existing
+  // audit trail. Nothing here writes `locations.status`.
+  //
+  // Its own route rather than a field on the location PATCH, because the flag
+  // is per MOD and a mod can carry two pins (23896 supplies two tattoo shops).
+  // Dismissing it from one of them would have to mean dismissing it for both,
+  // which is a location endpoint quietly writing something that is not a
+  // location.
+  if (url.pathname === '/admin/nexus-status' && method === 'GET') {
+    return json(request, { mods: await readModStatuses(env) });
+  }
+
+  const modStatusMatch = url.pathname.match(/^\/admin\/nexus-status\/([^/]+)$/);
+  if (modStatusMatch && method === 'PATCH') {
+    const nexusId = decodeURIComponent(modStatusMatch[1]);
+    let payload;
+    try { payload = await request.json(); } catch { return json(request, { error: 'invalid_json' }, 400); }
+    if (typeof payload?.dismissed !== 'boolean') {
+      return json(request, { error: 'validation_failed', errors: ['dismissed must be a boolean'] }, 422);
+    }
+
+    const record = await setDismissed(env, nexusId, { actor, dismissed: payload.dismissed });
+    if (!record) return json(request, { error: 'not_found' }, 404);
+
+    // Audited, unlike an alert acknowledgement. For a deleted mod this decides
+    // whether a pin is on the public map, and even for a hidden one it records
+    // that a person looked at the author's reason and made a call.
+    await writeAudit(env, {
+      actor,
+      action: payload.dismissed ? 'nexus_status.dismiss' : 'nexus_status.restore',
+      target: nexusId,
+      after: record,
+    });
+    // Dismissing a DELETED mod puts its pin back, so the served dataset has to
+    // be rebuilt for that to be true anywhere but this response. Same
+    // fire-and-forget as every other write on this surface.
+    materializeAfterWrite(env, ctx);
+    return json(request, { mod: record });
+  }
+  if (modStatusMatch) return json(request, { error: 'method_not_allowed' }, 405);
 
   // ---- quota: dataset introspection --------------------------------------
   //

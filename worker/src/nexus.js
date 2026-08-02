@@ -20,6 +20,16 @@ export const FILE_METADATA_BASE = 'https://file-metadata.nexusmods.com/file/nexu
 export const FILE_MANIFEST_BASE = 'https://file-manifests.nexusmods.com';
 export const NEXUS_GAME_ID = 3333; // Cyberpunk 2077
 export const NEXUS_BATCH_SIZE = 50;
+
+/**
+ * A mod's public page. Alerts carry it: an alert that says "go and read the
+ * author's reason" and then makes the reader retype a six-digit id into a
+ * browser is an alert that gets skipped.
+ *
+ * Resolves for a hidden or deleted mod too. It answers 404 or a "not
+ * available" page to a visitor, which IS the thing being reported.
+ */
+export const modPageUrl = (modId) => `https://www.nexusmods.com/cyberpunk2077/mods/${modId}`;
 const ARCHIVE_UA = 'nczoning-data-api (+https://nczoning.net)';
 
 const QUERY = `
@@ -107,6 +117,7 @@ const THUMBS_QUERY = `query modsByUid($uids: [ID!]!, $count: Int!) {
     nodes {
       modId
       name
+      status
       pictureUrl
       thumbnailUrl
       updatedAt
@@ -149,6 +160,12 @@ export async function fetchModsByUidThumbs(fetchImpl = fetch, numericIds = []) {
       for (const node of nodes) {
         map[String(node.modId)] = {
           name: node.name || null,
+          // Nexus's own word for whether the mod is still on the site.
+          // `modsByUid` does NOT filter by it (the `mods` search query does), so
+          // a deleted or hidden mod arrives here looking like any other and
+          // this field is the only thing that says otherwise. Null when the
+          // field is absent, which must read as published: see nexus-status.js.
+          status: node.status || null,
           pictureUrl: node.pictureUrl || null,
           thumbnailUrl: node.thumbnailUrl || null,
           updatedAt: node.updatedAt || null,

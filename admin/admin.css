@@ -1292,6 +1292,24 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 
 #overview-alerts .btn { margin-top: var(--space-xs); }
 
+/* A mod-status card's foot carries one control per pin plus the dismissal,
+   where an alert's has only ever had one. Scoped to the panel so the Alerts tab
+   keeps the layout it was reviewed with. */
+#overview-mod-status .alert-foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+}
+
+/* "Pin withheld" sits in the card head, where .chip's uppercase label reads as
+   a state rather than as another filter. Amber, not cyan: it is the one thing
+   in this panel that has already changed what visitors see. */
+#overview-mod-status .alert-head .chip {
+    border-color: var(--tertiary);
+    background: transparent;
+    color: var(--tertiary);
+}
+
 /* The diff renders field names and enum values in English, so it is prose and
    set in the body face. The verbatim record below it is JSON, and is the only
    part here that takes the monospace. */

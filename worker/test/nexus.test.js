@@ -68,14 +68,34 @@ function uidFetch(responses) {
   };
 }
 const uidNode = (i) => ({
-  modId: i, name: `n${i}`, pictureUrl: `p${i}`, thumbnailUrl: `t${i}`, updatedAt: `u${i}`,
+  modId: i, name: `n${i}`, status: 'published',
+  pictureUrl: `p${i}`, thumbnailUrl: `t${i}`, updatedAt: `u${i}`,
 });
 
 test('modsByUid: returns a thumb map keyed by modId', async () => {
   const impl = uidFetch([{ json: { data: { modsByUid: { nodes: [uidNode(1), uidNode(2)] } } } }]);
   const map = await fetchModsByUidThumbs(impl, ['1', '2']);
-  assert.deepEqual(map['1'], { name: 'n1', pictureUrl: 'p1', thumbnailUrl: 't1', updatedAt: 'u1' });
-  assert.deepEqual(map['2'], { name: 'n2', pictureUrl: 'p2', thumbnailUrl: 't2', updatedAt: 'u2' });
+  assert.deepEqual(map['1'], { name: 'n1', status: 'published', pictureUrl: 'p1', thumbnailUrl: 't1', updatedAt: 'u1' });
+  assert.deepEqual(map['2'], { name: 'n2', status: 'published', pictureUrl: 'p2', thumbnailUrl: 't2', updatedAt: 'u2' });
+});
+
+test('modsByUid: a deleted mod is RETURNED, carrying the status that says so', async () => {
+  // The premise of #900's detection, and the opposite of what the issue
+  // assumed. Measured against the live API: mod 17513 comes back with
+  // `wastebinned`. Only the `mods` SEARCH query filters by status.
+  const impl = uidFetch([{ json: { data: { modsByUid: { nodes: [
+    { modId: 1, name: 'Gone - DELETED', status: 'wastebinned', updatedAt: 'u1' },
+  ] } } } }]);
+  const map = await fetchModsByUidThumbs(impl, ['1']);
+  assert.equal(map['1'].status, 'wastebinned',
+    'dropping this field is what made a deleted mod indistinguishable from a live one');
+});
+
+test('modsByUid: a node with no status yields null, which reads as published', async () => {
+  const impl = uidFetch([{ json: { data: { modsByUid: { nodes: [{ modId: 1, pictureUrl: 'p1' }] } } } }]);
+  const map = await fetchModsByUidThumbs(impl, ['1']);
+  assert.equal(map['1'].status, null,
+    'a pin must never come down because a field went missing from a response');
 });
 
 test('modsByUid: a mod with no name yields null rather than dropping the key', async () => {

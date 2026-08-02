@@ -150,6 +150,11 @@ The 3D scene ships on `main`. These are the other five files:
 - **Validation** happens on the write path in the Worker, so a bad value is refused at submission rather than caught in CI afterwards.
 - **The registry is not in git.** `data/locations/*.json`, `mods.json` and `build_mods.js` were deleted at Phase 6. The backup is the nightly export to the `data-snapshots` branch, plus D1 Time Travel's 30 days.
 - A frozen copy of 297 records lives at `worker/test/fixtures/locations-corpus.json`. It is a **test fixture**, not a backup: it does not track the registry and is not restored from.
+- **A pin whose mod stops being published on Nexus is acted on by status, not by absence.** `modsByUid` returns deleted and hidden mods like any other node, carrying a `status`; only the tag-search query filters. `nexus_mod_status` records how many consecutive sweeps have seen each non-published status (#900).
+  - `wastebinned` (deleted), confirmed over 3 sweeps: the pin is **withheld from the built dataset**. `locations.status` is never written, so a reversal on Nexus restores the pin with nobody involved, and no sweep may withhold more than 5 pins at once.
+  - `hidden`, confirmed over 3 sweeps: **review list only**. It covers an author mid-upload and a moderation hold equally and the API will not say which, so a person reads the reason on the mod page and decides.
+  - absent from the response, 6 sweeps and 24 hours: review list only. The weakest signal, because a failed `modsByUid` chunk manufactures it.
+  - Only a person writes `locations.status`. The dashboard's drift row subtracts the withheld pins, so a deliberate withdrawal is not reported as a fault.
 
 ### Styling (`style.css`)
 

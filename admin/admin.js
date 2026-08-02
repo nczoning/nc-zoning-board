@@ -74,6 +74,18 @@
     // "3 open" when it merely fetched 3 of them.
     alerts: [],
     alertsUnacknowledged: 0,
+    // Pinned mods Nexus no longer calls published, with the pins that point at
+    // them. Server state, not derived from the locations list: how many
+    // consecutive sweeps have said so is a fact about a run of cron ticks, and
+    // nothing in the browser can see it.
+    nexusMods: [],
+    // Set when this page has done something that changes what the map serves
+    // and the rebuild is still in flight. Only the mod-status dismissal does:
+    // it is the one control here whose effect lands in KV a moment after the
+    // response comes back, so for that moment the registry and the origin
+    // disagree BY DESIGN. Without this the drift row calls that a fault and
+    // tells the reader to rebuild, which is exactly what is already happening.
+    awaitingRebuild: false,
     selectedLocation: null,   // id, or '' for a new record
     selectedTag: null,        // slug, or '' for a new tag
     selectedSubmission: null, // submission id
@@ -1840,7 +1852,7 @@
    */
   async function refreshAll() {
     const results = await Promise.all([
-      loadTags(), loadLocations(), loadQueue(), loadCandidates(),
+      loadTags(), loadLocations(), loadQueue(), loadCandidates(), loadNexusStatus(),
     ]);
 
     // A record open in the detail pane can have gone away in the meantime.
@@ -2026,6 +2038,7 @@
         state.alertsUnacknowledged ? 'warn' : null));
 
     renderOverviewAlerts();
+    renderNexusStatus();
 
     replace($('#stat-category'),
       breakdown(countBy(records, (r) => r.category), records.length, (name) => ({ category: name })));
@@ -2090,13 +2103,36 @@
     // Two independent counts of the same thing. The pair is the point: what the
     // registry holds against what the public API hands the map. Renaming them
     // must not collapse them into one number.
+    // Published records whose Nexus mod is confirmed deleted are withheld from
+    // the dataset on purpose (#900), so they are NOT drift. Counted from the
+    // pins the status list names, because a count would not survive a record
+    // being deleted between the two reads. Without this the drift row reports a
+    // deliberate withdrawal as a fault and tells the reader to rebuild, which
+    // would not fix it: a spurious drift alarm trains people to ignore the row.
+    const withheldPins = new Set(
+      state.nexusMods.filter((m) => m.withheld).flatMap((m) => m.locations.map((l) => l.id)),
+    );
+    const expected = published.filter((r) => !withheldPins.has(r.id)).length;
+
     rows.push(kvRow('in the registry', String(records.length)));
     rows.push(kvRow('published in the registry', String(published.length)));
+    if (withheldPins.size) {
+      rows.push(kvRow('withheld (mod deleted on Nexus)', String(withheldPins.size)));
+    }
+    const agrees = servedCount === expected;
+    if (agrees) state.awaitingRebuild = false;
+
     rows.push(kvRow('served to the map', servedCount === null ? 'unknown' : String(servedCount),
-      servedCount === null ? null : servedCount === published.length ? 'ok' : 'bad'));
-    if (servedCount !== null && servedCount !== published.length) {
-      rows.push(kvRow('drift',
-        `${published.length - servedCount} record(s) not on the map. Rebuild.`, 'bad'));
+      // Neutral, not red, while a rebuild this page started is still in flight:
+      // the number is correct for the moment, it is just about to change.
+      servedCount === null || (!agrees && state.awaitingRebuild) ? null : agrees ? 'ok' : 'bad'));
+    if (servedCount !== null && !agrees) {
+      // A rebuild this page started is not drift, and must not be reported as
+      // one: telling the reader to do the thing already in progress is how a
+      // real drift alarm gets trained out of them.
+      rows.push(state.awaitingRebuild
+        ? kvRow('map', 'rebuilding after your change; this settles within a minute')
+        : kvRow('drift', `${expected - servedCount} record(s) not on the map. Rebuild.`, 'bad'));
     }
     rows.push(kvRow('api host', API.replace('https://', ''), 'mono'));
 
@@ -2504,20 +2540,65 @@
     return loadAlerts();
   }
 
+  /**
+   * An alert title, with a trailing Nexus mod id made clickable.
+   *
+   * Matched on shape rather than on a field, because the alerts table stores a
+   * title and a body and nothing else: adding a `link` column would mean a
+   * migration, a change to the /internal/alerts contract and a second thing for
+   * the GitHub Actions producers to fill in. The pattern is anchored tightly so
+   * it cannot catch a number that is not a mod id (`Quota 80%: KV writes`), and
+   * a title it does not recognise renders as plain text, which is what every
+   * alert did before this existed.
+   */
+  const MOD_ID_TITLE = /^(.*\bmod\b.*: )(\d+)$/i;
+
+  function alertTitleNodes(title) {
+    const m = MOD_ID_TITLE.exec(String(title ?? ''));
+    if (!m) return [String(title ?? '')];
+    return [m[1], nexusLink(m[2])];
+  }
+
+  /**
+   * Alert bodies are plain text assembled by the producers, and some of them
+   * carry a URL. Rendering it as a live link is the difference between "go and
+   * read the author's reason" and making someone copy a line out of an embed.
+   *
+   * Generic over every source rather than special-cased to one: the text is
+   * split and inserted as text nodes, so nothing here can turn a body into
+   * markup.
+   */
+  const URL_IN_TEXT = /https?:\/\/[^\s<>"')]+/g;
+
+  function bodyNodes(body) {
+    const text = String(body ?? '');
+    const out = [];
+    let last = 0;
+    for (const m of text.matchAll(URL_IN_TEXT)) {
+      if (m.index > last) out.push(text.slice(last, m.index));
+      out.push(h('a', {
+        href: m[0], target: '_blank', rel: 'noopener noreferrer', text: m[0],
+      }));
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) out.push(text.slice(last));
+    return out;
+  }
+
   function alertCard(a) {
     const severity = SEVERITY_LABEL[a.severity] ? a.severity : 'info';
     const acknowledged = Boolean(a.acknowledged_at);
     return h('div', { class: `alert-entry sev-${severity}${acknowledged ? ' acknowledged' : ''}` },
       h('div', { class: 'alert-head' },
         h('span', { class: 'alert-sev', text: SEVERITY_LABEL[severity] }),
-        h('strong', { class: 'alert-title', text: a.title }),
+        h('strong', { class: 'alert-title' }, alertTitleNodes(a.title)),
         h('span', { class: 'spacer', style: 'flex:1' }),
         h('span', { class: 'muted', text: SOURCE_LABEL[a.source] ?? a.source }),
         timeEl(a.at)),
       // Pre-wrap: the body is plain text assembled with newlines by the
-      // producers, not markup, and it is inserted as text so a Discord-flavoured
-      // body can never become HTML here.
-      a.body ? h('p', { class: 'alert-body', text: a.body }) : null,
+      // producers, not markup. Split into text nodes and anchors, never
+      // innerHTML, so a Discord-flavoured body still cannot become markup here.
+      a.body ? h('p', { class: 'alert-body' }, bodyNodes(a.body)) : null,
       h('div', { class: 'alert-foot' },
         acknowledged
           ? h('span', { class: 'muted' },
@@ -2595,7 +2676,7 @@
     replace(box,
       sorted.slice(0, SHOWN).map((a) => h('div', { class: `overview-alert sev-${SEVERITY_LABEL[a.severity] ? a.severity : 'info'}` },
         h('span', { class: 'alert-sev', text: SEVERITY_LABEL[a.severity] ?? 'Info' }),
-        h('span', { class: 'overview-alert-title', text: a.title }),
+        h('span', { class: 'overview-alert-title' }, alertTitleNodes(a.title)),
         h('span', { class: 'muted', text: SOURCE_LABEL[a.source] ?? a.source }),
         timeEl(a.at))),
       // Says what is NOT on screen. A panel capped at four that does not admit
@@ -2604,6 +2685,174 @@
         class: 'btn secondary', type: 'button',
         onclick: () => switchTab('alerts'),
       }, total > SHOWN ? `See all ${total} open alerts` : 'Open the Alerts tab'));
+  }
+
+  // ------------------------------------ mods not published on Nexus --
+
+  /**
+   * What each status means here, and what the reader is being asked to do.
+   *
+   * Three separate stories on purpose. "Deleted" has already changed the map
+   * and needs confirming; "hidden" has changed nothing and needs a person to go
+   * and read why; "no longer returned" is the weak signal and says so. Rendering
+   * them identically would flatten the one distinction the panel exists for.
+   */
+  const MOD_STATUS_LABEL = {
+    wastebinned: 'Deleted',
+    hidden: 'Hidden',
+    absent: 'No answer',
+  };
+
+  const MOD_STATUS_NOTE = {
+    wastebinned: 'Nexus reports this mod as deleted, so its pin is off the map. '
+      + 'The record itself has not been edited. Dismiss to put the pin back.',
+    hidden: 'The pin is still up and nothing here will take it down. Hidden covers '
+      + 'an author mid-upload and a moderation hold equally, and only the reason on '
+      + 'the mod page says which.',
+    absent: 'Nexus has stopped answering about this mod at all, which is not the '
+      + 'same as reporting it deleted. The pin is still up.',
+  };
+
+  const modStatusLabel = (s) => MOD_STATUS_LABEL[s] ?? s;
+  const modStatusNote = (s) => MOD_STATUS_NOTE[s]
+    ?? `Nexus reports this mod as "${s}", which this dashboard has not been taught. `
+      + 'The pin is still up.';
+
+  /**
+   * Pinned mods Nexus no longer calls published (#900).
+   *
+   * Server state, unlike every other number on the Overview: how many
+   * consecutive sweeps have said so is a fact about a run of cron ticks, and
+   * nothing in the browser can derive it from the locations list.
+   *
+   * The list is served whole, confirmed rows and not, and this decides what to
+   * show. A mod that has looked odd for one sweep is not news; the panel would
+   * cry wolf every time Nexus hiccupped if the API had already called it one.
+   */
+  async function loadNexusStatus() {
+    const res = await api('/admin/nexus-status');
+    if (!res.ok) {
+      const [kind, message] = describeFailure(res);
+      banner(kind, message);
+      return false;
+    }
+    state.nexusMods = res.body.mods || [];
+    renderNexusStatus();
+    // The health panel's drift row subtracts the withheld pins, so it has to be
+    // redrawn when this list moves. Only when it is on screen: renderOverview
+    // re-reads the public endpoints, which is not free.
+    if (!$('#tab-overview').hidden) renderOverview();
+    return true;
+  }
+
+  /** Whole days since a timestamp, floored at one: never "0 days". */
+  function daysSince(iso) {
+    const ms = Date.now() - Date.parse(iso);
+    return Number.isFinite(ms) ? Math.max(1, Math.round(ms / 86400000)) : 1;
+  }
+
+  /**
+   * One confirmed mod. Borrows the Alerts tab's card rather than defining a
+   * second one: same severity stripe, same head/body/foot, and the two panels
+   * report the same kind of thing.
+   */
+  function modStatusEntry(r) {
+    const days = daysSince(r.first_seen_at);
+    // The stripe carries the difference the reader has to see first: a pin that
+    // is already down is a stronger statement than one that needs a decision.
+    const severity = r.withheld ? 'error' : 'warn';
+    return h('div', { class: `alert-entry sev-${severity}` },
+      h('div', { class: 'alert-head' },
+        h('span', { class: 'alert-sev', text: modStatusLabel(r.status) }),
+        h('strong', { class: 'alert-title', text: r.mod_name || 'Name unknown' }),
+        nexusLink(r.nexus_id),
+        r.withheld ? h('span', { class: 'chip', text: 'pin withheld' }) : null,
+        h('span', { class: 'spacer', style: 'flex:1' }),
+        h('span', { class: 'muted', text: `${r.streak} sweeps` }),
+        timeEl(r.first_seen_at)),
+      h('p', {
+        class: 'alert-body',
+        text: `${days} day${days === 1 ? '' : 's'}. ${modStatusNote(r.status)}`,
+      }),
+      h('div', { class: 'alert-foot' },
+        // The pin, not the mod, is the thing that can be changed, so the buttons
+        // go to the record rather than to Nexus. One per pin: a mod can supply
+        // two locations, and a decision about one says nothing about the other.
+        r.locations.map((l) => h('button', {
+          type: 'button',
+          class: 'btn secondary',
+          onclick: () => { switchTab('locations'); selectLocation(l.id); },
+        }, `Open ${l.name}`)),
+        h('button', {
+          type: 'button',
+          class: 'btn secondary',
+          title: r.withheld
+            ? 'Put the pin back and stop showing this. The mod stays flagged underneath.'
+            : 'Stop showing this. The mod stays flagged underneath, and the pin is untouched.',
+          onclick: (e) => dismissModStatus(r.nexus_id, e.currentTarget),
+        }, r.withheld ? 'Keep the pin' : 'Dismiss')));
+  }
+
+  /**
+   * The panel. Collapses to one muted line on a quiet day, like the alerts
+   * panel above it, and says what it is NOT showing rather than implying the
+   * confirmed rows are everything being tracked.
+   */
+  function renderNexusStatus() {
+    const box = $('#overview-mod-status');
+    if (!box) return;
+
+    const rows = state.nexusMods;
+    const open = rows.filter((r) => r.flagged_at && !r.dismissed_at);
+    const dismissed = rows.filter((r) => r.dismissed_at).length;
+    const watching = rows.filter((r) => !r.flagged_at).length;
+    const aside = [
+      watching ? `${watching} seen once, not confirmed` : null,
+      dismissed ? `${dismissed} dismissed` : null,
+    ].filter(Boolean).join(', ');
+
+    if (!open.length) {
+      replace(box, h('p', {
+        class: 'muted',
+        text: `Every pin points at a mod Nexus still publishes${aside ? ` (${aside})` : ''}.`,
+      }));
+      return;
+    }
+
+    // Deleted first: those pins are already off the map, and the rest are
+    // asking for a decision that has not been made yet.
+    const RANK = { wastebinned: 0, hidden: 1, absent: 2 };
+    const sorted = [...open].sort(
+      (a, b) => (RANK[a.status] ?? 9) - (RANK[b.status] ?? 9)
+        || String(a.first_seen_at).localeCompare(String(b.first_seen_at)),
+    );
+
+    replace(box,
+      sorted.map(modStatusEntry),
+      aside ? h('p', { class: 'muted', text: `Also tracked: ${aside}.` }) : null);
+  }
+
+  /**
+   * Dismiss one flag. The row and its count stay; the panel stops showing it.
+   * For a deleted mod it also puts the pin back, and the button says so.
+   */
+  async function dismissModStatus(nexusId, button) {
+    button.disabled = true;
+    const res = await api(`/admin/nexus-status/${encodeURIComponent(nexusId)}`, {
+      method: 'PATCH',
+      body: { dismissed: true },
+    });
+    if (!res.ok) {
+      button.disabled = false;
+      const [kind, message] = describeFailure(res);
+      return banner(kind, message);
+    }
+    clearBanner();
+    // The Worker rebuilds the dataset for this, in the background. Until that
+    // lands the origin still serves what it served a second ago; see the note
+    // on state.awaitingRebuild.
+    if (res.body?.mod?.status === 'wastebinned') state.awaitingRebuild = true;
+    return loadNexusStatus();
   }
 
   // -------------------------------------------------- narrow-screen nav --
@@ -2845,7 +3094,7 @@
     // Both feed counts the Overview and the tab badges derive from, so they
     // load at boot rather than on first visit to their tab. A badge that only
     // appears once you have already gone looking is not a notification.
-    await Promise.all([loadQueue(), loadCandidates(), loadAlerts()]);
+    await Promise.all([loadQueue(), loadCandidates(), loadAlerts(), loadNexusStatus()]);
     await refreshFreshness();
     // Overview is the landing tab, and its numbers come from what was just
     // loaded, so it is rendered after both rather than on its own fetch.
