@@ -4,7 +4,7 @@ import { sqliteD1 } from '../test-support/d1-sqlite.mjs';
 import { refreshNexusCache } from '../src/nexus-cache.js';
 import { materializeFromD1 } from '../src/materialize.js';
 import {
-  sweepLooksUnreliable, isPublished, readModStatuses, readWithheld, setDismissed,
+  sweepLooksUnreliable, isPublished, readModStatuses, readWithheld, setDismissed, recordSweep,
   CONFIRM_SWEEPS, ABSENT_STREAK, SWEEP_MIN_SUSPECT, MAX_WITHHELD,
   WASTEBINNED, ABSENT,
 } from '../src/nexus-status.js';
@@ -208,6 +208,53 @@ test('a mod that was dismissed reports no withholding to undo', async () => {
   const back = await sweeps(env, { states: ALL_OK, count: 1, gap: 5 * MIN, from: 2 * HOUR });
   assert.equal(back.modStatus.recovered[0].wasWithheld, false,
     'the admin already put the pin back by hand; there is nothing to restore');
+});
+
+// Both of these fired in production on 2026-08-02, the first time an admin dealt
+// with a flagged mod. A row stops being named for two unrelated reasons and only
+// one of them is the mod being fixed; reporting the other says something false
+// about the outside world.
+
+test('repointing a pin at a successor mod is not the old mod recovering', async () => {
+  const env = envWith();
+  await sweeps(env, { states: { ...ALL_OK, 200: 'hidden' }, count: CONFIRM_SWEEPS, gap: 5 * MIN });
+  assert.ok(one(env, '200').flagged_at, 'precondition: flagged');
+
+  // What an admin does when the author says "use this other mod instead".
+  env.DB._db.prepare('UPDATE locations SET nexus_id = ? WHERE id = ?').run('300', 'l2');
+
+  const after = await sweeps(env, {
+    states: { ...ALL_OK, 300: 'published' }, count: 1, gap: 5 * MIN, from: HOUR,
+  });
+  assert.deepEqual(after.modStatus.recovered, [],
+    'mod 200 is exactly as hidden as it was; nothing points at it any more');
+  assert.equal(one(env, '200'), null, 'the row still clears, silently');
+  assert.equal(one(env, '300'), null, 'and the successor is healthy, so it is not tracked');
+});
+
+test('deleting the pin is not the mod recovering', async () => {
+  const env = envWith();
+  await sweeps(env, { states: { ...ALL_OK, 200: 'hidden' }, count: CONFIRM_SWEEPS, gap: 5 * MIN });
+
+  // The author deleted their account, so the mod is gone for good and the
+  // record should never have outlived it.
+  env.DB._db.prepare('DELETE FROM locations WHERE id = ?').run('l2');
+
+  const after = await sweeps(env, { states: ALL_OK, count: 1, gap: 5 * MIN, from: HOUR });
+  assert.deepEqual(after.modStatus.recovered, [],
+    'announcing "back on Nexus" for a mod whose author deleted their account is a lie');
+  assert.equal(one(env, '200'), null);
+});
+
+test('a caller that does not say what it considered reports no recoveries', async () => {
+  // Silence is the safe default: a missed recovery costs an alert, an invented
+  // one costs the reader's trust in the channel.
+  const env = envWith();
+  await sweeps(env, { states: { ...ALL_OK, 200: 'hidden' }, count: CONFIRM_SWEEPS, gap: 5 * MIN });
+
+  const r = await recordSweep(env, { unavailable: new Map(), nowIso: at(HOUR) });
+  assert.deepEqual(r.recovered, []);
+  assert.equal(r.cleared, 1, 'the row still clears');
 });
 
 test('a one-sweep blink is not a recovery', async () => {

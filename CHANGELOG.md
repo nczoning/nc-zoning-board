@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.1] - 2026-08-02
+
+### Fixed
+
+- Dealing with a flagged mod no longer announces that the mod is back on Nexus. Repointing a pin at a successor, or deleting the pin outright, stops the registry tracking that mod: it does not mean the mod recovered, and saying so was false.
+- The audit log reads as English for a dismissal, and no longer reports a mod hidden on Nexus as "off the map" one line above saying its pin is still up.
+
 ## [2.5.0] - 2026-08-02
 
 A mod that leaves Nexus no longer leaves its pin behind. Nexus states a
