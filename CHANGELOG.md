@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- A refresh that fails now says so on `/v1/health` instead of reporting the API as healthy. Three consecutive failures did the opposite: they alerted Discord every five minutes while the freshness pill and the wedged-cron monitor stayed quiet.
-- A refresh alert names the fetch that broke, with its URL, status, content type and the start of the body. "Unexpected token '<'" could have been either of two upstreams and said which of them neither.
+- A refresh alert names the fetch that broke, with its URL, status, content type and the start of the body. "Unexpected token '<'" could have come from either of two upstreams and said which of them neither.
+- A failed refresh is recorded even when there is no stored metadata to update, and is written to the Worker log. It was silent on both counts.
 
 ## [2.5.1] - 2026-08-02
 
