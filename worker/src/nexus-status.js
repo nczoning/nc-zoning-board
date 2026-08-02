@@ -149,6 +149,10 @@ function crossesThreshold(row, nowMs) {
  *   pinned mod this sweep did NOT get a published answer for. `absent` is this
  *   module's own value; everything else is Nexus's own string, stored verbatim
  *   so an unrecognised vocabulary is recorded rather than discarded.
+ * @param {Set<string>} opts.considered  every pinned mod id this sweep had an
+ *   answer about. A tracked row inside this set and outside `unavailable` is
+ *   published again; a tracked row OUTSIDE it is simply no longer pinned, which
+ *   is not the same fact and must not be reported as the same one.
  * @param {string} opts.nowIso
  * @returns {Promise<{tracked:number, cleared:number, flagged:string[]}>}
  *   `flagged` is the ids that crossed on THIS sweep, which is what the caller
@@ -157,7 +161,7 @@ function crossesThreshold(row, nowMs) {
  * NOT called on a sweep the caller does not trust: this prunes every row it was
  * not told about, so a failed sweep passed through here would clear the table.
  */
-export async function recordSweep(env, { unavailable = new Map(), nowIso }) {
+export async function recordSweep(env, { unavailable = new Map(), considered = null, nowIso }) {
   const stamp = nowIso ?? new Date().toISOString();
   const nowMs = Date.parse(stamp);
   const existing = await readRows(env);
@@ -201,11 +205,10 @@ export async function recordSweep(env, { unavailable = new Map(), nowIso }) {
     ));
   }
 
-  // Every row this sweep did not name: Nexus called it published, or it is no
-  // longer pinned. Both are a delete rather than a reset, so an untracked mod
-  // costs no write at all in the steady state. A dismissal goes with the row,
-  // which is right: the admin dismissed a mod that was in trouble, and this one
-  // is not.
+  // Every row this sweep did not name is deleted, whatever the reason, so an
+  // untracked mod costs no write at all in the steady state. A dismissal goes
+  // with the row, which is right: the admin dismissed a mod that was in
+  // trouble, and this one no longer is.
   let cleared = 0;
   for (const id of existing.keys()) {
     if (unavailable.has(id)) continue;
@@ -214,17 +217,41 @@ export async function recordSweep(env, { unavailable = new Map(), nowIso }) {
   }
 
   // The up edge, captured BEFORE the delete, because the row is the only record
-  // that anything was ever wrong. Only rows that were FLAGGED: a mod that
-  // looked odd for one sweep and was fine on the next is not a recovery, it is
-  // noise, and announcing it would teach people to skip the recovery alerts
-  // that matter.
+  // that anything was ever wrong.
+  //
+  // A row can stop being named for two unrelated reasons, and only ONE of them
+  // is a recovery:
+  //
+  //   * the mod is in `considered` and not in `unavailable` -- this sweep asked
+  //     Nexus about it and got `published`. That is the mod coming back.
+  //   * the mod is not in `considered` at all -- nothing points at it any more.
+  //     The pin was repointed at a successor mod, or the location was deleted.
+  //     THE MOD IS EXACTLY AS BROKEN AS IT WAS; the registry simply stopped
+  //     caring. Reporting that as "back on Nexus" states something false about
+  //     the outside world, which is worse than saying nothing.
+  //
+  // Both were reported as recoveries until 2026-08-02, and both fired in
+  // production the first time an admin dealt with a flagged mod: repointing
+  // Jig Jig Revolution at its successor announced that mod 28736 was back, and
+  // deleting the Silicon Mirage Villa pin announced the same for a mod whose
+  // author had deleted their account.
+  //
+  // A null `considered` means the caller did not say, and nothing is treated as
+  // a recovery. Silence is the safe default here: a missed recovery costs an
+  // alert, an invented one costs the reader's trust in the whole channel.
+  //
+  // FLAGGED rows only. A mod that looked odd for one sweep and was fine on the
+  // next is noise, and announcing it teaches people to skip the alerts that
+  // matter.
   //
   // The pins go with it. Withholding reverses itself, but an admin who HID the
   // record while the mod was down has made a write that no sweep will undo, and
   // the only moment anyone can be told is this one.
-  const recovering = [...existing.values()].filter(
-    (r) => !unavailable.has(String(r.nexus_id)) && r.flagged_at,
-  );
+  const recovering = [...existing.values()].filter((r) => {
+    const id = String(r.nexus_id);
+    if (unavailable.has(id) || !r.flagged_at) return false;
+    return considered instanceof Set && considered.has(id);
+  });
   const pins = recovering.length ? await readPinsForTracked(env) : new Map();
   const recovered = recovering.map((r) => ({
     nexus_id: String(r.nexus_id),
