@@ -9,6 +9,8 @@
  * dataset".
  */
 
+import { jsonOrThrow } from './json.js';
+
 export const NEXUS_GQL_ENDPOINT = 'https://api.nexusmods.com/v2/graphql';
 // Newer public router endpoint that exposes modFiles (the V2 endpoint above
 // does not). Both are unauthenticated; see docs/nexus-api-reference.md.
@@ -83,7 +85,11 @@ export async function fetchTaggedModNodes(fetchImpl = fetch) {
     });
     if (!res.ok) throw new Error(`Nexus GraphQL HTTP ${res.status}`);
 
-    const json = await res.json();
+    // Not `res.json()`: Nexus answering 200 with a challenge or error PAGE is a
+    // thing that happens, and a bare SyntaxError names neither this endpoint nor
+    // the body, which makes it indistinguishable from the other JSON parse in
+    // the cron's fatal path. See json.js.
+    const json = await jsonOrThrow(res, `${NEXUS_GQL_ENDPOINT} (tagged query, offset ${offset})`);
     const page = json?.data?.mods;
     if (!page) {
       throw new Error(

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.2] - 2026-08-02
+
+### Fixed
+
+- A refresh that fails now says so on `/v1/health` instead of reporting the API as healthy. Three consecutive failures did the opposite: they alerted Discord every five minutes while the freshness pill and the wedged-cron monitor stayed quiet.
+- A refresh alert names the fetch that broke, with its URL, status, content type and the start of the body. "Unexpected token '<'" could have been either of two upstreams and said which of them neither.
+
 ## [2.5.1] - 2026-08-02
 
 ### Fixed

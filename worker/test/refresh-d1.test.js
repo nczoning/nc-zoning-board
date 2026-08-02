@@ -352,6 +352,68 @@ test('a recovery names a record the admin hid, because no sweep will un-hide it'
     'and it is still a human decision to reverse');
 });
 
+// A refresh that fails must never leave the API reporting itself healthy. On
+// 2026-08-02 three consecutive production failures alerted Discord every five
+// minutes while `/v1/health` stayed green and `last_refresh_at` sat frozen,
+// because `readMeta` came back null and the meta write was skipped.
+
+test('a 200 that is not JSON says which URL and what arrived', async () => {
+  const html = '<!DOCTYPE html><html><title>Just a moment...</title></html>';
+  const fetchImpl = async (url) => {
+    if (String(url).includes('/subdistricts.json')) {
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'text/html' },
+        async json() { return JSON.parse(html); },
+        async text() { return html; },
+        clone() { return this; },
+      };
+    }
+    return fakeFetch()(url, { body: '{"query":""}' });
+  };
+
+  const db = fakeD1();
+  const env = { DATASET: fakeKV(), DB: db, SITE_ORIGIN: 'https://x' };
+  const r = await runRefresh(env, fetchImpl);
+
+  assert.equal(r.stale, true);
+  assert.match(r.error, /subdistricts\.json/, 'the alert has to name the fetch that broke');
+  assert.match(r.error, /text\/html/);
+  assert.match(r.error, /DOCTYPE/);
+});
+
+test('a failed cycle records itself even with no previous meta', async () => {
+  const db = fakeD1();
+  const env = { DATASET: fakeKV(), DB: db, SITE_ORIGIN: 'https://x' };
+  // Nothing in KV: the state a first-ever run is in, and the state a null read
+  // is indistinguishable from.
+  const r = await runRefresh(env, fakeFetch({ nexusKnowsNothing: true }));
+  assert.equal(r.stale, true);
+
+  const meta = await env.DATASET.get(KEYS.meta, 'json');
+  assert.ok(meta, 'skipping this write is what made an outage invisible');
+  assert.equal(meta.discovery_stale, true);
+  assert.ok(meta.last_error, 'and the error is kept, not just the flag');
+  assert.ok(meta.last_refresh_at, 'the cron RAN: this must read as stale data, not a wedged cron');
+});
+
+test('a meta write that throws cannot swallow the alert', async () => {
+  const db = fakeD1();
+  const env = {
+    DATASET: {
+      async get() { return null; },
+      async put() { throw new Error('KV unavailable'); },
+    },
+    DB: db,
+    SITE_ORIGIN: 'https://x',
+  };
+  const r = await runRefresh(env, fakeFetch({ nexusKnowsNothing: true }));
+  assert.equal(r.stale, true, 'the failure is still reported to the caller');
+  assert.equal(db.rows("SELECT * FROM alerts WHERE title = 'Data API refresh failed'").length, 1,
+    'the alert is the last line of defence; nothing that can fail may run after it');
+});
+
 test('a truncated result set fails the refresh rather than shrinking the map', async () => {
   const env = {
     DATASET: fakeKV(),
