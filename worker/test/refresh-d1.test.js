@@ -82,8 +82,11 @@ const NEXUS_PAGE = {
  * @param {object} opts
  * @param {boolean} opts.nexusKnowsNothing  Nexus answers both queries with an
  *   empty node list, so nothing lands in nexus_cache.
+ * @param {object} opts.nexusStatus  extra modsByUid nodes, `{modId: status}`.
+ *   A deleted or hidden mod is RETURNED by modsByUid carrying its status, not
+ *   omitted, which is the whole basis of the #900 detection.
  */
-function fakeFetch({ nexusKnowsNothing = false } = {}) {
+function fakeFetch({ nexusKnowsNothing = false, nexusStatus = {} } = {}) {
   return async (url, init) => {
     if (url.includes('/subdistricts.json')) return { ok: true, json: async () => SUBDISTRICTS };
     if (url.includes('api-router.nexusmods.com')) return { ok: false, status: 503 };
@@ -92,7 +95,14 @@ function fakeFetch({ nexusKnowsNothing = false } = {}) {
       if (JSON.parse(init.body).query.includes('modsByUid')) {
         return { ok: true, json: async () => ({
           data: { modsByUid: { nodes: nexusKnowsNothing ? [] : [
-            { modId: 12345, pictureUrl: 'pm', thumbnailUrl: 'tm', updatedAt: '2026-07-08' },
+            {
+              modId: 12345, status: 'published',
+              pictureUrl: 'pm', thumbnailUrl: 'tm', updatedAt: '2026-07-08',
+            },
+            ...Object.entries(nexusStatus).map(([modId, status]) => ({
+              modId: Number(modId), name: `Mod ${modId}`, status,
+              pictureUrl: 'px', thumbnailUrl: 'tx', updatedAt: '2026-07-08',
+            })),
           ] } },
         }) };
       }
@@ -215,47 +225,71 @@ test('a failed nexus_cache sweep is reported as itself, not as an empty cache', 
   assert.doesNotMatch(r.error, /nexus_cache is empty/, 'the symptom must not replace the cause');
 });
 
-test('a pin whose mod has been gone for a day raises one alert, and hides nothing', async () => {
-  // The end of #900, through the real cron: the sweep asks Nexus about both
-  // pinned mods, gets one back, and the one it does not get has been missing
-  // long enough to be worth telling someone about.
-  const gone = {
-    ...ROWS[0], id: 'm2', name: 'Deleted Mod Pin', nexus_id: '99999',
-  };
+test('a pin whose mod Nexus calls deleted is withheld, alerted once, and never hidden', async () => {
+  // The end of #900, through the real cron. `nexusStatus` makes modsByUid
+  // answer for 99999 with `wastebinned`, which is what the live API does for a
+  // deleted mod: it returns the node, it does not omit it.
+  const gone = { ...ROWS[0], id: 'm2', name: 'Deleted Mod Pin', nexus_id: '99999' };
   const db = fakeD1({ rows: [...ROWS, gone] });
+  // Two sweeps' worth of history, so the third confirms it. Written directly
+  // because the point under test is the cron's response to a confirmation, not
+  // the counting, which nexus-status.test.js covers.
   db._db.prepare(
-    `INSERT INTO nexus_missing (nexus_id, miss_streak, missing_since, last_missed_at)
-     VALUES (?, ?, ?, ?)`,
-  ).run('99999', 5, new Date(Date.now() - 25 * 3600_000).toISOString(),
-    new Date(Date.now() - 3600_000).toISOString());
+    `INSERT INTO nexus_mod_status (nexus_id, status, streak, first_seen_at, last_seen_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  ).run('99999', 'wastebinned', 2, new Date(Date.now() - 900_000).toISOString(),
+    new Date(Date.now() - 300_000).toISOString());
 
   const env = { DATASET: fakeKV(), DB: db, SITE_ORIGIN: 'https://x' };
-  const r = await runRefresh(env, fakeFetch());
-  assert.equal(r.stale, false, 'one mod being gone is not a broken refresh');
+  const r = await runRefresh(env, fakeFetch({ nexusStatus: { 99999: 'wastebinned' } }));
+  assert.equal(r.stale, false, 'one mod being deleted is not a broken refresh');
+
+  const full = await env.DATASET.get(KEYS.full, 'json');
+  assert.deepEqual(Object.keys(full).sort(), ['m1', 'nexus-888'], 'the pin is off the map');
+  assert.equal(db.one('SELECT status FROM locations WHERE id = ?', 'm2').status, 'published',
+    'and the record is untouched, so Nexus reversing itself needs no human');
 
   const alerts = db.rows('SELECT * FROM alerts');
-  assert.equal(alerts.length, 1, 'one alert for one disappearance');
+  assert.equal(alerts.length, 1, 'one alert for one deletion');
   assert.equal(alerts[0].source, 'refresh');
   assert.equal(alerts[0].severity, 'warn');
   assert.match(alerts[0].title, /99999/);
-  assert.match(alerts[0].body, /Deleted Mod Pin/, 'the body has to name the pin, not just the mod id');
-
-  assert.ok(db.one('SELECT flagged_at FROM nexus_missing WHERE nexus_id = ?', '99999').flagged_at);
-  assert.equal(db.one('SELECT status FROM locations WHERE id = ?', 'm2').status, 'published',
-    'flagged, not hidden');
+  assert.match(alerts[0].body, /Deleted Mod Pin/, 'the body names the pin, not just the mod id');
+  assert.match(alerts[0].body, /WITHHELD/, 'and says the map has already changed');
 
   // Second tick, same day: the flag is already raised, so nothing is said again.
-  await runRefresh(env, fakeFetch());
+  await runRefresh(env, fakeFetch({ nexusStatus: { 99999: 'wastebinned' } }));
   assert.equal(db.rows('SELECT * FROM alerts').length, 1,
     'alerting every five minutes is how a channel gets muted');
 
-  // And with the stored flag taken away -- which is what two overlapping cron
-  // runs look like, each crossing the threshold before the other has written --
-  // the alerts table is the only thing left that can see the duplicate.
-  db._db.prepare('UPDATE nexus_missing SET flagged_at = NULL WHERE nexus_id = ?').run('99999');
-  await runRefresh(env, fakeFetch());
+  // And with the stored flag taken away, which is what two overlapping cron
+  // runs look like (each crossing before the other has written), the alerts
+  // table is the only thing left that can see the duplicate.
+  db._db.prepare('UPDATE nexus_mod_status SET flagged_at = NULL WHERE nexus_id = ?').run('99999');
+  await runRefresh(env, fakeFetch({ nexusStatus: { 99999: 'wastebinned' } }));
   assert.equal(db.rows('SELECT * FROM alerts').length, 1,
     'alertedSinceUtcMidnight is the backstop when the flag itself cannot dedup');
+});
+
+test('a hidden mod is alerted about and its pin stays up', async () => {
+  const hiddenPin = { ...ROWS[0], id: 'm2', name: 'Hidden Mod Pin', nexus_id: '99999' };
+  const db = fakeD1({ rows: [...ROWS, hiddenPin] });
+  db._db.prepare(
+    `INSERT INTO nexus_mod_status (nexus_id, status, streak, first_seen_at, last_seen_at)
+     VALUES (?, ?, ?, ?, ?)`,
+  ).run('99999', 'hidden', 2, new Date(Date.now() - 900_000).toISOString(),
+    new Date(Date.now() - 300_000).toISOString());
+
+  const env = { DATASET: fakeKV(), DB: db, SITE_ORIGIN: 'https://x' };
+  await runRefresh(env, fakeFetch({ nexusStatus: { 99999: 'hidden' } }));
+
+  const full = await env.DATASET.get(KEYS.full, 'json');
+  assert.ok(full.m2, 'hidden is a decision for a person, so the pin is still served');
+  const alerts = db.rows('SELECT * FROM alerts');
+  assert.equal(alerts.length, 1);
+  assert.match(alerts[0].title, /hidden on Nexus/);
+  assert.match(alerts[0].body, /reason the author left/,
+    'the alert has to send the reader to the only place the reason exists');
 });
 
 test('a truncated result set fails the refresh rather than shrinking the map', async () => {

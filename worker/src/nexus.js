@@ -107,6 +107,7 @@ const THUMBS_QUERY = `query modsByUid($uids: [ID!]!, $count: Int!) {
     nodes {
       modId
       name
+      status
       pictureUrl
       thumbnailUrl
       updatedAt
@@ -149,6 +150,12 @@ export async function fetchModsByUidThumbs(fetchImpl = fetch, numericIds = []) {
       for (const node of nodes) {
         map[String(node.modId)] = {
           name: node.name || null,
+          // Nexus's own word for whether the mod is still on the site.
+          // `modsByUid` does NOT filter by it (the `mods` search query does), so
+          // a deleted or hidden mod arrives here looking like any other and
+          // this field is the only thing that says otherwise. Null when the
+          // field is absent, which must read as published: see nexus-status.js.
+          status: node.status || null,
           pictureUrl: node.pictureUrl || null,
           thumbnailUrl: node.thumbnailUrl || null,
           updatedAt: node.updatedAt || null,

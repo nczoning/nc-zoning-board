@@ -35,6 +35,8 @@ query modsByUid($uids: [ID!]!, $count: Int!) {
   modsByUid(uids: $uids, count: $count) {
     nodes {
       modId
+      name
+      status
       pictureUrl
       thumbnailUrl
       updatedAt
@@ -42,6 +44,24 @@ query modsByUid($uids: [ID!]!, $count: Int!) {
   }
 }
 ```
+
+**⚠️ `modsByUid` does NOT filter by status; the `mods` search query does.**
+
+Measured against the live API on 2026-08-02. A deleted or hidden mod comes back from `modsByUid` looking like any other node, and only `status` says otherwise. The tag-search query returns published mods only, which is why an auto-discovered mod used to drop off the map by itself while a manually pinned one never does.
+
+| `status` | Means | Where it comes from |
+| --- | --- | --- |
+| `published` | On the site | The normal case |
+| `hidden` | Not visible to visitors. Author-hidden **or** staff-hidden, and the API does not distinguish them | Only the reason on the mod page says which |
+| `wastebinned` | Deleted | Mod 17513 (Starfield) is a live example; its `name` also carries " - DELETED" |
+
+`status` is a `String`, not an enum, so the values above are observed rather than exhaustive. Treat anything that is not `published` as not-published, and treat **null as published**: a missing field must never be read as evidence.
+
+**The reason a mod is hidden is not reachable.** `Mod` has no moderation field, `moderationWarnings` requires a login ("You must be logged in to retrieve moderation warnings"), and the mod page returns 403 to a non-browser. `moderationReasons()` is readable anonymously but is only the catalogue (7 entries, including "Under review" and "DMCA investigation"), not any given mod's record.
+
+**`updatedAt` is not "when it went away".** For a deleted mod it is the deletion; for a hidden one it can be the last real file update months earlier. `nexus_mod_status.first_seen_at` records when the sweep first saw the status, which is the only timestamp that means one thing.
+
+Consumed by `worker/src/nexus-status.js`; see [`architecture.md`](architecture.md).
 
 **Input Variables:**
 - `uids`: Array of composite Nexus UIDs (see UID Construction below)

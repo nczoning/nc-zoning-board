@@ -16,7 +16,9 @@
 import { fetchTaggedModNodes } from './nexus.js';
 import { materializeFromD1, attachArchives } from './materialize.js';
 import { refreshNexusCache, refreshArchives, readNexusIndex } from './nexus-cache.js';
-import { readMissing, FLAG_MIN_AGE_MS } from './nexus-missing.js';
+import {
+  readModStatuses, readWithheld, WASTEBINNED, ABSENT, MAX_WITHHELD,
+} from './nexus-status.js';
 import {
   readLocationRows, readDismissedIds, readTags, readLocationTags,
 } from './d1.js';
@@ -75,73 +77,108 @@ async function alertRefreshRecovered(env, fetchImpl) {
  * Beyond this many mods flagged on one sweep, say it once instead of once each.
  *
  * Twenty separate embeds is a channel nobody reads afterwards, and a flag this
- * broad is a different story anyway: mods do not disappear in batches, so the
+ * broad is a different story anyway: mods do not go under in batches, so the
  * batch itself is the thing worth looking at.
  */
-const MISSING_ALERT_MAX = 5;
+const STATUS_ALERT_MAX = 5;
 
-/** "Deleted Mod (12345)", or just the id when Nexus never gave us a name. */
+/** "Deleted Mod (12345)", or just the id when Nexus never supplied a name. */
 const describeMod = (row, id) => (row?.mod_name ? `${row.mod_name} (${id})` : `mod ${id}`);
 
-/** "Cliffside Abode, Kabuki Ripper" -- the pins that point at the missing mod. */
+/** "Cliffside Abode, Kabuki Ripper" -- the pins pointing at the mod. */
 const describePins = (row) => (row?.locations?.length
   ? row.locations.map((l) => l.name).join(', ')
   : 'no pins (the location was removed since it was flagged)');
 
 /**
- * Pinned mods Nexus has stopped returning for a day straight (#900).
+ * What each status means, and what has already happened about it.
+ *
+ * The three read differently on purpose. A reviewer opening the channel needs
+ * to know within one line whether the map has already changed, because that
+ * decides whether this is urgent or merely due.
+ */
+const STATUS_STORY = {
+  [WASTEBINNED]: {
+    headline: 'deleted from Nexus',
+    detail: 'Nexus reports this mod as deleted. Its pin has been WITHHELD from '
+      + 'the map automatically, and the record itself is untouched: nothing has '
+      + 'edited the location, so nothing needs undoing if this turns out to be '
+      + 'wrong. Dismissing the flag in the dashboard puts the pin back.',
+  },
+  [ABSENT]: {
+    headline: 'no longer returned by Nexus',
+    detail: 'Nexus has stopped answering about this mod at all, for a day of '
+      + 'consecutive sweeps. That is not the same as a deletion, which Nexus '
+      + 'states outright, so nothing has changed on the map. It usually means '
+      + 'the mod was purged rather than binned.',
+  },
+  default: {
+    headline: 'hidden on Nexus',
+    detail: 'The pin is still on the map and nothing here will take it down. '
+      + 'Hidden covers an author mid-upload and a moderation hold equally, and '
+      + 'the API does not say which: only the reason the author left on the mod '
+      + 'page does. Read it, then either hide the record, point it at a '
+      + 'successor mod, or dismiss the flag and leave it up.',
+  },
+};
+
+const storyFor = (status) => STATUS_STORY[status] ?? STATUS_STORY.default;
+
+/**
+ * Pinned mods Nexus no longer calls published (#900).
  *
  * Raised here rather than in the sweep for the reason every other alert is:
  * nexus-cache.js does D1 and Nexus, this file does the fan-out. The sweep hands
- * back the ids that crossed the threshold ON THIS TICK, so a mod alerts once
+ * back the ids that crossed their threshold ON THIS TICK, so a mod alerts once
  * and then lives in the dashboard's review list until a person deals with it.
  *
  * `alertedSinceUtcMidnight` is still checked on top of that. The stored
- * `flagged_at` already makes this once-per-disappearance, but two overlapping
- * cron runs would each see the same crossing before either had written, and the
- * alerts table is the only thing that can see across them.
+ * `flagged_at` already makes this once-per-run, but two overlapping cron runs
+ * would each see the same crossing before either had written, and the alerts
+ * table is the only thing that can see across them.
  *
- * Never throws: an alert about a missing mod must not cost the dataset a cycle.
+ * Never throws: an alert about a deleted mod must not cost the dataset a cycle.
  */
-async function alertMissingMods(env, fetchImpl, flagged, nowMs) {
-  const days = Math.round(FLAG_MIN_AGE_MS / 86400000);
-  const tracked = await readMissing(env);
+async function alertModStatus(env, fetchImpl, flagged, nowMs) {
+  const tracked = await readModStatuses(env);
   const byId = new Map(tracked.map((r) => [r.nexus_id, r]));
-  const advice = 'Nothing has been hidden: the pins are still on the map. '
-    + 'The registry never changes a location\'s status on its own -- open the '
-    + 'dashboard to hide the record, or dismiss the flag if the mod is only '
-    + 'temporarily unpublished.';
 
-  if (flagged.length > MISSING_ALERT_MAX) {
-    const title = `${flagged.length} pinned mods missing from Nexus`;
+  if (flagged.length > STATUS_ALERT_MAX) {
+    const title = `${flagged.length} pinned mods are no longer published on Nexus`;
     if (await alertedSinceUtcMidnight(env, { source: 'refresh', title }, nowMs)) return;
     await raiseAlert(env, {
       source: 'refresh',
       severity: 'warn',
       title,
-      body: `Nexus has not returned these for ${days} day(s) of consecutive sweeps:\n`
-        + `${flagged.map((id) => describeMod(byId.get(id), id)).join('\n')}\n\n`
+      body: `${flagged.map((id) => {
+        const row = byId.get(id);
+        return `${describeMod(row, id)}: ${storyFor(row?.status).headline}`;
+      }).join('\n')}\n\n`
         + `A batch this size is more likely a Nexus change than ${flagged.length} `
-        + `deletions. ${advice}`,
+        + `separate events, so no more than ${MAX_WITHHELD} pins are ever withheld `
+        + 'at once: past that the map is left exactly as it is and this alert is '
+        + 'the whole of the response. Check the dashboard.',
     }, { fetchImpl, nowMs });
     return;
   }
 
   for (const id of flagged) {
     const row = byId.get(id);
-    // The title is the dedup key, so it carries the id and nothing that moves
-    // between sweeps. The streak belongs in the body: putting it in the title
-    // would make every tick a new alert.
-    const title = `Pinned mod missing from Nexus: ${id}`;
+    const story = storyFor(row?.status);
+    // The title is the dedup key, so it carries the id and the status and
+    // nothing that moves between sweeps. The streak belongs in the body:
+    // putting it in the title would make every tick a new alert.
+    const title = `Pinned mod ${story.headline}: ${id}`;
     if (await alertedSinceUtcMidnight(env, { source: 'refresh', title }, nowMs)) continue;
     await raiseAlert(env, {
       source: 'refresh',
+      // `warn` throughout: the dataset is being served either way. A withheld
+      // pin is a correct outcome, not a failure, and `error` is for not serving.
       severity: 'warn',
       title,
-      body: `${describeMod(row, id)} has not been returned by Nexus since `
-        + `${row?.missing_since ?? 'this sweep'} (${row?.miss_streak ?? 1} consecutive sweeps, `
-        + `at least ${days} day(s)). It was probably deleted or hidden.\n\n`
-        + `Pins affected: ${describePins(row)}.\n\n${advice}`,
+      body: `${describeMod(row, id)} has been ${story.headline} since `
+        + `${row?.first_seen_at ?? 'this sweep'} (${row?.streak ?? 1} consecutive sweeps).\n\n`
+        + `Pins affected: ${describePins(row)}.\n\n${story.detail}`,
     }, { fetchImpl, nowMs });
   }
 }
@@ -163,18 +200,18 @@ async function sweepNexusCache(env, fetchImpl, nexusNodes, nowIso) {
         + `${sweep.backfilled} backfilled, ${sweep.untagged} untagged)`,
       );
     }
-    if (sweep.missing?.flagged?.length) {
+    if (sweep.modStatus?.flagged?.length) {
       // Its own try/catch, INSIDE the one that rethrows: a D1 failure reading
       // the cache must keep last-known-good, and a Discord failure telling
       // someone about a deleted mod must not. Different severities, so they
       // cannot share a catch.
       try {
         const nowMs = Date.parse(nowIso);
-        await alertMissingMods(
-          env, fetchImpl, sweep.missing.flagged, Number.isFinite(nowMs) ? nowMs : Date.now(),
+        await alertModStatus(
+          env, fetchImpl, sweep.modStatus.flagged, Number.isFinite(nowMs) ? nowMs : Date.now(),
         );
       } catch (err) {
-        console.warn('missing-mod alert failed (non-fatal):', String(err).slice(0, 200));
+        console.warn('mod-status alert failed (non-fatal):', String(err).slice(0, 200));
       }
     }
     return await readNexusIndex(env);
@@ -246,12 +283,31 @@ async function sourceAndBuild(env, fetchImpl, origin, nowMs, { nexusNodes, nexus
   if (nexusIndex.size === 0) {
     throw new Error('nexus_cache is empty -- refusing to serve a dataset with no images');
   }
+  // Pins whose mod Nexus has confirmed deleted. Read here rather than inside
+  // the materializer, which is pure: it is handed the verdict, it does not go
+  // and ask. `refused` is the cap having declined to act on an implausible
+  // batch, which is a thing to say out loud rather than a quiet no-op.
+  const { withhold, refused } = await readWithheld(env);
+  if (refused) {
+    console.warn(
+      `nexus_mod_status: ${refused} pins are flagged as deleted, above the cap of `
+      + `${MAX_WITHHELD}. Withholding none of them; the map is unchanged.`,
+    );
+  }
+
   // No modsByUid call here: the sweep has already resolved every published
   // record's images into nexus_cache, including the auto-discovered ones,
   // which are rows like any other.
   const built = materializeFromD1({
     rows, dismissed, nexusNodes, districts, nexusIndex, locationTags, nowMs,
+    withheld: withhold,
   });
+  if (built.meta.withheld.length) {
+    console.log(
+      `withheld ${built.meta.withheld.length} pin(s) whose mod is deleted on Nexus: `
+      + built.meta.withheld.map((w) => `${w.id} (mod ${w.nexus_id})`).join(', '),
+    );
+  }
   return { ...built, tagsList, districts };
 }
 

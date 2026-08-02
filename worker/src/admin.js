@@ -13,7 +13,7 @@ import { adminCors } from './auth.js';
 import { validateLocationInput } from './validate.js';
 import { writeAudit, readAudit } from './audit.js';
 import { readAlerts, countUnacknowledged, acknowledgeAlert } from './alerts.js';
-import { readMissing, setMissingDismissed } from './nexus-missing.js';
+import { readModStatuses, setDismissed } from './nexus-status.js';
 import { runRefresh } from './refresh.js';
 import {
   validateTagInput, readTagSlugs, readTagsWithUsage, readTagUsers, readTag,
@@ -102,11 +102,11 @@ export async function handleAdmin(request, env, ctx) {
   }
   if (alertMatch) return json(request, { error: 'method_not_allowed' }, 405);
 
-  // ---- pinned mods Nexus has stopped returning (#900) ----------------------
+  // ---- pinned mods Nexus no longer calls published (#900) ------------------
   //
   // Read plus a dismissal, and deliberately nothing else. The cron owns every
-  // other column: an admin who thinks a flagged mod is gone for good edits the
-  // LOCATION, which is the existing hidden/published control and the existing
+  // other column: an admin who decides a flagged mod is gone for good edits the
+  // LOCATION, through the existing hidden/published control and the existing
   // audit trail. Nothing here writes `locations.status`.
   //
   // Its own route rather than a field on the location PATCH, because the flag
@@ -114,37 +114,38 @@ export async function handleAdmin(request, env, ctx) {
   // Dismissing it from one of them would have to mean dismissing it for both,
   // which is a location endpoint quietly writing something that is not a
   // location.
-  if (url.pathname === '/admin/nexus-missing' && method === 'GET') {
-    return json(request, { missing: await readMissing(env) });
+  if (url.pathname === '/admin/nexus-status' && method === 'GET') {
+    return json(request, { mods: await readModStatuses(env) });
   }
 
-  const missingMatch = url.pathname.match(/^\/admin\/nexus-missing\/([^/]+)$/);
-  if (missingMatch && method === 'PATCH') {
-    const nexusId = decodeURIComponent(missingMatch[1]);
+  const modStatusMatch = url.pathname.match(/^\/admin\/nexus-status\/([^/]+)$/);
+  if (modStatusMatch && method === 'PATCH') {
+    const nexusId = decodeURIComponent(modStatusMatch[1]);
     let payload;
     try { payload = await request.json(); } catch { return json(request, { error: 'invalid_json' }, 400); }
     if (typeof payload?.dismissed !== 'boolean') {
       return json(request, { error: 'validation_failed', errors: ['dismissed must be a boolean'] }, 422);
     }
 
-    const record = await setMissingDismissed(env, nexusId, {
-      actor, dismissed: payload.dismissed,
-    });
+    const record = await setDismissed(env, nexusId, { actor, dismissed: payload.dismissed });
     if (!record) return json(request, { error: 'not_found' }, 404);
 
-    // Audited, unlike an alert acknowledgement: this one says "I have looked at
-    // a pin whose mod is gone and decided to leave it up", which is a decision
-    // about a published record even though it writes no location column.
+    // Audited, unlike an alert acknowledgement. For a deleted mod this decides
+    // whether a pin is on the public map, and even for a hidden one it records
+    // that a person looked at the author's reason and made a call.
     await writeAudit(env, {
       actor,
-      action: payload.dismissed ? 'nexus_missing.dismiss' : 'nexus_missing.restore',
+      action: payload.dismissed ? 'nexus_status.dismiss' : 'nexus_status.restore',
       target: nexusId,
       after: record,
     });
-    // No materialize: nothing here is served on /v1.
-    return json(request, { missing: record });
+    // Dismissing a DELETED mod puts its pin back, so the served dataset has to
+    // be rebuilt for that to be true anywhere but this response. Same
+    // fire-and-forget as every other write on this surface.
+    materializeAfterWrite(env, ctx);
+    return json(request, { mod: record });
   }
-  if (missingMatch) return json(request, { error: 'method_not_allowed' }, 405);
+  if (modStatusMatch) return json(request, { error: 'method_not_allowed' }, 405);
 
   // ---- quota: dataset introspection --------------------------------------
   //

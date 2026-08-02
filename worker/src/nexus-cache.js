@@ -71,12 +71,14 @@
 
 import { fetchTaggedModNodes, fetchModsByUidThumbs, fetchModArchiveNames } from './nexus.js';
 import { readArchives } from './store.js';
-import { recordSweep, sweepLooksUnreliable } from './nexus-missing.js';
+import {
+  recordSweep, sweepLooksUnreliable, isPublished, ABSENT, PUBLISHED,
+} from './nexus-status.js';
 
 /** Columns compared to decide whether a row needs writing. */
 const TRACKED = [
   'name', 'summary', 'uploader', 'updated_at', 'thumbnail_url', 'picture_url',
-  'archives', 'archives_at', 'nczoning_tagged',
+  'archives', 'archives_at', 'nczoning_tagged', 'status',
 ];
 
 // Per-tick archive budgets, carried over from refresh.js unchanged. Archives are
@@ -102,6 +104,10 @@ function nodeToRow(node, tagged) {
   return {
     nexus_id: String(node.modId),
     name: node.name ?? null,
+    // The tagged query returns published mods only (measured against the live
+    // API), so a node arriving from it is published by construction. Stated
+    // rather than read off the node, which does not carry the field.
+    status: tagged ? PUBLISHED : (node.status ?? null),
     // The two fields merge.js builds an auto-discovered record's description
     // and first author from, kept so the submit form can prefill the same way.
     summary: node.summary ?? null,
@@ -117,7 +123,7 @@ function nodeToRow(node, tagged) {
 export async function readNexusCache(env) {
   const { results } = await env.DB.prepare(
     `SELECT nexus_id, name, summary, uploader, updated_at, thumbnail_url,
-            picture_url, archives, archives_at, nczoning_tagged, fetched_at
+            picture_url, archives, archives_at, nczoning_tagged, status, fetched_at
        FROM nexus_cache`,
   ).all();
   const map = new Map();
@@ -241,8 +247,8 @@ async function writeRows(env, rows, nowIso) {
   const stmt = env.DB.prepare(
     `INSERT INTO nexus_cache
        (nexus_id, name, summary, uploader, updated_at, thumbnail_url, picture_url,
-        archives, archives_at, nczoning_tagged, fetched_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        archives, archives_at, nczoning_tagged, status, fetched_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(nexus_id) DO UPDATE SET
        name            = COALESCE(excluded.name, nexus_cache.name),
        summary         = COALESCE(excluded.summary, nexus_cache.summary),
@@ -253,6 +259,7 @@ async function writeRows(env, rows, nowIso) {
        archives        = COALESCE(excluded.archives, nexus_cache.archives),
        archives_at     = COALESCE(excluded.archives_at, nexus_cache.archives_at),
        nczoning_tagged = excluded.nczoning_tagged,
+       status          = COALESCE(excluded.status, nexus_cache.status),
        fetched_at      = excluded.fetched_at`,
   );
   await env.DB.batch(rows.map((r) => stmt.bind(
@@ -266,6 +273,7 @@ async function writeRows(env, rows, nowIso) {
     r.archives ?? null,
     r.archives_at ?? null,
     r.nczoning_tagged ?? 0,
+    r.status ?? null,
     nowIso,
   )));
   return rows.length;
@@ -413,9 +421,11 @@ export async function refreshNexusCache(env, { fetchImpl = fetch, nowIso, tagged
     .map((r) => String(r.nexus_id))
     .filter((id) => isRealNexusId(id) && !incoming.has(id));
 
-  // Ids this sweep asked Nexus about and did not get back. Populated below;
-  // folded into nexus_missing at the end, once it is known whether the sweep
+  // What this sweep learned about each pinned mod that is not published:
+  // nexus_id -> status, where `absent` means the response did not mention it.
+  // Folded into nexus_mod_status at the end, once it is known whether the sweep
   // can be trusted at all.
+  const unavailable = new Map();
   let missingIds = [];
 
   if (needBackfill.length) {
@@ -427,9 +437,15 @@ export async function refreshNexusCache(env, { fetchImpl = fetch, nowIso, tagged
     const returned = new Set(Object.keys(thumbs ?? {}).map(String));
     missingIds = needBackfill.filter((id) => !returned.has(id));
     for (const [id, t] of Object.entries(thumbs ?? {})) {
+      // A deleted or hidden mod is RETURNED by modsByUid, unlike the tagged
+      // query, which filters. Its images and name are cached like any other
+      // (they are what the review list shows); `status` is what says the pin
+      // needs looking at.
+      if (!isPublished(t.status)) unavailable.set(String(id), String(t.status));
       incoming.set(String(id), {
         nexus_id: String(id),
         name: t.name ?? null,
+        status: t.status ?? null,
         updated_at: t.updatedAt ?? null,
         thumbnail_url: t.thumbnailUrl ?? null,
         picture_url: t.pictureUrl ?? null,
@@ -458,12 +474,14 @@ export async function refreshNexusCache(env, { fetchImpl = fetch, nowIso, tagged
 
   const writes = diffRows([...incoming.values()], existing);
   summary.written = await writeRows(env, writes, stamp);
-  summary.missing = await trackMissing(env, { missingIds, needBackfill, summary, stamp });
+  summary.modStatus = await trackModStatus(
+    env, { unavailable, missingIds, needBackfill, summary, stamp },
+  );
   return summary;
 }
 
 /**
- * Fold this sweep's unanswered ids into `nexus_missing` (#900).
+ * Fold this sweep's verdicts into `nexus_mod_status` (#900).
  *
  * Runs after the cache write, and never fails the sweep: a mod that vanished
  * from Nexus is worth telling someone about, and it is not worth costing the
@@ -471,7 +489,7 @@ export async function refreshNexusCache(env, { fetchImpl = fetch, nowIso, tagged
  * posture as archives.
  *
  * Two reasons to skip a sweep entirely, and both are the difference between a
- * useful flag and one Nexus outage flagging the whole registry:
+ * useful flag and one Nexus outage condemning the whole registry:
  *
  *   * `summary.stale` -- the all-or-nothing case detected above. Asked for
  *     some, got none: that is Nexus, not the mods.
@@ -479,23 +497,31 @@ export async function refreshNexusCache(env, { fetchImpl = fetch, nowIso, tagged
  *     modsByUid is chunked and a chunk that fails after its retry returns {}
  *     for its whole share, which looks like a simultaneous mass deletion.
  *
- * Skipping leaves the stored streaks untouched rather than resetting them: a
- * mod that really is gone keeps the count it has earned, and picks up again on
- * the next sweep worth believing.
+ * Both guards are about ABSENCE, which is the only one of the three states a
+ * Nexus failure can manufacture: a failed chunk returns no node, never a node
+ * saying `wastebinned`. They still gate the whole step, because a sweep that
+ * cannot be trusted about half its ids should not be recording verdicts on the
+ * other half either.
+ *
+ * Skipping leaves the stored runs untouched rather than resetting them: a mod
+ * that really is gone keeps the count it has earned and picks up again on the
+ * next sweep worth believing.
  */
-async function trackMissing(env, { missingIds, needBackfill, summary, stamp }) {
+async function trackModStatus(env, { unavailable, missingIds, needBackfill, summary, stamp }) {
   if (summary.stale) return { skipped: 'stale', flagged: [] };
   if (sweepLooksUnreliable({ missing: missingIds.length, requested: needBackfill.length })) {
     console.warn(
-      `nexus_missing: ignoring sweep, ${missingIds.length} of ${needBackfill.length} `
+      `nexus_mod_status: ignoring sweep, ${missingIds.length} of ${needBackfill.length} `
       + 'ids came back empty (reads as a Nexus failure, not a deletion)',
     );
     return { skipped: 'unreliable', flagged: [] };
   }
+  // Absence is folded in only now, so the guards above judge it first.
+  for (const id of missingIds) unavailable.set(id, ABSENT);
   try {
-    return await recordSweep(env, { missing: missingIds, nowIso: stamp });
+    return await recordSweep(env, { unavailable, nowIso: stamp });
   } catch (err) {
-    console.warn('nexus_missing tracking failed (non-fatal):', String(err).slice(0, 200));
+    console.warn('nexus_mod_status tracking failed (non-fatal):', String(err).slice(0, 200));
     return { skipped: 'error', flagged: [], error: String(err).slice(0, 200) };
   }
 }

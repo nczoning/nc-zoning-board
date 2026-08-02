@@ -9,8 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- A pin whose Nexus mod has been deleted or hidden is flagged for review after a day of consecutive sweeps that came back with nothing, with one alert and a list on the dashboard's Overview.
-- Nothing is hidden automatically: the flag is a prompt, and only a person changes a location's status.
+- A pin whose Nexus mod has been deleted drops off the map on its own again, three sweeps after Nexus reports it. The location record is not edited, so the pin returns by itself if Nexus changes its mind.
+- A pin whose mod is hidden on Nexus is flagged for review and left on the map: only the reason the author gave says whether that is temporary, and the API does not expose it.
+- The dashboard's Overview lists both, with the pins each one affects and a control to dismiss the flag or put a withheld pin back.
 
 ## [2.4.1] - 2026-08-02
 
