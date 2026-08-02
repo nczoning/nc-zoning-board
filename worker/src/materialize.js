@@ -84,13 +84,25 @@ function resolveTags(row, locationTags) {
  */
 export function materializeFromD1({
   rows, dismissed, nexusNodes, districts, nexusIndex = new Map(),
-  locationTags = null, nowMs = Date.now(),
+  locationTags = null, nowMs = Date.now(), withheld = new Set(),
 }) {
   const dismissedIds = dismissed instanceof Set ? dismissed : new Set(dismissed || []);
+  const withheldIds = withheld instanceof Set ? withheld : new Set(withheld || []);
 
   // Only published records reach the map. `hidden` keeps the row but pulls the
-  // pin (the Nexus-deletion case); `draft` has never been published.
-  const published = rows.filter((r) => r.status === 'published');
+  // pin; `draft` has never been published.
+  const publishedRows = rows.filter((r) => r.status === 'published');
+
+  // Records whose Nexus mod has been confirmed deleted (`wastebinned` on
+  // consecutive sweeps; see nexus-status.js). Withheld HERE rather than by
+  // writing `locations.status`, so the row keeps whatever the admin last set
+  // and a reversal on Nexus restores the pin with nobody involved. Reported on
+  // /v1/meta, because a record that is published and not served is otherwise a
+  // silent disagreement between the dashboard and the map.
+  const withdrawn = publishedRows.filter((r) => withheldIds.has(String(r.nexus_id)));
+  const published = withdrawn.length
+    ? publishedRows.filter((r) => !withheldIds.has(String(r.nexus_id)))
+    : publishedRows;
 
   // Every record's nexus_id, not just the manual ones -- the auto-discovered
   // records are rows now, so they suppress their own re-creation for free.
@@ -153,7 +165,16 @@ export function materializeFromD1({
     };
   }
 
-  return { full, meta: { skipped } };
+  return {
+    full,
+    meta: {
+      skipped,
+      // Published in the registry, deliberately not on the map. Named, not
+      // counted: "3 records withheld" is a number nobody can check, and the
+      // dashboard's drift row has to subtract exactly these.
+      withheld: withdrawn.map((r) => ({ id: r.id, nexus_id: String(r.nexus_id) })),
+    },
+  };
 }
 
 /**

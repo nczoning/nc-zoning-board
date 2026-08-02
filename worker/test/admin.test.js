@@ -90,14 +90,14 @@ const FRESH_USER = (collab = 1) => ({
 
 function envFor({
   collab = 1, locations = [ROW],
-  locationTags = [['loc-1', 'apartment']], checkedAt,
+  locationTags = [['loc-1', 'apartment']], checkedAt, nexusModStatus,
 } = {}) {
   const user = FRESH_USER(collab);
   if (checkedAt) user.checked_at = checkedAt;
   return {
     SESSION_SECRET: SECRET,
     DATASET: fakeKv(),
-    DB: sqliteD1({ locations, locationTags, users: [user] }),
+    DB: sqliteD1({ locations, locationTags, users: [user], nexusModStatus }),
   };
 }
 
@@ -143,6 +143,7 @@ test('every admin route is refused without a session', async () => {
     ['GET', '/admin/tags'], ['POST', '/admin/tags'],
     ['GET', '/admin/tags/corpo'], ['PATCH', '/admin/tags/corpo'],
     ['DELETE', '/admin/tags/corpo'], ['POST', '/admin/refresh'],
+    ['GET', '/admin/nexus-status'], ['PATCH', '/admin/nexus-status/12345'],
   ]) {
     const res = await worker.fetch(
       new Request(`https://api.nczoning.net${path}`, { method }), env, {},
@@ -643,4 +644,73 @@ test('a tag write rebuilds the read path too, since /v1/tags serves it', async (
     { waitUntil: (p) => waited.push(p) });
   assert.equal(waited.length, 1);
   await waited[0];
+});
+
+// -------------------------------------- mods no longer published on Nexus ---
+// The review surface for #900. Read plus a dismissal and nothing else: the cron
+// owns every other column, and an admin who decides the mod is gone for good
+// edits the LOCATION, through the existing status control and audit trail.
+
+const DELETED_ROW = {
+  nexus_id: '12345', status: 'wastebinned', streak: 300,
+  first_seen_at: '2026-07-01T00:00:00Z', last_seen_at: '2026-07-02T00:00:00Z',
+  flagged_at: '2026-07-02T00:00:00Z',
+};
+
+test('the review list comes back with the pins that point at the mod', async () => {
+  const env = envFor({ nexusModStatus: [DELETED_ROW] });
+  const res = await hit(env, 'GET', '/admin/nexus-status');
+  assert.equal(res.status, 200);
+  const { mods } = await res.json();
+  assert.equal(mods.length, 1);
+  assert.equal(mods[0].nexus_id, '12345');
+  assert.equal(mods[0].status, 'wastebinned');
+  assert.equal(mods[0].streak, 300);
+  assert.equal(mods[0].withheld, true, 'a confirmed deletion is already off the map');
+  assert.deepEqual(mods[0].locations, [{ id: 'loc-1', name: 'Existing Loft', status: 'published' }],
+    'the pin is the thing the admin has to decide about');
+});
+
+test('dismissing records who did it, is audited, and puts the pin back', async () => {
+  const env = envFor({ nexusModStatus: [DELETED_ROW] });
+  const res = await hit(env, 'PATCH', '/admin/nexus-status/12345', { dismissed: true });
+  assert.equal(res.status, 200);
+  const { mod } = await res.json();
+  assert.equal(mod.dismissed_by, 'spuddeh');
+  assert.equal(mod.withheld, false, 'dismissing a deletion is how a pin goes back up');
+
+  const row = env.DB.one('SELECT * FROM nexus_mod_status WHERE nexus_id = ?', '12345');
+  assert.equal(row.dismissed_by, 'spuddeh');
+  assert.ok(row.dismissed_at);
+  assert.equal(row.streak, 300, 'dismissing is not forgetting: the mod is still deleted');
+
+  const audit = auditRows(env);
+  assert.equal(audit.length, 1);
+  assert.equal(audit[0].action, 'nexus_status.dismiss');
+  assert.equal(audit[0].target, '12345');
+});
+
+test('dismissing never writes the location', async () => {
+  const env = envFor({ nexusModStatus: [DELETED_ROW] });
+  await hit(env, 'PATCH', '/admin/nexus-status/12345', { dismissed: true });
+  assert.equal(env.DB.one('SELECT status FROM locations WHERE id = ?', 'loc-1').status, 'published',
+    'the pin moves on and off the map without the record ever changing');
+});
+
+test('a dismissal rebuilds the read path, since it changes what is served', async () => {
+  const env = envFor({ nexusModStatus: [DELETED_ROW] });
+  const waited = [];
+  await hit(env, 'PATCH', '/admin/nexus-status/12345', { dismissed: true },
+    { waitUntil: (p) => waited.push(p) });
+  assert.equal(waited.length, 1, 'without this the pin only returns at the next cron tick');
+  await waited[0];
+});
+
+test('an untracked mod is 404, and a bad body is 422', async () => {
+  const env = envFor({ nexusModStatus: [DELETED_ROW] });
+  assert.equal((await hit(env, 'PATCH', '/admin/nexus-status/99999', { dismissed: true })).status, 404);
+  assert.equal((await hit(env, 'PATCH', '/admin/nexus-status/12345', { note: 'x' })).status, 422);
+  assert.equal((await hit(env, 'DELETE', '/admin/nexus-status/12345')).status, 405,
+    "the row is the cron's to delete, not an admin's");
+  assert.equal(auditRows(env).length, 0, 'a refused call is not audited');
 });

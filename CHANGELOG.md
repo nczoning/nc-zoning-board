@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-08-02
+
+A mod that leaves Nexus no longer leaves its pin behind. Nexus states a
+mod's status outright and the sweep now asks for it, so a deletion is a
+fact rather than an inference. Deleted pulls the pin by itself; hidden
+never does, because the API will not say whether an author is mid-upload
+or a moderator is holding the page, and only the reason on the mod page
+answers that. Nothing changes a location's status but a person.
+
+### Added
+
+- A pin whose Nexus mod has been deleted drops off the map on its own again, three sweeps after Nexus reports it. The location record is not edited, so the pin returns by itself if Nexus changes its mind.
+- A pin whose mod is hidden on Nexus is flagged for review and left on the map: only the reason the author gave says whether that is temporary, and the API does not expose it.
+- The dashboard's Overview lists both, with the pins each one affects and a control to dismiss the flag or put a withheld pin back.
+- A mod published on Nexus again restores its own pin and says so. If someone had hidden the record by hand meanwhile, the alert names it: that stays hidden until a person republishes it.
+- Alerts link to the mod they are about, in the dashboard and in Discord.
+
 ## [2.4.1] - 2026-08-02
 
 ### Fixed
