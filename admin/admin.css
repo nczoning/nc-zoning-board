@@ -925,6 +925,14 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 
 .sibling p { margin: var(--space-2xs) 0 0; }
 
+/* The field-by-field comparison against a HIDDEN record, under the row it
+ * belongs to. `.sibling` is a flex row, so it takes a full-width basis rather
+ * than becoming a third column squeezed beside the buttons. */
+.sibling-diff {
+    flex: 1 0 100%;
+    margin-top: var(--space-xs);
+}
+
 .candidate-list { display: grid; gap: var(--space-sm); }
 
 .candidate {
