@@ -540,6 +540,170 @@ test('a restore materializes, because a record did change', async () => {
   assert.equal(waited.length, 1);
 });
 
+// ------------------------------------------ restoring AND applying the values ---
+
+// The reviewer has read the diff and decided the submitted values are the ones
+// that should be on the map. Same grant as a restore (one record, not two) and
+// the opposite decision about whose values win.
+
+const APPLY = { restore_location_id: 'loc-hidden', apply_payload: true };
+const tagsFor = (env, id) => env.DB.rows(
+  'SELECT tag_slug FROM location_tags WHERE location_id = ? ORDER BY tag_slug', id,
+).map((r) => r.tag_slug);
+
+test('restore-and-apply puts the record back AND writes the submitted values', async () => {
+  const env = envFor({ locations: [LOCATION, HIDDEN], submissions: [resubmission()] });
+  const res = await hit(env, 'POST', `/admin/submissions/${firstId(env)}/approve`, APPLY);
+  assert.equal(res.status, 200);
+
+  const body = await res.json();
+  assert.equal(body.restored, true);
+  assert.equal(body.applied, true, 'the two restores have to be tellable apart in the response');
+  assert.equal(body.submission.status, 'approved');
+
+  const rows = locRows(env);
+  assert.equal(rows.length, 2, 'still no second record: this is a restore');
+  const row = rows.find((r) => r.id === 'loc-hidden');
+  assert.equal(row.status, 'published');
+  assert.equal(row.name, 'Rooftop Bar', 'the submitted name is the point of this outcome');
+  assert.equal(row.x, 100);
+  assert.equal(row.y, 200);
+  assert.equal(row.z, 30);
+  // The join, not just the column: a record that materializes with no tags is
+  // the failure insertLocation's comment exists for.
+  assert.deepEqual(tagsFor(env, 'loc-hidden'), ['apartment']);
+});
+
+test('restore-and-apply revalidates against the tag registry as it stands NOW', async () => {
+  // The submission carried a tag that was renamed or deleted while it sat in
+  // the queue. Applying it would write a location whose join rows silently go
+  // missing, so it is refused and the submission stays reviewable.
+  const env = envFor({
+    locations: [LOCATION, HIDDEN],
+    submissions: [submission({
+      payload: JSON.stringify({ ...VALID, tags: ['a-tag-that-was-renamed'] }),
+    })],
+  });
+  const res = await hit(env, 'POST', `/admin/submissions/${firstId(env)}/approve`, APPLY);
+  assert.equal(res.status, 422);
+  assert.equal((await res.json()).error, 'validation_failed');
+
+  const row = locRows(env).find((r) => r.id === 'loc-hidden');
+  assert.equal(row.status, 'hidden', 'nothing may be published by a refused apply');
+  assert.equal(row.name, 'Pulled Loft', 'and nothing may be written');
+  assert.equal(subRows(env)[0].status, 'pending', 'a submission that could not be applied is not reviewed');
+});
+
+test('the audit tells restore-and-apply apart from restore-as-is', async () => {
+  // Only one of the two discarded something. An audit that calls both "restore"
+  // cannot answer the question a reader comes to it with.
+  const env = envFor({ locations: [LOCATION, HIDDEN], submissions: [resubmission()] });
+  await hit(env, 'POST', `/admin/submissions/${firstId(env)}/approve`, APPLY);
+
+  const log = auditRows(env);
+  assert.deepEqual(log.map((r) => r.action), ['location.update', 'submission.approve']);
+  const after = JSON.parse(log.at(-1).after);
+  assert.equal(after.granted_by, 'restore_apply');
+  assert.equal(after.location_id, 'loc-hidden');
+
+  // The location entry has to show what the apply overwrote, or the curated
+  // values it replaced are gone with no record that they existed.
+  const update = JSON.parse(log[0].before);
+  assert.equal(update.name, 'Pulled Loft');
+});
+
+test('two approvals racing on one submission apply the payload once', async () => {
+  // Both requests pass the pending check before either writes. Whichever guard
+  // catches the second (the submission resolve, the `hidden` read, or the
+  // conditional update), exactly one write may land.
+  const env = envFor({ locations: [LOCATION, HIDDEN], submissions: [resubmission()] });
+  const path = `/admin/submissions/${firstId(env)}/approve`;
+  const results = await Promise.all([
+    hit(env, 'POST', path, APPLY),
+    hit(env, 'POST', path, APPLY),
+  ]);
+
+  const codes = results.map((r) => r.status).sort();
+  assert.deepEqual(codes, [200, 409], 'one grant, one refusal');
+  assert.equal(
+    actions(env).filter((a) => a === 'location.update').length, 1,
+    'the registry may be written once, whichever request lost',
+  );
+  assert.equal(subRows(env).filter((r) => r.status === 'approved').length, 1);
+});
+
+test('an apply refuses rather than overwriting a record that moved under it', async () => {
+  // The window the conditional write exists for, and the only way to stand in
+  // it deterministically: the record is written in the instant between
+  // restoreInstead reading it and applying to it. Two reviewers resolving two
+  // resubmissions of one mod at once is what puts a person here, and their
+  // payloads are NOT identical, so last-write-wins is not a harmless no-op.
+  const env = envFor({ locations: [LOCATION, HIDDEN], submissions: [resubmission()] });
+  const realPrepare = env.DB.prepare.bind(env.DB);
+  let moved = false;
+  env.DB.prepare = (sql) => {
+    if (!moved && sql.startsWith('UPDATE locations')) {
+      moved = true;
+      env.DB._db.prepare(
+        "UPDATE locations SET name = 'Renamed by someone else', modified_at = '2026-09-09T00:00:00Z' WHERE id = 'loc-hidden'",
+      ).run();
+    }
+    return realPrepare(sql);
+  };
+
+  const res = await hit(env, 'POST', `/admin/submissions/${firstId(env)}/approve`, APPLY);
+  assert.equal(res.status, 409);
+  assert.equal((await res.json()).error, 'stale_restore');
+
+  const row = locRows(env).find((r) => r.id === 'loc-hidden');
+  assert.equal(row.name, 'Renamed by someone else', 'the other write must survive');
+  assert.equal(row.status, 'hidden', 'and this approval must have written nothing');
+  assert.equal(subRows(env)[0].status, 'pending');
+});
+
+test('a resolved submission cannot be approved again, applied or otherwise', async () => {
+  const env = envFor({ locations: [LOCATION, HIDDEN], submissions: [resubmission()] });
+  const path = `/admin/submissions/${firstId(env)}/approve`;
+  assert.equal((await hit(env, 'POST', path, APPLY)).status, 200);
+
+  const again = await hit(env, 'POST', path, APPLY);
+  assert.equal(again.status, 409);
+  assert.equal((await again.json()).error, 'already_resolved');
+  assert.equal(actions(env).filter((a) => a === 'location.update').length, 1);
+});
+
+test('apply_payload is refused without a record to apply it to, and unless boolean', async () => {
+  // Alone it would read as "apply the submitted values", which is what a plain
+  // approve does by inserting them. Here it would quietly do nothing.
+  const env = envFor({ locations: [LOCATION, HIDDEN], submissions: [resubmission()] });
+  const path = `/admin/submissions/${firstId(env)}/approve`;
+
+  const alone = await hit(env, 'POST', path, { apply_payload: true });
+  assert.equal(alone.status, 400);
+
+  const notBool = await hit(env, 'POST', path, { restore_location_id: 'loc-hidden', apply_payload: 'yes' });
+  assert.equal(notBool.status, 400);
+
+  assert.equal(locRows(env).find((r) => r.id === 'loc-hidden').status, 'hidden');
+  assert.equal(subRows(env)[0].status, 'pending');
+});
+
+test('restore-as-is is unchanged: apply_payload false keeps the curated record', async () => {
+  // 34 of 295 names differ from their Nexus title on purpose. Applying must
+  // stay the explicit choice, never what an absent or false flag does.
+  const env = envFor({ locations: [LOCATION, HIDDEN], submissions: [resubmission()] });
+  const res = await hit(env, 'POST', `/admin/submissions/${firstId(env)}/approve`,
+    { restore_location_id: 'loc-hidden', apply_payload: false });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).applied, false);
+
+  const row = locRows(env).find((r) => r.id === 'loc-hidden');
+  assert.equal(row.status, 'published');
+  assert.equal(row.name, 'Pulled Loft');
+  assert.equal(row.x, LOCATION.x);
+  assert.equal(JSON.parse(auditRows(env).at(-1).after).granted_by, 'restore');
+});
+
 // ------------------------------------------------- reject / request changes ---
 
 test('a rejection without a reason is refused, and changes nothing', async () => {

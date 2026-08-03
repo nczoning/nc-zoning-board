@@ -1343,6 +1343,26 @@
    * two rows for one pin. Restoring puts the curated record back instead, and
    * still resolves the submission as approved, because the request was granted.
    */
+  /**
+   * What the submission would change about the stored record, field by field.
+   *
+   * The same renderer the queue uses for an `edit`, pointed at a pair it was not
+   * built for: (hidden record -> submitted payload). The reviewer is deciding
+   * between two sets of values, and one distance in metres cannot answer "is it
+   * back in the same place, with the same description, by the same author?".
+   *
+   * Only the keys the payload carries. A `create` payload does not mention
+   * `admin_notes` or `status`, and diffing the record's against `undefined`
+   * would report the record's own fields as removals.
+   */
+  function hiddenSiblingDiff(sub, location) {
+    const before = {};
+    for (const key of Object.keys(sub.payload)) before[key] = location[key];
+    return h('div', { class: 'sibling-diff' },
+      h('p', { class: 'muted', text: 'What the submission would change about this record:' }),
+      renderDiff(before, sub.payload, 'Show both records in full'));
+  }
+
   function siblingPanel(sub) {
     const siblings = siblingLocations(sub);
     if (!siblings.length) return null;
@@ -1357,15 +1377,26 @@
           : `${Math.round(metres).toLocaleString()} m from the proposed pin` })),
       h('div', { class: 'candidate-actions' },
         location.status === 'hidden'
-          ? h('button', {
-            class: 'btn', type: 'button', text: 'Restore this instead',
-            title: 'Puts this record back on the map as it stands, and marks the submission approved. The submitted coordinates are not applied.',
-            onclick: (e) => approveByRestoring(sub, location, e.currentTarget),
-          })
+          ? [
+            h('button', {
+              class: 'btn', type: 'button', text: 'Restore this instead',
+              title: 'Puts this record back on the map as it stands, and marks the submission approved. The submitted coordinates are not applied.',
+              onclick: (e) => approveByRestoring(sub, location, e.currentTarget),
+            }),
+            // Second, and `secondary`, on purpose: 34 of 295 names differ from
+            // their Nexus title by curation, so overwriting the stored record
+            // is the deliberate choice and must not be the easy one.
+            h('button', {
+              class: 'btn secondary', type: 'button', text: 'Restore and apply these values',
+              title: 'Puts this record back on the map AND overwrites it with the submitted values. Any curation on the stored record is replaced.',
+              onclick: (e) => approveByRestoring(sub, location, e.currentTarget, { apply: true }),
+            }),
+          ]
           : h('button', {
             class: 'btn secondary', type: 'button', text: 'Open it',
             onclick: () => selectLocation(location.id),
-          }))));
+          })),
+      location.status === 'hidden' ? hiddenSiblingDiff(sub, location) : null));
 
     return h('div', { class: `sibling-panel${hidden.length ? ' has-hidden' : ''}` },
       h('p', { class: 'muted', text: hidden.length
@@ -1374,19 +1405,30 @@
       rows);
   }
 
-  /** Grant a create by putting an existing hidden record back on the map. */
-  async function approveByRestoring(sub, location, button) {
-    const ok = confirm(
-      `Restore "${location.name}" and approve this submission?\n\n`
-      + 'The record goes back on the map exactly as it is stored. The submitted '
-      + 'coordinates and description are NOT applied, and no second record is created.',
-    );
+  /**
+   * Grant a create by putting an existing hidden record back on the map, either
+   * as it stands or overwritten with the submitted values.
+   *
+   * The two confirms say different things because the two outcomes are
+   * different, and only one of them discards anything. The apply confirm names
+   * the record it is about to overwrite: "Restore and apply" reads as additive
+   * until you know it is a replacement.
+   */
+  async function approveByRestoring(sub, location, button, { apply = false } = {}) {
+    const ok = confirm(apply
+      ? `Restore "${location.name}" and OVERWRITE it with the submitted values?\n\n`
+        + 'The record goes back on the map carrying the submitted name, coordinates '
+        + 'and description. Anything curated on the stored record is replaced. No '
+        + 'second record is created.'
+      : `Restore "${location.name}" and approve this submission?\n\n`
+        + 'The record goes back on the map exactly as it is stored. The submitted '
+        + 'coordinates and description are NOT applied, and no second record is created.');
     if (!ok) return;
 
     button.disabled = true;
     const res = await api(`/admin/submissions/${sub.id}/approve`, {
       method: 'POST',
-      body: { restore_location_id: location.id },
+      body: { restore_location_id: location.id, ...(apply ? { apply_payload: true } : {}) },
     });
     button.disabled = false;
 
@@ -1400,7 +1442,11 @@
     await loadLocations();
     await loadQueue();
     selectSubmission(sub.id);
-    banner('ok', `Restored "${res.body.location.name}" and approved the submission. No second record was created.`);
+    // `res.body.applied` rather than what this call asked for: the reviewer is
+    // told whether the stored values survived, and only the server knows.
+    banner('ok', res.body.applied
+      ? `Restored "${res.body.location.name}" and applied the submitted values. No second record was created.`
+      : `Restored "${res.body.location.name}" and approved the submission. No second record was created.`);
   }
 
   /** The coordinates a submission wants, and the ones it moves away from. */
@@ -2323,6 +2369,7 @@
     granted_by: {
       apply: 'applied to the existing record',
       restore: 'put a hidden record back, rather than creating a second one',
+      restore_apply: 'put a hidden record back AND overwrote it with the submitted values',
     },
     status: {
       published: 'on the map',
@@ -2529,6 +2576,13 @@
         if (after.granted_by === 'restore') {
           return ['approved submission #', target, ' by restoring ',
             quoted(name ?? 'a hidden record'), ' rather than creating a second one'];
+        }
+        // The one outcome that discarded something. The location.update entry
+        // beside this one holds what it discarded; this sentence has to say
+        // that there was something, or nobody goes and looks.
+        if (after.granted_by === 'restore_apply') {
+          return ['approved submission #', target, ' by restoring ',
+            quoted(name ?? 'a hidden record'), ' and overwriting it with the submitted values'];
         }
         return ['approved submission #', target, name ? [', applied to ', quoted(name)] : '',
           // The reviewer approved over a record that had moved since the

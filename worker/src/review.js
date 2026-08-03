@@ -166,16 +166,20 @@ function checkNote(value, { required }) {
  * and later someone submits the same mod again. Approving that create normally
  * would leave two rows for one pin, one hidden and one published.
  *
- * It restores the record AS IT STANDS. The submitted coordinates and
+ * By default it restores the record AS IT STANDS. The submitted coordinates and
  * description are NOT applied: the stored record is curated (34 of 295 names
  * differ from their Nexus title deliberately), and quietly overwriting that
- * from an anonymous payload is not a restore. A reviewer who does want the new
- * values makes that edit deliberately afterwards.
+ * from an anonymous payload is not a restore.
+ *
+ * `applyPayload` is the reviewer saying otherwise, in as many words, having read
+ * the diff the queue now renders. It stays opt-in and must never become the
+ * default: the curation it overwrites is invisible in the payload, so a reviewer
+ * who did not choose it cannot see what it cost.
  *
  * Three checks, three distinct refusals, because each one means the reviewer
  * pointed at the wrong record and they are wrong in different ways.
  */
-async function restoreInstead(env, submission, locationId, { actor, nowIso }) {
+async function restoreInstead(env, submission, locationId, { actor, nowIso, applyPayload }) {
   const row = await getRow(env, locationId);
   if (!row) {
     return { error: 'location_missing', detail: 'that location does not exist', status: 409 };
@@ -202,12 +206,48 @@ async function restoreInstead(env, submission, locationId, { actor, nowIso }) {
   }
 
   const before = await loadAdminRecord(env, row);
-  // Unguarded on purpose: publishing a record this approval just restored is
-  // this call's whole job, and there is no competing version to lose.
-  await patchLocation(env, locationId, { status: 'published' }, nowIso);
+
+  if (!applyPayload) {
+    // Unguarded on purpose: publishing a record this approval just restored is
+    // this call's whole job, and there is no competing version to lose.
+    await patchLocation(env, locationId, { status: 'published' }, nowIso);
+    const after = await loadAdminRecordById(env, locationId);
+    await writeAudit(env, { actor, action: 'location.update', target: locationId, before, after });
+    return { location: after, restored: true };
+  }
+
+  // Revalidated against the tag registry AS IT STANDS NOW, for the reason
+  // applyApproval gives: a tag renamed or deleted while the submission sat in
+  // the queue would write a record whose join rows silently go missing. Full
+  // validation rather than partial, because a `create` payload is a whole
+  // record and applying half of one is not what the reviewer asked for.
+  const v = validateLocationInput(payload, { tagNames: await readTagSlugs(env) });
+  if (!v.ok) return { error: 'validation_failed', errors: v.errors, status: 422 };
+
+  // One UPDATE: the payload and `published` land together or not at all. There
+  // is no state in which the record is back on the map still carrying the
+  // values the reviewer chose to replace.
+  //
+  // GUARDED, unlike the restore above, and on the row this function read a
+  // moment ago rather than on anything the submitter saw. Two approvals racing
+  // on one submission both pass the `hidden` check before either writes; the
+  // second one finds `modified_at` moved and writes nothing, instead of
+  // applying the payload twice over a record that is already published.
+  const patched = await patchLocation(
+    env, locationId, { ...payload, status: 'published' }, nowIso,
+    { ifMatch: row.modified_at },
+  );
+  if (patched.conflict) {
+    return {
+      error: 'stale_restore',
+      detail: `"${row.name}" changed while this approval was being applied, so nothing was written`,
+      current: await loadAdminRecordById(env, locationId),
+      status: 409,
+    };
+  }
   const after = await loadAdminRecordById(env, locationId);
   await writeAudit(env, { actor, action: 'location.update', target: locationId, before, after });
-  return { location: after, restored: true };
+  return { location: after, restored: true, applied: true };
 }
 
 /**
@@ -222,14 +262,16 @@ async function restoreInstead(env, submission, locationId, { actor, nowIso }) {
  * submission pending: a submission that could not be applied has not been
  * reviewed, and marking it approved anyway would lose it.
  */
-async function applyApproval(env, submission, { actor, nowIso, restoreLocationId, baseOverride }) {
+async function applyApproval(
+  env, submission, { actor, nowIso, restoreLocationId, applyPayload, baseOverride },
+) {
   const payload = parsePayload(submission.payload);
 
   if (submission.kind === 'create') {
     // The reviewer chose to grant this by restoring an existing record rather
     // than by inserting a new one. Still an approval: the request was granted.
     if (restoreLocationId) {
-      return restoreInstead(env, submission, restoreLocationId, { actor, nowIso });
+      return restoreInstead(env, submission, restoreLocationId, { actor, nowIso, applyPayload });
     }
 
     const v = validateLocationInput(payload, { tagNames: await readTagSlugs(env) });
@@ -312,6 +354,13 @@ async function applyApproval(env, submission, { actor, nowIso, restoreLocationId
   return { location: after };
 }
 
+/** The route by which an approval reached the registry, for the audit log. */
+function grantedBy(applied) {
+  if (!applied) return null;
+  if (!applied.restored) return 'apply';
+  return applied.applied ? 'restore_apply' : 'restore';
+}
+
 /**
  * POST /admin/submissions/:id/(approve|reject|hold)
  *
@@ -344,6 +393,9 @@ async function act(request, env, ctx, { id, action, actor }) {
   if (body.restore_location_id !== undefined && typeof body.restore_location_id !== 'string') {
     errors.push('restore_location_id must be a string');
   }
+  if (body.apply_payload !== undefined && typeof body.apply_payload !== 'boolean') {
+    errors.push('apply_payload must be a boolean');
+  }
   // The version the REVIEWER is approving against, sent only on a second
   // attempt after a `stale_submission` refusal. See applyApproval's edit branch.
   if (body.base_modified_at !== undefined
@@ -362,6 +414,15 @@ async function act(request, env, ctx, { id, action, actor }) {
     return json(request, {
       error: 'invalid_review',
       errors: ['restore_location_id applies only to approving a create'],
+    }, 400);
+  }
+  // `apply_payload` modifies a restore and means nothing without one. Accepting
+  // it alone would read as "apply the submitted values", which is what a plain
+  // approve already does by inserting them, and would quietly do nothing here.
+  if (body.apply_payload && !body.restore_location_id) {
+    return json(request, {
+      error: 'invalid_review',
+      errors: ['apply_payload applies only alongside restore_location_id'],
     }, 400);
   }
   // Same shape of mistake: a create inserts and a removal is unguarded on
@@ -389,6 +450,7 @@ async function act(request, env, ctx, { id, action, actor }) {
       actor,
       nowIso,
       restoreLocationId: body.restore_location_id ?? null,
+      applyPayload: body.apply_payload === true,
       baseOverride: body.base_modified_at ?? null,
     });
     if (applied.error) {
@@ -431,7 +493,12 @@ async function act(request, env, ctx, { id, action, actor }) {
       // How the request was granted, not just that it was. An approval that
       // inserted nothing and an approval that inserted a record are different
       // events, and the log is the only place that distinction survives.
-      granted_by: applied ? (applied.restored ? 'restore' : 'apply') : null,
+      //
+      // Three values, because a restore that kept the curated record and a
+      // restore that overwrote it with the submitted values are the two
+      // outcomes an audit reader most needs to tell apart: only one of them
+      // discarded something, and neither shows up as a create.
+      granted_by: grantedBy(applied),
       // The reviewer approved an edit over a record that had moved since the
       // submission was made. The before/after pair above shows what changed;
       // this says the overwrite was a decision rather than a race.
@@ -446,6 +513,10 @@ async function act(request, env, ctx, { id, action, actor }) {
     submission,
     location: applied?.location ?? null,
     restored: applied?.restored === true,
+    // Reported, not inferred from what the caller sent: the dashboard tells the
+    // reviewer whether the curated values survived, and that has to come from
+    // what the server actually did.
+    applied: applied?.applied === true,
   });
 }
 
