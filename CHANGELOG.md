@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- The audit log filters by who, what and which record, combinable. The filter reads the entries already loaded, so it answers instantly and asks the API for nothing extra.
+- Filtering by a location finds both halves of an approval, including the submission row that names it only in its recorded values.
+
 ## [2.7.0] - 2026-08-03
 
 ### Added

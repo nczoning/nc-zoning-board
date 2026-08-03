@@ -337,7 +337,27 @@
         </select>
         <button type="button" class="btn secondary" id="audit-refresh">Refresh</button>
       </div>
+      <!--
+        Filters over the entries already fetched, not new query params. The two
+        selects are filled from the rows that came back rather than from a list
+        written here, so an action added to the Worker later shows up on its own.
+      -->
+      <div class="toolbar">
+        <select id="audit-actor" aria-label="Filter by who did it">
+          <option value="">Anyone</option>
+        </select>
+        <select id="audit-action" aria-label="Filter by what was done">
+          <option value="">Any action</option>
+        </select>
+        <input type="search" id="audit-target" placeholder="Location, submission, mod or tag id…"
+               aria-label="Filter by what it was done to">
+        <span class="spacer" style="flex:1"></span>
+        <button type="button" class="btn secondary" id="audit-clear">Clear filters</button>
+      </div>
       <div id="audit-list"></div>
+      <!-- What the list is showing, and whether a filter is why. A filtered log
+           that looks unfiltered reads as "nothing happened". -->
+      <p class="muted" id="audit-summary"></p>
     </div>
   </section>
 </main>
