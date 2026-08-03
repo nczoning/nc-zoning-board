@@ -74,6 +74,12 @@
     // "3 open" when it merely fetched 3 of them.
     alerts: [],
     alertsUnacknowledged: 0,
+    // What the Audit tab last fetched, held so a filter change re-renders
+    // instead of re-fetching. The filter is applied to these rows and nowhere
+    // else: `decisions/api-per-location-records` derives rather than asking the
+    // server for a narrower answer, and at 14 rows the whole log is one fetch.
+    audit: [],
+    auditFilter: { actor: '', action: '', target: '' },
     // Pinned mods Nexus no longer calls published, with the pins that point at
     // them. Server state, not derived from the locations list: how many
     // consecutive sweeps have said so is a fact about a run of cron ticks, and
@@ -2634,6 +2640,99 @@
     }
   }
 
+  /** Who did it, in the words the entry itself uses. */
+  const actorLabel = (actor) => (actor === 'anonymous' ? 'a visitor' : actor);
+
+  /**
+   * Every id this entry is ABOUT, not just the one in its `target` column.
+   *
+   * One approval writes two rows and they do not share a target: the
+   * `location.update` names the location UUID, and the `submission.approve`
+   * beside it names the submission number, carrying the UUID in its recorded
+   * values. Matching the column alone answers "what has been done to this
+   * location" with half of what happened to it, which is worse than answering
+   * nothing, because it looks complete.
+   *
+   * A bounded list of id fields rather than a scan of the whole record:
+   * `before`/`after` also hold prose (a name, a reason, an admin note), and
+   * searching those turns an id lookup into a text search that happens to match
+   * ids as well.
+   */
+  const AUDIT_ID_FIELDS = ['id', 'location_id', 'nexus_id', 'slug'];
+
+  function auditIdentifiers(e) {
+    const parts = [e.target];
+    for (const snapshot of [e.before, e.after]) {
+      if (!snapshot || typeof snapshot !== 'object') continue;
+      for (const key of AUDIT_ID_FIELDS) parts.push(snapshot[key]);
+      // A mod-status row is about the pins it lists, not about one target.
+      if (Array.isArray(snapshot.locations)) parts.push(...snapshot.locations.map((l) => l?.id));
+    }
+    return parts.filter((v) => v !== null && v !== undefined).join(' ').toLowerCase();
+  }
+
+  /** `filter.target` arrives already trimmed and lowercased; see the wiring in main(). */
+  function auditMatches(e, filter) {
+    if (filter.actor && e.actor !== filter.actor) return false;
+    if (filter.action && e.action !== filter.action) return false;
+    if (filter.target && !auditIdentifiers(e).includes(filter.target)) return false;
+    return true;
+  }
+
+  /**
+   * Fill a filter select from the values that actually occur in the fetched
+   * rows, never from a list written here. A hard-coded list silently drops an
+   * action a later Worker change adds, which is the same failure `FIELD_LABEL`
+   * avoids by falling back to the raw key.
+   *
+   * The current selection stays an option even when no fetched row carries it,
+   * so narrowing the limit cannot quietly reset the filter to "anyone" while
+   * the list below is showing nothing.
+   */
+  function fillAuditSelect(select, anyLabel, values, selected, label = (v) => v) {
+    const present = [...new Set(values)].sort();
+    if (selected && !present.includes(selected)) present.push(selected);
+    replace(select,
+      h('option', { value: '', text: anyLabel }),
+      present.map((v) => h('option', { value: v, text: label(v) })));
+    select.value = selected;
+  }
+
+  function renderAudit() {
+    const filter = state.auditFilter;
+    const filtering = Boolean(filter.actor || filter.action || filter.target);
+    const shown = filtering ? state.audit.filter((e) => auditMatches(e, filter)) : state.audit;
+
+    fillAuditSelect($('#audit-actor'), 'Anyone', state.audit.map((e) => e.actor), filter.actor, actorLabel);
+    fillAuditSelect($('#audit-action'), 'Any action', state.audit.map((e) => e.action), filter.action);
+    $('#audit-clear').disabled = !filtering;
+
+    replace($('#audit-list'), shown.length
+      ? shown.map((e) => h('div', { class: 'audit-entry' },
+        h('div', { class: 'audit-head' },
+          timeEl(e.at),
+          h('span', { class: 'who', text: actorLabel(e.actor) }),
+          h('span', { class: 'sentence' }, describeAudit(e).flat()),
+          // The machine-readable pair, kept visible so the sentence above can
+          // always be checked against what was actually recorded. It is also
+          // what makes the action filter discoverable: nothing else on the row
+          // says the words the select is offering.
+          h('code', { class: 'action', title: `recorded as ${e.action} on ${e.target ?? 'nothing'}`, text: e.action })),
+        h('details', {}, h('summary', { text: 'The full record' }),
+          renderDiff(e.before, e.after, 'Show exactly what was recorded', e.action))))
+      // An empty log and an empty filter result are different facts, and only
+      // one of them means nothing has happened.
+      : h('p', {
+        class: 'muted',
+        text: state.audit.length ? 'No entries match this filter.' : 'No entries yet.',
+      }));
+
+    $('#audit-summary').textContent = state.audit.length === 0 ? ''
+      : filtering
+        ? `${shown.length} shown of ${state.audit.length} loaded.`
+        : `${state.audit.length} entries, most recent first.`;
+  }
+
   async function loadAudit() {
     const limit = $('#audit-limit').value;
     const res = await api(`/admin/audit?limit=${encodeURIComponent(limit)}`);
@@ -2641,19 +2740,8 @@
       const [kind, message] = describeFailure(res);
       return banner(kind, message);
     }
-    const entries = res.body.entries || [];
-    replace($('#audit-list'), entries.length
-      ? entries.map((e) => h('div', { class: 'audit-entry' },
-        h('div', { class: 'audit-head' },
-          timeEl(e.at),
-          h('span', { class: 'who', text: e.actor === 'anonymous' ? 'a visitor' : e.actor }),
-          h('span', { class: 'sentence' }, describeAudit(e).flat()),
-          // The machine-readable pair, kept visible so the sentence above can
-          // always be checked against what was actually recorded.
-          h('code', { class: 'action', title: `recorded as ${e.action} on ${e.target ?? 'nothing'}`, text: e.action })),
-        h('details', {}, h('summary', { text: 'The full record' }),
-          renderDiff(e.before, e.after, 'Show exactly what was recorded', e.action))))
-      : h('p', { class: 'muted', text: 'No entries yet.' }));
+    state.audit = res.body.entries || [];
+    return renderAudit();
   }
 
   // -------------------------------------------------------------- alerts --
@@ -3233,6 +3321,26 @@
     $('#tag-new').onclick = () => selectTag('');
     $('#audit-refresh').onclick = loadAudit;
     $('#audit-limit').onchange = loadAudit;
+    $('#audit-actor').onchange = (e) => {
+      state.auditFilter.actor = e.target.value;
+      renderAudit();
+    };
+    $('#audit-action').onchange = (e) => {
+      state.auditFilter.action = e.target.value;
+      renderAudit();
+    };
+    // Normalised once, here, so the match is a plain `includes` on values that
+    // are already lowercase. A reviewer pastes part of a UUID out of a URL or a
+    // Discord message and it arrives with whatever case and spacing it had.
+    $('#audit-target').oninput = (e) => {
+      state.auditFilter.target = e.target.value.trim().toLowerCase();
+      renderAudit();
+    };
+    $('#audit-clear').onclick = () => {
+      state.auditFilter = { actor: '', action: '', target: '' };
+      $('#audit-target').value = '';
+      renderAudit();
+    };
     $('#alerts-refresh').onclick = loadAlerts;
     $('#alerts-limit').onchange = loadAlerts;
     $('#alerts-unack-only').onchange = loadAlerts;
