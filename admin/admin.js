@@ -2644,6 +2644,49 @@
   const actorLabel = (actor) => (actor === 'anonymous' ? 'a visitor' : actor);
 
   /**
+   * What was done, in words, for the filter select.
+   *
+   * `submission.*` splits two ways that read alike and are not alike: three of
+   * them are what the public asked for, three are what a reviewer decided. The
+   * labels say which, because "submission.remove" beside "submission.reject"
+   * gives no clue that one is a request and the other an answer.
+   *
+   * Same fallback rule as `FIELD_LABEL`: an action this page has not been
+   * taught shows as itself rather than being dropped from the list.
+   */
+  const ACTION_LABEL = {
+    'dataset.refresh': 'Dataset rebuilt',
+    'location.create': 'Location created',
+    'location.update': 'Location changed',
+    'location.delete': 'Location deleted',
+    'tag.create': 'Tag created',
+    'tag.update': 'Tag changed',
+    'tag.rename': 'Tag renamed',
+    'tag.delete': 'Tag deleted',
+    'submission.create': 'Asked for: a new pin',
+    'submission.edit': 'Asked for: an edit',
+    'submission.remove': 'Asked for: a pin off the map',
+    'submission.approve': 'Submission approved',
+    'submission.reject': 'Submission rejected',
+    'submission.hold': 'Submission put on hold',
+    'candidate.dismiss': 'Candidate dismissed',
+    'candidate.restore': 'Candidate restored',
+    'nexus_status.dismiss': 'Nexus flag dealt with',
+    'nexus_status.restore': 'Nexus flag raised again',
+  };
+
+  /**
+   * The raw action stays IN the label, never replaced by it.
+   *
+   * Each entry shows its action as a `<code>`, and that chip is the only thing
+   * on the row saying the words this select offers. A select that spoke only
+   * English would be a second vocabulary with nothing connecting it to the
+   * first, and the log would go back to being unfilterable by anything the
+   * reader can see.
+   */
+  const actionLabel = (action) => (ACTION_LABEL[action] ? `${ACTION_LABEL[action]} (${action})` : action);
+
+  /**
    * Every id this entry is ABOUT, not just the one in its `target` column.
    *
    * One approval writes two rows and they do not share a target: the
@@ -2690,11 +2733,17 @@
    * the list below is showing nothing.
    */
   function fillAuditSelect(select, anyLabel, values, selected, label = (v) => v) {
-    const present = [...new Set(values)].sort();
+    const present = [...new Set(values)];
     if (selected && !present.includes(selected)) present.push(selected);
+    // Ordered by what is READ, not by the stored value. Sorting on the raw
+    // action interleaves the three requests with the three decisions, because
+    // they share the `submission.` prefix and nothing else.
+    const options = present
+      .map((v) => ({ value: v, text: label(v) }))
+      .sort((a, b) => a.text.localeCompare(b.text));
     replace(select,
       h('option', { value: '', text: anyLabel }),
-      present.map((v) => h('option', { value: v, text: label(v) })));
+      options.map((o) => h('option', { value: o.value, text: o.text })));
     select.value = selected;
   }
 
@@ -2704,7 +2753,7 @@
     const shown = filtering ? state.audit.filter((e) => auditMatches(e, filter)) : state.audit;
 
     fillAuditSelect($('#audit-actor'), 'Anyone', state.audit.map((e) => e.actor), filter.actor, actorLabel);
-    fillAuditSelect($('#audit-action'), 'Any action', state.audit.map((e) => e.action), filter.action);
+    fillAuditSelect($('#audit-action'), 'Any action', state.audit.map((e) => e.action), filter.action, actionLabel);
     $('#audit-clear').disabled = !filtering;
 
     replace($('#audit-list'), shown.length
