@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- The review queue compares a resubmission against the hidden record it matches, field by field, instead of showing one distance in metres.
+- A third outcome on that panel: restore the record **and** apply the submitted values. Restore-as-is is unchanged and stays the default; the audit tells the two apart.
+
 ## [2.6.0] - 2026-08-03
 
 ### Changed
