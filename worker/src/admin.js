@@ -22,7 +22,7 @@ import {
 import { introspectDatasets, introspectType, readQuota } from './quota.js';
 import {
   getRow, rowToAdmin, loadAdminRecord, materializeAfterWrite, insertLocation, patchLocation,
-  readNexusUpdatedMap,
+  readNexusModMap, archivesView,
 } from './registry.js';
 import { handleReview } from './review.js';
 
@@ -242,11 +242,20 @@ export async function handleAdmin(request, env, ctx) {
     const { results } = await env.DB.prepare('SELECT * FROM locations ORDER BY name').all();
     const rows = results ?? [];
     const tagMap = await readTagsForLocations(env, rows.map((r) => r.id));
-    const nexusMap = await readNexusUpdatedMap(env);
+    const nexusMap = await readNexusModMap(env);
+    // Archives ride the list rather than a per-record fetch because the detail
+    // pane reads the record straight out of the loaded list -- see
+    // selectLocation in admin/admin.js. Attached here rather than inside
+    // rowToAdmin so the audit log keeps carrying only editable fields.
     return json(request, {
-      locations: rows.map((r) => rowToAdmin(
-        r, tagMap.get(r.id) ?? [], nexusMap.get(String(r.nexus_id)) ?? null,
-      )),
+      locations: rows.map((r) => {
+        const nexus = nexusMap.get(String(r.nexus_id)) ?? null;
+        return {
+          ...rowToAdmin(r, tagMap.get(r.id) ?? [], nexus?.updated_at ?? null),
+          archives: nexus?.archives ?? [],
+          archives_state: nexus?.archives_state ?? 'unknown',
+        };
+      }),
     });
   }
 
@@ -270,7 +279,16 @@ export async function handleAdmin(request, env, ctx) {
   if (oneMatch && method === 'GET') {
     const row = await getRow(env, decodeURIComponent(oneMatch[1]));
     if (!row) return json(request, { error: 'not_found' }, 404);
-    return json(request, { location: await loadAdminRecord(env, row) });
+    // Same two fields the list carries, so a single-record read is not a
+    // narrower view than the list it came from. The write routes deliberately
+    // do NOT: their bodies are the audit record.
+    const nexus = await env.DB.prepare(
+      'SELECT updated_at, archives, archives_at FROM nexus_cache WHERE nexus_id = ?',
+    ).bind(String(row.nexus_id)).first();
+    const { archives, archives_state } = archivesView(nexus);
+    return json(request, {
+      location: { ...await loadAdminRecord(env, row), archives, archives_state },
+    });
   }
 
   // ---- update ------------------------------------------------------------
