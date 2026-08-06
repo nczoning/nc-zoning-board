@@ -875,6 +875,42 @@
    * opened a live form would make every browse a potential edit: one stray
    * keystroke in a focused field marks a record dirty that was only being read.
    */
+  /**
+   * The mod's install-file fingerprint: the `.archive` / `.xl` names a consumer
+   * matches against the player's `archive/pc/mod/` to decide whether the mod is
+   * installed. Cron-owned and read-only here.
+   *
+   * Worth a row of its own because `/v1` collapses two different situations
+   * into the same empty array on purpose: an unread listing and a mod that
+   * ships no archive at all both serve `[]`, and a consumer is told to treat
+   * both as unknown. This is the one screen that separates them, which is what
+   * makes "why is this pin's file list empty?" answerable.
+   */
+  function archivesCell(loc) {
+    // WIP and Dummy are valid nexus_ids with no mod page behind them, so there
+    // is nothing to read and never will be. Saying "not read yet" there would
+    // promise a fetch that is never going to happen.
+    if (!isRealNexusId(loc.nexus_id)) {
+      return h('span', { class: 'muted', text: 'no Nexus page to read files from' });
+    }
+    const names = loc.archives || [];
+    const state = loc.archives_state || 'unknown';
+    if (state === 'unknown') {
+      return h('span', { class: 'muted', text: 'not read yet; a cron tick will fetch it' });
+    }
+    if (!names.length) {
+      return h('span', { class: 'muted', text: 'none: this mod ships no .archive or .xl' });
+    }
+    return h('div', {},
+      h('ul', { class: 'archive-list' }, names.map((n) => h('li', { class: 'mono', text: n }))),
+      state === 'stale'
+        ? h('p', {
+          class: 'muted archive-note',
+          text: 'Read against an earlier upload. The mod has re-uploaded since, so a refetch is pending.',
+        })
+        : null);
+  }
+
   function renderLocationDetail(loc) {
     const row = (label, value, cls) => [
       h('dt', { text: label }),
@@ -906,6 +942,7 @@
         row('Added', timeEl(loc.added_at)),
         row('Modified', timeEl(loc.modified_at)),
         row('Updated on Nexus', loc.nexus_updated_at ? timeEl(loc.nexus_updated_at) : null),
+        row('Install files', archivesCell(loc)),
       )),
       h('div', { class: 'editor-actions' },
         h('button', {

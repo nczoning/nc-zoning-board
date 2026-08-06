@@ -343,6 +343,16 @@ exercise auth. Test on `dev.nczoning.net`. These are deliberately absent from
 | `/admin/locations` | GET | every location, all statuses, including `admin_notes` |
 | `/admin/locations` | POST | 201; `id` is server-generated and refused from input |
 | `/admin/locations/{id}` | GET / PATCH / DELETE | PATCH is partial; DELETE keeps the full record in the audit row |
+
+Both read routes above add `archives` and `archives_state` from `nexus_cache`.
+`archives_state` is the three-way answer `/v1` cannot give, because there the
+empty array covers both ends: `unknown` (the listing has never been read),
+`stale` (read against an earlier upload, refetch pending) and `known` (read
+against the current upload, so an empty list means the mod ships no
+`.archive`/`.xl`). The predicate mirrors `refreshArchives`' own due-rule, so
+"pending" names exactly the mods the next cron tick will fetch. The write
+routes deliberately omit both fields: their bodies are the audit record, and
+archives are cron-owned data no editor can change.
 | `/admin/tags` | GET | the registry, each row with `usage_count` |
 | `/admin/tags` | POST | 201; 409 `tag_exists` on a duplicate slug |
 | `/admin/tags/{slug}` | GET / PATCH / DELETE | see the two rules below |

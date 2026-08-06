@@ -602,6 +602,22 @@ button.breakdown-row:hover .k { color: var(--secondary); }
 }
 .detail dd.empty { color: var(--text-dim); font-style: italic; }
 
+/* The mod's .archive / .xl names. A list rather than a comma-joined line
+   because a filename can contain both spaces and commas, so joined text is
+   genuinely ambiguous about where one file ends and the next begins, and these
+   are matched character for character against a folder listing. */
+.archive-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--space-2xs);
+}
+
+.archive-list .mono { font-family: ui-monospace, monospace; font-size: var(--fs-code); }
+
+.archive-note { margin: var(--space-2xs) 0 0; font-size: var(--fs-label); }
+
 /* A count with a proportional bar. The bar is decoration on top of the number,
    never a replacement for it: a reader must be able to get the exact value. */
 .breakdown { display: grid; gap: var(--space-2xs); }

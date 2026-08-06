@@ -90,14 +90,14 @@ const FRESH_USER = (collab = 1) => ({
 
 function envFor({
   collab = 1, locations = [ROW],
-  locationTags = [['loc-1', 'apartment']], checkedAt, nexusModStatus,
+  locationTags = [['loc-1', 'apartment']], checkedAt, nexusModStatus, nexusCache,
 } = {}) {
   const user = FRESH_USER(collab);
   if (checkedAt) user.checked_at = checkedAt;
   return {
     SESSION_SECRET: SECRET,
     DATASET: fakeKv(),
-    DB: sqliteD1({ locations, locationTags, users: [user], nexusModStatus }),
+    DB: sqliteD1({ locations, locationTags, users: [user], nexusModStatus, nexusCache }),
   };
 }
 
@@ -269,6 +269,115 @@ test('the single-record route still uses a targeted lookup', async () => {
   const res = await hit(env, 'GET', '/admin/locations/loc-1');
   assert.equal(res.status, 200);
   assert.deepEqual((await res.json()).location.tags, ['apartment']);
+});
+
+// ------------------------------------------------------ archives on a read ---
+
+/** A `nexus_cache` row for the fixture's mod. `fetched_at` is NOT NULL. */
+const cacheRow = (over = {}) => ({
+  nexus_id: '12345', updated_at: '2026-01-02T00:00:00Z',
+  archives: null, archives_at: null, fetched_at: '2026-01-02T00:00:00Z', ...over,
+});
+
+const firstLocation = async (env) => (await (await hit(env, 'GET', '/admin/locations')).json()).locations[0];
+
+test('the list carries the mod archives, marked as read against the current upload', async () => {
+  const env = envFor({
+    nexusCache: [cacheRow({
+      archives: JSON.stringify(['Loft.archive', 'Loft.xl']),
+      archives_at: '2026-01-02T00:00:00Z',
+    })],
+  });
+  const loc = await firstLocation(env);
+  assert.deepEqual(loc.archives, ['Loft.archive', 'Loft.xl']);
+  assert.equal(loc.archives_state, 'known');
+});
+
+test('a listing read against an older upload is stale, not current', async () => {
+  // The mod re-uploaded (updated_at moved) and the refetch has not run. The
+  // names on file are the previous upload's, so presenting them as the current
+  // fingerprint would send a consumer looking for files that may be gone.
+  const env = envFor({
+    nexusCache: [cacheRow({
+      updated_at: '2026-03-01T00:00:00Z',
+      archives: JSON.stringify(['Loft.archive']),
+      archives_at: '2026-01-02T00:00:00Z',
+    })],
+  });
+  const loc = await firstLocation(env);
+  assert.deepEqual(loc.archives, ['Loft.archive']);
+  assert.equal(loc.archives_state, 'stale');
+});
+
+test('an empty listing read against the current upload is a real answer, not unknown', async () => {
+  // The distinction /v1 cannot make: out there both serve `archives: []` and
+  // the consumer is told to read that as unknown. A loose-file mod genuinely
+  // ships nothing, and this screen has to be able to say so.
+  const env = envFor({
+    nexusCache: [cacheRow({ archives: '[]', archives_at: '2026-01-02T00:00:00Z' })],
+  });
+  const loc = await firstLocation(env);
+  assert.deepEqual(loc.archives, []);
+  assert.equal(loc.archives_state, 'known');
+});
+
+test('a never-read listing is unknown, whether the cache row is empty or absent', async () => {
+  for (const nexusCache of [[cacheRow()], []]) {
+    const loc = await firstLocation(envFor({ nexusCache }));
+    assert.deepEqual(loc.archives, []);
+    assert.equal(loc.archives_state, 'unknown');
+  }
+});
+
+test('a null Nexus updated_at still reads as known once the listing is fetched', async () => {
+  // refreshArchives stores `archives_at = updated_at`, so a mod Nexus reports
+  // no update time for stores null on a perfectly good fetch. Testing freshness
+  // as `archives_at != null` would call that one permanently stale and refetch
+  // it every tick.
+  const env = envFor({
+    nexusCache: [cacheRow({ updated_at: null, archives: JSON.stringify(['Loft.archive']) })],
+  });
+  assert.equal((await firstLocation(env)).archives_state, 'known');
+});
+
+test('a malformed archives cell reads as unknown rather than failing the page', async () => {
+  const env = envFor({
+    nexusCache: [cacheRow({ archives: 'not json', archives_at: '2026-01-02T00:00:00Z' })],
+  });
+  const res = await hit(env, 'GET', '/admin/locations');
+  assert.equal(res.status, 200);
+  const loc = (await res.json()).locations[0];
+  assert.deepEqual(loc.archives, []);
+  assert.equal(loc.archives_state, 'unknown');
+});
+
+test('the single-record read carries archives too, so it is not a narrower view than the list', async () => {
+  const env = envFor({
+    nexusCache: [cacheRow({
+      archives: JSON.stringify(['Loft.archive']), archives_at: '2026-01-02T00:00:00Z',
+    })],
+  });
+  const { location } = await (await hit(env, 'GET', '/admin/locations/loc-1')).json();
+  assert.deepEqual(location.archives, ['Loft.archive']);
+  assert.equal(location.archives_state, 'known');
+});
+
+test('archives stay OUT of the audit record, being cron-owned rather than edited', async () => {
+  // The audit row is the record of who changed what. A file list nobody on this
+  // screen can change does not belong in it, and a sweep landing between the
+  // `before` and `after` reads would write a diff for a change nobody made.
+  const env = envFor({
+    nexusCache: [cacheRow({
+      archives: JSON.stringify(['Loft.archive']), archives_at: '2026-01-02T00:00:00Z',
+    })],
+  });
+  assert.equal((await hit(env, 'PATCH', '/admin/locations/loc-1', { name: 'Renamed' })).status, 200);
+  const [entry] = auditRows(env);
+  for (const side of ['before', 'after']) {
+    const rec = JSON.parse(entry[side]);
+    assert.ok(!('archives' in rec), `${side} must not carry archives`);
+    assert.ok(!('archives_state' in rec), `${side} must not carry archives_state`);
+  }
 });
 
 // ------------------------------------------------- tags on the write path ---
