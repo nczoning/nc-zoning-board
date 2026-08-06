@@ -61,17 +61,66 @@ export function rowToAdmin(row, tags = [], nexusUpdatedAt = null) {
 }
 
 /**
- * `nexus_id` -> the mod's Nexus update time, for every cached mod.
+ * A `nexus_cache` row -> the Nexus-derived view the dashboard shows.
+ *
+ * `archives_state` is the three-way answer the served `archives: []` cannot
+ * give, because /v1 collapses "unknown" and "ships none" into the same empty
+ * array on purpose (docs/api-reference.md). Here they are worth separating:
+ *
+ * - `unknown`  the listing has never been read. `archives` column is NULL.
+ * - `stale`    read, but against an older upload -- the mod has re-uploaded
+ *              since and the refetch has not come round yet.
+ * - `known`    read against the current upload. An empty list here is a real
+ *              answer: a loose-file mod ships no `.archive`/`.xl` at all.
+ *
+ * The predicate mirrors refreshArchives' own due-rule (nexus-cache.js) exactly,
+ * `archives != null && archives_at === updated_at`, so the panel says "pending"
+ * for precisely the mods the next cron tick will go and fetch. Do not switch
+ * the freshness test to `archives_at != null`: a mod whose Nexus `updated_at`
+ * is itself null stores a null `archives_at` on a perfectly good fetch.
+ */
+export function archivesView(row) {
+  if (!row) return { archives: [], archives_state: 'unknown', archives_at: null };
+  let names = [];
+  try {
+    const parsed = JSON.parse(row.archives ?? '[]');
+    if (Array.isArray(parsed)) names = parsed.filter((n) => typeof n === 'string');
+  } catch {
+    // A malformed cell reads as unknown rather than as an error: one mod's file
+    // list is not worth failing an admin page load over, and the cron rewrites
+    // it on the next re-upload anyway.
+    return { archives: [], archives_state: 'unknown', archives_at: null };
+  }
+  const at = row.archives_at ?? null;
+  const known = row.archives != null;
+  return {
+    archives: names,
+    archives_state: !known ? 'unknown' : at === (row.updated_at ?? null) ? 'known' : 'stale',
+    archives_at: at,
+  };
+}
+
+/**
+ * `nexus_id` -> `{ updated_at, ...archivesView }`, for every cached mod.
  *
  * One query for the whole list rather than a lookup per record: the admin list
  * route already reads tags in bulk for the same reason.
+ *
+ * Deliberately NOT folded into rowToAdmin. That function's output is what the
+ * audit log stores as a write's `before` and `after`, and archives are
+ * cron-owned data no editor can change; a file list in an edit diff is noise at
+ * best, and a phantom change nobody made if a sweep lands between the two
+ * reads. `nexus_updated_at` is in there for historical reasons and is not a
+ * precedent to extend.
  */
-export async function readNexusUpdatedMap(env) {
+export async function readNexusModMap(env) {
   const { results } = await env.DB.prepare(
-    'SELECT nexus_id, updated_at FROM nexus_cache',
+    'SELECT nexus_id, updated_at, archives, archives_at FROM nexus_cache',
   ).all();
   const map = new Map();
-  for (const r of results ?? []) map.set(String(r.nexus_id), r.updated_at ?? null);
+  for (const r of results ?? []) {
+    map.set(String(r.nexus_id), { updated_at: r.updated_at ?? null, ...archivesView(r) });
+  }
   return map;
 }
 
