@@ -148,7 +148,7 @@ test('modsByUid: retries UIDs the first call silently dropped', async () => {
 // ── fetchModArchiveNames (installed-mod detection) ──────────────────────────
 
 // A file-contents preview tree with the given .archive/other file names under
-// archive/pc/mod/ — the real nesting confirmed against a live file-metadata
+// archive/pc/mod/, the real nesting confirmed against a live file-metadata
 // response (archive → pc → mod → files).
 const tree = (...names) => ({
   children: [{ name: 'archive', type: 'directory', children: [
@@ -304,7 +304,9 @@ test('archives: a removal-only mod (ships only .xl) is still detected', async ()
 
 test('archives: modFiles failure → ok:false, no archives, only the one subrequest', async () => {
   const res = await fetchModArchiveNames(archiveFetch({ routerOk: false }), 1);
-  assert.deepEqual(res, { archives: [], ok: false, subrequests: 1 });
+  assert.deepEqual(res, {
+    archives: [], ok: false, listed: false, subrequests: 1,
+  });
 });
 
 test('archives: a 404 file has no preview but does NOT poison the mod (ok stays true)', async () => {
@@ -329,18 +331,52 @@ test('archives: a transient (5xx) file failure marks ok:false so it retries', as
   assert.equal(res.ok, false); // transient: caller must not cache this as final
 });
 
-test('archives: a mod whose only file 404s caches as [] with ok:true (no starvation)', async () => {
+test('archives: a mod whose only file 404s is ok:true but listed:false', async () => {
+  // ok stays true so the mod leaves the queue rather than starving it, and
+  // listed:false is what stops the empty array being stored as "ships nothing".
   const impl = archiveFetch({
     modFiles: [{ uri: 'Gone.7z', category: 'MAIN' }],
     trees: { 'Gone.7z': { ok: false, status: 404 } },
   });
   const res = await fetchModArchiveNames(impl, 1);
-  assert.deepEqual(res, { archives: [], ok: true, subrequests: 2 }); // determined empty, leaves the queue
+  assert.deepEqual(res, {
+    archives: [], ok: true, listed: false, subrequests: 2,
+  });
+});
+
+test('archives: a read listing with no .archive in it is listed:true', async () => {
+  // An AMM-only mod: the preview loads and genuinely holds no install file.
+  // Same empty array as the 404 case above, opposite meaning.
+  const impl = archiveFetch({
+    modFiles: [{ uri: 'AMM.7z', category: 'MAIN' }],
+    trees: { 'AMM.7z': tree('decor.json', 'readme.txt') },
+  });
+  const res = await fetchModArchiveNames(impl, 1);
+  assert.deepEqual(res.archives, []);
+  assert.equal(res.listed, true, 'a 200 that holds no .archive is still an answer');
+});
+
+test('archives: one readable file makes the mod listed, even beside a 404 sibling', async () => {
+  const impl = archiveFetch({
+    modFiles: [{ uri: 'Good.7z', category: 'MAIN' }, { uri: 'NoPreview.7z', category: 'OPTIONAL' }],
+    trees: { 'Good.7z': tree('good.archive'), 'NoPreview.7z': { ok: false, status: 404 } },
+  });
+  assert.equal((await fetchModArchiveNames(impl, 1)).listed, true);
+});
+
+test('archives: a mod with no downloadable files at all is listed:false', async () => {
+  // Nothing was read, so nothing is known: the same silence as a 404.
+  const res = await fetchModArchiveNames(archiveFetch({ modFiles: [] }), 1);
+  assert.deepEqual(res, {
+    archives: [], ok: true, listed: false, subrequests: 1,
+  });
 });
 
 test('archives: a thrown fetch degrades to ok:false, never throws', async () => {
   const impl = async () => { throw new Error('network'); };
-  assert.deepEqual(await fetchModArchiveNames(impl, 1), { archives: [], ok: false, subrequests: 1 });
+  assert.deepEqual(await fetchModArchiveNames(impl, 1), {
+    archives: [], ok: false, listed: false, subrequests: 1,
+  });
 });
 
 test('archives: sends modId/gameId as ID strings and builds the file-metadata URL', async () => {
