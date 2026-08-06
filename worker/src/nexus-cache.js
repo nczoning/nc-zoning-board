@@ -96,18 +96,19 @@ const ARCHIVE_SUBREQUEST_BUDGET = 25;
  *
  * Nexus publishes a file's contents manifest minutes to hours AFTER the upload
  * that `updated_at` reports, and a re-upload re-queues the mod the moment that
- * timestamp moves. Arroyo Petrochem Backlot (31332) was refetched 2m42s after
- * its 2026-08-03 upload, read 404 on every file, and stored `[]` against the
- * new `updated_at`: permanently "ships nothing" until its next re-upload.
+ * timestamp moves. The two race: mod 31332 was refetched 2m42s after its own
+ * upload (measured 2026-08-03), read 404 on every file, and a listing stored
+ * from that answer says "ships nothing" until the mod's next release, because
+ * `archives_at` already matches.
  *
  * The bound is time rather than an attempt counter because time is already
  * stored. `updated_at` says how old the upload is, so no column, no migration,
  * and no per-mod state to keep consistent.
  *
- * A mod whose preview is broken for good therefore retries for a day and then
- * records `[]`, exactly as before. It does not sit at the head of the
- * newest-first queue forever, which is the starvation the 404-survives-ok rule
- * in nexus.js exists to prevent.
+ * A preview that is broken for good therefore costs a day of retries and then
+ * records `[]`. It cannot sit at the head of the newest-first queue forever,
+ * which is the starvation the 404-survives-ok rule in nexus.js exists to
+ * prevent.
  */
 const ARCHIVE_LISTING_GRACE_MS = 24 * 60 * 60 * 1000;
 
@@ -322,11 +323,11 @@ async function writeRows(env, rows, nowIso) {
  * stored, so the next tick retries instead of recording a partial listing as
  * final.
  *
- * A THIRD outcome is skipped too: `ok:true` with `listed:false`, meaning every
+ * A third outcome is skipped too: `ok:true` with `listed:false`, meaning every
  * file preview 404'd and the empty array is a silence rather than an answer.
- * That is only worth retrying while the upload is recent enough for Nexus to
+ * That is worth retrying only while the upload is recent enough for Nexus to
  * still be publishing its manifests, so ARCHIVE_LISTING_GRACE_MS bounds it and
- * an older mod stores `[]` as before.
+ * an older mod stores `[]`.
  *
  * @param {object} env
  * @param {typeof fetch} fetchImpl

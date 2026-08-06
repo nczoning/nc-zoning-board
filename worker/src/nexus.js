@@ -327,7 +327,7 @@ export async function fetchModFileUris(fetchImpl, modId) {
  * 404 (both are survivable: "here are the names" / "this file has none") and
  * false only for a transient error (429/5xx/network) worth retrying.
  *
- * THREE OUTCOMES, not two, and `ok` alone cannot tell them apart:
+ * Four responses, three meanings, and `ok` alone separates only two of them:
  *
  *   * 200 with names   → { ok: true,  listed: true  }
  *   * 200 with none    → { ok: true,  listed: true  }  a real listing, no archives
@@ -357,9 +357,9 @@ export async function fetchArchiveNamesForFile(fetchImpl, modId, uri) {
       // mod behind it (observed: cron stuck at "refreshed 0/9"). Only
       // 429/5xx/network stay ok:false so they retry.
       //
-      // It is NOT definitive, though, which is what this used to assume: Nexus
-      // publishes a file's manifest some minutes after the upload itself, so a
-      // 404 here is routinely just "too early". `listed:false` carries that.
+      // A 404 is not definitive either way. Nexus publishes a file's manifest
+      // some minutes after the upload itself, so this is routinely just "too
+      // early", and `listed:false` is what keeps it out of the cache.
       return { names: [], ok: res.status === 404, listed: false };
     }
     const json = await res.json();

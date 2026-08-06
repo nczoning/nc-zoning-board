@@ -380,10 +380,12 @@ test('a mod that ships no .archive is not refetched every tick', async () => {
 });
 
 test('a fresh upload with no readable preview is retried, not stored as empty', async () => {
-  // Arroyo Petrochem Backlot (31332): refetched 2m42s after its own upload,
-  // every file preview 404'd because Nexus had not published the manifests
-  // yet, and `[]` was stored against the new updated_at. That reads in-game as
-  // "not installed" and never refetches, because the stamp already matches.
+  // A re-upload re-queues the mod immediately, so a tick can reach it before
+  // Nexus publishes the file manifests and read 404 on every file. Storing
+  // that answer stamps archives_at with the current updated_at, which is the
+  // one state that never refetches: the mod reads "not installed" in-game
+  // until its next release. Measured on mod 31332, refetched 2m42s after its
+  // own upload.
   const env = { DB: sqliteD1(), DATASET: null };
   const justUploaded = record('100', '2026-07-26T23:00:00.000Z'); // 1h before NOW
 
