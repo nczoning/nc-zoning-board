@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- A mod refetched within minutes of its own re-upload no longer records an empty install-file list. Nexus publishes a file's contents manifest after the upload, so the listing is retried for a day instead of being frozen as "ships nothing".
+- Arroyo Petrochem Backlot showed as unknown in-game for this reason; its listing is restored.
+
+### Changed
+
+- The API docs now say to filter `archives` to `.archive` before deciding a mod is installed. An `.xl` is a manifest, not a mounted archive, and no in-game lookup can match one.
+
 ## [2.9.0] - 2026-08-06
 
 ### Added

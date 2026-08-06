@@ -106,15 +106,22 @@ A location record:
 - `credits` appears only when set; `thumbnail_url` / `picture_url` / `updated_at`
   are `null` when unknown (e.g. WIP/Dummy entries with no Nexus page, which are
   also never `recently_updated`).
-- `archives` is the list of the mod's detectable install files — `.archive` load
-  files and `.xl` (ArchiveXL) files (the latter is the only fingerprint a
-  removal-only mod has). Both live in `archive/pc/mod/`. **Match these against the
-  player's `archive/pc/mod/` folder to detect which location mods are installed.**
-  Names are the bare filename (`Atari AIO.archive`), not a path, so
-  a case-sensitive set-membership test against the folder listing is all a
-  consumer needs. It's always present — `[]` means "not determinable / not yet
-  fetched", never "ships no archives" (freshly added mods fill in over a few
-  cron ticks; see the note below).
+- `archives` is the list of the mod's install files as shipped: `.archive` load
+  files and `.xl` (ArchiveXL) manifests, both of which live in `archive/pc/mod/`.
+  **Match these against the player's `archive/pc/mod/` folder to detect which
+  location mods are installed.** Names are the bare filename
+  (`Atari AIO.archive`), not a path, so a case-sensitive set-membership test
+  against the folder listing is all a consumer needs. It's always present, and
+  `[]` means "not determinable / not yet fetched", never "ships no archives"
+  (freshly added mods fill in over a few cron ticks; see the note below).
+- **Filter `archives` to `.archive` before deciding a mod is installed.** An
+  `.xl` is a manifest, not a mounted archive, so an in-game lookup over
+  ResourceDepot's Mod-scope archive groups never matches one; that is the same
+  set CET's `ModArchiveExists` walks, and NCZoningCore ignores `.xl` for the
+  same reason. 838 of the 1,297 names currently served are `.xl`, so a consumer
+  that skips the filter reports installed mods as missing. A record whose only
+  names are `.xl` is undetectable and should read as **unknown**, exactly like
+  an empty list.
 
 ## Versioning
 
@@ -292,6 +299,11 @@ re-downloading unchanged data.
   land. A small residual stays `[]` (loose-file mods with no `.archive`, or
   WIP/Dummy entries with no Nexus page). Either way, treat `[]` as "unknown",
   never "ships no archives".
+- A re-upload re-queues the listing, and Nexus publishes a file's contents
+  manifest some minutes after the upload itself. The cron retries an unreadable
+  preview for 24 hours after the mod's `updated_at` rather than recording the
+  empty result, so a mod caught mid-publication does not freeze as `[]` until
+  its next release.
 - `recently_updated` rides the content hash: because it depends on the clock,
   a location crossing the `recently_updated_days` boundary changes
   `dataset_version` (and the `ETag`) even when nothing on Nexus changed, so a

@@ -90,6 +90,35 @@ const TRACKED = [
 const ARCHIVE_MOD_BUDGET = 15;
 const ARCHIVE_SUBREQUEST_BUDGET = 25;
 
+/**
+ * How long after a mod's own `updated_at` an unreadable file listing counts as
+ * "too early" rather than as "this mod ships no archives".
+ *
+ * Nexus publishes a file's contents manifest minutes to hours AFTER the upload
+ * that `updated_at` reports, and a re-upload re-queues the mod the moment that
+ * timestamp moves. Arroyo Petrochem Backlot (31332) was refetched 2m42s after
+ * its 2026-08-03 upload, read 404 on every file, and stored `[]` against the
+ * new `updated_at`: permanently "ships nothing" until its next re-upload.
+ *
+ * The bound is time rather than an attempt counter because time is already
+ * stored. `updated_at` says how old the upload is, so no column, no migration,
+ * and no per-mod state to keep consistent.
+ *
+ * A mod whose preview is broken for good therefore retries for a day and then
+ * records `[]`, exactly as before. It does not sit at the head of the
+ * newest-first queue forever, which is the starvation the 404-survives-ok rule
+ * in nexus.js exists to prevent.
+ */
+const ARCHIVE_LISTING_GRACE_MS = 24 * 60 * 60 * 1000;
+
+/** Whether `updatedAt` is recent enough that an unread listing is worth retrying. */
+function withinListingGrace(updatedAt, nowIso) {
+  const uploaded = Date.parse(updatedAt ?? '');
+  const now = Date.parse(nowIso);
+  if (!Number.isFinite(uploaded) || !Number.isFinite(now)) return false;
+  return now - uploaded < ARCHIVE_LISTING_GRACE_MS;
+}
+
 /** Nexus ids that are placeholders rather than real mods. */
 const isRealNexusId = (id) => Boolean(id) && /^\d+$/.test(String(id));
 
@@ -293,6 +322,12 @@ async function writeRows(env, rows, nowIso) {
  * stored, so the next tick retries instead of recording a partial listing as
  * final.
  *
+ * A THIRD outcome is skipped too: `ok:true` with `listed:false`, meaning every
+ * file preview 404'd and the empty array is a silence rather than an answer.
+ * That is only worth retrying while the upload is recent enough for Nexus to
+ * still be publishing its manifests, so ARCHIVE_LISTING_GRACE_MS bounds it and
+ * an older mod stores `[]` as before.
+ *
  * @param {object} env
  * @param {typeof fetch} fetchImpl
  * @param {object} opts
@@ -301,7 +336,9 @@ async function writeRows(env, rows, nowIso) {
  * @param {string} opts.nowIso
  */
 export async function refreshArchives(env, fetchImpl, { records, index, nowIso }) {
-  const summary = { seeded: 0, fetched: 0, pending: 0, written: 0 };
+  const summary = {
+    seeded: 0, fetched: 0, unlisted: 0, pending: 0, written: 0,
+  };
   const stamp = nowIso ?? new Date().toISOString();
 
   const due = new Map();
@@ -355,6 +392,12 @@ export async function refreshArchives(env, fetchImpl, { records, index, nowIso }
     mods += 1;
     subrequests += res.subrequests;
     if (!res.ok) continue;
+    if (!res.listed && withinListingGrace(updatedAt, stamp)) {
+      // Nothing was read and the upload is new enough that Nexus is probably
+      // still publishing its manifests. Leave it due for the next tick.
+      summary.unlisted += 1;
+      continue;
+    }
     take(id, updatedAt, res.archives);
     summary.fetched += 1;
   }

@@ -275,8 +275,17 @@ test('a backfill that returns nothing is reported, not read as a clean sweep', a
 // mods that need one are the records the dataset serves, which is not the
 // `locations` table while production still builds from mods.json.
 
-/** A fetch answering the two archive endpoints for any mod. */
-function fakeArchiveFetch({ fail = false, files = 1, calls = [] } = {}) {
+/**
+ * A fetch answering the two archive endpoints for any mod.
+ *
+ * `preview404` and an empty `names` are the two ways a mod ends up with no
+ * archive names, and they mean opposite things: a 404 read nothing, an empty
+ * preview read a listing that holds nothing. Both are here so the difference
+ * can be tested rather than assumed.
+ */
+function fakeArchiveFetch({
+  fail = false, files = 1, preview404 = false, names = null, calls = [],
+} = {}) {
   const impl = async (url, init) => {
     if (String(url).includes('api-router.nexusmods.com')) {
       calls.push(`router:${JSON.parse(init.body).variables.modId}`);
@@ -294,14 +303,16 @@ function fakeArchiveFetch({ fail = false, files = 1, calls = [] } = {}) {
       // the stub declined it rather than because the code did.
       const modId = String(url).match(/\/3333\/([^/]+)\//)[1];
       calls.push(`file:${modId}`);
+      if (preview404) return { ok: false, status: 404 };
+      const entries = (names ?? [`mod_${modId}.archive`]).map((n) => ({
+        name: n, type: 'file', path: `archive/pc/mod/${n}`,
+      }));
       return {
         ok: true,
         async json() {
           return { children: [{ name: 'archive', type: 'directory', children: [
             { name: 'pc', type: 'directory', children: [
-              { name: 'mod', type: 'directory', children: [
-                { name: `mod_${modId}.archive`, type: 'file', path: `archive/pc/mod/mod_${modId}.archive` },
-              ] },
+              { name: 'mod', type: 'directory', children: entries },
             ] },
           ] }] };
         },
@@ -355,7 +366,7 @@ test('a mod that ships no .archive is not refetched every tick', async () => {
   // listing has ever been read. Without archives_known this mod would be due on
   // every single tick, at two subrequests a time, forever.
   const env = { DB: sqliteD1(), DATASET: null };
-  const empty = fakeArchiveFetch({ files: 0 });
+  const empty = fakeArchiveFetch({ names: ['decor.json'] }); // an AMM mod
   const index = await readNexusIndex(env);
   await refreshArchives(env, empty, { records: [record('100')], index, nowIso: NOW });
   assert.deepEqual(index.get('100').archives, []);
@@ -366,6 +377,60 @@ test('a mod that ships no .archive is not refetched every tick', async () => {
   });
   assert.equal(again.fetched, 0);
   assert.equal(calls.length, 0);
+});
+
+test('a fresh upload with no readable preview is retried, not stored as empty', async () => {
+  // Arroyo Petrochem Backlot (31332): refetched 2m42s after its own upload,
+  // every file preview 404'd because Nexus had not published the manifests
+  // yet, and `[]` was stored against the new updated_at. That reads in-game as
+  // "not installed" and never refetches, because the stamp already matches.
+  const env = { DB: sqliteD1(), DATASET: null };
+  const justUploaded = record('100', '2026-07-26T23:00:00.000Z'); // 1h before NOW
+
+  const first = await refreshArchives(env, fakeArchiveFetch({ preview404: true }), {
+    records: [justUploaded], index: await readNexusIndex(env), nowIso: NOW,
+  });
+  assert.equal(first.unlisted, 1);
+  assert.equal(first.fetched, 0);
+  assert.equal(first.written, 0, 'storing this is what makes it permanent');
+  assert.equal(first.pending, 1);
+  assert.equal(
+    env.DB.one('SELECT COUNT(*) AS n FROM nexus_cache WHERE nexus_id = ?', '100').n, 0,
+  );
+
+  // Nexus publishes the manifest, the next tick reads it.
+  const later = await refreshArchives(env, fakeArchiveFetch(), {
+    records: [justUploaded], index: await readNexusIndex(env), nowIso: NOW,
+  });
+  assert.equal(later.fetched, 1);
+  assert.deepEqual(
+    JSON.parse(env.DB.one('SELECT archives FROM nexus_cache WHERE nexus_id = ?', '100').archives),
+    ['mod_100.archive'],
+  );
+});
+
+test('a preview that never appears stops being retried once the upload is old', async () => {
+  // The bound the grace window buys back: without it an unreadable preview
+  // sits at the head of the newest-first queue every tick, forever, starving
+  // the cold fill behind it.
+  const env = { DB: sqliteD1(), DATASET: null };
+  const oldUpload = record('100', '2026-07-01T00:00:00.000Z'); // 26 days before NOW
+
+  const r = await refreshArchives(env, fakeArchiveFetch({ preview404: true }), {
+    records: [oldUpload], index: await readNexusIndex(env), nowIso: NOW,
+  });
+  assert.equal(r.unlisted, 0);
+  assert.equal(r.fetched, 1, 'past the grace window an unread listing is stored as empty');
+  assert.equal(
+    env.DB.one('SELECT archives FROM nexus_cache WHERE nexus_id = ?', '100').archives, '[]',
+  );
+
+  const calls = [];
+  const again = await refreshArchives(env, fakeArchiveFetch({ calls, preview404: true }), {
+    records: [oldUpload], index: await readNexusIndex(env), nowIso: NOW,
+  });
+  assert.equal(calls.length, 0, 'it must leave the queue rather than retry forever');
+  assert.equal(again.pending, 0);
 });
 
 test('a transient failure stores nothing, so the next tick retries', async () => {
