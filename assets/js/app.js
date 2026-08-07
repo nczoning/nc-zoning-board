@@ -2409,11 +2409,11 @@ async function initMap() {
     // site and the Worker can deploy in either order during the migration.
     const tagsDict = NCZ.normaliseTags(tagsPayload);
     const { mods, nexusThumbs } = apiResult;
-    // The API owns the recency window (it computes each mod's recently_updated
-    // bool against it). Adopt it so the tooltip text matches; fall back to the
-    // local constant if an older API omits it.
+    // The API owns the recency window; NCZ.isRecentlyUpdated applies it here.
+    // Adopt it so the badge and its tooltip agree, falling back to the local
+    // constant when the envelope omits it.
     NCZ.recentlyUpdatedDays = apiResult.recentlyUpdatedDays ?? NCZ.RECENTLY_UPDATED_DAYS;
-    console.log(`Data source: /v1 API — ${mods.length} mods`);
+    console.log(`Data source: /v1 API: ${mods.length} mods`);
 
     modCountEl.textContent = `(${mods.length})`;
 

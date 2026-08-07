@@ -163,7 +163,7 @@ The Nexus API does not document pagination for the `mods` query, but it supports
 1. A tagged mod that already has a location contributes nothing further here: its images and `updatedAt` reach the record through `nexus_cache` like every other record's
 2. A tagged mod that is neither a location nor dismissed is a **candidate**, offered in the submit form's picker and the dashboard
 3. `name`, `summary` (truncated to 500 characters) and `uploader.name` prefill the submit form when a candidate is selected. All three stay editable
-4. `updatedAt` drives the server-computed `recently_updated` bool, which shows an `UPDATED` badge in the popup, sidebar and cluster flyout
+4. `updatedAt` is served as each record's `updated_at`, from which every consumer computes recency itself: the site shows an `UPDATED` badge in the popup, sidebar and cluster flyout
 
 > **Retired at 2.0.0.** `node.description` used to be parsed for an `[NCZoning]`
 > metadata block, and a valid block published a pin with no human step. The

@@ -41,7 +41,6 @@ const build = (rows, over = {}) => materializeFromD1({
   nexusNodes: [],
   districts: DISTRICTS,
   locationTags: new Map(rows.map((r) => [r.id, ['apartment']])),
-  nowMs: Date.parse('2026-01-10T00:00:00Z'),
   ...over,
 });
 
@@ -74,9 +73,24 @@ test('key order matches merge.js, because the gate compares bytes', () => {
   const { full } = build([row()]);
   assert.deepEqual(Object.keys(full['aaaa-1111']), [
     'id', 'name', 'nexus_id', 'coordinates', 'yaw', 'category', 'tags', 'authors',
-    'district', 'subdistrict', 'recently_updated', 'description', 'credits',
+    'district', 'subdistrict', 'description', 'credits',
     'thumbnail_url', 'picture_url', 'updated_at',
   ]);
+});
+
+test('no field in a record depends on the clock', () => {
+  // The content hash gates the cron KV write, so a time-derived field would
+  // make every tick a write. Two builds an hour apart must be byte-identical.
+  const rows = [row()];
+  const nexusIndex = index({ 12345: { updatedAt: new Date().toISOString() } });
+  const a = JSON.stringify(build(rows, { nexusIndex }));
+  const realNow = Date.now;
+  Date.now = () => realNow() + 3600_000;
+  try {
+    assert.equal(JSON.stringify(build(rows, { nexusIndex })), a);
+  } finally {
+    Date.now = realNow;
+  }
 });
 
 test('only published rows are served; hidden and draft are withheld', () => {
@@ -141,8 +155,7 @@ test('an existing record suppresses its own re-creation, and is imaged from the 
   assert.equal(Object.keys(full).length, 1);
   assert.equal(full['aaaa-1111'].thumbnail_url, 'thumb');
   assert.equal(full['aaaa-1111'].picture_url, 'pic');
-  // 2026-01-08 is 2 days before the 2026-01-10 clock, inside the 7-day window.
-  assert.equal(full['aaaa-1111'].recently_updated, true);
+  assert.equal(full['aaaa-1111'].updated_at, '2026-01-08T00:00:00Z');
 });
 
 test('a tagged node cannot image a record on its own', () => {
@@ -156,12 +169,20 @@ test('a tagged node cannot image a record on its own', () => {
   assert.equal(full['aaaa-1111'].thumbnail_url, null);
 });
 
-test('recently_updated is false outside the window and for an unknown date', () => {
+test('updated_at is served raw, and is null when the index has no entry', () => {
+  // Recency is the consumer's answer to compute; the API ships only the fact it
+  // is computed from, in the exact shape NCZoningCore's parser is locked to.
   const stale = index({ 12345: { updatedAt: '2025-01-01T00:00:00Z' } });
-  assert.equal(build([row()], { nexusIndex: stale }).full['aaaa-1111'].recently_updated, false);
-  // No index entry at all: updated_at null, so the bool is false rather than
-  // NaN-ish.
-  assert.equal(build([row()]).full['aaaa-1111'].recently_updated, false);
+  const served = build([row()], { nexusIndex: stale }).full['aaaa-1111'].updated_at;
+  assert.equal(served, '2025-01-01T00:00:00Z');
+  assert.match(served, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  assert.equal(build([row()]).full['aaaa-1111'].updated_at, null);
+});
+
+test('no record carries a recently_updated key', () => {
+  const fresh = index({ 12345: { updatedAt: new Date().toISOString() } });
+  const record = build([row()], { nexusIndex: fresh }).full['aaaa-1111'];
+  assert.equal('recently_updated' in record, false);
 });
 
 test('a WIP record stays image-less rather than borrowing another mod images', () => {

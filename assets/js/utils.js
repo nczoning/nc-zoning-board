@@ -188,12 +188,11 @@ NCZ.pickDirectionAndPosition = function (anchorPoint, size, mapSize, config) {
 };
 
 // Returns true when a mod was updated on Nexus within the recent window.
-// The API computes this server-side (so the clockless in-game consumer can read
-// it too) and ships it as `recently_updated` on every record; trust that when
-// present. The timestamp fallback below only runs for an older API deploy that
-// omits the bool, computing it from the raw `_updatedAt` and effective window.
+// Computed here, from the raw `_updatedAt` and the window the API publishes on
+// its envelope (`NCZ.recentlyUpdatedDays`). The API serves no recency bool: it
+// would be the only time-dependent field in the payload, which forces the cron
+// to rewrite KV on every tick.
 NCZ.isRecentlyUpdated = function (mod) {
-  if (typeof mod.recently_updated === "boolean") return mod.recently_updated;
   if (!mod._updatedAt) return false;
   const days = NCZ.recentlyUpdatedDays ?? NCZ.RECENTLY_UPDATED_DAYS;
   return new Date(mod._updatedAt).getTime() > Date.now() - days * 86400000;
@@ -254,7 +253,7 @@ NCZ.pointInPolygon = function (point, ring) {
  *
  * TRANSITIONAL: accepts BOTH the array-of-records shape (D1-backed, current)
  * and the legacy { slug: description } dictionary. Not defensive coding for its
- * own sake — the site and the Worker deploy independently, and the dev site
+ * own sake: the site and the Worker deploy independently, and the dev site
  * reads the PRODUCTION API by default, so during the migration a new site can
  * legitimately be talking to an API still serving the pre-0.4.0 shape. Tolerating
  * both means the two can ship in either order with no flag day.

@@ -48,9 +48,10 @@ const DATA_CACHE = 'public, max-age=300, stale-while-revalidate=3600';
 
 /**
  * Wrap payload data in the versioned envelope (version/time from meta).
- * recently_updated_days publishes the recency window so clock-having consumers
- * (and the website's tooltip text) read the rule rather than hardcoding it; the
- * clockless in-game consumer instead reads each record's recently_updated bool.
+ * recently_updated_days publishes the recency window so every consumer (the
+ * website, NCZoningCore, and the tooltip text) reads the rule rather than
+ * hardcoding it, and answers it against its own clock from each record's
+ * updated_at. It is a constant, so it never moves the ETag.
  */
 function envelope(data, meta) {
   return {
