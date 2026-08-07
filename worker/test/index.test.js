@@ -21,11 +21,11 @@ const META = {
   skipped: [], discovery_stale: false, last_refresh_at: '2026-07-04T00:05:00.000Z',
 };
 // The single representation: full records keyed by id (what /v1/locations serves
-// the values of, and /v1/locations/{id} reads directly). Each carries the
-// server-computed recently_updated bool.
+// the values of, and /v1/locations/{id} reads directly). Recency is not among
+// the fields: consumers derive it from updated_at and the envelope's window.
 const FULL = {
-  m1: { id: 'm1', name: 'Manual', nexus_id: '1', coordinates: [1, 2, 3], category: 'other', tags: [], authors: ['A'], district: 'Watson', subdistrict: 'Kabuki', recently_updated: false, description: 'a manual mod' },
-  'nexus-2': { id: 'nexus-2', name: 'Auto', nexus_id: '2', coordinates: [4, 5, 6], category: 'new-location', tags: [], authors: ['B'], district: 'Watson', subdistrict: null, recently_updated: true, description: 'an auto mod' },
+  m1: { id: 'm1', name: 'Manual', nexus_id: '1', coordinates: [1, 2, 3], category: 'other', tags: [], authors: ['A'], district: 'Watson', subdistrict: 'Kabuki', description: 'a manual mod', updated_at: '2026-07-01T00:00:00Z' },
+  'nexus-2': { id: 'nexus-2', name: 'Auto', nexus_id: '2', coordinates: [4, 5, 6], category: 'new-location', tags: [], authors: ['B'], district: 'Watson', subdistrict: null, description: 'an auto mod', updated_at: '2026-07-03T00:00:00Z' },
 };
 const DISTRICTS = [{ id: 'watson', name: 'Watson', boundary: [0, 0, 10, 0, 10, 10], centroid: { x: 5, y: 5 }, subdistricts: [] }];
 const TAGS = { apartment: 'a place', corpo: 'suits' };
@@ -65,7 +65,7 @@ test('GET /v1/health before the first cron: alive, heartbeat null (not 503)', as
   assert.equal(body.data.refresh_age_seconds, null);
 });
 
-test('GET /v1/locations returns the full records with recently_updated + envelope window', async () => {
+test('GET /v1/locations returns the full records, with the recency window on the envelope', async () => {
   const res = await worker.fetch(GET('/v1/locations'), seededEnv());
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('ETag'), '"abc123"');
@@ -77,7 +77,9 @@ test('GET /v1/locations returns the full records with recently_updated + envelop
   assert.equal(body.recently_updated_days, 7); // window published on the envelope
   assert.equal(body.data.length, 2);
   assert.equal(body.data[0].description, 'a manual mod');     // single full representation
-  assert.equal(typeof body.data[0].recently_updated, 'boolean');
+  // The window is published; the per-record answer is not. Consumers compute it.
+  assert.equal('recently_updated' in body.data[0], false);
+  assert.equal(body.data[0].updated_at, '2026-07-01T00:00:00Z');
 });
 
 test('GET /v1/locations?full=1 is a no-op alias: same body, same ETag', async () => {
@@ -127,7 +129,7 @@ test('GET /v1/locations/{id} returns the full entry', async () => {
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.data.description, 'an auto mod');
-  assert.equal(body.data.recently_updated, true);
+  assert.equal(body.data.updated_at, '2026-07-03T00:00:00Z');
 });
 
 test('GET /v1/locations/{unknown} → 404', async () => {

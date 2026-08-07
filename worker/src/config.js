@@ -1,21 +1,24 @@
 /**
- * Shared dataset config. Single source of truth for values that must agree
- * across the merge (which computes the recency bool) and the request handler
- * (which publishes the window on the envelope).
+ * Shared dataset config. Single source of truth for values the request handler
+ * and the cron must agree on.
  */
 
-// "Recently updated" window, in days. A location's recently_updated bool is
-// computed against this in merge.js; the value is published on every response
-// envelope as recently_updated_days so clock-having consumers (and humans)
-// read the rule rather than hardcoding it. The website's own constant is only
-// a fallback for when the API is unavailable.
+// "Recently updated" window, in days. Published on every response envelope as
+// recently_updated_days, and applied by nobody here: the API states the rule
+// and each consumer answers it against its own clock, from the record's
+// updated_at. The website's NCZ.RECENTLY_UPDATED_DAYS is only a fallback for
+// when the envelope is unavailable.
+//
+// A constant, so it costs the content hash nothing. The per-record bool this
+// used to feed was removed once every consumer had a clock; see
+// wiki/learnings/time-relative-field-cannot-ride-a-content-hash-gated-write.
 export const RECENTLY_UPDATED_DAYS = 7;
 
 // Minimum gap between liveness-heartbeat writes on an UNCHANGED cron tick.
 //
 // The cron rebuilds every 5 min but writes KV only when the content hash moves
 // (see refresh.js). The #849 heartbeat deliberately bypassed that gate to prove
-// scheduled() is still running — which reintroduced exactly the per-tick write
+// scheduled() is still running, which reintroduced exactly the per-tick write
 // cost the hash gate existed to remove: 288 writes/day/env against a free-tier
 // cap of 1,000 per ACCOUNT. Rate-limiting the heartbeat keeps the liveness
 // signal while cutting idle writes to ~96/day.

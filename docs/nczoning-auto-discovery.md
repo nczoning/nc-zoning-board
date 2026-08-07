@@ -42,7 +42,7 @@ Independent of the tag, for every mod that has a pin:
 | Nexus field | Used as |
 | --- | --- |
 | `thumbnailUrl` | The image on the pin popup and sidebar entry |
-| `updatedAt` | The `UPDATED` badge, within the API's `recently_updated_days` window |
+| `updatedAt` | Served as `updated_at`; the `UPDATED` badge when it falls within the API's `recently_updated_days` window |
 
 Your mod's **description is no longer read at all**. Nothing is parsed out of it.
 

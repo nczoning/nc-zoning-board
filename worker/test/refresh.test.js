@@ -152,7 +152,7 @@ test('first run writes the full dataset (changed=true)', async () => {
   const locs = Object.values(full);
   assert.equal(locs.length, 2); // 1 manual + 1 auto (777 excluded)
   assert.ok(locs.every((l) => l.district));
-  assert.ok(locs.every((l) => typeof l.recently_updated === 'boolean'));
+  assert.ok(locs.every((l) => !('recently_updated' in l)));
   const meta = await env.DATASET.get(KEYS.meta, 'json');
   assert.equal(meta.discovery_stale, false);
   assert.ok(!('counts' in meta)); // aggregates removed; consumers derive their own
@@ -188,7 +188,7 @@ test('unchanged content on the second run skips the content write (changed=false
   const before = (await env.DATASET.get(KEYS.meta, 'json')).generated_at;
   const r2 = await runRefresh(env, fakeFetch());
   assert.equal(r2.changed, false);
-  // generated_at (content time) is preserved — the dataset wasn't rewritten. Only
+  // generated_at (content time) is preserved: the dataset wasn't rewritten. Only
   // the last_refresh_at heartbeat moves on an unchanged cycle (see next test).
   assert.equal((await env.DATASET.get(KEYS.meta, 'json')).generated_at, before);
 });
@@ -201,7 +201,7 @@ test('an unchanged cycle advances the heartbeat once the interval has elapsed', 
 
   // Pin the heartbeat far enough in the past to be due, then run an UNCHANGED
   // cycle: the content hash matches, so nothing is rewritten EXCEPT the
-  // heartbeat, which must advance — proving the cron ran. generated_at (content
+  // heartbeat, which must advance, proving the cron ran. generated_at (content
   // time) must NOT move. This is the #849 liveness signal: a running-but-idle
   // cron still proves life.
   await env.DATASET.put(KEYS.meta, JSON.stringify({ ...m1, last_refresh_at: '2000-01-01T00:00:00.000Z' }));
@@ -233,7 +233,7 @@ test('an unchanged cycle inside the heartbeat interval writes NOTHING', async ()
 
 test('a missing last_refresh_at is treated as due (no permanent suppression)', async () => {
   // Meta written before #849 has no heartbeat field. Date.parse(undefined) is
-  // NaN, and every comparison against NaN is false — so a naive `elapsed >= X`
+  // NaN, and every comparison against NaN is false, so a naive `elapsed >= X`
   // guard would suppress the heartbeat forever and the monitor would read the
   // Worker as wedged. It must fall through to "write it".
   const env = newEnv();
@@ -287,8 +287,8 @@ test('Nexus failure keeps last-known-good, flags stale, and records the alert', 
 });
 
 test('the third consecutive failure is the one that reaches Discord', async () => {
-  // The threshold is the whole point of routing this alert: below it a person
-  // is not told, at it they are. Asserting only the quiet case would pass on a
+  // The threshold decides who is told: below it a person is not notified, at
+  // it they are. Asserting only the quiet case would pass on a
   // build that never notifies at all.
   const env = newEnv({ NCZ_ALERTS_DISCORD_WEBHOOK_URL: 'https://discord/webhook' });
   const discordSink = [];

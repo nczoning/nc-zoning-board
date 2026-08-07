@@ -172,9 +172,9 @@ node scripts/parity-check.mjs                                   # the gate
 ```
 
 `parity-check.mjs` rebuilds `/v1/locations` from D1 via `src/materialize.js` and
-diffs it **byte-for-byte** against what the live API is serving. All 18 served
-fields are rebuilt: 11 from `locations`, 4 from `nexus_cache`, and
-`district`/`subdistrict`/`recently_updated` recomputed from D1's own data. It
+diffs it **byte-for-byte** against what the live API is serving. All 16 served
+fields are rebuilt: 10 from `locations`, 4 from `nexus_cache`, and
+`district`/`subdistrict` recomputed from D1's own coordinates. It
 **fails on any served field it neither rebuilds nor feeds in**, so a new `/v1`
 field cannot slip past as "not compared".
 

@@ -32,11 +32,15 @@ Every response is wrapped:
 `dataset_version` is a content hash of the whole dataset. It's also the
 `ETag`, so it's how you detect changes (see [Caching](#caching)).
 
-`recently_updated_days` is the recency window in days: a location's
-`recently_updated` bool is `true` when its Nexus update falls within this many
-days. It's published so consumers (and UI text) read the rule instead of
-hardcoding it, though a clockless in-game consumer doesn't need it: it just
-reads each record's `recently_updated` bool directly.
+`recently_updated_days` is the recency window in days: a location counts as
+recently updated when its `updated_at` falls within this many days of now. The
+API publishes the rule and does not apply it. **There is no per-record
+`recently_updated` bool** (removed in 0.6.0): compute it yourself as
+`updated_at > now - recently_updated_days * 86400`.
+
+The window is a constant, so it costs the ETag nothing. A per-record bool would
+be the only field in the payload that depends on what time it is, which forces a
+KV rewrite on every cron tick.
 
 ## Contract rules (why the JSON looks the way it does)
 
@@ -55,9 +59,9 @@ parser:
   `nexus-<nexus_id>`. Safe to bookmark.
 - **`district` is never null**: anywhere outside every district polygon is
   Badlands (the game's own default). `subdistrict` may be null.
-- **Additive versioning:** new fields may appear within `/v1/`; breaking
-  changes would ship as `/v2/`. Which additive changes have landed is readable
-  from `/v1/health`'s `version`. See [Versioning](#versioning).
+- **Versioning:** while the surface is on `0.x`, **both** additive and breaking
+  changes stay on `/v1/` and are readable only from `/v1/health`'s `version`.
+  Pin to a shape you have read, not to the path. See [Versioning](#versioning).
 
 ## Routes
 
@@ -90,22 +94,28 @@ A location record:
   "authors": ["ellios2normandie"],
   "district": "City Center",
   "subdistrict": "Corpo Plaza",
-  "recently_updated": true,
   "description": "…",
   "credits": "Optional team name",
   "thumbnail_url": "https://…",
   "picture_url": "https://…",
-  "updated_at": "2026-07-02T12:00:00.000Z",
+  "updated_at": "2026-07-02T12:00:00Z",
   "archives": ["Atari AIO.archive"]
 }
 ```
 
-- `recently_updated` is server-computed: `true` when `updated_at` is within
-  `recently_updated_days` (on the envelope). It's the answer a clockless in-game
-  consumer can't compute for itself, so the server provides it.
+- **`updated_at` is served as exactly `YYYY-MM-DDTHH:MM:SSZ`**: 20 characters,
+  UTC, no offset, no fractional seconds. This is a hard contract, not a
+  formatting preference. NCZoningCore's redscript parser is length-locked to that
+  shape and returns `0.0` for anything else rather than guessing at a wrong
+  instant, so an offset or a millisecond field would make every record read as
+  not-recently-updated with no error and no log line anywhere. If the format ever
+  has to change, the mod ships first.
+- **Recency is yours to compute**, from `updated_at` and the envelope's
+  `recently_updated_days`. The server no longer ships a `recently_updated` bool
+  (see [Versioning](#versioning), 0.6.0).
 - `credits` appears only when set; `thumbnail_url` / `picture_url` / `updated_at`
-  are `null` when unknown (e.g. WIP/Dummy entries with no Nexus page, which are
-  also never `recently_updated`).
+  are `null` when unknown (e.g. WIP/Dummy entries with no Nexus page, which
+  therefore can never read as recently updated).
 - `archives` is the list of the mod's install files as shipped: `.archive` load
   files and `.xl` (ArchiveXL) manifests, both of which live in `archive/pc/mod/`.
   **Match these against the player's `archive/pc/mod/` folder to detect which
@@ -163,7 +173,7 @@ From `1.0.0` onward:
 So a consumer can read `/v1/health` once and know whether the field it wants
 exists yet, without probing for it.
 
-Every shape change the surface has taken, in order. The last two are breaking,
+Every shape change the surface has taken, in order. Three of them are breaking,
 which on a 1.x line would each have cost a MAJOR plus a path move:
 
 | Shape change | Under the 1.x numbering | Now |
@@ -174,10 +184,11 @@ which on a 1.x line would each have cost a MAJOR plus a path move:
 | `last_refresh_at`, `refresh_age_seconds` on `/v1/health` | 1.3.0 | 0.3.0 |
 | **breaking:** `/v1/tags` becomes an array of records | would be 2.0.0 | 0.4.0 |
 | **breaking:** `source` and the synthetic `nczoning` tag leave every location record | would be 3.0.0 | 0.5.0 |
-| `/v1/meta.skipped` lists every open candidate | 3.0.1 | **0.5.1** *(current)* |
+| `/v1/meta.skipped` lists every open candidate | 3.0.1 | 0.5.1 |
+| **breaking:** `recently_updated` leaves every location record | would be 4.0.0 | **0.6.0** *(current)* |
 
 The rollback was mechanical: the MINOR digit was preserved and the MAJOR dropped,
-so the three additive changes already made survived as `0.3.0`. The two breaking
+so the three additive changes already made survived as `0.3.0`. The breaking
 changes since then each cost a MINOR, which is the whole point of taking them
 before `1.0.0`.
 
@@ -188,7 +199,7 @@ policy backfilled it to `1.3.0`, which shipped in 1.7.0, and it was rolled back 
 `0.3.0` in 1.7.2. The middle column above is a reconstruction (what each
 deploy *should* have served); the right-hand column is what the API serves today.
 
-⚠️ **`0.5.1` is numerically lower than the `1.3.0` some earlier deploys served.**
+⚠️ **`0.6.0` is numerically lower than the `1.3.0` some earlier deploys served.**
 Nothing compares this field numerically (verified before the rollback), but a
 consumer that starts doing so must not read the decrease as a downgrade.
 
@@ -247,7 +258,8 @@ public class NCZLocation {
   let category: String;
   let district: String;
   let subdistrict: String;
-  let recently_updated: Bool;      // server-computed; no client clock needed
+  let updated_at: String;          // 20-char UTC; parse it, then compare against
+                                   // the envelope's recently_updated_days
 }
 
 public class NCZExample extends ScriptableSystem {
@@ -305,7 +317,8 @@ re-downloading unchanged data.
   preview for 24 hours after the mod's `updated_at` rather than recording the
   empty result, so a mod caught mid-publication does not freeze as `[]` until
   its next release.
-- `recently_updated` rides the content hash: because it depends on the clock,
-  a location crossing the `recently_updated_days` boundary changes
-  `dataset_version` (and the `ETag`) even when nothing on Nexus changed, so a
-  conditional GET correctly sees the flip rather than a stale `304`.
+- **Every served field is a pure function of the stored data.** Nothing in the
+  payload depends on what time it is, so `dataset_version` (and the `ETag`) moves
+  only when the data moves, and an idle cron tick rewrites nothing. This is why
+  recency is the consumer's job: a per-record bool would flip on the clock alone,
+  forcing a rewrite every tick to keep conditional GETs honest.
