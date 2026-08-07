@@ -3,9 +3,9 @@
 Read-only API serving the NC Zoning Board registry (Cyberpunk 2077 location
 mods) to in-game mods and the website.
 
-- **Production:** `https://api.nczoning.net` — used by **every** consumer,
+- **Production:** `https://api.nczoning.net`, used by **every** consumer,
   including dev.nczoning.net, preview builds and localhost.
-- **Staging:** `https://api-dev.nczoning.net` — for testing API changes only.
+- **Staging:** `https://api-dev.nczoning.net`, for testing API changes only.
   It has **no cron**, so its dataset is stale until refreshed manually, and the
   website reads it only when given `?api=dev` (see
   [`url-parameters.md`](url-parameters.md)).
@@ -57,7 +57,7 @@ parser:
   Badlands (the game's own default). `subdistrict` may be null.
 - **Additive versioning:** new fields may appear within `/v1/`; breaking
   changes would ship as `/v2/`. Which additive changes have landed is readable
-  from `/v1/health`'s `version` — see [Versioning](#versioning).
+  from `/v1/health`'s `version`. See [Versioning](#versioning).
 
 ## Routes
 
@@ -131,12 +131,12 @@ so don't substitute one for another:
 | Signal | Where | Moves when |
 | --- | --- | --- |
 | `/v1` path prefix | every route | **only** on a breaking change (→ `/v2`) |
-| `version` | `GET /v1/health` | the API's *shape* changes — SemVer, see below |
+| `version` | `GET /v1/health` | the API's *shape* changes (SemVer, see below) |
 | `dataset_version` | every envelope | the *content* changes (it's a hash, and the `ETag`) |
 
 `version` is SemVer for the API surface.
 
-> ⚠️ **The API is currently pre-1.0 (`0.5.0`), and the rules below are inverted
+> ⚠️ **The API is currently pre-1.0 (`0.5.1`), and the rules below are inverted
 > while it is.** The surface was rolled back from `1.3.0` because nothing
 > consuming it has shipped yet, and the D1 work took shape changes rather than
 > deferring them. On a 1.x line each of those would need
@@ -144,7 +144,7 @@ so don't substitute one for another:
 > consumers to preserve.
 >
 > **While on `0.x`:** breaking → **MINOR**, additive → **PATCH**, and **the path
-> stays `/v1` throughout** — SemVer permits breaking changes before 1.0, which is
+> stays `/v1` throughout**. SemVer permits breaking changes before 1.0, which is
 > what makes this resolve cleanly. Pin to a shape you have read, not to `/v1`
 > alone.
 >
@@ -153,11 +153,11 @@ so don't substitute one for another:
 
 From `1.0.0` onward:
 
-- **MAJOR** — a breaking change. This also moves `/v1` → `/v2`, so a consumer
+- **MAJOR**: a breaking change. This also moves `/v1` → `/v2`, so a consumer
   pinned to a path prefix never silently breaks.
-- **MINOR** — an additive field or route. Safe: existing consumers are
+- **MINOR**: an additive field or route. Safe: existing consumers are
   unaffected, but a new field is now available.
-- **PATCH** — a behaviour or performance fix worth marking a deploy for, with
+- **PATCH**: a behaviour or performance fix worth marking a deploy for, with
   no change to the shape.
 
 So a consumer can read `/v1/health` once and know whether the field it wants
@@ -173,7 +173,8 @@ which on a 1.x line would each have cost a MAJOR plus a path move:
 | `archives` | 1.2.0 | 0.2.0 |
 | `last_refresh_at`, `refresh_age_seconds` on `/v1/health` | 1.3.0 | 0.3.0 |
 | **breaking:** `/v1/tags` becomes an array of records | would be 2.0.0 | 0.4.0 |
-| **breaking:** `source` and the synthetic `nczoning` tag leave every location record | would be 3.0.0 | **0.5.0** *(current)* |
+| **breaking:** `source` and the synthetic `nczoning` tag leave every location record | would be 3.0.0 | 0.5.0 |
+| `/v1/meta.skipped` lists every open candidate | 3.0.1 | **0.5.1** *(current)* |
 
 The rollback was mechanical: the MINOR digit was preserved and the MAJOR dropped,
 so the three additive changes already made survived as `0.3.0`. The two breaking
@@ -187,20 +188,20 @@ policy backfilled it to `1.3.0`, which shipped in 1.7.0, and it was rolled back 
 `0.3.0` in 1.7.2. The middle column above is a reconstruction (what each
 deploy *should* have served); the right-hand column is what the API serves today.
 
-⚠️ **`0.5.0` is numerically lower than the `1.3.0` some earlier deploys served.**
-Nothing compares this field numerically — verified before the rollback — but a
+⚠️ **`0.5.1` is numerically lower than the `1.3.0` some earlier deploys served.**
+Nothing compares this field numerically (verified before the rollback), but a
 consumer that starts doing so must not read the decrease as a downgrade.
 
 ### Not to be confused with `ApiVersion()`
 
-The in-game **NCZoningCore** mod exposes its own `ApiVersion()` — an integer
+The in-game **NCZoningCore** mod exposes its own `ApiVersion()`, an integer
 that increments **only on a breaking change**, so redscript consumers can gate
 on compatibility. This API's `version` is a *deploy and shape marker* that moves
 on additive changes too. They are unrelated numbers and will not match.
 
 ### For maintainers
 
-`API_VERSION` is declared in four places that must agree — `wrangler.jsonc`
+`API_VERSION` is declared in four places that must agree: `wrangler.jsonc`
 (production **and** staging; named Wrangler environments don't inherit `vars`),
 `openapi.json` `info.version`, and `package.json`. After bumping all four:
 
@@ -284,7 +285,7 @@ re-downloading unchanged data.
   rebuilds the dataset every 5 minutes and serves it from cache, so you're
   shielded from Nexus API hiccups. If a refresh fails, `meta.discovery_stale`
   is `true` and the last-known-good data is served.
-- Freshness vs. liveness: the envelope's `generated_at` is the *content* time —
+- Freshness vs. liveness: the envelope's `generated_at` is the *content* time:
   it only moves when the dataset changes (a few times a day), so it can be hours
   old on a perfectly healthy API. To tell whether the refresh cron is still
   *running*, read `/v1/health.last_refresh_at` (or the server-computed

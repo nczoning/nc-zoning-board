@@ -232,13 +232,13 @@ The registry moves out of git into a database, with a dashboard for maintainers.
 
 - Daily Workers KV writes cut from ~576–700 to ~100–200 (of a 1,000/day per-account free-tier cap): the staging Worker's cron is removed, and the cron liveness heartbeat is now written at most every 15 minutes on an unchanged tick instead of on all 288.
 - The health monitor's staleness threshold moves 20 → 45 minutes to match, and no longer probes staging (a cronless Worker's heartbeat never advances, so it would page and self-heal in a loop).
-- The site reads the **production** API from every origin — dev, previews and localhost included. Use `?api=dev` to opt into staging when testing an API change. There was never a deliberate dev dataset; dev only differed from main by being behind.
+- The site reads the **production** API from every origin (dev, previews and localhost included). Use `?api=dev` to opt into staging when testing an API change. There was never a deliberate dev dataset; dev only differed from main by being behind.
 
 ## [1.7.0] - 2026-07-22
 
 ### Changed
 
-- The API's `version` (served at `/v1/health`) is now real SemVer for the API surface — MINOR on an additive field or route, MAJOR on a break — instead of a static `0.1.0`. Backfilled to **1.3.0** for the three additive changes already shipped: `recently_updated` (1.1.0), `archives` (1.2.0), the cron heartbeat (1.3.0). It is not the in-game `ApiVersion()`, which gates only on breaking changes. ([#857](https://github.com/spuddeh/nc-zoning-board/issues/857))
+- The API's `version` (served at `/v1/health`) is now real SemVer for the API surface (MINOR on an additive field or route, MAJOR on a break) instead of a static `0.1.0`. Backfilled to **1.3.0** for the three additive changes already shipped: `recently_updated` (1.1.0), `archives` (1.2.0), the cron heartbeat (1.3.0). It is not the in-game `ApiVersion()`, which gates only on breaking changes. ([#857](https://github.com/spuddeh/nc-zoning-board/issues/857))
 - CI now fails if `openapi.json`'s shape changes without an `API_VERSION` bump, or if the four places the version is declared disagree. The worker suite also runs on pull requests now, not only at deploy. ([#857](https://github.com/spuddeh/nc-zoning-board/issues/857))
 
 ## [1.6.0] - 2026-07-21
@@ -252,13 +252,13 @@ The registry moves out of git into a database, with a dashboard for maintainers.
 
 ### Added
 
-- Each `/v1` location record now carries an `archives` array — the `.archive` and `.xl` filenames the mod installs to `archive/pc/mod/` (so removal-only mods are detectable too) — letting an in-game mod detect which location mods a player has installed. ([#841](https://github.com/spuddeh/nc-zoning-board/issues/841))
+- Each `/v1` location record now carries an `archives` array: the `.archive` and `.xl` filenames the mod installs to `archive/pc/mod/` (so removal-only mods are detectable too), letting an in-game mod detect which location mods a player has installed. ([#841](https://github.com/spuddeh/nc-zoning-board/issues/841))
 
 ## [1.4.1] - 2026-07-19
 
 ### Changed
 
-- The website now loads exclusively from the `/v1` Data API — the legacy client-side Nexus merge and its fallback are removed, so the browser makes no Nexus calls at all.
+- The website now loads exclusively from the `/v1` Data API; the legacy client-side Nexus merge and its fallback are removed, so the browser makes no Nexus calls at all.
 - If the API is unreachable the map shows a loud "temporarily unavailable" state that auto-retries, instead of silently blanking. This keeps the site an honest canary for API outages.
 
 ## [1.4.0] - 2026-07-16
