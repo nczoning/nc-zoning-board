@@ -390,9 +390,14 @@ async function fillArchives(env, fetchImpl, full, index, nowIso) {
       records: Object.values(full), index, nowIso,
     });
     if (r.fetched || r.seeded || r.pending) {
+      // `unlisted` is the one to watch: a mod counted here answered without a
+      // readable file preview, so it is being retried rather than recorded. A
+      // count that does not fall within a day means Nexus stopped publishing
+      // manifests for it, and the grace window will store `[]` instead.
       console.log(
         `archives: +${r.fetched} fetched, +${r.seeded} carried over from KV, `
-        + `${r.pending} still due, ${r.written} rows written`,
+        + `${r.unlisted} awaiting a file listing, ${r.pending} still due, `
+        + `${r.written} rows written`,
       );
     }
   } catch (err) {

@@ -209,13 +209,17 @@ export async function fetchModsByUidThumbs(fetchImpl = fetch, numericIds = []) {
 //
 // A file's contents preview lives at ONE OF TWO hosts, chosen by the shape of
 // its modFiles `uri` (Nexus changed its storage scheme ~mid-2026):
-//   - OLD scheme — `uri` is the friendly filename (`Atari…-27618-1-0-….7z`):
+//   - OLD scheme: `uri` is the friendly filename (`Atari…-27618-1-0-….7z`),
 //     file-metadata host, keyed by game/mod/<uri>.json, a nested {children} tree.
-//   - NEW scheme — `uri` is a UUID storage path (contains `/`, `b9/e3/70/b9e3…`):
+//   - NEW scheme: `uri` is a UUID storage path (contains `/`, `b9/e3/70/b9e3…`),
 //     file-manifests host, keyed by <uri>.json, a FLAT array of { file_path }.
-// Both are covered (see fetchArchiveNamesForFile), so coverage is near-total;
-// `[]` means WIP/Dummy (no Nexus page), a loose-file mod with no `.archive`, or
-// not-yet-fetched — never "ships no archives".
+// Both are covered (see fetchArchiveNamesForFile), so coverage is near-total.
+//
+// A MANIFEST IS PUBLISHED AFTER ITS UPLOAD, not with it, so both hosts answer
+// 404 for a few minutes to a few hours after a mod re-uploads. That is why
+// every result carries `listed` alongside `ok`: an empty name set from a read
+// listing means the mod ships no `.archive`, an empty one from a 404 means
+// nothing was read, and only the first is safe to store as final.
 
 // Download-file categories that represent the mod's *current* files. Prefer
 // these; ARCHIVED/OLD_VERSION are superseded and only used as a fallback when a
@@ -320,13 +324,24 @@ export async function fetchModFileUris(fetchImpl, modId) {
  * (contains `/`) → file-manifests host (flat file_path array); a friendly
  * filename → file-metadata host (nested children tree). Not every file has a
  * published preview (many 404, on either host), so `ok` is true for a 200 OR a
- * 404 (both are definitive: "here are the names" / "this file has none") and
+ * 404 (both are survivable: "here are the names" / "this file has none") and
  * false only for a transient error (429/5xx/network) worth retrying.
+ *
+ * Four responses, three meanings, and `ok` alone separates only two of them:
+ *
+ *   * 200 with names   → { ok: true,  listed: true  }
+ *   * 200 with none    → { ok: true,  listed: true  }  a real listing, no archives
+ *   * 404              → { ok: true,  listed: false }  nothing was read
+ *   * 429/5xx/network  → { ok: false, listed: false }
+ *
+ * `listed` is the one the caller stores against. An empty `names` from a 200 is
+ * a mod that ships no `.archive`; an empty `names` from a 404 says nothing at
+ * all about the mod. Collapsing those two freezes "unknown" as "empty".
  *
  * @param {typeof fetch} fetchImpl injectable for tests
  * @param {string|number} modId numeric Nexus mod id
  * @param {string} uri the download file's uri (from modFiles)
- * @returns {Promise<{names: string[], ok: boolean}>}
+ * @returns {Promise<{names: string[], ok: boolean, listed: boolean}>}
  */
 export async function fetchArchiveNamesForFile(fetchImpl, modId, uri) {
   try {
@@ -336,21 +351,25 @@ export async function fetchArchiveNamesForFile(fetchImpl, modId, uri) {
       : `${FILE_METADATA_BASE}/${NEXUS_GAME_ID}/${modId}/${encodeURIComponent(uri)}.json`;
     const res = await fetchImpl(url, { headers: { 'User-Agent': ARCHIVE_UA } });
     if (!res.ok) {
-      // 404 is a DEFINITIVE answer — this file has no published preview — not a
-      // transient error. It must contribute no archives WITHOUT poisoning the
-      // mod's ok: otherwise a mod with a good MAIN and a preview-less OPTIONAL
-      // never caches, sits at the front of the newest-first queue, and starves
-      // every mod behind it (observed: cron stuck at "refreshed 0/9"). Only
+      // 404 must contribute no archives WITHOUT poisoning the mod's ok:
+      // otherwise a mod with a good MAIN and a preview-less OPTIONAL never
+      // caches, sits at the front of the newest-first queue, and starves every
+      // mod behind it (observed: cron stuck at "refreshed 0/9"). Only
       // 429/5xx/network stay ok:false so they retry.
-      return { names: [], ok: res.status === 404 };
+      //
+      // A 404 is not definitive either way. Nexus publishes a file's manifest
+      // some minutes after the upload itself, so this is routinely just "too
+      // early", and `listed:false` is what keeps it out of the cache.
+      return { names: [], ok: res.status === 404, listed: false };
     }
     const json = await res.json();
     const names = new Set();
     if (isUuidPath) collectArchiveNamesFromManifest(json, names);
     else collectArchiveNames(json, names);
-    return { names: [...names], ok: true };
+    return { names: [...names], ok: true, listed: true };
   } catch {
-    return { names: [], ok: false }; // network/parse error: transient, retry
+    // network/parse error: transient, retry
+    return { names: [], ok: false, listed: false };
   }
 }
 
@@ -367,13 +386,19 @@ export async function fetchArchiveNamesForFile(fetchImpl, modId, uri) {
  * failure as if it were complete. `subrequests` is the number of network calls
  * made, for budgeting.
  *
+ * `listed` is true once ANY chosen file returned a readable listing, and it is
+ * what says the empty array is an answer rather than a silence. A mod with no
+ * downloadable files at all is `listed:false` for the same reason: nothing was
+ * read. See the section note on manifest publication lag.
+ *
  * @param {typeof fetch} fetchImpl injectable for tests
  * @param {string|number} modId numeric Nexus mod id
- * @returns {Promise<{archives: string[], ok: boolean, subrequests: number}>}
+ * @returns {Promise<{archives: string[], ok: boolean, listed: boolean, subrequests: number}>}
  */
 export async function fetchModArchiveNames(fetchImpl, modId) {
   const filesRes = await fetchModFileUris(fetchImpl, modId);
   let ok = filesRes.ok;
+  let listed = false;
   let subrequests = 1; // the modFiles call itself
 
   // Prefer the mod's current files; fall back to all files (older ARCHIVED/
@@ -386,7 +411,10 @@ export async function fetchModArchiveNames(fetchImpl, modId) {
     const r = await fetchArchiveNamesForFile(fetchImpl, modId, f.uri);
     subrequests += 1;
     if (!r.ok) ok = false;
+    if (r.listed) listed = true;
     for (const name of r.names) all.add(name);
   }
-  return { archives: [...all].sort(), ok, subrequests };
+  return {
+    archives: [...all].sort(), ok, listed, subrequests,
+  };
 }
