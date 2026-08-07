@@ -40,7 +40,7 @@ if submitted on a location.
 | Tag | Applied by | Description |
 | --- | --- | --- |
 | `nczoning` | Auto-discovery (server-side, `worker/src/nexus.js`) | Applied to every mod sourced automatically from Nexus Mods. Appears as a filter tag and as a badge on the popup and sidebar entry. |
-| `updated` | `app.js` filter setup | A virtual filter that surfaces any recently updated mod, matched via `isRecentlyUpdated()`, which reads the API's server-computed `recently_updated` bool (or, for an older API deploy that omits the bool, computes from `updatedAt` vs the recency window). Not a stored tag. |
+| `updated` | `app.js` filter setup | A virtual filter that surfaces any recently updated mod, matched via `isRecentlyUpdated()`, which computes recency here from the record's `updated_at` and the window the API publishes as `recently_updated_days`. Not a stored tag. |
 
 ---
 

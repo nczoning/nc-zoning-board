@@ -17,7 +17,6 @@
  */
 
 import { assignDistrict } from './districts.js';
-import { RECENTLY_UPDATED_DAYS } from './config.js';
 
 /**
  * Decode one D1 row into the intermediate entry shape.
@@ -51,16 +50,13 @@ export function rowToEntry(row, locationTags) {
  * Tags for one record.
  *
  * `locationTags` is REQUIRED, and a missing map throws rather than defaulting.
- * There used to be a fallback to the legacy `locations.tags` JSON column, kept
- * while migration 0002 held both in sync so the switch could be proven
- * byte-for-byte. That column is gone, and a silent default here would serve
- * every record untagged while looking like it worked, which is the failure this
- * whole area keeps producing.
+ * Tags come only from the join; the legacy `locations.tags` JSON column no
+ * longer exists. A silent default would serve every record untagged while
+ * looking like it worked.
  *
- * The synthetic `nczoning` marker is NOT added. It used to be prepended for
- * auto-sourced records, which made it a visible filter for a tag `/v1/tags` does
- * not list. Nothing auto-publishes any more, so the marker described nothing a
- * consumer could act on.
+ * The synthetic `nczoning` marker is NOT added. Nothing auto-publishes, so the
+ * marker would be a visible filter for a tag `/v1/tags` does not list and that
+ * describes nothing a consumer can act on.
  */
 function resolveTags(row, locationTags) {
   if (!locationTags) {
@@ -79,12 +75,18 @@ function resolveTags(row, locationTags) {
  *   keyed by nexus_id. One lookup, not two: under D1 the tagged nodes and the
  *   modsByUid backfill have both already been folded into `nexus_cache` by the
  *   sweep, so a second in-memory channel would only be a way for them to disagree.
- * @param {number} [input.nowMs]       clock the recently_updated bool is computed against
  * @returns {{full: Object<string, object>, meta: object}}
+ *
+ * NO CLOCK. Every field here is a pure function of the stored data, which is
+ * what lets the cron's content-hash gate suppress an unchanged tick's KV write.
+ * Recency is not answered here: both consumers own a clock and derive it
+ * themselves from `updated_at` and the envelope's `recently_updated_days`.
+ * A time-derived field added here re-breaks the write gate; see
+ * wiki/learnings/time-relative-field-cannot-ride-a-content-hash-gated-write.
  */
 export function materializeFromD1({
   rows, dismissed, nexusNodes, districts, nexusIndex = new Map(),
-  locationTags = null, nowMs = Date.now(), withheld = new Set(),
+  locationTags = null, withheld = new Set(),
 }) {
   const dismissedIds = dismissed instanceof Set ? dismissed : new Set(dismissed || []);
   const withheldIds = withheld instanceof Set ? withheld : new Set(withheld || []);
@@ -132,7 +134,6 @@ export function materializeFromD1({
     .map((row) => rowToEntry(row, locationTags))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const cutoffMs = nowMs - RECENTLY_UPDATED_DAYS * 86400000;
   const full = {};
 
   for (const entry of all) {
@@ -143,10 +144,6 @@ export function materializeFromD1({
       picture_url: t?.pictureUrl ?? null,
       updated_at: t?.updatedAt ?? null,
     };
-    const recently_updated = thumbs.updated_at
-      ? Date.parse(thumbs.updated_at) > cutoffMs
-      : false;
-
     full[entry.id] = {
       id: entry.id,
       name: entry.name,
@@ -158,7 +155,6 @@ export function materializeFromD1({
       authors: entry.authors,
       district,
       subdistrict,
-      recently_updated,
       description: entry.description ?? '',
       ...(entry.credits ? { credits: entry.credits } : {}),
       ...thumbs,

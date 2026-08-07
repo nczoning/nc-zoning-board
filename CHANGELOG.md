@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+- The API no longer serves a per-record `recently_updated` bool (API surface `0.6.0`). `updated_at` and the envelope's `recently_updated_days` stay; every consumer now has a clock and computes recency itself.
+- Installs still on an older NCZoningCore lose the in-game recency badge until they update. No error, no crash.
+
 ## [2.9.1] - 2026-08-06
 
 ### Fixed

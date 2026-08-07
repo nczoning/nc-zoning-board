@@ -421,7 +421,7 @@ async function fillArchives(env, fetchImpl, full, index, nowIso) {
  * sweep needs both before this runs, and the tagged query is one of the two
  * expensive calls in the tick.
  */
-async function sourceAndBuild(env, fetchImpl, origin, nowMs, { nexusNodes, nexusIndex }) {
+async function sourceAndBuild(env, fetchImpl, origin, { nexusNodes, nexusIndex }) {
   const subdistricts = await fetchJson(fetchImpl, origin, '/data/subdistricts.json');
   const districts = subdistricts.districts;
 
@@ -455,7 +455,7 @@ async function sourceAndBuild(env, fetchImpl, origin, nowMs, { nexusNodes, nexus
   // record's images into nexus_cache, including the auto-discovered ones,
   // which are rows like any other.
   const built = materializeFromD1({
-    rows, dismissed, nexusNodes, districts, nexusIndex, locationTags, nowMs,
+    rows, dismissed, nexusNodes, districts, nexusIndex, locationTags,
     withheld: withhold,
   });
   if (built.meta.withheld.length) {
@@ -501,7 +501,7 @@ export async function runRefresh(env, fetchImpl = fetch) {
     // A D1 read failure, by contrast, throws and lands in the catch below --
     // last-known-good, discovery_stale, alert. Never an empty map.
     const { full, meta, tagsList, districts } = await sourceAndBuild(
-      env, fetchImpl, origin, Date.parse(generatedAt), { nexusNodes, nexusIndex },
+      env, fetchImpl, origin, { nexusNodes, nexusIndex },
     );
     const districtsOut = districtsPayload(districts);
 
@@ -509,11 +509,12 @@ export async function runRefresh(env, fetchImpl = fetch) {
     await fillArchives(env, fetchImpl, full, nexusIndex, generatedAt);
 
     // Hash the content that actually varies (not generated_at). Tags are
-    // included so a tags.json edit propagates through the ETag. `full` carries
-    // the recently_updated bool, so its clock-driven flips move the ETag;
-    // that is deliberate (a location aging past the window must invalidate
-    // caches even though nothing on Nexus changed). This is why the cron
-    // rebuilds every tick against a fresh clock, with no Nexus short-circuit.
+    // included so a tags.json edit propagates through the ETag.
+    //
+    // `full` is a pure function of the stored data: no field in it depends on
+    // what time it is. So an idle tick reproduces the same hash and writes
+    // nothing, and the ETag moves only when the data does. Adding a
+    // time-derived field back would make every tick a write.
     const version = await contentHash(
       JSON.stringify({ full, districts: districtsOut, tags: tagsList }),
     );

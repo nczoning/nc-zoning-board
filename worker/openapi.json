@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "NC Zoning Data API",
-    "version": "0.5.1",
+    "version": "0.6.0",
     "description": "Read-only API serving the NC Zoning Board mod registry (Cyberpunk 2077 location mods) to in-game mods and the website. Every response is wrapped in a versioned envelope. Coordinates are raw CET world values [X, Y, Z], usable in-game with no transform. The JSON stays DTO-mappable for the in-game RedData parser: no arrays-of-arrays, property names are case-sensitive. See https://github.com/nczoning/nc-zoning-board for the project.",
     "contact": { "name": "NC Zoning Board", "url": "https://nczoning.net" }
   },
@@ -34,7 +34,7 @@
     "/v1/locations": {
       "get": {
         "summary": "All locations",
-        "description": "The workhorse: every location as a full record (all fields incl. description, credits, Nexus image URLs, and the recently_updated bool) in one array. There is a single representation; ?full=1 is accepted as a no-op alias for older consumers. Consumers derive any aggregate (district/category counts, recency counts) by grouping these records. Supports conditional GET: send If-None-Match with the last dataset_version to get a 304.",
+        "description": "The workhorse: every location as a full record (all fields incl. description, credits, Nexus image URLs and updated_at) in one array. There is a single representation; ?full=1 is accepted as a no-op alias for older consumers. Consumers derive any aggregate (district/category counts, recency counts) by grouping these records. Supports conditional GET: send If-None-Match with the last dataset_version to get a 304.",
         "parameters": [
           { "name": "full", "in": "query", "required": false, "schema": { "type": "string", "enum": ["1"] }, "description": "Accepted as a no-op alias (the response is always the full record). Retained so existing consumers that pass full=1 keep working." },
           { "$ref": "#/components/parameters/IfNoneMatch" }
@@ -164,7 +164,7 @@
           "schema": { "type": "integer", "const": 1, "description": "Envelope schema version." },
           "generated_at": { "type": ["string", "null"], "format": "date-time", "description": "When the dataset was last built." },
           "dataset_version": { "type": ["string", "null"], "description": "Content hash; the ETag value." },
-          "recently_updated_days": { "type": "integer", "description": "The recency window in days: a location's recently_updated bool is true when its Nexus update is within this many days. Published so clock-having consumers (and UI text) read the rule instead of hardcoding it." },
+          "recently_updated_days": { "type": "integer", "description": "The recency window in days: a location counts as recently updated when its updated_at is within this many days of now. The API publishes the rule and does not apply it, because the answer depends on the clock and every consumer has one. It is a constant, so it costs the ETag nothing." },
           "data": { "description": "Route-specific payload." }
         }
       },
@@ -189,13 +189,12 @@
         "description": "The single location representation served by /v1/locations and /v1/locations/{id}.",
         "allOf": [
           { "$ref": "#/components/schemas/Location" },
-          { "type": "object", "required": ["recently_updated"], "properties": {
-            "recently_updated": { "type": "boolean", "description": "Server-computed: true when updated_at is within recently_updated_days (see envelope). Polyfill for the clockless in-game consumer; the website reads it too." },
+          { "type": "object", "properties": {
             "description": { "type": "string" },
             "credits": { "type": "string" },
             "thumbnail_url": { "type": ["string", "null"], "description": "Nexus thumbnail image URL, or null (unknown / WIP / Dummy)." },
             "picture_url": { "type": ["string", "null"], "description": "Nexus full-size image URL, or null." },
-            "updated_at": { "type": ["string", "null"], "format": "date-time", "description": "Nexus last-updated timestamp, or null." },
+            "updated_at": { "type": ["string", "null"], "format": "date-time", "description": "Nexus last-updated timestamp, or null. CONTRACT: exactly YYYY-MM-DDTHH:MM:SSZ, 20 characters, UTC, no offset and no fractional seconds. NCZoningCore's redscript parser is length-locked to that shape and returns 0.0 for anything else rather than guessing at a wrong instant, so an offset or a millisecond field makes every record read as not recently updated with no error anywhere. Consumers derive recency from this field and the envelope's recently_updated_days." },
             "archives": { "type": "array", "items": { "type": "string" }, "description": "The mod's install files as shipped: .archive load files AND .xl (ArchiveXL) manifests, both of which land in archive/pc/mod/. Bare filenames, not paths. FILTER TO .archive FOR AN INSTALL CHECK: an .xl is a manifest rather than a mounted archive, so a lookup over ResourceDepot's Mod-scope archive groups (what CET's ModArchiveExists and NCZoningCore both walk) never matches one. A record whose only names are .xl is therefore undetectable and must read as unknown, not as not-installed. Excludes CET/AMM .json files (they load into CET's sandboxed folder and are not readable by other mods). Empty means not determinable (an AMM-only mod, a WIP/Dummy entry with no Nexus page, a mod whose Nexus file preview has stayed unavailable for a day past its upload, or not yet fetched by the cron), never 'ships nothing'.", "example": ["Atari Canyon AIO.archive", "atari_aio.xl"] }
           } }
         ]

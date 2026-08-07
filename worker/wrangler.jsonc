@@ -46,7 +46,7 @@
 		// package.json, then run `npm run version:lock` —
 		// test/api-version.test.js enforces all four. There is no monotonicity
 		// check, so a decrease passes provided all four move together.
-		"API_VERSION": "0.5.1",
+		"API_VERSION": "0.6.0",
 		// Origin the cron pulls subdistricts from. Locations and tags are in D1;
 		// this is the last thing served as a static file.
 		"SITE_ORIGIN": "https://nczoning.net",
@@ -150,7 +150,7 @@
 			],
 			"vars": {
 				// Pre-1.0 window — see the production block above.
-				"API_VERSION": "0.5.1",
+				"API_VERSION": "0.6.0",
 				"SITE_ORIGIN": "https://dev.nczoning.net",
 				// STAGING IS THE D1 CANARY: it runs the D1 path while production
 				// stays on mods.json, so the binding, the reads and the whole

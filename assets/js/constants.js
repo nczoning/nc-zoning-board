@@ -80,7 +80,7 @@ NCZ.CATEGORY_STYLES = {
 // The Nexus auto-discovery merge that once ran client-side now lives entirely in
 // the API (worker/); the browser makes no Nexus calls.
 //
-// EVERY origin reads PRODUCTION by default — dev.nczoning.net, *.pages.dev
+// EVERY origin reads PRODUCTION by default: dev.nczoning.net, *.pages.dev
 // previews and localhost included. The old hostname split sent them to the
 // staging API on the premise that it "reflects staging data", but there has
 // never been a deliberate dev dataset: dev differs from main only when merged
@@ -123,7 +123,7 @@ NCZ.DATASET_POLL_MS = 60 * 1000;
 
 // The tag registry now comes from /v1/tags alongside the locations: one origin,
 // one contract, rather than a same-origin fetch of data/tags.json, which was
-// fine while the file was the source of truth — from Phase 4 the D1 `tags`
+// fine while the file was the source of truth; from Phase 4 the D1 `tags`
 // table is, edited in the dashboard rather than by pull request.
 //
 // Kept only as the fallback if /v1/tags cannot be reached, so a tag-registry
@@ -212,10 +212,10 @@ NCZ.CET_UNITS_PER_METER = 1;
 // LocalStorage cache keys & TTLs
 NCZ.THEME_PREFERENCE_KEY = "nc_theme_id";
 NCZ.SHOWCASE_OPTIONS_KEY = "nc_showcase_options";
-// Default recency window (days). The API owns this rule: it computes each mod's
-// `recently_updated` bool and publishes the window as `recently_updated_days` on
-// the response envelope, which the app adopts into NCZ.recentlyUpdatedDays. This
-// constant is only the safety default for an older API deploy that omits the field.
+// Default recency window (days). The API owns the rule and publishes it as
+// `recently_updated_days` on the response envelope, which the app adopts into
+// NCZ.recentlyUpdatedDays; the site applies it itself in NCZ.isRecentlyUpdated.
+// This constant is only the safety default for when the envelope omits it.
 NCZ.RECENTLY_UPDATED_DAYS = 7;
 NCZ.UPDATED_LABEL = "RECENTLY UPDATED";
 

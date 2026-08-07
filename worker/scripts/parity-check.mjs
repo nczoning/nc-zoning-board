@@ -20,9 +20,6 @@
  *   RECOMPUTED           district, subdistrict   (from D1's OWN x/y/z, which is
  *                                                 what catches a mangled
  *                                                 coordinate)
- *                        recently_updated        (from nexus_cache.updated_at
- *                                                 against the envelope's
- *                                                 generated_at clock)
  *
  * A field in NEITHER set fails the run (see assertKeyCoverage). That is what
  * stops a newly added /v1 field from silently slipping past the gate as
@@ -51,7 +48,7 @@ const ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID || 'b9937d8d595fad7de8d1549
 
 const REBUILT_KEYS = new Set([
   'id', 'name', 'nexus_id', 'coordinates', 'yaw', 'category', 'tags', 'authors',
-  'description', 'credits', 'district', 'subdistrict', 'recently_updated',
+  'description', 'credits', 'district', 'subdistrict',
   'thumbnail_url', 'picture_url', 'updated_at', 'archives',
 ]);
 // Empty on purpose, and kept rather than deleted: it is the list of fields this
@@ -142,7 +139,7 @@ function assertKeyCoverage(records) {
   }
 }
 
-function buildFromRows(rows, dismissedIds, tagsDict, districts, nexusIndex, nowMs, locationTags) {
+function buildFromRows(rows, dismissedIds, tagsDict, districts, nexusIndex, locationTags) {
   const { full } = materializeFromD1({
     rows,
     dismissed: dismissedIds,
@@ -154,7 +151,6 @@ function buildFromRows(rows, dismissedIds, tagsDict, districts, nexusIndex, nowM
     // locations.tags column, so the gate would pass while testing the path
     // production no longer takes.
     locationTags,
-    nowMs,
   });
   // Appended last, in the position the cron appends it, because the comparison
   // below is on bytes and JSON.stringify emits insertion order.
@@ -174,8 +170,6 @@ async function main() {
     getJson(`${SITE}/data/tags.json`),
   ]);
   const liveRecords = envelope.data;
-  const nowMs = Date.parse(envelope.generated_at);
-  if (!Number.isFinite(nowMs)) fail('envelope.generated_at is not a date -- cannot reproduce recently_updated');
 
   assertKeyCoverage(liveRecords);
 
@@ -213,7 +207,7 @@ async function main() {
   }
 
   const nexusIndex = indexFromRows(nexusRows);
-  const candidate = buildFromRows(rows, dismissedIds, tagsDict, subdistricts.districts, nexusIndex, nowMs, locationTags);
+  const candidate = buildFromRows(rows, dismissedIds, tagsDict, subdistricts.districts, nexusIndex, locationTags);
 
   // --- ID assertion (the deep-link contract) ----------------------------
   const liveIds = new Set(liveRecords.map((r) => r.id));
@@ -293,7 +287,7 @@ async function main() {
     const mutatedTags = mutateTags ? mutateTags(locationTags) : locationTags;
     let differs;
     try {
-      const out = buildFromRows(mutatedRows, dismissedIds, tagsDict, subdistricts.districts, mutatedIndex, nowMs, mutatedTags);
+      const out = buildFromRows(mutatedRows, dismissedIds, tagsDict, subdistricts.districts, mutatedIndex, mutatedTags);
       differs = !compare(out, liveRecords);
     } catch {
       differs = true; // a throw is also a detection
