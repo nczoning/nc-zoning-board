@@ -186,7 +186,7 @@ export function materializeFromD1({
   // and this is internal routing.
   //
   // "Contested" is a page that more than one PUBLISHED record points at. That
-  // is the trigger, not "the page has several downloads": 229 of 294 pages
+  // is the trigger, not "the page has several downloads": 229 of 294 pages today
   // have several downloads (main plus updates and optional patches, all one
   // location) and exactly one page has several locations. See migration 0011.
   const perPage = new Map();

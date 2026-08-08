@@ -311,7 +311,7 @@ export async function handleAdmin(request, env, ctx) {
     // one. `contested` is "another location points at this Nexus page", which
     // is what makes a per-download mapping necessary; a page with several
     // downloads and a single location does not need one and gets no picker
-    // (229 of 294 pages are that shape). See migration 0011.
+    // (229 of 294 pages were that shape when this was measured). See migration 0011.
     const sharers = await env.DB.prepare(
       'SELECT id, name FROM locations WHERE nexus_id = ? AND id != ?',
     ).bind(String(row.nexus_id), row.id).all();
