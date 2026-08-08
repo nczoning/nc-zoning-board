@@ -19,6 +19,26 @@
 import { assignDistrict } from './districts.js';
 
 /**
+ * `locations.nexus_files` as an array of Nexus download names, or null.
+ *
+ * null means "not mapped" and is the correct, normal state: only a record
+ * sharing its Nexus page with another record needs a mapping. An empty or
+ * malformed array is also null, so a half-written value cannot be read as
+ * "mapped to nothing".
+ */
+export function parseNexusFiles(value) {
+  if (typeof value !== 'string') return null;
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return null;
+    const names = parsed.filter((n) => typeof n === 'string' && n.length > 0);
+    return names.length ? names : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Decode one D1 row into the intermediate entry shape.
  *
  * Two round-trip details that a byte-for-byte diff will catch and a "looks
@@ -161,10 +181,40 @@ export function materializeFromD1({
     };
   }
 
+  // How each record's archive list should be resolved. Kept out of `full`
+  // deliberately: `full` is the public payload with a byte-for-byte contract,
+  // and this is internal routing.
+  //
+  // "Contested" is a page that more than one PUBLISHED record points at. That
+  // is the trigger, not "the page has several downloads": 229 of 294 pages today
+  // have several downloads (main plus updates and optional patches, all one
+  // location) and exactly one page has several locations. See migration 0011.
+  const perPage = new Map();
+  for (const row of published) {
+    const id = String(row.nexus_id);
+    perPage.set(id, (perPage.get(id) ?? 0) + 1);
+  }
+  const archivePlan = new Map();
+  for (const row of published) {
+    archivePlan.set(row.id, {
+      contested: (perPage.get(String(row.nexus_id)) ?? 0) > 1,
+      files: parseNexusFiles(row.nexus_files),
+    });
+  }
+
   return {
     full,
+    archivePlan,
     meta: {
       skipped,
+      // Records on a page shared with another record that have not been mapped
+      // to a download. Each is served `[]` rather than the whole page, so it
+      // cannot report installed off another location's files, and it is named
+      // here so the state is visible instead of looking like "ships nothing".
+      unmapped: published
+        .filter((r) => (perPage.get(String(r.nexus_id)) ?? 0) > 1
+          && !parseNexusFiles(r.nexus_files))
+        .map((r) => ({ id: r.id, nexus_id: String(r.nexus_id) })),
       // Published in the registry, deliberately not on the map. Named, not
       // counted: "3 records withheld" is a number nobody can check, and the
       // dashboard's drift row has to subtract exactly these.
@@ -182,9 +232,54 @@ export function materializeFromD1({
  * Pure, and shared by the cron and the parity gate so the gate cannot pass
  * against a channel the cron does not use.
  */
-export function attachArchives(full, nexusIndex = new Map()) {
+/**
+ * What one record's `archives` should be. The single definition of that answer.
+ *
+ * Exported and shared with the admin dashboard deliberately. The dashboard is
+ * where a reviewer goes to CHECK this mapping, so a second copy of the rule
+ * there is the one place a disagreement would be invisible: it showed the whole
+ * page's listing while /v1 served the split, which reads as "the mapping did
+ * not work".
+ *
+ * @param {object} opts
+ * @param {string[]} [opts.pageArchives]    the page's flat union
+ * @param {object}   [opts.archivesByFile]  that union grouped by download name
+ * @param {string[]|null} [opts.files]      this record's mapped download names
+ * @param {boolean}  [opts.contested]       another record points at this page
+ */
+export function resolveArchives({
+  pageArchives = [], archivesByFile = {}, files = null, contested = false,
+} = {}) {
+  // The ordinary case, and all but two records today: the only record on its
+  // page, so the page's whole listing is its listing.
+  if (!contested) return pageArchives;
+
+  // Two or more records share this page, so the union would hand each of them
+  // the others' files and Core would report every one of them installed as soon
+  // as the player had any one of them.
+  //
+  // Unmapped resolves empty, not to the union: a false "not installed" is a
+  // missing badge, a false "installed" is a lie about the player's game. A
+  // mapping that matched no download resolves empty for the same reason, since
+  // the fallback IS the bug.
+  if (!files) return [];
+  const picked = new Set();
+  for (const fileName of files) {
+    for (const name of archivesByFile[fileName] ?? []) picked.add(name);
+  }
+  return [...picked].sort();
+}
+
+export function attachArchives(full, nexusIndex = new Map(), archivePlan = new Map()) {
   for (const rec of Object.values(full)) {
-    rec.archives = nexusIndex.get(String(rec.nexus_id))?.archives ?? [];
+    const entry = nexusIndex.get(String(rec.nexus_id));
+    const plan = archivePlan.get(rec.id);
+    rec.archives = resolveArchives({
+      pageArchives: entry?.archives ?? [],
+      archivesByFile: entry?.archivesByFile ?? {},
+      files: plan?.files ?? null,
+      contested: Boolean(plan?.contested),
+    });
   }
   return full;
 }

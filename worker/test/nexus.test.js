@@ -305,7 +305,7 @@ test('archives: a removal-only mod (ships only .xl) is still detected', async ()
 test('archives: modFiles failure → ok:false, no archives, only the one subrequest', async () => {
   const res = await fetchModArchiveNames(archiveFetch({ routerOk: false }), 1);
   assert.deepEqual(res, {
-    archives: [], ok: false, listed: false, subrequests: 1,
+    archives: [], archivesByFile: {}, ok: false, listed: false, subrequests: 1,
   });
 });
 
@@ -340,7 +340,7 @@ test('archives: a mod whose only file 404s is ok:true but listed:false', async (
   });
   const res = await fetchModArchiveNames(impl, 1);
   assert.deepEqual(res, {
-    archives: [], ok: true, listed: false, subrequests: 2,
+    archives: [], archivesByFile: {}, ok: true, listed: false, subrequests: 2,
   });
 });
 
@@ -368,14 +368,14 @@ test('archives: a mod with no downloadable files at all is listed:false', async 
   // Nothing was read, so nothing is known: the same silence as a 404.
   const res = await fetchModArchiveNames(archiveFetch({ modFiles: [] }), 1);
   assert.deepEqual(res, {
-    archives: [], ok: true, listed: false, subrequests: 1,
+    archives: [], archivesByFile: {}, ok: true, listed: false, subrequests: 1,
   });
 });
 
 test('archives: a thrown fetch degrades to ok:false, never throws', async () => {
   const impl = async () => { throw new Error('network'); };
   assert.deepEqual(await fetchModArchiveNames(impl, 1), {
-    archives: [], ok: false, listed: false, subrequests: 1,
+    archives: [], archivesByFile: {}, ok: false, listed: false, subrequests: 1,
   });
 });
 

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0] - 2026-08-09
+
+### Added
+
+- Locations sharing a Nexus page can be mapped to the specific download they ship, from a picker in the dashboard. It appears only for a record whose page holds another location.
+
+### Fixed
+
+- The admin locations search box accepts spaces. It trimmed on every keystroke and echoed the result back into the input, so a space was deleted before the next character could be typed and no multi-word query was possible.
+- Two locations sharing one Nexus page are no longer served each other's `.archive` files, which made both report as installed when the player had either one. Archive listings are now kept per download, and a record on a shared page is mapped to its own download from the dashboard.
+- A record on a shared page with no mapping is served no archives rather than the whole page. A missing install badge is recoverable; a false one is not.
+
 ## [2.10.1] - 2026-08-09
 
 ### Fixed

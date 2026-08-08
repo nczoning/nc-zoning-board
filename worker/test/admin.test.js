@@ -823,3 +823,57 @@ test('an untracked mod is 404, and a bad body is 422', async () => {
     "the row is the cron's to delete, not an admin's");
   assert.equal(auditRows(env).length, 0, 'a refused call is not audited');
 });
+
+// The dashboard is where a reviewer CHECKS a download mapping, so it showing
+// the Nexus page's whole listing while /v1 serves the split reads as "the
+// mapping did not work". Both answers come from resolveArchives now; these pin
+// the list route to it.
+const SHARED_PAGE = [
+  { ...ROW, id: 'loc-a', name: 'Little China', nexus_id: '23896', nexus_files: JSON.stringify(['LilChina']) },
+  { ...ROW, id: 'loc-b', name: 'Northside', nexus_id: '23896', nexus_files: JSON.stringify(['Northside']) },
+];
+const SHARED_CACHE = [cacheRow({
+  nexus_id: '23896',
+  archives: JSON.stringify(['lil.archive', 'north.archive']),
+  archives_by_file: JSON.stringify({ LilChina: ['lil.archive'], Northside: ['north.archive'] }),
+  archives_at: '2026-01-02T00:00:00Z',
+})];
+
+const listById = async (env) => {
+  const { locations } = await (await hit(env, 'GET', '/admin/locations')).json();
+  return new Map(locations.map((l) => [l.id, l]));
+};
+
+test('the list shows each shared-page record its own download, not the page', async () => {
+  const env = envFor({
+    locations: SHARED_PAGE,
+    locationTags: [['loc-a', 'apartment'], ['loc-b', 'apartment']],
+    nexusCache: SHARED_CACHE,
+  });
+  const byId = await listById(env);
+  assert.deepEqual(byId.get('loc-a').archives, ['lil.archive']);
+  assert.deepEqual(byId.get('loc-b').archives, ['north.archive']);
+});
+
+test('an unmapped shared-page record shows nothing in the dashboard too', async () => {
+  const env = envFor({
+    locations: [SHARED_PAGE[0], { ...SHARED_PAGE[1], nexus_files: null }],
+    locationTags: [['loc-a', 'apartment'], ['loc-b', 'apartment']],
+    nexusCache: SHARED_CACHE,
+  });
+  const byId = await listById(env);
+  // Matching what /v1 serves it, rather than implying files it does not get.
+  assert.deepEqual(byId.get('loc-b').archives, []);
+});
+
+test('a record alone on its page still shows the whole listing', async () => {
+  const env = envFor({
+    nexusCache: [cacheRow({
+      archives: JSON.stringify(['Loft.archive', 'Loft.xl']),
+      archives_by_file: JSON.stringify({ Main: ['Loft.archive'] }),
+      archives_at: '2026-01-02T00:00:00Z',
+    })],
+  });
+  const loc = await firstLocation(env);
+  assert.deepEqual(loc.archives, ['Loft.archive', 'Loft.xl']);
+});

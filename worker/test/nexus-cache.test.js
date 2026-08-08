@@ -565,3 +565,100 @@ test('a location that is not tagged still gets its images backfilled', async () 
   assert.equal(row.name, 'Manual Mod');
   assert.equal(row.nczoning_tagged, 0, 'backfilled locations are not candidates');
 });
+
+// ---------------------------------------------------------------------------
+// Backfill of the per-download breakdown (migration 0011).
+//
+// The listing refetch trigger is "updated_at moved". Rows written before 0011
+// have a current listing and no breakdown, so that trigger never fires for
+// them and the download picker would sit on "no breakdown cached" forever.
+// These cover the separate backfill path and its two safety properties:
+// it terminates, and it never downgrades a listing it only meant to regroup.
+//
+// The pre-0011 row is simulated on the index rather than by writing to the
+// stub, whose test conveniences are read-only by design.
+// ---------------------------------------------------------------------------
+
+/** A read index with one row rewound to its pre-migration-0011 state. */
+async function indexWithoutBreakdown(env, id) {
+  const index = await readNexusIndex(env);
+  index.set(id, { ...index.get(id), archivesByFile: {}, archivesByFileKnown: false });
+  return index;
+}
+
+test('a row with a current listing but no breakdown is backfilled, once', async () => {
+  const env = { DB: sqliteD1(), DATASET: null };
+  await refreshArchives(env, fakeArchiveFetch(), {
+    records: [record('100')], index: await readNexusIndex(env), nowIso: NOW,
+  });
+
+  const stored = await indexWithoutBreakdown(env, '100');
+  const back = await refreshArchives(env, fakeArchiveFetch(), {
+    records: [record('100')], index: stored, nowIso: NOW,
+  });
+  assert.equal(back.fetched, 1, 'the backfill must actually run');
+  assert.deepEqual(stored.get('100').archivesByFile, { 'f0.7z': ['mod_100.archive'] });
+
+  // Terminates: the column is set now, so a fresh read is no longer due.
+  const after = await readNexusIndex(env);
+  assert.equal(after.get('100').archivesByFileKnown, true);
+  const again = await refreshArchives(env, fakeArchiveFetch({ calls: [] }), {
+    records: [record('100')], index: after, nowIso: NOW,
+  });
+  assert.equal(again.fetched, 0, 'the backfill must not refetch the same row every tick');
+});
+
+test('a backfill whose manifests have gone unreadable keeps the stored listing', async () => {
+  const env = { DB: sqliteD1(), DATASET: null };
+  await refreshArchives(env, fakeArchiveFetch(), {
+    records: [record('100')], index: await readNexusIndex(env), nowIso: NOW,
+  });
+
+  // Nexus has since stopped serving this mod's file previews. The mod is old,
+  // so the listing grace window does not apply and the fetch resolves empty.
+  const stored = await indexWithoutBreakdown(env, '100');
+  await refreshArchives(env, fakeArchiveFetch({ preview404: true }), {
+    records: [record('100')], index: stored, nowIso: NOW,
+  });
+  assert.deepEqual(
+    stored.get('100').archives, ['mod_100.archive'],
+    'a regrouping refetch must never turn a good listing into "ships nothing"',
+  );
+  assert.equal(
+    env.DB.one('SELECT archives FROM nexus_cache WHERE nexus_id = ?', '100').archives,
+    JSON.stringify(['mod_100.archive']),
+    'and the stored row must not be downgraded either',
+  );
+});
+
+test('the backfill does a shared page before pages that will never consult it', async () => {
+  const env = { DB: sqliteD1(), DATASET: null };
+  // More cold mods than one tick's budget, with the shared page last in
+  // iteration order so a fair drain would not reach it for many ticks.
+  const many = Array.from({ length: 20 }, (_, i) => record(String(200 + i)));
+  const shared = [record('23896'), record('23896')];
+  let index = await readNexusIndex(env);
+  for (let i = 0; i < 3; i += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await refreshArchives(env, fakeArchiveFetch(), {
+      records: [...many, ...shared], index, nowIso: NOW,
+    });
+    index = await readNexusIndex(env); // eslint-disable-line no-await-in-loop
+  }
+
+  // Rewind every breakdown, as migration 0011 leaves them.
+  const rewound = await readNexusIndex(env);
+  for (const [id, e] of rewound) {
+    rewound.set(id, { ...e, archivesByFile: {}, archivesByFileKnown: false });
+  }
+  await refreshArchives(env, fakeArchiveFetch(), {
+    records: [...many, ...shared], index: rewound, nowIso: NOW,
+  });
+
+  assert.equal(
+    env.DB.one('SELECT archives_by_file FROM nexus_cache WHERE nexus_id = ?', '23896')
+      .archives_by_file != null,
+    true,
+    'the page whose records are serving [] must not queue behind 20 that are fine',
+  );
+});

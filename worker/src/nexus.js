@@ -230,9 +230,15 @@ const CURRENT_FILE_CATEGORIES = new Set(['MAIN', 'OPTIONAL', 'UPDATE']);
 // variants can't blow the run's subrequest budget on its own.
 const ARCHIVE_FILES_PER_MOD = 6;
 
+// `name` is the download's display name ("Watson Little China Tattoo Shop").
+// It is the only stable handle on a download: `uri` embeds version and upload
+// timestamp and changes on every re-upload, while `name` repeats across a
+// download's versions. Archive names are grouped under it so a page hosting two
+// locations can be split. See migration 0011.
 const MOD_FILES_QUERY = `query ModFiles($modId: ID!, $gameId: ID!) {
   modFiles(modId: $modId, gameId: $gameId) {
     uri
+    name
     category
   }
 }`;
@@ -310,7 +316,7 @@ export async function fetchModFileUris(fetchImpl, modId) {
     return {
       files: files
         .filter((f) => typeof f?.uri === 'string' && f.uri.length > 0)
-        .map((f) => ({ uri: f.uri, category: f.category || '' })),
+        .map((f) => ({ uri: f.uri, name: f.name || '', category: f.category || '' })),
       ok: true,
     };
   } catch {
@@ -407,14 +413,32 @@ export async function fetchModArchiveNames(fetchImpl, modId) {
   const chosen = (current.length ? current : filesRes.files).slice(0, ARCHIVE_FILES_PER_MOD);
 
   const all = new Set();
+  // Also kept grouped by download name, so a page whose downloads belong to
+  // different locations can be split. Several files can share a name (one per
+  // version), and their contents are unioned under it.
+  const byFile = new Map();
   for (const f of chosen) {
     const r = await fetchArchiveNamesForFile(fetchImpl, modId, f.uri);
     subrequests += 1;
     if (!r.ok) ok = false;
     if (r.listed) listed = true;
-    for (const name of r.names) all.add(name);
+    const key = f.name || f.uri;
+    if (!byFile.has(key)) byFile.set(key, new Set());
+    for (const name of r.names) {
+      all.add(name);
+      byFile.get(key).add(name);
+    }
+  }
+  const archivesByFile = {};
+  for (const [key, names] of [...byFile].sort((a, b) => a[0].localeCompare(b[0]))) {
+    // A download whose contents could not be read contributes no group at all.
+    // Recording it as `[]` would state "this download ships nothing", which is
+    // the same shape as a real answer and would resolve a mapped location to an
+    // empty archive list on a transient 404.
+    if (!names.size) continue;
+    archivesByFile[key] = [...names].sort();
   }
   return {
-    archives: [...all].sort(), ok, listed, subrequests,
+    archives: [...all].sort(), archivesByFile, ok, listed, subrequests,
   };
 }
