@@ -1,0 +1,22 @@
+{
+    "id": "7644b000-e989-4096-b001-cb0986c0e8c5",
+    "name": "Carmel Club and Penthouse",
+    "nexus_id": "32349",
+    "category": "new-location",
+    "coordinates": [
+        -687.9523,
+        1481.8401,
+        158.7254
+    ],
+    "yaw": 52.6878,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "Mazamp"
+    ],
+    "description": "Three story capsule located at northwest Japantown in a tall advertisement pole with amazing views all around. Club, chill area, apartment and small garage in one.",
+    "status": "published",
+    "added_at": "2026-08-08T08:57:24.367Z",
+    "modified_at": "2026-08-08T08:57:24.367Z"
+}
