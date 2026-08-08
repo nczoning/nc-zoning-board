@@ -34,6 +34,9 @@ const NEXUS_ID_RE = /^(\d+|WIP|Dummy)$/;
 const WRITABLE = new Set([
   'name', 'authors', 'credits', 'coordinates', 'yaw', 'nexus_id',
   'description', 'category', 'tags', 'status', 'admin_notes',
+  // Admin-only, and only meaningful when the record's Nexus page hosts another
+  // location. See migration 0011.
+  'nexus_files',
 ]);
 
 const isPlainObject = (v) => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -152,6 +155,18 @@ export function validateLocationInput(payload, { tagNames, partial = false } = {
 
   if (has('admin_notes') && payload.admin_notes !== null && typeof payload.admin_notes !== 'string') {
     err('admin_notes must be a string or null');
+  }
+
+  // Nexus download names. `null` and `[]` both mean "not mapped" and are the
+  // normal state; the names themselves are not checked against the page here,
+  // because the page's download list is a live Nexus fact and a stale check
+  // would reject a mapping that is about to become correct.
+  if (has('nexus_files') && payload.nexus_files !== null) {
+    if (!Array.isArray(payload.nexus_files)) {
+      err('nexus_files must be an array of Nexus download names, or null');
+    } else if (payload.nexus_files.some((n) => typeof n !== 'string')) {
+      err('nexus_files entries must be strings');
+    }
   }
 
   return { ok: errors.length === 0, errors };

@@ -283,11 +283,38 @@ export async function handleAdmin(request, env, ctx) {
     // narrower view than the list it came from. The write routes deliberately
     // do NOT: their bodies are the audit record.
     const nexus = await env.DB.prepare(
-      'SELECT updated_at, archives, archives_at FROM nexus_cache WHERE nexus_id = ?',
+      `SELECT updated_at, archives, archives_by_file, archives_at
+         FROM nexus_cache WHERE nexus_id = ?`,
     ).bind(String(row.nexus_id)).first();
     const { archives, archives_state } = archivesView(nexus);
+
+    // Everything the download picker needs, and only for a record that needs
+    // one. `contested` is "another location points at this Nexus page", which
+    // is what makes a per-download mapping necessary; a page with several
+    // downloads and a single location does not need one and gets no picker
+    // (229 of 294 pages are that shape). See migration 0011.
+    const sharers = await env.DB.prepare(
+      'SELECT id, name FROM locations WHERE nexus_id = ? AND id != ?',
+    ).bind(String(row.nexus_id), row.id).all();
+    const others = sharers.results ?? [];
+    let downloads = [];
+    try {
+      const parsed = JSON.parse(nexus?.archives_by_file ?? '{}');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        downloads = Object.entries(parsed).map(([name, files]) => ({ name, files }));
+      }
+    } catch {
+      // No breakdown reads as no picker, same posture as archivesView: one
+      // mod's file listing is not worth failing the page load over.
+    }
+
     return json(request, {
       location: { ...await loadAdminRecord(env, row), archives, archives_state },
+      page: {
+        contested: others.length > 0,
+        shared_with: others.map((o) => ({ id: o.id, name: o.name })),
+        downloads,
+      },
     });
   }
 

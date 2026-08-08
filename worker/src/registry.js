@@ -16,6 +16,7 @@
 
 import { runRefresh } from './refresh.js';
 import { syncLocationTags, readTagsForLocations } from './tag-registry.js';
+import { parseNexusFiles } from './materialize.js';
 
 /** Payload field -> column, for the fields that map one to one. */
 const COLUMN_FOR = {
@@ -51,6 +52,9 @@ export function rowToAdmin(row, tags = [], nexusUpdatedAt = null) {
     tags,
     status: row.status,
     admin_notes: row.admin_notes,
+    // Array or null, never the raw JSON string: the dashboard renders it as a
+    // set of checkboxes and should not have to parse.
+    nexus_files: parseNexusFiles(row.nexus_files),
     added_at: row.added_at,
     modified_at: row.modified_at,
     // The MOD's update time on Nexus, which is a different thing from both of
@@ -174,6 +178,19 @@ function buildUpdate(payload) {
   }
   if (Object.prototype.hasOwnProperty.call(payload, 'authors')) {
     sets.push('authors = ?'); binds.push(JSON.stringify(payload.authors));
+  }
+  // Which Nexus download(s) this record is, when its page hosts more than one
+  // location. JSON array of download names, like `authors`, so it cannot be
+  // bound raw. An empty array clears the mapping back to NULL rather than
+  // storing `[]`: "not mapped" and "mapped to no downloads" must not be two
+  // different states, because the second would be indistinguishable from a
+  // half-saved edit. See migration 0011.
+  if (Object.prototype.hasOwnProperty.call(payload, 'nexus_files')) {
+    const files = Array.isArray(payload.nexus_files)
+      ? payload.nexus_files.filter((n) => typeof n === 'string' && n.length)
+      : [];
+    sets.push('nexus_files = ?');
+    binds.push(files.length ? JSON.stringify(files) : null);
   }
   if (Object.prototype.hasOwnProperty.call(payload, 'coordinates')) {
     const [x, y, z] = payload.coordinates;

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { materializeFromD1, rowToEntry } from '../src/materialize.js';
+import { materializeFromD1, rowToEntry, attachArchives } from '../src/materialize.js';
 
 // These cover the shapes the Phase 1 parity diff structurally CANNOT reach:
 // every record in production today is published, has a Z and (mostly) a yaw, so
@@ -210,4 +210,95 @@ test('rowToEntry tolerates a NULL authors column and a record with no tag links'
   const entry = rowToEntry(row({ authors: null }), new Map());
   assert.deepEqual(entry.authors, []);
   assert.deepEqual(entry.tags, [], 'no join rows is an empty array, not undefined');
+});
+
+// ---------------------------------------------------------------------------
+// Archive resolution when one Nexus page hosts two locations.
+//
+// Modelled on the real case: page 23896 (Watson Tattoo Shops) ships two
+// separate downloads and the registry has a record for each. The old code
+// keyed archives on nexus_id alone, so both records were served all six files
+// and Core reported both installed when the player had either one.
+//
+// The trigger is "the page has >1 LOCATION", not ">1 download": 229 of 294
+// pages have several downloads and are a single location. See migration 0011.
+// ---------------------------------------------------------------------------
+
+const LIL_CHINA = 'Watson Little China Tattoo Shop';
+const NORTHSIDE = 'Watson Northside Tattoo Shop';
+
+const watsonIndex = () => index({
+  23896: {
+    archives: [
+      'Watson Little China Tattoo Shop.archive', 'Watson Northside Tattoo Shop.archive',
+      'watsonlilchinatattooshop1.xl', 'watsonnorthsidetattooshop1.xl',
+    ],
+    archivesByFile: {
+      [LIL_CHINA]: ['Watson Little China Tattoo Shop.archive', 'watsonlilchinatattooshop1.xl'],
+      [NORTHSIDE]: ['Watson Northside Tattoo Shop.archive', 'watsonnorthsidetattooshop1.xl'],
+    },
+  },
+});
+
+const watsonRows = (aFiles, bFiles) => [
+  row({ id: 'a', name: 'Little China Pink Ink', nexus_id: '23896', nexus_files: aFiles }),
+  row({ id: 'b', name: 'Northside Body Mods', nexus_id: '23896', nexus_files: bFiles }),
+];
+
+test('a page with ONE location still takes the whole listing, mapping or not', () => {
+  const { full, archivePlan } = build([row({ nexus_id: '23896' })]);
+  attachArchives(full, watsonIndex(), archivePlan);
+  assert.equal(full['aaaa-1111'].archives.length, 4);
+});
+
+test('two locations on one page each get only their own download', () => {
+  const { full, archivePlan } = build(
+    watsonRows(JSON.stringify([LIL_CHINA]), JSON.stringify([NORTHSIDE])),
+  );
+  attachArchives(full, watsonIndex(), archivePlan);
+  assert.deepEqual(full.a.archives,
+    ['Watson Little China Tattoo Shop.archive', 'watsonlilchinatattooshop1.xl']);
+  assert.deepEqual(full.b.archives,
+    ['Watson Northside Tattoo Shop.archive', 'watsonnorthsidetattooshop1.xl']);
+  // The actual defect: neither may carry the other's .archive.
+  assert.ok(!full.a.archives.includes('Watson Northside Tattoo Shop.archive'));
+  assert.ok(!full.b.archives.includes('Watson Little China Tattoo Shop.archive'));
+});
+
+test('an unmapped record on a shared page is served nothing, not the union', () => {
+  const { full, archivePlan, meta } = build(watsonRows(null, JSON.stringify([NORTHSIDE])));
+  attachArchives(full, watsonIndex(), archivePlan);
+  // Empty is the fail-safe direction: a missing badge, never a false INSTALLED.
+  assert.deepEqual(full.a.archives, []);
+  assert.deepEqual(full.b.archives,
+    ['Watson Northside Tattoo Shop.archive', 'watsonnorthsidetattooshop1.xl']);
+  // ...and it is named rather than silently looking like "ships nothing".
+  assert.deepEqual(meta.unmapped, [{ id: 'a', nexus_id: '23896' }]);
+});
+
+test('a mapping naming a download that no longer exists resolves empty', () => {
+  const { full, archivePlan } = build(
+    watsonRows(JSON.stringify(['Renamed By The Author']), JSON.stringify([NORTHSIDE])),
+  );
+  attachArchives(full, watsonIndex(), archivePlan);
+  assert.deepEqual(full.a.archives, []);
+});
+
+test('a malformed nexus_files cell reads as unmapped, not as mapped-to-nothing', () => {
+  for (const bad of ['not json', '{}', '[]', '[""]']) {
+    const { full, archivePlan, meta } = build(watsonRows(bad, JSON.stringify([NORTHSIDE])));
+    attachArchives(full, watsonIndex(), archivePlan);
+    assert.deepEqual(full.a.archives, [], bad);
+    assert.deepEqual(meta.unmapped, [{ id: 'a', nexus_id: '23896' }], bad);
+  }
+});
+
+test('a draft sharing the page does not make the published record contested', () => {
+  const rows = watsonRows(null, JSON.stringify([NORTHSIDE]));
+  rows[1].status = 'draft';
+  const { full, archivePlan, meta } = build(rows);
+  attachArchives(full, watsonIndex(), archivePlan);
+  // Only one PUBLISHED record points at the page, so it takes the whole listing.
+  assert.equal(full.a.archives.length, 4);
+  assert.deepEqual(meta.unmapped, []);
 });

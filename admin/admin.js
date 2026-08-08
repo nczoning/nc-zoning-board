@@ -46,6 +46,10 @@
   const WRITABLE = [
     'name', 'authors', 'credits', 'coordinates', 'yaw', 'nexus_id',
     'description', 'category', 'tags', 'status', 'admin_notes',
+    // Only ever sent for a record whose Nexus page holds another location; the
+    // picker that produces it is not rendered otherwise, and readForm leaves
+    // the key off entirely rather than sending null and clearing a mapping.
+    'nexus_files',
   ];
 
   // Reasons the OAuth callback can bounce back with. `check_unavailable` is
@@ -630,6 +634,18 @@
       description: val('description'),
       authors: trimmed('authors').split(',').map((a) => a.trim()).filter(Boolean),
       tags: [...form.querySelectorAll('input[name="tag"]:checked')].map((i) => i.value),
+      // Present only when the download picker was rendered, i.e. only when this
+      // record shares its Nexus page with another. Everywhere else the key is
+      // absent and diffPayload skips it, so the stored mapping is untouched.
+      ...(form.querySelector('[data-field="nexus_files"]')
+        ? (() => {
+          const picked = [...form.querySelectorAll('input[name="nexus_file"]:checked')]
+            .map((i) => i.value);
+          // Nothing ticked is null, not [], matching what the server stores.
+          // Otherwise every save of an unmapped record would look like a change.
+          return { nexus_files: picked.length ? picked : null };
+        })()
+        : {}),
     };
   }
 
@@ -646,6 +662,10 @@
   function diffPayload(current, original) {
     const patch = {};
     for (const key of WRITABLE) {
+      // A key the form did not produce at all is not "changed to undefined".
+      // `nexus_files` is only present when the download picker was rendered,
+      // and a missing picker must leave the stored mapping alone.
+      if (!Object.prototype.hasOwnProperty.call(current, key)) continue;
       if (!sameValue(current[key], original[key])) patch[key] = current[key];
     }
     return patch;
@@ -674,10 +694,59 @@
       }));
   }
 
+  /**
+   * The download picker, for a record that shares its Nexus page with another.
+   *
+   * Rendered only in that case. A page with several downloads and one location
+   * is the normal shape (229 of 294 pages) and needs no mapping: it takes the
+   * whole listing. Asking there would be a question with one right answer on
+   * three quarters of the registry.
+   *
+   * The download list is a live Nexus fact the client does not hold, so it is
+   * fetched per record. That request only ever happens for a contested record,
+   * which today is two of them.
+   */
+  function downloadPicker(loc, others) {
+    const box = h('div', { class: 'tag-picker', 'data-field': 'nexus_files' },
+      h('span', { class: 'muted', text: 'Loading downloads…' }));
+
+    api(`/admin/locations/${encodeURIComponent(loc.id)}`).then((res) => {
+      const downloads = res.body?.page?.downloads ?? [];
+      replace(box);
+      if (!downloads.length) {
+        // No breakdown stored yet: the cron refills it on this mod's next
+        // listing fetch. Say so rather than showing an empty box that looks
+        // like "this page has no downloads".
+        box.append(h('span', {
+          class: 'muted',
+          text: 'No download breakdown cached yet. It appears after the next archive refresh.',
+        }));
+        return;
+      }
+      const selected = loc.nexus_files ?? [];
+      for (const d of downloads) {
+        const cb = h('input', { type: 'checkbox', name: 'nexus_file', value: d.name });
+        cb.checked = selected.includes(d.name);
+        box.append(h('label', {
+          title: (d.files || []).join('\n') || 'no archive files in this download',
+        }, cb, d.name));
+      }
+    }).catch(() => {
+      replace(box);
+      box.append(h('span', { class: 'muted', text: 'Could not load the download list.' }));
+    });
+
+    return field('Which download is this?', box,
+      `This Nexus page is also ${others.length === 1 ? 'used by' : 'used by'} `
+      + `${others.map((o) => o.name).join(', ')}. Tick the download(s) this record ships, `
+      + 'so an installed-mod check cannot match the other record\'s files. '
+      + 'Left blank, this record is served no archives at all.');
+  }
+
   const BLANK_LOCATION = {
     id: '', name: '', nexus_id: '', category: 'new-location', status: 'draft',
     coordinates: ['', '', ''], yaw: null, credits: null,
-    admin_notes: null, description: '', authors: [], tags: [],
+    admin_notes: null, description: '', authors: [], tags: [], nexus_files: null,
   };
 
   function renderLocationEditor(loc) {
@@ -717,6 +786,15 @@
       field('Credits', input('credits', loc.credits ?? '', { placeholder: 'blank for none' })),
       field('Description', h('textarea', { name: 'description', maxlength: '500' }, loc.description || '')),
       field('Tags', tagPicker(loc.tags || [])),
+      // Only when another record already points at this Nexus page. Computed
+      // from the list the dashboard already holds, so the extra request the
+      // picker makes happens for those records and nowhere else.
+      (() => {
+        if (isNew || !isRealNexusId(String(loc.nexus_id))) return null;
+        const others = (state.locations || [])
+          .filter((l) => String(l.nexus_id) === String(loc.nexus_id) && l.id !== loc.id);
+        return others.length ? downloadPicker(loc, others) : null;
+      })(),
       field('Admin notes', h('textarea', { name: 'admin_notes', placeholder: 'internal, never served on /v1' },
         loc.admin_notes || '')),
     );
