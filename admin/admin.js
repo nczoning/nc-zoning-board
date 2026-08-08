@@ -433,13 +433,19 @@
     if (f.district && state.districtById.get(loc.id) !== f.district) return false;
     if (f.special === 'untagged' && (loc.tags || []).length) return false;
     if (f.special === 'wip' && /^\d+$/.test(String(loc.nexus_id))) return false;
-    if (!f.q) return true;
+    // Trimmed here rather than on input: `q` is echoed back into the search box
+    // by setFilter, so trimming on the way in deletes the space the moment it is
+    // typed and no multi-word query can ever be entered.
+    const q = f.q.trim().toLowerCase();
+    if (!q) return true;
     const hay = [loc.name, loc.nexus_id, ...(loc.authors || []), ...(loc.tags || [])]
       .join(' ').toLowerCase();
-    return hay.includes(f.q.toLowerCase());
+    return hay.includes(q);
   }
 
-  const activeFilters = () => Object.entries(state.filter).filter(([, v]) => v !== '');
+  // Trimmed: `q` now holds the raw box contents, so a lone space is "no filter"
+  // rather than a chip with nothing visible in it.
+  const activeFilters = () => Object.entries(state.filter).filter(([, v]) => String(v).trim() !== '');
 
   /**
    * Apply a filter and show the result.
@@ -3377,7 +3383,7 @@
     // The inputs write into the filter state rather than being read from it,
     // so the Overview tiles and the controls cannot disagree about what the
     // list is showing.
-    $('#loc-search').addEventListener('input', (e) => setFilter({ q: e.target.value.trim() }));
+    $('#loc-search').addEventListener('input', (e) => setFilter({ q: e.target.value }));
     $('#loc-status').addEventListener('change', (e) => setFilter({ status: e.target.value }));
     $('#loc-category').addEventListener('change', (e) => setFilter({ category: e.target.value }));
 
