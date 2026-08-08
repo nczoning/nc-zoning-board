@@ -78,7 +78,7 @@ import {
 /** Columns compared to decide whether a row needs writing. */
 const TRACKED = [
   'name', 'summary', 'uploader', 'updated_at', 'thumbnail_url', 'picture_url',
-  'archives', 'archives_at', 'nczoning_tagged', 'status',
+  'archives', 'archives_by_file', 'archives_at', 'nczoning_tagged', 'status',
 ];
 
 // Per-tick archive budgets, carried over from refresh.js unchanged. Archives are
@@ -177,6 +177,24 @@ function parseArchives(value) {
 }
 
 /**
+ * A stored `archives_by_file` value as `{ [downloadName]: string[] }`. Same
+ * posture as parseArchives: a malformed cell degrades to "no breakdown", which
+ * falls back to the flat union rather than taking the refresh down.
+ */
+function parseArchivesByFile(value) {
+  if (typeof value !== 'string') return {};
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const out = {};
+    for (const [k, v] of Object.entries(parsed)) if (Array.isArray(v)) out[k] = v;
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
  * The four Nexus-derived /v1 fields, keyed by nexus_id, for the materializer to
  * join on. One-to-many: two locations sharing a mod read the same entry.
  *
@@ -187,8 +205,8 @@ function parseArchives(value) {
  */
 export async function readNexusIndex(env) {
   const { results } = await env.DB.prepare(
-    `SELECT nexus_id, updated_at, thumbnail_url, picture_url, archives, archives_at,
-            nczoning_tagged
+    `SELECT nexus_id, updated_at, thumbnail_url, picture_url, archives, archives_by_file,
+            archives_at, nczoning_tagged
        FROM nexus_cache`,
   ).all();
   const index = new Map();
@@ -198,6 +216,10 @@ export async function readNexusIndex(env) {
       pictureUrl: r.picture_url ?? null,
       updatedAt: r.updated_at ?? null,
       archives: parseArchives(r.archives),
+      // The same names grouped by the download they came from. Empty for every
+      // row written before migration 0011 and refilled on that mod's next
+      // listing fetch; consulted only for a page that maps to >1 location.
+      archivesByFile: parseArchivesByFile(r.archives_by_file),
       // Carried so an archives-only write can preserve it: writeRows sets the
       // flag unconditionally, and a candidate that lost it here would quietly
       // drop out of the candidates list.
@@ -206,6 +228,11 @@ export async function readNexusIndex(env) {
       // all -- so the array cannot say whether the listing has ever been read.
       // These two carry that, and only refreshArchives looks at them.
       archivesKnown: r.archives != null,
+      // Distinct from `archivesByFile` being empty: `{}` is a real answer (the
+      // page's downloads had no readable contents), NULL means the breakdown
+      // has never been computed. Only the second is a reason to refetch, and
+      // conflating them would refetch a genuinely empty page every tick.
+      archivesByFileKnown: r.archives_by_file != null,
       archivesAt: r.archives_at ?? null,
     });
   }
@@ -277,8 +304,8 @@ async function writeRows(env, rows, nowIso) {
   const stmt = env.DB.prepare(
     `INSERT INTO nexus_cache
        (nexus_id, name, summary, uploader, updated_at, thumbnail_url, picture_url,
-        archives, archives_at, nczoning_tagged, status, fetched_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        archives, archives_by_file, archives_at, nczoning_tagged, status, fetched_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(nexus_id) DO UPDATE SET
        name            = COALESCE(excluded.name, nexus_cache.name),
        summary         = COALESCE(excluded.summary, nexus_cache.summary),
@@ -287,6 +314,7 @@ async function writeRows(env, rows, nowIso) {
        thumbnail_url   = COALESCE(excluded.thumbnail_url, nexus_cache.thumbnail_url),
        picture_url     = COALESCE(excluded.picture_url, nexus_cache.picture_url),
        archives        = COALESCE(excluded.archives, nexus_cache.archives),
+       archives_by_file = COALESCE(excluded.archives_by_file, nexus_cache.archives_by_file),
        archives_at     = COALESCE(excluded.archives_at, nexus_cache.archives_at),
        nczoning_tagged = excluded.nczoning_tagged,
        status          = COALESCE(excluded.status, nexus_cache.status),
@@ -301,6 +329,7 @@ async function writeRows(env, rows, nowIso) {
     r.thumbnail_url ?? null,
     r.picture_url ?? null,
     r.archives ?? null,
+    r.archives_by_file ?? null,
     r.archives_at ?? null,
     r.nczoning_tagged ?? 0,
     r.status ?? null,
@@ -343,15 +372,30 @@ export async function refreshArchives(env, fetchImpl, { records, index, nowIso }
   const stamp = nowIso ?? new Date().toISOString();
 
   const due = new Map();
+  // Rows whose listing is current but predate migration 0011, so they have no
+  // per-download breakdown. Kept separate from `due`: their `archives` is fine
+  // and must not be re-seeded, they only need the grouping recomputed. Without
+  // this the backfill never happens at all, because a listing that already
+  // matches its `updated_at` is never refetched, and the download picker would
+  // sit on "no breakdown cached" forever.
+  //
+  // Self-limiting: one fetch writes the column (JSON.stringify always yields at
+  // least `{}`), so a row leaves this set permanently. The whole registry
+  // drains in roughly ceil(records / ARCHIVE_MOD_BUDGET) ticks, behind the same
+  // budget as any other archive work.
+  const breakdownDue = new Map();
   for (const rec of records) {
     const id = String(rec.nexus_id);
-    if (!isRealNexusId(id) || due.has(id)) continue;
+    if (!isRealNexusId(id) || due.has(id) || breakdownDue.has(id)) continue;
     const updatedAt = rec.updated_at ?? null;
     const entry = index.get(id);
-    if (entry?.archivesKnown && entry.archivesAt === updatedAt) continue;
+    if (entry?.archivesKnown && entry.archivesAt === updatedAt) {
+      if (!entry.archivesByFileKnown) breakdownDue.set(id, updatedAt);
+      continue;
+    }
     due.set(id, updatedAt);
   }
-  if (!due.size) return summary;
+  if (!due.size && !breakdownDue.size) return summary;
 
   // One-time carry-over from the KV blob this table replaces. Worth the read
   // twice over: it skips a ~20 tick cold fill, and archive-seeds.json holds
@@ -366,15 +410,21 @@ export async function refreshArchives(env, fetchImpl, { records, index, nowIso }
   }
 
   const resolved = new Map();
-  const take = (id, updatedAt, archives) => {
-    resolved.set(id, { archives, updatedAt });
+  // `archivesByFile` is undefined for a seeded listing (archive-seeds.json is a
+  // flat array and has no download breakdown). Left undefined it COALESCEs to
+  // "keep whatever is stored", which is right: a seed must not erase a
+  // breakdown a real fetch already produced.
+  const take = (id, updatedAt, archives, archivesByFile) => {
+    resolved.set(id, { archives, archivesByFile, updatedAt });
     index.set(id, {
       ...(index.get(id) ?? { thumbnailUrl: null, pictureUrl: null, updatedAt }),
       archives,
+      archivesByFile: archivesByFile ?? index.get(id)?.archivesByFile ?? {},
       archivesKnown: true,
       archivesAt: updatedAt,
     });
     due.delete(id);
+    breakdownDue.delete(id);
   };
 
   for (const [id, updatedAt] of [...due]) {
@@ -384,7 +434,14 @@ export async function refreshArchives(env, fetchImpl, { records, index, nowIso }
     summary.seeded += 1;
   }
 
-  const ordered = [...due].sort((a, b) => String(b[1] ?? '').localeCompare(String(a[1] ?? '')));
+  // Listing work first, breakdown backfill with whatever budget is left: a mod
+  // with no file list at all is a worse state than one with a list and no
+  // grouping, and the backfill is a one-off that can take as many ticks as it
+  // needs.
+  const ordered = [
+    ...[...due].sort((a, b) => String(b[1] ?? '').localeCompare(String(a[1] ?? ''))),
+    ...breakdownDue,
+  ];
   let mods = 0;
   let subrequests = 0;
   for (const [id, updatedAt] of ordered) {
@@ -399,10 +456,18 @@ export async function refreshArchives(env, fetchImpl, { records, index, nowIso }
       summary.unlisted += 1;
       continue;
     }
-    take(id, updatedAt, res.archives);
+    // A backfill refetch must never downgrade a listing it was not asked to
+    // change. If Nexus has stopped serving this mod's manifests since the
+    // listing was stored, the fetch comes back empty; taking that would turn a
+    // good file list into "ships nothing" for a mod that only needed grouping.
+    const backfillOnly = breakdownDue.has(id) && !due.has(id);
+    const keep = backfillOnly && !res.archives.length
+      ? (index.get(id)?.archives ?? [])
+      : res.archives;
+    take(id, updatedAt, keep, res.archivesByFile);
     summary.fetched += 1;
   }
-  summary.pending = due.size;
+  summary.pending = due.size + breakdownDue.size;
 
   // A row per mod, same batching and the same 100-bound-parameter ceiling as
   // the sweep. Nothing resolved means nothing written, which is the steady
@@ -411,6 +476,7 @@ export async function refreshArchives(env, fetchImpl, { records, index, nowIso }
     nexus_id: nexusId,
     nczoning_tagged: index.get(nexusId)?.nczoning_tagged ?? 0,
     archives: JSON.stringify(r.archives),
+    archives_by_file: r.archivesByFile ? JSON.stringify(r.archivesByFile) : null,
     archives_at: r.updatedAt,
   }));
   summary.written = await writeRows(env, rows, stamp);

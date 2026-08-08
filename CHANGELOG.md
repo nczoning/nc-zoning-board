@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - The admin locations search box accepts spaces. It trimmed on every keystroke and echoed the result back into the input, so a space was deleted before the next character could be typed and no multi-word query was possible.
+- Two locations sharing one Nexus page are no longer served each other's `.archive` files, which made both report as installed when the player had either one. Archive listings are now kept per download, and a record on a shared page is mapped to its own download from the dashboard.
+- A record on a shared page with no mapping is served no archives rather than the whole page. A missing install badge is recoverable; a false one is not.
 
 ## [2.10.1] - 2026-08-09
 

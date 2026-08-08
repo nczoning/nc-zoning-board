@@ -384,7 +384,7 @@ async function sweepNexusCache(env, fetchImpl, nexusNodes, nowIso) {
  * need a listing, and before the content hash so a re-upload that changes only
  * the file list still moves the ETag.
  */
-async function fillArchives(env, fetchImpl, full, index, nowIso) {
+async function fillArchives(env, fetchImpl, full, index, nowIso, archivePlan) {
   try {
     const r = await refreshArchives(env, fetchImpl, {
       records: Object.values(full), index, nowIso,
@@ -403,7 +403,7 @@ async function fillArchives(env, fetchImpl, full, index, nowIso) {
   } catch (err) {
     console.warn('archive refresh failed (non-fatal):', String(err).slice(0, 200));
   }
-  attachArchives(full, index);
+  attachArchives(full, index, archivePlan);
 }
 
 /**
@@ -464,6 +464,13 @@ async function sourceAndBuild(env, fetchImpl, origin, { nexusNodes, nexusIndex }
       + built.meta.withheld.map((w) => `${w.id} (mod ${w.nexus_id})`).join(', '),
     );
   }
+  if (built.meta.unmapped.length) {
+    console.warn(
+      `${built.meta.unmapped.length} record(s) share a Nexus page with another `
+      + 'record and have no download mapped, so they are served no archives: '
+      + built.meta.unmapped.map((u) => `${u.id} (mod ${u.nexus_id})`).join(', '),
+    );
+  }
   return { ...built, tagsList, districts };
 }
 
@@ -500,13 +507,15 @@ export async function runRefresh(env, fetchImpl = fetch) {
     // leaves some images null for a cycle, it never marks the dataset stale.
     // A D1 read failure, by contrast, throws and lands in the catch below --
     // last-known-good, discovery_stale, alert. Never an empty map.
-    const { full, meta, tagsList, districts } = await sourceAndBuild(
+    const { full, meta, tagsList, districts, archivePlan } = await sourceAndBuild(
       env, fetchImpl, origin, { nexusNodes, nexusIndex },
     );
     const districtsOut = districtsPayload(districts);
 
     // Each record's shipped .archive file names (installed-mod detection).
-    await fillArchives(env, fetchImpl, full, nexusIndex, generatedAt);
+    // `archivePlan` decides whether a record takes its page's whole listing or
+    // only the download(s) it was mapped to; see attachArchives.
+    await fillArchives(env, fetchImpl, full, nexusIndex, generatedAt, archivePlan);
 
     // Hash the content that actually varies (not generated_at). Tags are
     // included so a tags.json edit propagates through the ETag.
