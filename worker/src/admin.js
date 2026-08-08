@@ -25,6 +25,10 @@ import {
   readNexusModMap, archivesView,
 } from './registry.js';
 import { handleReview } from './review.js';
+// The single definition of "what archives is this record served". Shared with
+// the materializer on purpose: a second copy here is how the dashboard came to
+// disagree with /v1 about a split page.
+import { resolveArchives, parseNexusFiles } from './materialize.js';
 
 const json = (request, body, status = 200) => new Response(JSON.stringify(body), {
   status,
@@ -247,12 +251,27 @@ export async function handleAdmin(request, env, ctx) {
     // pane reads the record straight out of the loaded list -- see
     // selectLocation in admin/admin.js. Attached here rather than inside
     // rowToAdmin so the audit log keeps carrying only editable fields.
+    // Which pages more than one PUBLISHED record points at. Same definition the
+    // materializer uses, so the panel shows what /v1 serves rather than what the
+    // Nexus page holds; showing the page's whole listing against a split record
+    // reads as "the download mapping did not work".
+    const perPage = new Map();
+    for (const r of rows) {
+      if (r.status !== 'published') continue;
+      const k = String(r.nexus_id);
+      perPage.set(k, (perPage.get(k) ?? 0) + 1);
+    }
     return json(request, {
       locations: rows.map((r) => {
         const nexus = nexusMap.get(String(r.nexus_id)) ?? null;
         return {
           ...rowToAdmin(r, tagMap.get(r.id) ?? [], nexus?.updated_at ?? null),
-          archives: nexus?.archives ?? [],
+          archives: resolveArchives({
+            pageArchives: nexus?.archives ?? [],
+            archivesByFile: nexus?.archivesByFile ?? {},
+            files: parseNexusFiles(r.nexus_files),
+            contested: (perPage.get(String(r.nexus_id)) ?? 0) > 1,
+          }),
           archives_state: nexus?.archives_state ?? 'unknown',
         };
       }),
@@ -308,8 +327,20 @@ export async function handleAdmin(request, env, ctx) {
       // mod's file listing is not worth failing the page load over.
     }
 
+    // What this record is actually served, not what its page holds. The two
+    // differ only on a shared page, which is exactly the record a reviewer
+    // opens this panel to check.
+    const resolved = resolveArchives({
+      pageArchives: archives,
+      archivesByFile: Object.fromEntries(downloads.map((d) => [d.name, d.files])),
+      files: parseNexusFiles(row.nexus_files),
+      contested: others.length > 0,
+    });
+
     return json(request, {
-      location: { ...await loadAdminRecord(env, row), archives, archives_state },
+      location: {
+        ...await loadAdminRecord(env, row), archives: resolved, archives_state,
+      },
       page: {
         contested: others.length > 0,
         shared_with: others.map((o) => ({ id: o.id, name: o.name })),

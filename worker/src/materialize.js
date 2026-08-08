@@ -232,37 +232,54 @@ export function materializeFromD1({
  * Pure, and shared by the cron and the parity gate so the gate cannot pass
  * against a channel the cron does not use.
  */
+/**
+ * What one record's `archives` should be. The single definition of that answer.
+ *
+ * Exported and shared with the admin dashboard deliberately. The dashboard is
+ * where a reviewer goes to CHECK this mapping, so a second copy of the rule
+ * there is the one place a disagreement would be invisible: it showed the whole
+ * page's listing while /v1 served the split, which reads as "the mapping did
+ * not work".
+ *
+ * @param {object} opts
+ * @param {string[]} [opts.pageArchives]    the page's flat union
+ * @param {object}   [opts.archivesByFile]  that union grouped by download name
+ * @param {string[]|null} [opts.files]      this record's mapped download names
+ * @param {boolean}  [opts.contested]       another record points at this page
+ */
+export function resolveArchives({
+  pageArchives = [], archivesByFile = {}, files = null, contested = false,
+} = {}) {
+  // The ordinary case, and all but two records today: the only record on its
+  // page, so the page's whole listing is its listing.
+  if (!contested) return pageArchives;
+
+  // Two or more records share this page, so the union would hand each of them
+  // the others' files and Core would report every one of them installed as soon
+  // as the player had any one of them.
+  //
+  // Unmapped resolves empty, not to the union: a false "not installed" is a
+  // missing badge, a false "installed" is a lie about the player's game. A
+  // mapping that matched no download resolves empty for the same reason, since
+  // the fallback IS the bug.
+  if (!files) return [];
+  const picked = new Set();
+  for (const fileName of files) {
+    for (const name of archivesByFile[fileName] ?? []) picked.add(name);
+  }
+  return [...picked].sort();
+}
+
 export function attachArchives(full, nexusIndex = new Map(), archivePlan = new Map()) {
   for (const rec of Object.values(full)) {
     const entry = nexusIndex.get(String(rec.nexus_id));
     const plan = archivePlan.get(rec.id);
-
-    // The ordinary case, and all but one record today: the only record on its
-    // page, so the page's whole listing is its listing.
-    if (!plan?.contested) {
-      rec.archives = entry?.archives ?? [];
-      continue;
-    }
-
-    // Two or more records share this page, so the union would hand each of them
-    // the others' files and Core would report every one of them installed as
-    // soon as the player had any one of them.
-    if (!plan.files) {
-      // Not mapped yet. Empty, not the union: a false "not installed" is a
-      // missing badge, a false "installed" is a lie about the player's game.
-      // Named in meta.unmapped so this is visible rather than silent.
-      rec.archives = [];
-      continue;
-    }
-
-    const byFile = entry?.archivesByFile ?? {};
-    const picked = new Set();
-    for (const fileName of plan.files) {
-      for (const name of byFile[fileName] ?? []) picked.add(name);
-    }
-    // A mapping that matched no download resolves empty rather than falling
-    // back to the union, for the same reason: the fallback is the bug.
-    rec.archives = [...picked].sort();
+    rec.archives = resolveArchives({
+      pageArchives: entry?.archives ?? [],
+      archivesByFile: entry?.archivesByFile ?? {},
+      files: plan?.files ?? null,
+      contested: Boolean(plan?.contested),
+    });
   }
   return full;
 }

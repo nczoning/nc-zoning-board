@@ -119,11 +119,21 @@ export function archivesView(row) {
  */
 export async function readNexusModMap(env) {
   const { results } = await env.DB.prepare(
-    'SELECT nexus_id, updated_at, archives, archives_at FROM nexus_cache',
+    'SELECT nexus_id, updated_at, archives, archives_by_file, archives_at FROM nexus_cache',
   ).all();
   const map = new Map();
   for (const r of results ?? []) {
-    map.set(String(r.nexus_id), { updated_at: r.updated_at ?? null, ...archivesView(r) });
+    let archivesByFile = {};
+    try {
+      const parsed = JSON.parse(r.archives_by_file ?? '{}');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) archivesByFile = parsed;
+    } catch {
+      // Same posture as archivesView: a malformed cell degrades to no
+      // breakdown, which the caller resolves as an unsplit page.
+    }
+    map.set(String(r.nexus_id), {
+      updated_at: r.updated_at ?? null, archivesByFile, ...archivesView(r),
+    });
   }
   return map;
 }
