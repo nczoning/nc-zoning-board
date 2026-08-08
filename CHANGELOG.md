@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- The cut-content casino subdistrict is now "North Oak Casino" (id `north_oak_casino`), matching the game's own display name. `Districts.NorthOaks` is only the internal TweakDB record ID; every player-facing string is singular.
+
 ## [2.10.0] - 2026-08-07
 
 ### Removed
