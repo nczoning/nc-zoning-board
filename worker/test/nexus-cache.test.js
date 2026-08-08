@@ -630,3 +630,35 @@ test('a backfill whose manifests have gone unreadable keeps the stored listing',
     'and the stored row must not be downgraded either',
   );
 });
+
+test('the backfill does a shared page before pages that will never consult it', async () => {
+  const env = { DB: sqliteD1(), DATASET: null };
+  // More cold mods than one tick's budget, with the shared page last in
+  // iteration order so a fair drain would not reach it for many ticks.
+  const many = Array.from({ length: 20 }, (_, i) => record(String(200 + i)));
+  const shared = [record('23896'), record('23896')];
+  let index = await readNexusIndex(env);
+  for (let i = 0; i < 3; i += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await refreshArchives(env, fakeArchiveFetch(), {
+      records: [...many, ...shared], index, nowIso: NOW,
+    });
+    index = await readNexusIndex(env); // eslint-disable-line no-await-in-loop
+  }
+
+  // Rewind every breakdown, as migration 0011 leaves them.
+  const rewound = await readNexusIndex(env);
+  for (const [id, e] of rewound) {
+    rewound.set(id, { ...e, archivesByFile: {}, archivesByFileKnown: false });
+  }
+  await refreshArchives(env, fakeArchiveFetch(), {
+    records: [...many, ...shared], index: rewound, nowIso: NOW,
+  });
+
+  assert.equal(
+    env.DB.one('SELECT archives_by_file FROM nexus_cache WHERE nexus_id = ?', '23896')
+      .archives_by_file != null,
+    true,
+    'the page whose records are serving [] must not queue behind 20 that are fine',
+  );
+});

@@ -384,6 +384,15 @@ export async function refreshArchives(env, fetchImpl, { records, index, nowIso }
   // drains in roughly ceil(records / ARCHIVE_MOD_BUDGET) ticks, behind the same
   // budget as any other archive work.
   const breakdownDue = new Map();
+  // How many served records point at each page. A page with more than one is
+  // the only place the breakdown changes an answer: its records are served []
+  // until it arrives, so it is backfilled before the ~294 pages where the
+  // breakdown is stored but never consulted.
+  const locationsPerPage = new Map();
+  for (const rec of records) {
+    const id = String(rec.nexus_id);
+    if (isRealNexusId(id)) locationsPerPage.set(id, (locationsPerPage.get(id) ?? 0) + 1);
+  }
   for (const rec of records) {
     const id = String(rec.nexus_id);
     if (!isRealNexusId(id) || due.has(id) || breakdownDue.has(id)) continue;
@@ -440,7 +449,13 @@ export async function refreshArchives(env, fetchImpl, { records, index, nowIso }
   // needs.
   const ordered = [
     ...[...due].sort((a, b) => String(b[1] ?? '').localeCompare(String(a[1] ?? ''))),
-    ...breakdownDue,
+    // Shared pages first: those records are serving [] until their breakdown
+    // lands, so a fair-order drain would leave the one page that needs it
+    // behind ~290 that do not. At 15 mods a tick that is the difference
+    // between the next tick and a hundred minutes.
+    ...[...breakdownDue].sort(
+      (a, b) => (locationsPerPage.get(b[0]) ?? 0) - (locationsPerPage.get(a[0]) ?? 0),
+    ),
   ];
   let mods = 0;
   let subrequests = 0;
