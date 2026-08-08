@@ -105,10 +105,24 @@ are entirely separate stores that answer the same command, which is exactly how
 a "verified" migration ends up missing in production.
 
 ```bash
-export CLOUDFLARE_ACCOUNT_ID=b9937d8d595fad7de8d1549b22390281
 npx wrangler d1 migrations apply nczoning-data --remote
 npx wrangler d1 migrations apply nczoning-data-staging --env staging --remote
 ```
+
+**Do not set `CLOUDFLARE_ACCOUNT_ID`.** This block used to open with
+`export CLOUDFLARE_ACCOUNT_ID=b9937d8d595fad7de8d1549b22390281`, and that line
+is what makes the command fail. The wrangler login is an OAuth token spanning
+two accounts; it resolves the right one from the config on its own, and pinning
+the id makes the API answer
+
+```text
+The given account is not valid or is not authorized to access this service [code: 7403]
+```
+
+which reads as "you are not logged in" and is not. `npx wrangler whoami` will
+show a valid token with `d1 (write)` while the same shell cannot list a
+migration. Unset it and the command works. The same variable also empties the
+Cloudflare MCP's D1 listing.
 
 **`--env staging` is not optional on the second line.** Wrangler resolves
 database names from the top-level config only, so without it the staging
