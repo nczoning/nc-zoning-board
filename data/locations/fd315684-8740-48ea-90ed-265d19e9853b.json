@@ -1,0 +1,22 @@
+{
+    "id": "fd315684-8740-48ea-90ed-265d19e9853b",
+    "name": "Messy H10 Apartment (World Builder)",
+    "nexus_id": "32436",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1388.5277,
+        1271.2661,
+        123.0824
+    ],
+    "yaw": -91.7501,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "mildindigestion"
+    ],
+    "description": "Yeah I don't like naming things. I wanted an apartment that felt more lived in and fit my V without changing too much. Goodbye purple zebra.",
+    "status": "published",
+    "added_at": "2026-08-09T09:23:30.806Z",
+    "modified_at": "2026-08-09T09:23:30.806Z"
+}

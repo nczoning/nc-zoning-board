@@ -1,0 +1,25 @@
+{
+    "id": "8bd3cfa8-864a-4cd3-a306-b89754256e28",
+    "name": "kabuki kitsch - apartment and ramen shop",
+    "nexus_id": "32446",
+    "category": "new-location",
+    "coordinates": [
+        -1516.1829,
+        1238.0394,
+        23.1333
+    ],
+    "yaw": -147.0522,
+    "tags": [
+        "apartment",
+        "house",
+        "kitsch",
+        "shop"
+    ],
+    "authors": [
+        "thumbsuckerr"
+    ],
+    "description": "cozy kitschy apartment above ramen shop",
+    "status": "published",
+    "added_at": "2026-08-09T09:23:25.078Z",
+    "modified_at": "2026-08-09T09:23:25.078Z"
+}

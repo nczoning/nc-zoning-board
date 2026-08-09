@@ -1,0 +1,23 @@
+{
+    "id": "5b7c3b58-8a21-4aff-b932-612183ddcfe0",
+    "name": "Silicon Mirage Villa 2",
+    "nexus_id": "32401",
+    "category": "new-location",
+    "coordinates": [
+        507.4288,
+        -2753.9492,
+        191.118
+    ],
+    "yaw": -1.7998,
+    "tags": [
+        "apartment",
+        "house"
+    ],
+    "authors": [
+        "K4g3K1tsun3"
+    ],
+    "description": "This is a slightly improved version of my old mod that is no longer accessible because I deleted my old account (Silicon Mirage villa Ex mod)",
+    "status": "published",
+    "added_at": "2026-08-08T17:25:31.275Z",
+    "modified_at": "2026-08-08T17:25:31.275Z"
+}
