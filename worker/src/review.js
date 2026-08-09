@@ -65,6 +65,7 @@ import { validateLocationInput } from './validate.js';
 import { readTagSlugs } from './tag-registry.js';
 import { readCandidates } from './nexus-cache.js';
 import { writeAudit } from './audit.js';
+import { resolveAlertsByRef } from './alerts.js';
 import {
   getRow, loadAdminRecord, loadAdminRecordById, materializeAfterWrite,
   insertLocation, patchLocation,
@@ -505,6 +506,20 @@ async function act(request, env, ctx, { id, action, actor }) {
       base_override: applied && body.base_modified_at ? true : undefined,
     },
   });
+
+  // The alert that asked for this is answered by this. Approve and reject only:
+  // a hold sends the submission back and it is still waiting on somebody, so the
+  // dashboard badge and the channel should both keep saying so.
+  //
+  // After resolve() won, so an alert is never closed for a review that lost the
+  // race. Awaited rather than deferred to ctx.waitUntil: it is two small D1
+  // statements and one Discord PATCH, and the reviewer's next screen is the
+  // dashboard, which reads the alert count they just changed.
+  if (action !== 'hold') {
+    await resolveAlertsByRef(env, `submission:${id}`, actor, {
+      verb: action === 'approve' ? 'Approved' : 'Rejected',
+    });
+  }
 
   if (applied) materializeAfterWrite(env, ctx);
 

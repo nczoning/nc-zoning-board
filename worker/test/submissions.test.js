@@ -356,6 +356,87 @@ test('an unknown kind is refused before anything else happens', async () => {
   assert.deepEqual(calls, []);
 });
 
+// ---------------------------------------------------------------- the alert ---
+//
+// The env carries no webhook, so nothing is posted and the alert ROW is what
+// these read. That is the right surface anyway: the row is what the dashboard
+// shows and what the resolved embed is rebuilt from, so a fact missing here is
+// missing everywhere.
+
+const alerts = (env) => env.DB.rows('SELECT * FROM alerts ORDER BY id');
+
+test('the alert names the submission and links straight at it', async () => {
+  const env = envFor();
+  await submit(env, {
+    kind: 'create', payload: VALID, turnstile_token: 't', submitter_note: 'built it last week',
+  });
+
+  const [alert] = alerts(env);
+  assert.equal(alert.ref, `submission:${rows(env)[0].id}`, 'the ref is what closes it on approval');
+  assert.match(alert.title, /^New location submission/);
+  assert.ok(alert.body.includes('Rooftop Bar'), 'a reviewer has to know what landed');
+  assert.ok(alert.body.includes('new-location'));
+  assert.ok(alert.body.includes('100, 200, 30'));
+  assert.match(alert.body, /\/admin\/\?submission=\d+$/, 'the link goes to the submission');
+});
+
+test('the alert says a note exists and does not repeat it', async () => {
+  // The note and the contact are unreviewed free text from an anonymous caller
+  // and the alerts channel is not behind the collaborator gate. The reviewer
+  // reads them in the dashboard; the alert only says there is something to read.
+  const env = envFor();
+  await submit(env, {
+    kind: 'create',
+    payload: VALID,
+    turnstile_token: 't',
+    submitter_note: 'call me on 555-0100',
+    submitter_contact: 'spud@example.com',
+  });
+
+  const [alert] = alerts(env);
+  assert.equal(alert.body.includes('555-0100'), false);
+  assert.equal(alert.body.includes('spud@example.com'), false);
+  assert.ok(alert.body.includes('a note and a contact'));
+});
+
+test('an edit alert names the record and the fields, not the new values', async () => {
+  const env = envFor();
+  await submit(env, {
+    kind: 'edit', location_id: 'loc-1', turnstile_token: 't',
+    payload: { yaw: 45, description: 'moved a bit' },
+  });
+
+  const [alert] = alerts(env);
+  assert.ok(alert.body.includes('Existing Loft'), 'which record, from the registry not the payload');
+  assert.ok(alert.body.includes('yaw'));
+  assert.ok(alert.body.includes('description'));
+  assert.equal(alert.body.includes('moved a bit'), false, 'values belong in the dashboard diff');
+});
+
+test('a removal alert says what it is asking for, not why', async () => {
+  const env = envFor();
+  await submit(env, {
+    kind: 'remove', location_id: 'loc-1', reason: 'the author asked me to say hello', turnstile_token: 't',
+  });
+
+  const [alert] = alerts(env);
+  assert.ok(alert.body.includes('Existing Loft'));
+  assert.equal(alert.body.includes('say hello'), false);
+});
+
+test('a submitted name cannot carry Discord formatting into the channel', async () => {
+  const env = envFor();
+  await submit(env, {
+    kind: 'create',
+    payload: { ...VALID, name: '@everyone **free** mods' },
+    turnstile_token: 't',
+  });
+
+  const [alert] = alerts(env);
+  assert.equal(alert.body.includes('@everyone'), false);
+  assert.ok(alert.body.includes('\\*\\*free\\*\\*'));
+});
+
 // ------------------------------------------------------------------- limits ---
 
 test('a large payload binds a constant number of parameters', async () => {

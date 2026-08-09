@@ -109,20 +109,22 @@ npx wrangler d1 migrations apply nczoning-data --remote
 npx wrangler d1 migrations apply nczoning-data-staging --env staging --remote
 ```
 
-**Do not set `CLOUDFLARE_ACCOUNT_ID`.** This block used to open with
-`export CLOUDFLARE_ACCOUNT_ID=b9937d8d595fad7de8d1549b22390281`, and that line
-is what makes the command fail. The wrangler login is an OAuth token spanning
-two accounts; it resolves the right one from the config on its own, and pinning
-the id makes the API answer
+**If you get a 7403, the login has expired. Run `npx wrangler whoami` and retry.**
 
 ```text
 The given account is not valid or is not authorized to access this service [code: 7403]
 ```
 
-which reads as "you are not logged in" and is not. `npx wrangler whoami` will
-show a valid token with `d1 (write)` while the same shell cannot list a
-migration. Unset it and the command works. The same variable also empties the
-Cloudflare MCP's D1 listing.
+That reads as "this account cannot do D1" and means "this access token is
+stale". The wrangler login is an OAuth token, and it is refreshed by the next
+command that needs it: `whoami` rewrites
+`%APPDATA%\xdg.config\.wrangler\config\default.toml` and everything after it
+works. Nothing about the account or its permissions is wrong, which is why the
+message sends you looking in the wrong place.
+
+`export CLOUDFLARE_ACCOUNT_ID=...` used to head this block and was removed for
+being unnecessary, not for being harmful: with a fresh token the command works
+with or without it. It is gone because the login already resolves the account.
 
 **`--env staging` is not optional on the second line.** Wrangler resolves
 database names from the top-level config only, so without it the staging
