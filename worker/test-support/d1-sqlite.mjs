@@ -88,6 +88,7 @@ function statement(db, sql, args = []) {
  * @param {Array}  [seed.nexusCache]     raw `nexus_cache` rows
  * @param {Array}  [seed.dismissed]      raw `dismissed_candidates` rows
  * @param {Array}  [seed.nexusModStatus] raw `nexus_mod_status` rows
+ * @param {Array}  [seed.alerts]         raw `alerts` rows
  */
 export function sqliteD1(seed = {}) {
   const db = new DatabaseSync(':memory:');
@@ -135,6 +136,7 @@ export function sqliteD1(seed = {}) {
   insertRows('nexus_cache', seed.nexusCache);
   insertRows('dismissed_candidates', seed.dismissed);
   insertRows('nexus_mod_status', seed.nexusModStatus);
+  insertRows('alerts', seed.alerts);
 
   return {
     _db: db,

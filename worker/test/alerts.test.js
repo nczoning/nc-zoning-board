@@ -12,21 +12,35 @@ import assert from 'node:assert/strict';
 import {
   raiseAlert, recordAlert, readAlerts, countUnacknowledged, acknowledgeAlert,
   alertedSinceUtcMidnight, validateAlertInput, alertStreak, ALERT_SOURCES,
+  resolveAlertsByRef, escapeDiscord,
 } from '../src/alerts.js';
 import { handleInternal } from '../src/internal.js';
 import { sqliteD1 } from '../test-support/d1-sqlite.mjs';
 
 const WEBHOOK = 'https://discord/webhook';
 
-/** Collects what would have been posted to Discord. */
-function fakeDiscord({ fail = false, throws = false } = {}) {
+/**
+ * Collects what would have been posted to Discord.
+ *
+ * Answers a POST with a message object, because that is what `?wait=true` gets
+ * and the id in it is what every edit later depends on. `noId` is the other real
+ * case: a webhook that 204s, which every alert raised before the edit existed
+ * did.
+ */
+function fakeDiscord({ fail = false, throws = false, noId = false } = {}) {
   const sent = [];
   const impl = async (url, init) => {
     if (throws) throw new Error('network down');
-    sent.push({ url, body: JSON.parse(init.body) });
-    return { ok: !fail, status: fail ? 500 : 204, text: async () => 'x' };
+    sent.push({ url, method: init.method, body: JSON.parse(init.body) });
+    return {
+      ok: !fail,
+      status: fail ? 500 : 200,
+      text: async () => 'x',
+      json: async () => (noId ? {} : { id: `msg-${sent.length}` }),
+    };
   };
   impl.sent = sent;
+  impl.edits = () => sent.filter((s) => s.method === 'PATCH');
   return impl;
 }
 
@@ -100,7 +114,7 @@ test('raiseAlert never throws, whatever fails', async () => {
   const env = { DB: { prepare() { throw new Error('nope'); } }, NCZ_ALERTS_DISCORD_WEBHOOK_URL: WEBHOOK };
   const result = await raiseAlert(env, ALERT, { fetchImpl: fakeDiscord({ throws: true }) });
   assert.deepEqual(result, {
-    id: null, recorded: false, notified: true, forwarded: false,
+    id: null, recorded: false, notified: true, forwarded: false, messageId: null,
   });
 });
 
@@ -116,7 +130,10 @@ test('the legacy submissions webhook is the fallback, not a second post', async 
   const discord = fakeDiscord();
   await raiseAlert(env, ALERT, { fetchImpl: discord });
   assert.equal(discord.sent.length, 1);
-  assert.equal(discord.sent[0].url, 'https://legacy');
+  // `?wait=true` on whichever webhook is in play: the message id is what makes
+  // the alert closable later, and losing it on the fallback would mean the
+  // legacy secret quietly gives you a channel that never goes green.
+  assert.equal(discord.sent[0].url, 'https://legacy/?wait=true');
 });
 
 // ------------------------------------------------------------------ embeds --
@@ -297,6 +314,140 @@ test('unacknowledged filter returns only what still needs a human', async () => 
   assert.equal(open.length, 1);
   assert.equal(open[0].title, 'Second');
   assert.equal((await readAlerts(env)).length, 2, 'the full list still has both');
+});
+
+// ------------------------------------------------- closing it in both places --
+
+test('the posted message id is stored, so the message can be edited later', async () => {
+  const env = newEnv();
+  const discord = fakeDiscord();
+  const result = await raiseAlert(env, ALERT, { fetchImpl: discord });
+
+  assert.equal(result.messageId, 'msg-1');
+  assert.match(discord.sent[0].url, /wait=true/, 'without ?wait=true Discord returns no id');
+  const row = await env.DB.prepare('SELECT discord_message_id FROM alerts WHERE id = ?')
+    .bind(result.id).first();
+  assert.equal(row.discord_message_id, 'msg-1');
+});
+
+test('acknowledging edits the original message green rather than posting again', async () => {
+  const env = newEnv();
+  const discord = fakeDiscord();
+  const { id } = await raiseAlert(env, ALERT, { fetchImpl: discord });
+
+  await acknowledgeAlert(env, id, 'spuddeh', { fetchImpl: discord });
+
+  const edits = discord.edits();
+  assert.equal(edits.length, 1, 'exactly one edit, and no second post');
+  assert.equal(discord.sent.length, 2, 'a second POST would double the channel volume');
+  assert.match(edits[0].url, /\/messages\/msg-1$/);
+  const embed = edits[0].body.embeds[0];
+  assert.equal(embed.color, 0x2ecc71, 'green');
+  assert.match(embed.title, /^✅/);
+  assert.match(embed.footer.text, /acknowledged by spuddeh/);
+  assert.equal(embed.description, 'detail', 'the body has to survive, or the message says nothing');
+});
+
+test('the second acknowledgement does not rewrite the first name into the channel', async () => {
+  // Same rule as the D1 row: the reviewer who got there first is the one who
+  // dealt with it. Editing on a no-op UPDATE would put the later name on the
+  // message and disagree with the dashboard.
+  const env = newEnv();
+  const discord = fakeDiscord();
+  const { id } = await raiseAlert(env, ALERT, { fetchImpl: discord });
+  await acknowledgeAlert(env, id, 'kaoziun', { fetchImpl: discord });
+  await acknowledgeAlert(env, id, 'akiway', { fetchImpl: discord });
+
+  assert.equal(discord.edits().length, 1);
+  assert.match(discord.edits()[0].body.embeds[0].footer.text, /kaoziun/);
+});
+
+test('an alert Discord never carried is still acknowledgeable', async () => {
+  // Every row written before this feature, and every alert Discord refused, has
+  // no message id. Acknowledgement is a dashboard action; it cannot depend on
+  // Discord having worked.
+  const env = newEnv();
+  const discord = fakeDiscord({ noId: true });
+  const { id } = await raiseAlert(env, ALERT, { fetchImpl: discord });
+
+  const row = await acknowledgeAlert(env, id, 'spuddeh', { fetchImpl: discord });
+
+  assert.equal(row.acknowledged_by, 'spuddeh');
+  assert.equal(discord.edits().length, 0);
+});
+
+test('a failing Discord edit does not fail the acknowledgement', async () => {
+  const env = newEnv();
+  const { id } = await raiseAlert(env, ALERT, { fetchImpl: fakeDiscord() });
+
+  const row = await acknowledgeAlert(env, id, 'spuddeh', {
+    fetchImpl: fakeDiscord({ throws: true }),
+  });
+
+  assert.equal(row.acknowledged_by, 'spuddeh');
+  assert.equal(await countUnacknowledged(env), 0);
+});
+
+test('discord_message_id never leaves the module', async () => {
+  // The admin API hands these rows to a browser, and the id is the address of a
+  // message an authenticated webhook can rewrite. It is plumbing, not data.
+  const env = newEnv();
+  const { id } = await raiseAlert(env, ALERT, { fetchImpl: fakeDiscord() });
+  const acked = await acknowledgeAlert(env, id, 'spuddeh', { fetchImpl: fakeDiscord() });
+
+  assert.equal('discord_message_id' in acked, false);
+  assert.equal('discord_message_id' in (await readAlerts(env))[0], false);
+});
+
+test('resolving by ref closes every open alert about one submission', async () => {
+  const env = newEnv();
+  const discord = fakeDiscord();
+  const ref = 'submission:42';
+  await raiseAlert(env, { ...ALERT, source: 'submissions', ref }, { fetchImpl: discord });
+  await raiseAlert(env, { ...ALERT, source: 'submissions', title: 'Reminder', ref },
+    { fetchImpl: discord });
+  await raiseAlert(env, { ...ALERT, source: 'submissions', ref: 'submission:43' },
+    { fetchImpl: discord });
+
+  const closed = await resolveAlertsByRef(env, ref, 'spuddeh', {
+    verb: 'Approved', fetchImpl: discord,
+  });
+
+  assert.equal(closed, 2);
+  assert.equal(await countUnacknowledged(env), 1, 'the other submission is untouched');
+  assert.equal(discord.edits().length, 2);
+  assert.match(discord.edits()[0].body.embeds[0].footer.text, /approved by spuddeh/);
+});
+
+test('resolving a ref nothing matches is zero, not a crash', async () => {
+  const env = newEnv();
+  assert.equal(await resolveAlertsByRef(env, 'submission:999', 'spuddeh'), 0);
+  assert.equal(await resolveAlertsByRef(env, null, 'spuddeh'), 0);
+});
+
+test('the link is one composed body, in D1 and in the embed alike', async () => {
+  // The resolved embed is rebuilt from the ROW, so if the row's body were
+  // missing the link the message would lose it the moment it went green.
+  const env = newEnv();
+  const discord = fakeDiscord();
+  const link = 'https://nczoning.net/admin/?submission=42';
+  const { id } = await raiseAlert(env, { ...ALERT, link }, { fetchImpl: discord });
+
+  const posted = discord.sent[0].body.embeds[0];
+  assert.equal(posted.url, link, 'the embed title is the link');
+  assert.ok(posted.description.includes(link));
+  assert.ok((await readAlerts(env))[0].body.includes(link));
+
+  await acknowledgeAlert(env, id, 'spuddeh', { fetchImpl: discord });
+  assert.equal(discord.edits()[0].body.embeds[0].url, link, 'the link survives resolution');
+});
+
+test('submitter text cannot become Discord formatting', () => {
+  const out = escapeDiscord('**@everyone** look\nat `this`');
+  assert.equal(out.includes('\n'), false, 'a newline re-enables line-start formatting');
+  assert.equal(out.includes('@everyone'), false, 'the mention has to be defused');
+  assert.match(out, /\\\*\\\*/);
+  assert.match(out, /\\`/);
 });
 
 // -------------------------------------------------------------- validation --

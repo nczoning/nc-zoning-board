@@ -2998,6 +2998,25 @@
   // somebody missed.
   const isLogOnly = (a) => a.notify === 0 || a.notify === false;
 
+  /**
+   * Straight to the thing the alert is about.
+   *
+   * The body already carries the same link as text, but following it opens a
+   * second tab on the dashboard the reviewer is already looking at. `ref` is
+   * `type:id`, and a submission is the only type with a destination here today,
+   * so anything else renders nothing rather than a button that lands nowhere.
+   */
+  function alertRefButton(a) {
+    const match = /^submission:(\d+)$/.exec(a.ref || '');
+    if (!match) return null;
+    return h('button', {
+      type: 'button',
+      class: 'btn secondary',
+      style: 'margin-right:var(--space-xs)',
+      onclick: () => openSubmission(Number(match[1])),
+    }, 'Open submission');
+  }
+
   function alertCard(a) {
     const severity = SEVERITY_LABEL[a.severity] ? a.severity : 'info';
     const acknowledged = Boolean(a.acknowledged_at);
@@ -3021,6 +3040,7 @@
       // innerHTML, so a Discord-flavoured body still cannot become markup here.
       a.body ? h('p', { class: 'alert-body' }, bodyNodes(a.body)) : null,
       h('div', { class: 'alert-foot' },
+        alertRefButton(a),
         // No Acknowledge on a log-only alert. Acknowledging clears something
         // from the open count, and a log-only alert was never in it, so the
         // button would be a control that visibly does nothing.
@@ -3414,11 +3434,21 @@
     // Surface a callback error, then strip it so a refresh does not re-show it.
     const params = new URLSearchParams(location.search);
     const err = params.get('error');
+    // Where the alert in Discord points. Read before the sign-in gate and kept
+    // across it: arriving from the channel signed out means bouncing through
+    // GitHub, and the destination has to survive that round trip.
+    const deepLink = Number(params.get('submission'));
     let callbackBanner = null;
     if (err) {
       const [kind, message] = CALLBACK_ERRORS[err] || ['error', `Sign-in failed (${err}).`];
       callbackBanner = h('div', { class: `notice ${kind}`, text: message });
       params.delete('error');
+    }
+    // Stripped either way. The parameter is an instruction for this load, not
+    // state: left in place it would reopen the same submission on every refresh,
+    // including one taken hours later to look at something else.
+    if (err || params.has('submission')) {
+      params.delete('submission');
       history.replaceState({}, '', location.pathname + (params.toString() ? `?${params}` : ''));
     }
 
@@ -3533,6 +3563,37 @@
     // Overview is the landing tab, and its numbers come from what was just
     // loaded, so it is rendered after both rather than on its own fetch.
     await renderOverview();
+
+    // Last, because it overrides the landing tab and needs the queue already
+    // loaded to select a row in it.
+    if (Number.isInteger(deepLink) && deepLink > 0) openSubmission(deepLink);
+  }
+
+  /**
+   * Open one submission from a link, wherever it came from.
+   *
+   * The queue's status filter is cleared first: it defaults to pending, and a
+   * link followed after the submission was already resolved would otherwise land
+   * on a queue that does not contain it and select nothing, which reads as a
+   * broken link rather than as "somebody got here first".
+   *
+   * A submission that is genuinely gone says so, rather than dumping the
+   * reviewer on an empty Queue tab with no explanation.
+   */
+  async function openSubmission(id) {
+    switchTab('queue');
+    // The queue can predate the link: the Alerts tab refreshes on its own, and
+    // a submission that arrived after boot is not in `state.submissions` yet.
+    const missing = () => !state.submissions.some((s) => s.id === id);
+    if (missing()) await loadQueue();
+    if (missing()) {
+      banner('error', `Submission #${id} is not in the queue. It may have been purged.`);
+      return;
+    }
+    state.queueStatus = '';
+    $('#queue-status').value = '';
+    renderQueue();
+    selectSubmission(id);
   }
 
   main();
