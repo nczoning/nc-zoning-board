@@ -35,7 +35,7 @@ import { validateLocationInput } from './validate.js';
 import { readTagSlugs } from './tag-registry.js';
 import { readCandidates } from './nexus-cache.js';
 import { writeAudit } from './audit.js';
-import { raiseAlert } from './alerts.js';
+import { raiseAlert, escapeDiscord } from './alerts.js';
 
 const KINDS = ['create', 'edit', 'remove'];
 
@@ -166,7 +166,60 @@ function checkText(value, { field, max, required = false }) {
  */
 async function readLocationBase(env, id) {
   if (typeof id !== 'string' || !id) return null;
-  return env.DB.prepare('SELECT id, modified_at FROM locations WHERE id = ?').bind(id).first();
+  // `name` comes along for the alert, which says WHICH record an edit or removal
+  // is about. It is a curated value out of the registry, not submitter text.
+  return env.DB.prepare('SELECT id, name, modified_at FROM locations WHERE id = ?').bind(id).first();
+}
+
+const KIND_LABEL = { create: 'New location', edit: 'Edit', remove: 'Removal' };
+
+/**
+ * The two or three lines that tell a reviewer what landed, without opening
+ * anything.
+ *
+ * ## What is quoted, and what is not
+ *
+ * Structured, validated fields only: the name, the category, the coordinates,
+ * the NAMES of the fields an edit touches. Every one of those has been through
+ * `validateLocationInput` and is bounded, enumerated, or numeric.
+ *
+ * `submitter_note`, `submitter_contact` and a removal's `reason` are still NOT
+ * quoted. They are unreviewed free prose from an anonymous caller and this posts
+ * to a channel; the reviewer reads them in the dashboard, behind the
+ * collaborator gate. The alert says one EXISTS, which is the part that changes
+ * whether the reviewer opens it now.
+ *
+ * `name` is submitter-controlled on a create, so it goes through
+ * `escapeDiscord`: a mod called `@everyone` or `[click here](http://evil)` must
+ * render as its own name and nothing else.
+ */
+function describeSubmission({ kind, stored, base, note, contact }) {
+  const subject = kind === 'create' ? stored?.name : base?.name;
+  const lines = [`**${KIND_LABEL[kind] ?? kind}** · ${subject ? escapeDiscord(subject) : 'unnamed'}`];
+
+  if (kind === 'create') {
+    const facts = [];
+    if (stored?.category) facts.push(`Category: ${escapeDiscord(stored.category, 40)}`);
+    if (stored?.nexus_id) facts.push(`Nexus: ${escapeDiscord(stored.nexus_id, 20)}`);
+    const coords = Array.isArray(stored?.coordinates)
+      ? stored.coordinates.map((n) => Math.round(Number(n))).join(', ')
+      : null;
+    if (coords) facts.push(`At ${coords}`);
+    if (facts.length) lines.push(facts.join(' · '));
+  } else if (kind === 'edit') {
+    // Field NAMES, not values. Which fields moved is what decides how long a
+    // review takes; the values are in the dashboard's diff, next to what they
+    // are replacing, which is the only place they can be judged.
+    const fields = Object.keys(stored ?? {});
+    lines.push(fields.length ? `Changes: ${fields.join(', ')}` : 'Changes: none stated');
+  } else {
+    lines.push('Asks for the pin to come off the map. A reason was given.');
+  }
+
+  const attached = [note ? 'a note' : null, contact ? 'a contact' : null].filter(Boolean);
+  if (attached.length) lines.push(`Submitter left ${attached.join(' and ')}.`);
+
+  return lines.join('\n');
 }
 
 /**
@@ -221,6 +274,8 @@ async function create(request, env, { fetchImpl = fetch, nowMs = Date.now() } = 
   // The version of the record this submission is written against. NULL for a
   // create, which has no base: see migration 0008.
   let baseModifiedAt = null;
+  // The record an edit or removal acts on, kept for the alert below.
+  let base = null;
 
   if (kind === 'create') {
     const tagNames = await readTagSlugs(env);
@@ -228,7 +283,7 @@ async function create(request, env, { fetchImpl = fetch, nowMs = Date.now() } = 
     errors.push(...checked.errors);
     stored = checked.values ?? null;
   } else {
-    const base = await readLocationBase(env, body.location_id);
+    base = await readLocationBase(env, body.location_id);
     if (!base) {
       errors.push('location_id must be an existing location');
     } else {
@@ -291,25 +346,36 @@ async function create(request, env, { fetchImpl = fetch, nowMs = Date.now() } = 
   // its doorbell. See learnings/retiring-a-channel-took-the-only-submission-
   // notification-with-it.
   //
-  // Deliberately a plain "one is waiting" post that links to the dashboard. The
-  // old webhook posted an embed and then EDITED it in place to show merged or
-  // closed, which made Discord the queue's UI; the dashboard holds that state
-  // now and the message-editing machinery is not being rebuilt.
+  // The post says what landed and links straight at it. What it does NOT quote,
+  // and why, is in describeSubmission.
   //
-  // Nothing from the submitter is quoted. The note and contact are unreviewed
-  // free text from an anonymous caller, and this posts to a channel; the
-  // reviewer reads them in the dashboard, behind the collaborator gate.
+  // The old GitHub-issue webhook posted an embed and edited it in place to show
+  // merged or closed. That machinery came back, deliberately and much smaller:
+  // `ref` below is what lets approving or rejecting this submission tick the
+  // message green (see resolveAlertsByRef). Discord is still not the queue's UI
+  // -- it cannot approve anything -- it just stops claiming work is open after
+  // it is done.
+  const origin = env.SITE_ORIGIN ?? 'https://nczoning.net';
   await raiseAlert(env, {
     source: 'submissions',
     severity: 'info',
-    title: `New ${kind} submission awaiting review`,
-    // Plain /admin/, not a deep link: the dashboard has no hash routing, so
-    // /admin/#queue would silently open on Overview and read as a broken link.
-    body: `A ${kind} submission is pending${id === null ? '' : ` (#${id})`}.`
-      + `\n\nReview it in the Queue tab at ${env.SITE_ORIGIN ?? 'https://nczoning.net'}/admin/`,
+    title: `${KIND_LABEL[kind] ?? kind} submission awaiting review`,
+    body: describeSubmission({
+      kind, stored, base, note: body.submitter_note, contact: body.submitter_contact,
+    }),
+    // A deep link, which the dashboard reads at boot: it switches to Queue and
+    // opens this submission. A query parameter rather than a hash, because the
+    // hash is already the overlay history's business (`popstate` in admin.js)
+    // and a second writer of it would fight the drawer.
+    link: id === null ? `${origin}/admin/` : `${origin}/admin/?submission=${id}`,
+    // What this alert is ABOUT, so resolving the submission resolves the alert.
+    ref: id === null ? null : `submission:${id}`,
     // The doorbell. A submission sits in the queue until a human approves or
     // rejects it, so this is the definition of actionable.
     notify: true,
+    // `fetchImpl` is deliberately not threaded through: it is the Turnstile stub
+    // in tests, and handing it the Discord post as well would make one fake
+    // answer for two unrelated services.
   }, { nowMs });
 
   return json({ id, kind, status: 'pending' }, 201);

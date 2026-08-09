@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Submission alerts in Discord say what landed: kind, name, and either the category, Nexus id and coordinates (a create) or the field names an edit changes. The submitter's note, contact and removal reason are still not quoted.
+- The alert links straight to the submission. `/admin/?submission=<id>` opens the Queue tab with it selected, and the Alerts tab gets an "Open submission" button.
+
+### Changed
+
+- An acknowledged alert turns green with a tick in Discord, edited in place, signed with who cleared it.
+- Approving or rejecting a submission acknowledges its alert automatically. Holding does not.
+
 ## [2.11.0] - 2026-08-09
 
 ### Added

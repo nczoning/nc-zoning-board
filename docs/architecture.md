@@ -238,6 +238,40 @@ Two rules keep this from going wrong:
   has not considered routing is noisy rather than silent. Silence is the
   expensive failure.
 
+#### Closing an alert
+
+An alert is posted once and then **edited** when it is resolved: the cyan "!"
+becomes a green "✅" on the original message, signed with who closed it. The
+Worker posts every alert with `?wait=true` so Discord returns the message id,
+and stores it in `alerts.discord_message_id`. The edit is best-effort and never
+gates the acknowledgement: a row raised before this existed, or one Discord
+refused, has no id and is acknowledged in the dashboard exactly as before.
+
+Two things close an alert:
+
+- **The Acknowledge button** in the dashboard's Alerts tab.
+- **Resolving what it was about.** `alerts.ref` holds a `type:id` string
+  (today only `submission:123`), and approving or rejecting that submission
+  acknowledges every open alert carrying its ref. A **hold** does not: the
+  submission is still waiting on somebody. Only the first close counts, so the
+  channel and the dashboard name the same reviewer.
+
+#### What a submission alert says
+
+The post carries the kind, the subject, and either the payload's category /
+Nexus id / coordinates (a create) or the **names** of the fields being changed
+(an edit). It does **not** quote `submitter_note`, `submitter_contact`, or a
+removal's `reason`: those are unreviewed free text from an anonymous caller and
+the channel is not behind the collaborator gate. The alert says one exists; the
+reviewer reads it in the dashboard. Everything submitter-controlled that *is*
+quoted goes through `escapeDiscord()`, so a mod named `@everyone` renders as its
+own name.
+
+The embed title links to `/admin/?submission=<id>`, which the dashboard reads at
+boot: it opens the Queue tab with that submission selected, clearing the pending
+filter first so an already-resolved one still opens. A query parameter, not a
+hash: the hash belongs to the dashboard's overlay history.
+
 **Why `/internal/` and not `/admin/`.** Every `/admin/*` route is gated on GitHub
 collaborator status, and `index.js` states that as an invariant. The machine
 surface authenticates with a shared secret instead, so it sits on its own prefix

@@ -768,6 +768,70 @@ test('an unknown submission is a 404, not a silent success', async () => {
   }
 });
 
+// -------------------------------------------------- the alert that asked for it ---
+//
+// A submission raises an alert, and resolving the submission is the answer to
+// it. Left unlinked, the dashboard badge and the Discord channel both keep
+// counting work that is finished, and a count that is routinely wrong is a
+// count nobody reads.
+
+/** A pending alert about submission `id`, as submissions.js would have raised it. */
+const openAlert = (id, over = {}) => ({
+  at: '2026-07-27T00:00:00Z',
+  source: 'submissions',
+  severity: 'info',
+  title: 'New location submission awaiting review',
+  body: 'a place',
+  notify: 1,
+  ref: `submission:${id}`,
+  ...over,
+});
+
+const alertRows = (env) => env.DB.rows('SELECT * FROM alerts ORDER BY id');
+
+test('approving acknowledges the alert that asked for the review', async () => {
+  const env = envFor({ submissions: [submission({ id: 1 })], alerts: [openAlert(1)] });
+  await hit(env, 'POST', '/admin/submissions/1/approve');
+
+  const [alert] = alertRows(env);
+  assert.equal(alert.acknowledged_by, 'spuddeh');
+  assert.ok(alert.acknowledged_at);
+});
+
+test('rejecting acknowledges it too: it is resolved either way', async () => {
+  const env = envFor({ submissions: [submission({ id: 1 })], alerts: [openAlert(1)] });
+  await hit(env, 'POST', '/admin/submissions/1/reject', { reason: 'coordinates are in a wall' });
+
+  assert.ok(alertRows(env)[0].acknowledged_at);
+});
+
+test('holding leaves the alert open, because it is still waiting on somebody', async () => {
+  const env = envFor({ submissions: [submission({ id: 1 })], alerts: [openAlert(1)] });
+  await hit(env, 'POST', '/admin/submissions/1/hold', { reason: 'ask Kao' });
+
+  assert.equal(alertRows(env)[0].acknowledged_at, null);
+});
+
+test('only the alerts about THIS submission are closed', async () => {
+  const env = envFor({
+    submissions: [submission({ id: 1 }), submission({ id: 2 })],
+    alerts: [openAlert(1), openAlert(2), openAlert(1, { title: 'Reminder' })],
+  });
+  await hit(env, 'POST', '/admin/submissions/1/approve');
+
+  const acked = alertRows(env).filter((a) => a.acknowledged_at);
+  assert.deepEqual(acked.map((a) => a.ref), ['submission:1', 'submission:1']);
+});
+
+test('a review whose alert is missing still succeeds', async () => {
+  // Every submission raised before the alert carried a ref, and any alert whose
+  // row failed to write. Closing a review must not depend on one existing.
+  const env = envFor({ submissions: [submission({ id: 1 })] });
+  const res = await hit(env, 'POST', '/admin/submissions/1/approve');
+  assert.equal(res.status, 200);
+  assert.equal(subRows(env)[0].status, 'approved');
+});
+
 // ------------------------------------------------------------ write-through ---
 
 test('an approval materializes: an approved change must reach the map', async () => {
