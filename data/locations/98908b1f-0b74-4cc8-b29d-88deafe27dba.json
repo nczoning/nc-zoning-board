@@ -1,0 +1,24 @@
+{
+    "id": "98908b1f-0b74-4cc8-b29d-88deafe27dba",
+    "name": "Dogtown Trailer Home",
+    "nexus_id": "32472",
+    "category": "new-location",
+    "coordinates": [
+        -1850.6208,
+        -2795.0881,
+        83.2708
+    ],
+    "yaw": -165.5182,
+    "tags": [
+        "apartment",
+        "entropism",
+        "house"
+    ],
+    "authors": [
+        "ashmix"
+    ],
+    "description": "Adds a tiny trailer home in Dogtown. Lore-friendly (ish)",
+    "status": "published",
+    "added_at": "2026-08-09T20:42:33.592Z",
+    "modified_at": "2026-08-09T20:42:33.592Z"
+}

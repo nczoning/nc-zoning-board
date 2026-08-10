@@ -1,0 +1,24 @@
+{
+    "id": "42848a30-17d1-492b-bb2b-8efce4daebd1",
+    "name": "Orbital air apartment 2",
+    "nexus_id": "32430",
+    "category": "new-location",
+    "coordinates": [
+        -2406.4802,
+        3474.7578,
+        75.0327
+    ],
+    "yaw": 179.4229,
+    "tags": [
+        "apartment",
+        "corpo",
+        "house"
+    ],
+    "authors": [
+        "K4g3K1tsun3"
+    ],
+    "description": "A new version of my old Orbitail air mod, which is no longer accessible.",
+    "status": "published",
+    "added_at": "2026-08-09T19:35:07.723Z",
+    "modified_at": "2026-08-09T19:35:07.723Z"
+}

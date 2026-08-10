@@ -1,0 +1,23 @@
+{
+    "id": "a41ecbb7-d7ce-4065-b525-8756aeae4bca",
+    "name": "Safehouses of Night City - Rancho Coronado Safehouse",
+    "nexus_id": "32504",
+    "category": "location-overhaul",
+    "coordinates": [
+        11.9612,
+        -1874.6403,
+        3.551
+    ],
+    "yaw": 38.6333,
+    "tags": [
+        "house",
+        "kitsch"
+    ],
+    "authors": [
+        "evafan84"
+    ],
+    "description": "A safehouse in Rancho Coronado, not far from the dam.",
+    "status": "published",
+    "added_at": "2026-08-10T15:15:52.151Z",
+    "modified_at": "2026-08-10T15:15:52.151Z"
+}

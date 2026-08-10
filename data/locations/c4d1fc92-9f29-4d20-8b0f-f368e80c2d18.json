@@ -1,0 +1,22 @@
+{
+    "id": "c4d1fc92-9f29-4d20-8b0f-f368e80c2d18",
+    "name": "Dogtown Public Toilet",
+    "nexus_id": "32467",
+    "category": "new-location",
+    "coordinates": [
+        -1798.3463,
+        -2772.3281,
+        83.146
+    ],
+    "yaw": 81.1105,
+    "tags": [
+        "infrastructure"
+    ],
+    "authors": [
+        "ashmix"
+    ],
+    "description": "a filthy public toilet",
+    "status": "published",
+    "added_at": "2026-08-09T21:11:57.511Z",
+    "modified_at": "2026-08-09T21:11:57.511Z"
+}
