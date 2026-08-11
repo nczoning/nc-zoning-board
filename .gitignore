@@ -107,6 +107,10 @@ assets/dds/rebuilt/
 #   node scripts/mesh_export_list.js
 scripts/wkit/ncz_mesh_list.wscript
 
+# The still-missing subset of that list. Rebuild with
+#   node scripts/wkit/uncook_remaining.js
+scripts/wkit/ncz_remaining.wscript
+
 # Generated D1 seed SQL: rebuild with `node worker/scripts/import-locations.mjs`
 worker/.import/
 
