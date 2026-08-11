@@ -87,6 +87,26 @@ data/window-debug-*.json
 data/window-faces-*.bin
 data/window-faces-*.json
 
+# Box-cloud rebuild intermediates. All regenerable from the world dump:
+#   node scripts/district_boxes.js <district>          stage 1, placements
+#   node scripts/district_hull.js <district> --voxel 2 stage 2, the hull
+#   node scripts/encode_hull_dds.js <district>         stage 3, the texture
+# The grid is 26 MB per district and the placement dump is hundreds of MB, so
+# none of it belongs in the history while the pipeline is still moving.
+data/district-boxes-*.bin
+data/district-boxes-*.json
+data/district-hull-*.bin
+data/district-hull-*.json
+data/district-grid-*.bin
+data/hull-assets-*.csv
+data/mesh-export-list.txt
+data/mesh-export-list.json
+assets/dds/rebuilt/
+
+# The generated mesh export list, 3 MB of depot paths. Rebuild with
+#   node scripts/mesh_export_list.js
+scripts/wkit/ncz_mesh_list.wscript
+
 # Generated D1 seed SQL: rebuild with `node worker/scripts/import-locations.mjs`
 worker/.import/
 
