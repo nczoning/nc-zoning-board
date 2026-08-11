@@ -34,13 +34,22 @@ import { MESHES } from 'ncz_mesh_list.wscript';
 
 // EXTRACTION is batched only to report progress; it is synchronous and safe to
 // call repeatedly.
-//
-// EXPORT IS ONE CALL, and must stay one call. Queuing it per batch put 58
-// asynchronous exports in flight in 43 seconds and they raced: 28,870 files
-// extracted with zero failures, and 62 GLBs written. The glass export ran a
-// single ExportFiles over 4,509 files and wrote all of them. Progress comes
-// from check_export.js watching the directory, not from splitting this call.
 const BATCH = 500;
+
+// ONE ExportFiles CALL PER RUN, AND A BOUNDED ONE. Two failure modes were
+// measured, and MAX_PER_RUN is the shape that avoids both:
+//
+//   Split into 58 calls of 500: all 58 go in flight inside 43 seconds and race.
+//   28,870 extracted with zero failures, 62 GLBs written.
+//
+//   One call over all 28,870: WolvenKit stops responding, no further script
+//   can be run, and the project has to be killed. 21 GLBs written.
+//
+// The glass export ran a single call over 4,509 and wrote all of them, so that
+// is the size known to work. The list is ordered largest mesh first and the
+// run is resumable, so each run takes the next chunk of the most valuable
+// geometry and the whole set arrives over several runs.
+const MAX_PER_RUN = 4000;
 
 Logger.Info(`[ncz] export list: ${MESHES.length} meshes`);
 
@@ -52,8 +61,10 @@ for (const p of MESHES) {
   try { have = wkit.FileExistsInRaw(p.replace(/\.mesh$/i, '.glb')); } catch { have = false; }
   if (have) already++; else todo.push(p);
 }
-Logger.Info(`[ncz] ${already} already exported, ${todo.length} to do`);
-if (!todo.length) {
+const remaining = todo.length;
+if (todo.length > MAX_PER_RUN) todo.length = MAX_PER_RUN;
+Logger.Info(`[ncz] ${already} already exported, ${remaining} still to do, taking ${todo.length} this run`);
+if (!remaining) {
   Logger.Success('[ncz] nothing to do: every mesh on the list is already in raw.');
 } else {
 
@@ -79,6 +90,9 @@ Logger.Info(`[ncz] extracted ${added}, extract failures ${addFail}`);
 try { wkit.ExportFiles(todo); Logger.Info(`[ncz] ExportFiles queued for ${todo.length} meshes`); }
 catch (e) { Logger.Error(`[ncz] ExportFiles threw: ${e}`); }
 Logger.Warning('[ncz] ExportFiles is ASYNCHRONOUS. Nothing above proves a file was written.');
-Logger.Warning(`[ncz] VERIFY: node scripts/wkit/check_export.js --expect ${MESHES.length}`);
+Logger.Warning(`[ncz] VERIFY: node scripts/wkit/check_export.js --expect ${already + todo.length}`);
+if (remaining > todo.length) {
+  Logger.Warning(`[ncz] ${remaining - todo.length} meshes remain. Run this again once the count settles.`);
+}
 
 }
