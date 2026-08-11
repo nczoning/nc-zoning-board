@@ -49,7 +49,15 @@ const MAX_SIZE = flag('maxsize', 1000); // and whose largest dimension is over t
 // 24 cells is 1,536 m3 of clutter, 3 cells is a 12 m column.
 const SCALE = 4 / VOXEL;
 const MIN_MASS = flag('minmass', Math.round(24 * SCALE ** 3)); // drop components smaller than this many cells
-const PROXY_L  = flag('proxylevel', 5); // drop area-proxy meshes at this streaming level and above
+// Streaming level is not a proxy's SIZE. At L5 and L6 the proxy directories
+// hold district shells (downtown.mesh, 1,536 m) and individual towers
+// (cct_cpz_building_militech_uf_v2.mesh, 337 m) side by side, and a level-based
+// cut takes the towers with the shells: it left 21.4% of city_center's windows
+// more than 8 m from any geometry, clustered on Corpo Plaza, whose towers reach
+// the dump mainly as their L5/L6 proxy. Redundancy is what actually
+// distinguishes them, and pass 2 measures it directly, so the level cut is off
+// by default and kept only as a lever.
+const PROXY_L  = flag('proxylevel', 99); // drop area-proxy NODE TYPES at this level and above
 const PROXY_COVER = flag('proxycover', 0.25); // a proxy is redundant once this much of it is already solid
 
 // Area proxies are low-detail stand-ins for a whole subdistrict, and the real
@@ -91,7 +99,14 @@ const NEVER = new Set([
  * dump ONLY as their proxy. So real geometry wins, and a proxy is voxelised
  * only where nothing real already occupies its footprint.
  */
-const isProxy = p => p.includes('\\_external\\proxy\\');
+// Proxies live in three places, not one. Matching only the first lets a
+// subdistrict proxy through as if it were real geometry, and it then wins the
+// grid outright because nothing tests it for redundancy:
+//   sectors\_external\proxy\<hash>\<name>.mesh
+//   ...\_proxyhelper\<name>_mproxy.mesh   (beside the sector or the prefab)
+//   any file whose name ends _mproxy
+const isProxy = p =>
+  p.includes('\\_external\\proxy\\') || p.includes('\\_proxyhelper\\') || p.endsWith('_mproxy.mesh');
 const isTerrain = p => p.includes('\\_global\\terrain\\');
 
 const MIN_COL = flag('mincol', Math.round(3 * SCALE)); // drop columns with fewer than this many solid cells
