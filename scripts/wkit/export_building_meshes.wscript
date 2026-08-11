@@ -32,9 +32,14 @@
 import * as Logger from 'Logger.wscript';
 import { MESHES } from 'ncz_mesh_list.wscript';
 
-// Batch size trades progress reporting against the number of ExportFiles calls
-// in flight. The glass export ran one call over 4,509 files; at 29,738 a single
-// call gives no way to tell a stall from slow progress.
+// EXTRACTION is batched only to report progress; it is synchronous and safe to
+// call repeatedly.
+//
+// EXPORT IS ONE CALL, and must stay one call. Queuing it per batch put 58
+// asynchronous exports in flight in 43 seconds and they raced: 28,870 files
+// extracted with zero failures, and 62 GLBs written. The glass export ran a
+// single ExportFiles over 4,509 files and wrote all of them. Progress comes
+// from check_export.js watching the directory, not from splitting this call.
 const BATCH = 500;
 
 Logger.Info(`[ncz] export list: ${MESHES.length} meshes`);
@@ -56,7 +61,7 @@ if (!todo.length) {
 // ExportFiles works on PROJECT files. Handed an archive path it logs
 // "doesn't exist in the project. Skipping", and a skip is not a throw, so a
 // try/catch sees nothing and the run reports success having written zero files.
-let added = 0, addFail = 0, batches = 0;
+let added = 0, addFail = 0;
 for (let i = 0; i < todo.length; i += BATCH) {
   const slice = todo.slice(i, i + BATCH);
   for (const p of slice) {
@@ -66,13 +71,13 @@ for (let i = 0; i < todo.length; i += BATCH) {
       if (addFail <= 5) Logger.Error(`[ncz] Extract failed: ${p} :: ${e}`);
     }
   }
-  try { wkit.ExportFiles(slice); }
-  catch (e) { Logger.Error(`[ncz] ExportFiles threw on batch ${batches}: ${e}`); }
-  batches++;
-  Logger.Info(`[ncz] queued batch ${batches} (${Math.min(i + BATCH, todo.length)}/${todo.length})`);
+  Logger.Info(`[ncz] extracted ${Math.min(i + BATCH, todo.length)}/${todo.length}`);
 }
+Logger.Info(`[ncz] extracted ${added}, extract failures ${addFail}`);
 
-Logger.Info(`[ncz] extracted ${added}, extract failures ${addFail}, batches queued ${batches}`);
+// ONE call. See the note on BATCH above.
+try { wkit.ExportFiles(todo); Logger.Info(`[ncz] ExportFiles queued for ${todo.length} meshes`); }
+catch (e) { Logger.Error(`[ncz] ExportFiles threw: ${e}`); }
 Logger.Warning('[ncz] ExportFiles is ASYNCHRONOUS. Nothing above proves a file was written.');
 Logger.Warning(`[ncz] VERIFY: node scripts/wkit/check_export.js --expect ${MESHES.length}`);
 
