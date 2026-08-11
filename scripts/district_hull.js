@@ -60,6 +60,20 @@ const MIN_MASS = flag('minmass', Math.round(24 * SCALE ** 3)); // drop component
 const PROXY_L  = flag('proxylevel', 99); // drop area-proxy NODE TYPES at this level and above
 const PROXY_COVER = flag('proxycover', 0.25); // a proxy is redundant once this much of it is already solid
 
+// TRIANGLES WHERE THERE ARE TRIANGLES. A bounding box has no shape: one Corpo
+// Plaza proxy carries 10,358 triangles across 608 m and voxelises as a single
+// rectangle. Where the mesh has been exported, its real geometry is rasterised
+// instead, which keeps the building's silhouette AND its rotation, since a
+// transformed triangle is already oriented.
+//
+// Placements below MESH_MIN keep using their box: at a 2 m cell a bollard and
+// its bounding box occupy the same cells, and reading a GLB for each one costs
+// far more than it returns.
+const RAW_ROOT = 'd:/Modding/CP2077 Mods/MyMods/map_data_export/source/raw';
+const MESH_MIN = flag('meshmin', 6);   // metres; below this a box is the same answer
+const useMeshes = !args.includes('--boxes');
+const { glbPathFor, meshTriangles } = require('./glb_lib');
+
 // Area proxies are low-detail stand-ins for a whole subdistrict, and the real
 // geometry they stand in for is in the dump as well, so keeping both double
 // counts and fills the grid with solid blocks a kilometre across. Measured on
@@ -244,13 +258,91 @@ function visit(i, mode) {
   return { seen, occupied };
 }
 
-// Pass 1: real geometry only.
+/**
+ * Mark the cells a triangle passes through, by sampling it on a barycentric
+ * lattice at half a cell. A triangle-versus-box overlap test per candidate cell
+ * is exact and far slower; at this cell size the sampled result is the same
+ * set of cells for anything but a sliver, and a sliver contributes no volume.
+ */
+function markTriangle(ax, ay, az, bx, by, bz, cx, cy, cz, aid) {
+  const ux = bx - ax, uy = by - ay, uz = bz - az;
+  const vx = cx - ax, vy = cy - ay, vz = cz - az;
+  const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+  const area = 0.5 * Math.hypot(nx, ny, nz);
+  if (!(area > 0)) return;
+  const step = VOXEL * 0.5;
+  let n = Math.ceil(Math.sqrt(area) / step) + 1;
+  if (n > 512) n = 512;   // a single triangle cannot be worth more than this
+  for (let i = 0; i <= n; i++) {
+    for (let j = 0; i + j <= n; j++) {
+      const s = i / n, t = j / n;
+      const px = ax + ux * s + vx * t;
+      const py = ay + uy * s + vy * t;
+      const pz = az + uz * s + vz * t;
+      const gx = ((px - minX) / VOXEL) | 0;
+      const gy = ((py - minY) / VOXEL) | 0;
+      const gz = ((pz - minZ) / VOXEL) | 0;
+      if (gx < 0 || gy < 0 || gz < 0 || gx >= NX || gy >= NY || gz >= NZ) continue;
+      const k = idx(gx, gy, gz);
+      tests++;
+      if (!solid[k]) { solid[k] = 1; voxelised++; cellsByAsset[aid] = (cellsByAsset[aid] || 0) + 1; }
+    }
+  }
+}
+
+/** Rasterise placement i from its mesh's triangles, already in CET-local space. */
+function visitMesh(i, tris) {
+  const o = i * S;
+  const aid = box[o + 10];
+  // The PLACEMENT transform, not the derived box: position, rotation, scale,
+  // applied to mesh-local vertices in that order.
+  const px = box[o + 13], py = box[o + 14], pz = box[o + 15];
+  const sx = box[o + 16], sy = box[o + 17], sz = box[o + 18];
+  const qx = box[o + 6], qy = box[o + 7], qz = box[o + 8], qw = box[o + 9];
+  const m00 = 1 - 2 * (qy * qy + qz * qz), m01 = 2 * (qx * qy - qz * qw), m02 = 2 * (qx * qz + qy * qw);
+  const m10 = 2 * (qx * qy + qz * qw), m11 = 1 - 2 * (qx * qx + qz * qz), m12 = 2 * (qy * qz - qx * qw);
+  const m20 = 2 * (qx * qz - qy * qw), m21 = 2 * (qy * qz + qx * qw), m22 = 1 - 2 * (qx * qx + qy * qy);
+  const p = new Float32Array(9);
+  for (let t = 0; t < tris.length; t += 9) {
+    for (let v = 0; v < 3; v++) {
+      const lx = tris[t + v * 3] * sx, ly = tris[t + v * 3 + 1] * sy, lz = tris[t + v * 3 + 2] * sz;
+      p[v * 3]     = px + m00 * lx + m01 * ly + m02 * lz;
+      p[v * 3 + 1] = py + m10 * lx + m11 * ly + m12 * lz;
+      p[v * 3 + 2] = pz + m20 * lx + m21 * ly + m22 * lz;
+    }
+    markTriangle(p[0], p[1], p[2], p[3], p[4], p[5], p[6], p[7], p[8], aid);
+  }
+}
+
+// Placements grouped by asset, so each GLB is read once however many times its
+// mesh is placed. Reading per placement would re-parse the same megabytes
+// hundreds of times.
+const byAsset = new Map();
 const proxies = [];
 for (let i = 0; i < nBox; i++) {
   const kind = classify(i);
   if (kind === null) continue;
   if (kind === 'proxy') { proxies.push(i); continue; }
-  visit(i, 'mark');
+  const aid = box[i * S + 10];
+  let g = byAsset.get(aid); if (!g) byAsset.set(aid, g = []);
+  g.push(i);
+}
+
+let meshHits = 0, meshMisses = 0, meshPlacements = 0, meshTris = 0;
+for (const [aid, list] of byAsset) {
+  let tris = null;
+  const p = assetPath[aid] || '';
+  const big = list.some(i => Math.max(box[i * S + 3], box[i * S + 4], box[i * S + 5]) * 2 >= MESH_MIN);
+  if (useMeshes && p && big) {
+    const file = glbPathFor(RAW_ROOT, p);
+    if (fs.existsSync(file)) {
+      try { tris = meshTriangles(file); if (!tris.length) tris = null; } catch { tris = null; }
+    }
+    if (tris) { meshHits++; meshTris += tris.length / 9; } else meshMisses++;
+  }
+  for (const i of list) {
+    if (tris) { visitMesh(i, tris); meshPlacements++; } else visit(i, 'mark');
+  }
 }
 const realCells = voxelised;
 
@@ -272,6 +364,8 @@ for (const i of proxies) {
 
 console.log(`  voxelised ${voxelised.toLocaleString()} cells occupied (${(100 * voxelised / N).toFixed(1)}% of the grid)`);
 console.log(`  real      ${realCells.toLocaleString()} cells from real geometry`);
+console.log(`  meshes    ${meshHits.toLocaleString()} assets rasterised from ${Math.round(meshTris).toLocaleString()} triangles ` +
+            `over ${meshPlacements.toLocaleString()} placements; ${meshMisses.toLocaleString()} assets fell back to their box`);
 console.log(`  proxies   ${proxyUsed.toLocaleString()} used where nothing real stood, ${proxyCovered.toLocaleString()} rejected as already covered (>= ${(PROXY_COVER * 100).toFixed(0)}%)`);
 console.log(`  skipped   ${skippedSmall.toLocaleString()} under ${MIN_SIZE} m, ${skippedHuge.toLocaleString()} over ${MAX_SIZE} m, ` +
             `${skippedNever.toLocaleString()} never-geometry, ${skippedProxy.toLocaleString()} area proxies at L${PROXY_L}+, ${tests.toLocaleString()} cell tests`);

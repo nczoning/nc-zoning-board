@@ -109,8 +109,14 @@ async function main() {
   const assets = await loadAssets(path.join(dumpDir, 'ncz_assets.csv'));
   console.log(`  assets    ${assets.size.toLocaleString()} with a bounding box`);
 
-  // 13 float32 per box. Grown in slabs so the pass stays single-shot.
-  const STRIDE = 13;
+  // 19 float32 per box. Grown in slabs so the pass stays single-shot.
+  //
+  // The raw POSITION and SCALE travel alongside the derived centre because the
+  // two consumers need different things: voxelising a bounding box wants the
+  // box (centre, half-extent, rotation), and voxelising the mesh's triangles
+  // wants the placement transform itself, which the centre has already folded
+  // the local bbox offset into.
+  const STRIDE = 19;
   let cap = 1 << 20, out = new Float32Array(cap * STRIDE), count = 0;
   let scanned = 0, inside = 0, noAsset = 0, droppedFx = 0, outsidePoly = 0;
   const heights = [];
@@ -176,6 +182,8 @@ async function main() {
     out[o + 3]  = hx;        out[o + 4] = hy;        out[o + 5] = hz;
     out[o + 6]  = q[0];      out[o + 7] = q[1];      out[o + 8] = q[2]; out[o + 9] = q[3];
     out[o + 10] = aid;       out[o + 11] = typeCode.get(t); out[o + 12] = level;
+    out[o + 13] = x;         out[o + 14] = y;               out[o + 15] = z;
+    out[o + 16] = s[0];      out[o + 17] = s[1];            out[o + 18] = s[2];
     count++;
     heights.push(hz * 2);
     volByAsset.set(aid, (volByAsset.get(aid) || 0) + hx * hy * hz * 8);
@@ -206,7 +214,7 @@ async function main() {
     boundary: poly ? 'district trigger polygon' : 'texture bbox',
     textureBounds: texBounds,
     stride: STRIDE,
-    layout: 'centre xyz, halfExtent xyz, quat xyzw, assetId, typeCode, streamingLevel (float32)',
+    layout: 'centre xyz, halfExtent xyz, quat xyzw, assetId, typeCode, streamingLevel, position xyz, scale xyz (float32)',
     types: Object.fromEntries([...typeCode].map(([k, v]) => [v, k])),
     // id -> depot path for every asset this district actually places, so a
     // later stage can name what it is looking at rather than report an id.
