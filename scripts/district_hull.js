@@ -61,6 +61,14 @@ const AREA_PROXY = new Set([
   'DestructibleProxyMesh', 'InvalidProxyMesh',
 ]);
 
+// Never geometry, at any level. An occluder is an invisible helper volume the
+// engine uses to cull what is behind it, and city_center places one editor
+// occluder box that alone marks 30,708 cells.
+const NEVER = new Set(['StaticOccluderMesh', 'StaticLight', 'Advertisement', 'WaterPatch', 'Foliage', 'Mirror']);
+
+const MIN_COL = flag('mincol', 3);   // drop columns with fewer than this many solid cells
+const BELOW   = flag('below', 4);    // keep this many metres below the terrain surface, discard the rest
+
 if (!name) {
   console.error('usage: node scripts/district_hull.js <district> [--voxel 4] [--minsize 2] [--minmass 24]');
   process.exit(1);
@@ -92,18 +100,24 @@ const idx = (x, y, z) => (z * NY + y) * NX + x;
 // centre falls inside the ORIENTED box (inverse-rotate the centre into box
 // space). Testing against the AABB instead would fatten every rotated tower.
 const solid = new Uint8Array(N);
-let voxelised = 0, skippedSmall = 0, skippedHuge = 0, skippedProxy = 0, tests = 0;
+let voxelised = 0, skippedSmall = 0, skippedHuge = 0, skippedProxy = 0, skippedNever = 0, tests = 0;
 const hugeSamples = [];
+// Cells attributed to whichever asset marked them FIRST. Approximate by
+// definition (boxes overlap), and enough to name what is filling the grid.
+const cellsByAsset = Object.create(null);
 
 for (let i = 0; i < nBox; i++) {
   const o = i * S;
+  const aid = box[o + 10];
   const cx = box[o], cy = box[o + 1], cz = box[o + 2];
   const hx = box[o + 3], hy = box[o + 4], hz = box[o + 5];
   const qx = box[o + 6], qy = box[o + 7], qz = box[o + 8], qw = box[o + 9];
 
   const largest = Math.max(hx, hy, hz) * 2;
   if (largest < MIN_SIZE) { skippedSmall++; continue; }
-  if (S >= 13 && AREA_PROXY.has(TYPE[box[o + 11]]) && box[o + 12] >= PROXY_L) { skippedProxy++; continue; }
+  const nodeType = TYPE[box[o + 11]];
+  if (NEVER.has(nodeType)) { skippedNever++; continue; }
+  if (S >= 13 && AREA_PROXY.has(nodeType) && box[o + 12] >= PROXY_L) { skippedProxy++; continue; }
   // A placement bigger than any building is not a building. ncz_assets.csv
   // carries sentinel bounds (100 km meshes) alongside genuinely world-scale
   // geometry like ocean patches, and one of them fills the whole grid. This is
@@ -129,6 +143,14 @@ for (let i = 0; i < nBox; i++) {
   x0 = Math.max(0, x0); y0 = Math.max(0, y0); z0 = Math.max(0, z0);
   x1 = Math.min(NX - 1, x1); y1 = Math.min(NY - 1, y1); z1 = Math.min(NZ - 1, z1);
 
+  // Slack exists so a wall panel thinner than a cell still registers. Applying
+  // it on every axis instead inflates a 20 m box to 24 m, which is a 1.7x
+  // volume error across the whole city, so it is granted per axis and only
+  // where the box really is thinner than a cell.
+  const sx = (hx * 2 < VOXEL) ? VOXEL * 0.5 : 0;
+  const sy = (hy * 2 < VOXEL) ? VOXEL * 0.5 : 0;
+  const sz = (hz * 2 < VOXEL) ? VOXEL * 0.5 : 0;
+
   // A box smaller than a cell still marks the cell it sits in, so kit panels
   // and thin slabs are not lost to the grid.
   const single = (x0 === x1 && y0 === y1 && z0 === z1);
@@ -144,10 +166,10 @@ for (let i = 0; i < nBox; i++) {
           const bx = m00 * wx + m10 * wy + m20 * wz;
           const by = m01 * wx + m11 * wy + m21 * wz;
           const bz = m02 * wx + m12 * wy + m22 * wz;
-          if (Math.abs(bx) > hx + VOXEL * 0.5 || Math.abs(by) > hy + VOXEL * 0.5 || Math.abs(bz) > hz + VOXEL * 0.5) continue;
+          if (Math.abs(bx) > hx + sx || Math.abs(by) > hy + sy || Math.abs(bz) > hz + sz) continue;
         }
         const k = idx(x, y, z);
-        if (!solid[k]) { solid[k] = 1; voxelised++; }
+        if (!solid[k]) { solid[k] = 1; voxelised++; cellsByAsset[aid] = (cellsByAsset[aid] || 0) + 1; }
       }
     }
   }
@@ -156,6 +178,15 @@ console.log(`  voxelised ${voxelised.toLocaleString()} cells occupied (${(100 * 
 console.log(`  skipped   ${skippedSmall.toLocaleString()} under ${MIN_SIZE} m, ${skippedHuge.toLocaleString()} over ${MAX_SIZE} m, ` +
             `${skippedProxy.toLocaleString()} area proxies at L${PROXY_L}+, ${tests.toLocaleString()} cell tests`);
 if (hugeSamples.length) hugeSamples.forEach(s => console.log(`            dropped as too large: ${s}`));
+
+const paths = meta.assetPaths || {};
+const topCells = Object.entries(cellsByAsset).sort((a, b) => b[1] - a[1]).slice(0, 20)
+  .map(([id, c]) => ({ id: +id, cells: c, path: paths[id] || '?' }));
+if (process.argv.includes('--why')) {
+  console.log('\n  cells marked, by asset:');
+  topCells.forEach(t => console.log(`    ${String(t.cells).padStart(9)}  ${t.path.slice(0, 92)}`));
+  console.log();
+}
 
 // ── 2. Fill enclosed space ────────────────────────────────────────────────
 // Flood the empty cells inward from every face of the grid. Anything empty the
@@ -186,6 +217,51 @@ for (let k = 0; k < N; k++) {
   else if (solid[k] === 0)  { solid[k] = 1; filled++; }
 }
 console.log(`  filled    ${filled.toLocaleString()} enclosed cells (interiors absorbed)`);
+
+// ── 2a. Cut the underground away ──────────────────────────────────────────
+// Night City has a whole city below the street: basements, car parks, metro.
+// It is real geometry and it is in the dump, and none of it belongs on a map
+// of the skyline. CDPR's cloud covers 1.6% of the footprint at -20 m; keeping
+// the underground takes that to 47.5%. The floor is the terrain surface
+// verify_terrain.js measured, less BELOW metres of tolerance for the ~4 m bias
+// it found.
+const { loadTerrain, indexTris, heightAtCet } = require('./terrain_lib');
+const terrain = indexTris(loadTerrain());
+let cutUnder = 0, offMesh = 0;
+for (let y = 0; y < NY; y++) {
+  const cetY = minY + (y + 0.5) * VOXEL;
+  for (let x = 0; x < NX; x++) {
+    const cetX = minX + (x + 0.5) * VOXEL;
+    const g = heightAtCet(terrain, cetX, cetY);
+    if (g === null) { offMesh++; continue; }
+    const floor = g - BELOW;
+    const zTop = Math.min(NZ - 1, Math.floor((floor - minZ) / VOXEL));
+    for (let z = 0; z <= zTop; z++) {
+      const k = idx(x, y, z);
+      if (solid[k] === 1) { solid[k] = 0; cutUnder++; }
+    }
+  }
+}
+console.log(`  under     ${cutUnder.toLocaleString()} cells cut below the terrain surface (${offMesh.toLocaleString()} columns off-mesh)`);
+
+// ── 2b. Strip the ground sheet ────────────────────────────────────────────
+// Roads, pavements and terrain form a continuous solid layer one or two cells
+// thick across the whole district. The ground is a separate mesh, not a
+// building: CDPR's cloud covers 15% of the footprint at ground level, and
+// keeping the sheet takes that to 85%. A column is ground if it holds fewer
+// than MIN_COL solid cells in total: a pavement column is one cell, a building
+// column is dozens.
+let strippedGround = 0;
+for (let y = 0; y < NY; y++) {
+  for (let x = 0; x < NX; x++) {
+    let h = 0;
+    for (let z = 0; z < NZ; z++) if (solid[idx(x, y, z)] === 1) h++;
+    if (h > 0 && h < MIN_COL) {
+      for (let z = 0; z < NZ; z++) if (solid[idx(x, y, z)] === 1) { solid[idx(x, y, z)] = 0; strippedGround++; }
+    }
+  }
+}
+console.log(`  ground    ${strippedGround.toLocaleString()} cells stripped from columns under ${MIN_COL} cells tall`);
 
 // ── 3. Label components, drop the small ones ──────────────────────────────
 const label = new Int32Array(N);

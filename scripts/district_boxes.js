@@ -207,6 +207,9 @@ async function main() {
     stride: STRIDE,
     layout: 'centre xyz, halfExtent xyz, quat xyzw, assetId, typeCode, streamingLevel (float32)',
     types: Object.fromEntries([...typeCode].map(([k, v]) => [v, k])),
+    // id -> depot path for every asset this district actually places, so a
+    // later stage can name what it is looking at rather than report an id.
+    assetPaths: Object.fromEntries([...volByAsset.keys()].map(id => [id, (assets.get(id) || {}).path || '?'])),
     heightHistogram: hist.map((n, i) => ({ from: edges[i], to: edges[i + 1], n })),
     topVolumeAssets: topVolume,
     generated: new Date().toISOString(),
