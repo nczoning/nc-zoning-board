@@ -3453,7 +3453,16 @@ const ThreeScene = (() => {
         setLoadingText(`Loading buildings [${meta.name}]…`);
 
         // ── _data.dds → CPU decode → packed Float32Array of mat4s ─────
-        const dataDdsPath = (assetSet === 'fixed' && meta.dataDdsFixed) ? meta.dataDdsFixed : meta.dataDds;
+        let dataDdsPath = (assetSet === 'fixed' && meta.dataDdsFixed) ? meta.dataDdsFixed : meta.dataDds;
+        // ?assets=rebuilt looks at the box cloud generated from the world dump
+        // (scripts/encode_hull_dds.js) instead of a shipped one. Only the
+        // districts that have been rebuilt carry a texture, so a district
+        // without one falls back and renders its shipped cloud beside them.
+        if (new URLSearchParams(location.search).get('assets') === 'rebuilt') {
+          const alt = 'assets/dds/rebuilt/' + meta.dataDds.split('/').pop();
+          if (await fetch(alt, { method: 'HEAD' }).then(r => r.ok).catch(() => false)) dataDdsPath = alt;
+          else console.warn(`[ncz] no rebuilt cloud for ${meta.name}, using ${dataDdsPath}`);
+        }
         const { pixels, width: texW, height: texH } = await loadDataDds(dataDdsPath);
         const blockW = Math.floor(texW / 3);
         const blockH = Math.min(texH, blockW);
