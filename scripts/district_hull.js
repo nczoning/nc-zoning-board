@@ -517,6 +517,47 @@ for (let y = 0; y < NY; y++) {
 }
 console.log(`  ground    ${strippedGround.toLocaleString()} cells stripped from columns under ${MIN_COL} cells tall`);
 
+// ── 2c. Close the facade noise ────────────────────────────────────────────
+// A rasterised shell is one cell thick and carries every ledge, mullion and
+// balcony as a notch. A morphological close (dilate, then erode) fills
+// concavities up to 2 cells wide and leaves flat surface exactly where it was.
+//
+// MEASURED, AND IT IS NOT A BOX-BUDGET LEVER. One pass on city_center at 2 m
+// added 768,932 cells and took the merge from 324,505 boxes to 380,881: the
+// notch fill forms new stair-steps that fragment on their own. What it buys
+// is accuracy (58.4% -> 59.3% at 0.5 m, swallowed windows 0.2% -> 0.1%), so
+// it stays a lever for the score, off by default.
+//
+// EXTENSIVE ON PURPOSE: original cells are never removed, a new cell is kept
+// only when its whole 6-neighbourhood survives the dilation, so closing can
+// only add volume inside notches. What that costs in fatness is priced by the
+// score's swallowed-window diagnostic, never assumed.
+const CLOSE = flag('close', 0);
+let closedCells = 0;
+for (let pass = 0; pass < CLOSE; pass++) {
+  const dil = new Uint8Array(N);
+  for (let z = 0; z < NZ; z++) for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+    const k = idx(x, y, z);
+    if (solid[k] !== 1) continue;
+    dil[k] = 1;
+    if (x > 0)      dil[k - 1] = 1;
+    if (x < NX - 1) dil[k + 1] = 1;
+    if (y > 0)      dil[k - NX] = 1;
+    if (y < NY - 1) dil[k + NX] = 1;
+    if (z > 0)      dil[k - NX * NY] = 1;
+    if (z < NZ - 1) dil[k + NX * NY] = 1;
+  }
+  for (let z = 1; z < NZ - 1; z++) for (let y = 1; y < NY - 1; y++) for (let x = 1; x < NX - 1; x++) {
+    const k = idx(x, y, z);
+    if (!dil[k] || solid[k] === 1) continue;
+    if (dil[k - 1] && dil[k + 1] && dil[k - NX] && dil[k + NX] && dil[k - NX * NY] && dil[k + NX * NY]) {
+      solid[k] = 1;
+      closedCells++;
+    }
+  }
+}
+if (CLOSE) console.log(`  closed    ${closedCells.toLocaleString()} notch cells added by ${CLOSE} close pass${CLOSE > 1 ? 'es' : ''}`);
+
 // ── 3. Label components, drop the small ones ──────────────────────────────
 // A per-cell label array would be another 845 MB at a 2 m cell, and the label
 // itself is never wanted: only whether the component it belongs to is big
@@ -570,35 +611,85 @@ console.log(`             ${keptCells.toLocaleString()} cells kept, ${droppedCel
 // Grow each seed as far as it goes in x, then y, then z, claiming as it goes.
 // Claiming is recorded in `solid` itself rather than a parallel byte array,
 // which is another 211 MB at a 2 m cell.
+//
+// AIR TOLERANCE is the box-budget lever. Exact cover of a one-cell shell that
+// carries every ledge and mullion as a notch averages ~17 cells per box and
+// lands 8x CDPR's count; two exact levers were measured and failed (growing
+// under all six axis orders per seed: +0.2%; a close pass first: +17%). With
+// --airmax, a slab may be accepted while the box's overall solid fraction
+// stays above 1 - AIR, so growth runs through surface noise instead of
+// stopping at every notch. Guards: a slab with no solid cell at all stops
+// growth (a street never bridges), and a slab holding an already-claimed cell
+// stops it (no solid cell is covered twice). Air inside an accepted box is
+// covered, not claimed: what that fattening costs is priced by the score's
+// swallowed-window diagnostic. --airmax 0 still covers exactly (every box all
+// solid), but the round-robin growth cuts the union differently from the old
+// x-then-y-then-z exhaustion, so the two exact decompositions are measured
+// separately, not assumed equal.
 const CLAIMED = 4;
+const AIR = flag('airmax', 0);
+const MIN_FRAC = 1 - AIR;
 const out = [];
+
+/** Solid/claimed census of one grid slab; claimed anywhere kills the slab. */
+function slabCensus(x0, x1, y0, y1, z0, z1) {
+  let solidCount = 0;
+  for (let c = z0; c <= z1; c++)
+    for (let b = y0; b <= y1; b++)
+      for (let a = x0; a <= x1; a++) {
+        const v = solid[idx(a, b, c)];
+        if (v === CLAIMED) return -1;
+        if (v === 1) solidCount++;
+      }
+  return solidCount;
+}
+
 for (let z = 0; z < NZ; z++) {
   for (let y = 0; y < NY; y++) {
     for (let x = 0; x < NX; x++) {
       const k = idx(x, y, z);
       if (solid[k] !== 1) continue;
 
-      let ex = x;
-      while (ex + 1 < NX && solid[idx(ex + 1, y, z)] === 1) ex++;
+      let ex = x, ey = y, ez = z;
+      let boxSolid = 1, boxCells = 1;
 
-      let ey = y;
-      grow: while (ey + 1 < NY) {
-        for (let i = x; i <= ex; i++) if (solid[idx(i, ey + 1, z)] !== 1) break grow;
-        ey++;
+      let grew = true;
+      while (grew) {
+        grew = false;
+        // One slab per axis per round, so growth stays roughly cubical instead
+        // of committing to the first axis before the others have been tried.
+        if (ex + 1 < NX) {
+          const s = slabCensus(ex + 1, ex + 1, y, ey, z, ez);
+          const cells = (ey - y + 1) * (ez - z + 1);
+          if (s > 0 && (boxSolid + s) / (boxCells + cells) >= MIN_FRAC) {
+            ex++; boxSolid += s; boxCells += cells; grew = true;
+          }
+        }
+        if (ey + 1 < NY) {
+          const s = slabCensus(x, ex, ey + 1, ey + 1, z, ez);
+          const cells = (ex - x + 1) * (ez - z + 1);
+          if (s > 0 && (boxSolid + s) / (boxCells + cells) >= MIN_FRAC) {
+            ey++; boxSolid += s; boxCells += cells; grew = true;
+          }
+        }
+        if (ez + 1 < NZ) {
+          const s = slabCensus(x, ex, y, ey, ez + 1, ez + 1);
+          const cells = (ex - x + 1) * (ey - y + 1);
+          if (s > 0 && (boxSolid + s) / (boxCells + cells) >= MIN_FRAC) {
+            ez++; boxSolid += s; boxCells += cells; grew = true;
+          }
+        }
       }
 
-      let ez = z;
-      growZ: while (ez + 1 < NZ) {
-        for (let j = y; j <= ey; j++) for (let i = x; i <= ex; i++) if (solid[idx(i, j, ez + 1)] !== 1) break growZ;
-        ez++;
+      for (let c = z; c <= ez; c++) for (let b = y; b <= ey; b++) for (let a = x; a <= ex; a++) {
+        const kk = idx(a, b, c);
+        if (solid[kk] === 1) solid[kk] = CLAIMED;
       }
-
-      for (let c = z; c <= ez; c++) for (let b = y; b <= ey; b++) for (let a = x; a <= ex; a++) solid[idx(a, b, c)] = CLAIMED;
       out.push([x, y, z, ex, ey, ez]);
     }
   }
 }
-console.log(`  BOXES     ${out.length.toLocaleString()} after greedy merge`);
+console.log(`  BOXES     ${out.length.toLocaleString()} after greedy merge${AIR ? ` (airmax ${AIR})` : ''}`);
 
 // ── Write, in stage 1's layout so one reader serves both ──────────────────
 const buf = new Float32Array(out.length * 10);
@@ -618,7 +709,7 @@ const sizes = compSizes.sort((a, b) => b - a);
 fs.writeFileSync(path.join(dataDir, `district-hull-${name}.json`), JSON.stringify({
   district: name, bounds: meta.bounds,
   voxel: VOXEL, minSize: MIN_SIZE, maxSize: MAX_SIZE, minMass: MIN_MASS, minCol: MIN_COL,
-  below: BELOW, proxyLevel: PROXY_L,
+  below: BELOW, proxyLevel: PROXY_L, close: CLOSE, closedCells,
   gridOrigin: [minX, minY, minZ],
   grid: { nx: NX, ny: NY, nz: NZ, cells: N },
   inputBoxes: nBox, skippedSmall, skippedHuge, skippedProxy,
