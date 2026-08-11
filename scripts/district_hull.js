@@ -67,7 +67,7 @@ const AREA_PROXY = new Set([
 const NEVER = new Set(['StaticOccluderMesh', 'StaticLight', 'Advertisement', 'WaterPatch', 'Foliage', 'Mirror']);
 
 const MIN_COL = flag('mincol', 3);   // drop columns with fewer than this many solid cells
-const BELOW   = flag('below', 4);    // keep this many metres below the terrain surface, discard the rest
+const BELOW   = flag('below', 16);   // keep this many metres below the terrain surface, cut deeper than that
 
 if (!name) {
   console.error('usage: node scripts/district_hull.js <district> [--voxel 4] [--minsize 2] [--minmass 24]');
@@ -220,11 +220,25 @@ console.log(`  filled    ${filled.toLocaleString()} enclosed cells (interiors ab
 
 // ── 2a. Cut the underground away ──────────────────────────────────────────
 // Night City has a whole city below the street: basements, car parks, metro.
-// It is real geometry and it is in the dump, and none of it belongs on a map
-// of the skyline. CDPR's cloud covers 1.6% of the footprint at -20 m; keeping
-// the underground takes that to 47.5%. The floor is the terrain surface
-// verify_terrain.js measured, less BELOW metres of tolerance for the ~4 m bias
-// it found.
+// It is real geometry and it is in the dump, and the deep part of it does not
+// belong on a map of the skyline. CDPR's cloud covers 1.6% of the footprint at
+// -20 m; keeping all of the underground takes that to 47.5%.
+//
+// CUT DEEP, NOT SHALLOW. Tunnel entrances, storm drains and underpasses sit
+// below the surrounding terrain height and DO show, so BELOW is deliberately
+// generous: everything within BELOW metres of the surface survives, and only
+// geometry buried deeper than that is cut. Raising BELOW is the safe
+// direction. The precise rule is "cut what cannot be seen", which needs the
+// below-terrain mass tested for whether it ever surfaces, and a depth
+// threshold is the cheap stand-in until the window score says it matters.
+//
+// The floor is the terrain surface verify_terrain.js measured, which carries a
+// near-constant ~4 m bias of its own, so BELOW absorbs that too.
+//
+// TERRAIN AND ROADS MAY NOT LINE UP. This clip trusts the terrain GLB to sit
+// where the placements think the ground is. If a road deck turns out to float
+// or sink relative to it, this is the step that will show it, and the ground
+// sheet handling below is the other half of the same question.
 const { loadTerrain, indexTris, heightAtCet } = require('./terrain_lib');
 const terrain = indexTris(loadTerrain());
 let cutUnder = 0, offMesh = 0;
@@ -251,6 +265,12 @@ console.log(`  under     ${cutUnder.toLocaleString()} cells cut below the terrai
 // keeping the sheet takes that to 85%. A column is ground if it holds fewer
 // than MIN_COL solid cells in total: a pavement column is one cell, a building
 // column is dozens.
+//
+// KEEP THIS KNOB. The default is deliberately weak because the road and
+// terrain surfaces have not been cross-checked against each other yet. If they
+// turn out not to line up, roads sitting proud of or sunk into the terrain is
+// exactly what this step and the underground clip above will surface, and the
+// gate is then the lever for it rather than something to be reinvented.
 let strippedGround = 0;
 for (let y = 0; y < NY; y++) {
   for (let x = 0; x < NX; x++) {
