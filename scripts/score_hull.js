@@ -37,6 +37,13 @@ const dataDir = path.join(__dirname, '..', 'data');
 const hullMeta = JSON.parse(fs.readFileSync(path.join(dataDir, `district-boxes-${name}.json`), 'utf8'));
 const bounds = hullMeta.bounds;
 
+// When the cloud was extracted on the district's real boundary, the windows
+// have to be judged on that boundary too. Scoring the bbox instead counts the
+// corners the district does not cover as misses, which is the neighbouring
+// district's geometry being marked absent.
+const { districtPolygon, inPolygon } = require('./district_meta');
+const polygon = hullMeta.boundary === 'district trigger polygon' ? districtPolygon(name) : null;
+
 // ── the boxes ─────────────────────────────────────────────────────────────
 // { c: centre CET, h: half-extent CET, q: orientation CET }
 const B = [];
@@ -77,7 +84,8 @@ if (CLOUD === 'hull') {
 }
 
 // Cull to the district footprint so both clouds are judged on the same ground.
-const inD = b => b.c[0] >= bounds.min[0] && b.c[0] <= bounds.max[0] && b.c[1] >= bounds.min[1] && b.c[1] <= bounds.max[1];
+const inD = b => b.c[0] >= bounds.min[0] && b.c[0] <= bounds.max[0] && b.c[1] >= bounds.min[1] && b.c[1] <= bounds.max[1]
+  && (!polygon || inPolygon(polygon, b.c[0], b.c[1]));
 const boxes = B.filter(inD);
 console.log(`cloud ${CLOUD}: ${boxes.length.toLocaleString()} boxes inside ${name}`);
 
@@ -175,6 +183,7 @@ for (let i = 0; i < n; i++) {
   // THREE (x, y, z) was written from CET (x, z, -y), so invert it.
   const cx = xyz[i * 3], cy = -xyz[i * 3 + 2], cz = xyz[i * 3 + 1];
   if (cx < bounds.min[0] || cx > bounds.max[0] || cy < bounds.min[1] || cy > bounds.max[1]) continue;
+  if (polygon && !inPolygon(polygon, cx, cy)) continue;
   scored++;
 
   let best = Infinity, bestDepth = null;

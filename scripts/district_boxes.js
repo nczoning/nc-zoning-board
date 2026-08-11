@@ -36,7 +36,7 @@ const readline = require('readline');
 
 const DEFAULT_DUMP = 'd:\\Modding\\CP2077 Mods\\MyMods\\map_data_export\\source\\raw';
 
-const { DISTRICTS, worldBounds } = require('./district_meta');
+const { DISTRICTS, worldBounds, districtPolygon, inPolygon, polygonBounds } = require('./district_meta');
 
 /** Rotate a vector by a quaternion (x, y, z, w). */
 function rotate(v, q) {
@@ -82,9 +82,26 @@ async function main() {
   const di = process.argv.indexOf('--dump');
   const dumpDir = di > 0 ? process.argv[di + 1] : DEFAULT_DUMP;
   const keepFx = process.argv.includes('--keepfx');
-  const bounds = worldBounds(DISTRICTS[name]);
+  const useBbox = process.argv.includes('--bbox');
+  const texBounds = worldBounds(DISTRICTS[name]);
+
+  // The district's real boundary, not its texture's bbox. See district_meta.
+  const poly = useBbox ? null : districtPolygon(name);
+  let bounds = texBounds;
+  if (poly) {
+    const [px0, py0, px1, py1] = polygonBounds(poly);
+    bounds = { min: [px0, py0, texBounds.min[2]], max: [px1, py1, texBounds.max[2]] };
+  }
 
   console.log(`district ${name}`);
+  if (poly) {
+    const tex = (texBounds.max[0] - texBounds.min[0]) * (texBounds.max[1] - texBounds.min[1]);
+    const box = (bounds.max[0] - bounds.min[0]) * (bounds.max[1] - bounds.min[1]);
+    console.log(`  boundary  ${poly.length}-point trigger polygon; bbox ${(box / 1e6).toFixed(2)} km2 ` +
+                `against the texture's ${(tex / 1e6).toFixed(2)} km2`);
+  } else {
+    console.log('  boundary  TEXTURE BBOX (--bbox): includes the neighbours');
+  }
   console.log(`  CET bbox  x ${bounds.min[0].toFixed(0)}..${bounds.max[0].toFixed(0)}` +
               `  y ${bounds.min[1].toFixed(0)}..${bounds.max[1].toFixed(0)}` +
               `  z ${bounds.min[2].toFixed(0)}..${bounds.max[2].toFixed(0)}`);
@@ -95,7 +112,7 @@ async function main() {
   // 13 float32 per box. Grown in slabs so the pass stays single-shot.
   const STRIDE = 13;
   let cap = 1 << 20, out = new Float32Array(cap * STRIDE), count = 0;
-  let scanned = 0, inside = 0, noAsset = 0, droppedFx = 0;
+  let scanned = 0, inside = 0, noAsset = 0, droppedFx = 0, outsidePoly = 0;
   const heights = [];
   const typeCode = new Map();   // node type name -> small integer
   const volByAsset = new Map(); // asset id -> total AABB volume placed
@@ -112,6 +129,7 @@ async function main() {
     const p = line.split(',');
     const x = +p[5], y = +p[6], z = +p[7];
     if (!(x >= bounds.min[0] && x <= bounds.max[0] && y >= bounds.min[1] && y <= bounds.max[1])) return;
+    if (poly && !inPolygon(poly, x, y)) { outsidePoly++; return; }
     inside++;
     const a = assets.get(+p[3]);
     if (!a) { noAsset++; return; }
@@ -183,7 +201,10 @@ async function main() {
   fs.writeFileSync(binPath, Buffer.from(out.buffer, 0, count * STRIDE * 4));
   const meta = {
     district: name, bounds, boxes: count,
-    scanned, insideFootprint: inside, droppedNoAssetBbox: noAsset, droppedFx,
+    scanned, insideFootprint: inside, outsidePolygon: outsidePoly,
+    droppedNoAssetBbox: noAsset, droppedFx,
+    boundary: poly ? 'district trigger polygon' : 'texture bbox',
+    textureBounds: texBounds,
     stride: STRIDE,
     layout: 'centre xyz, halfExtent xyz, quat xyzw, assetId, typeCode, streamingLevel (float32)',
     types: Object.fromEntries([...typeCode].map(([k, v]) => [v, k])),
@@ -198,6 +219,7 @@ async function main() {
 
   console.log(`  scanned   ${scanned.toLocaleString()} placements`);
   console.log(`  inside    ${inside.toLocaleString()}`);
+  console.log(`  outside   ${outsidePoly.toLocaleString()} in the bbox but outside the district itself`);
   console.log(`  no bbox   ${noAsset.toLocaleString()} (asset id absent from ncz_assets.csv)`);
   console.log(`  fx/light  ${droppedFx.toLocaleString()} dropped (--keepfx to keep them)`);
   console.log(`  BOXES     ${count.toLocaleString()} -> ${path.relative(process.cwd(), binPath)}`);

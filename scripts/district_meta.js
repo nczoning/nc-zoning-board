@@ -23,7 +23,7 @@ const DISTRICTS = {
   ep1_spaceport: { transMin: [-1168.5874,   -765.104614, -41.4592323], transMax: [1219.45483, 1018.70129,  296.498138], offset: [-4200.000,   200.000], cubeSize: 115.298218, dds: 'spaceport_data.dds', noFixed: true },
 };
 
-/** World (CET) bounding box of a district: min and max, xyz. */
+/** World (CET) bounding box of a district's TEXTURE: min and max, xyz. */
 function worldBounds(d) {
   return {
     min: [d.transMin[0] + d.offset[0], d.transMin[1] + d.offset[1], d.transMin[2]],
@@ -31,4 +31,47 @@ function worldBounds(d) {
   };
 }
 
-module.exports = { DISTRICTS, worldBounds };
+/**
+ * The district's TRUE boundary, from the game's own trigger areas
+ * (data/subdistricts.json, extracted from 3dmap_view.ent).
+ *
+ * The texture bbox is not the district. CDPR's clouds are sorted into
+ * districts only loosely, and the bbox of each one overshoots badly: 32% for
+ * city_center, 58% for santo_domingo, and 99% for pacifica, whose 145 km2
+ * texture bbox covers a 2 km2 district plus most of the badlands. Extracting
+ * on the bbox therefore pulls in the neighbours' buildings, and makes pacifica
+ * cost 5.8 billion grid cells for a district that needs 160 million.
+ *
+ * A placement belongs to whichever district CONTAINS ITS CENTRE, so every
+ * placement lands in exactly one district and a building straddling a boundary
+ * is not duplicated. Nothing is lost citywide because the districts render
+ * together.
+ */
+function districtPolygon(name) {
+  const sd = require('../data/subdistricts.json');
+  const id = name.replace(/^ep1_/, '');
+  const d = sd.districts.find(x => x.id === name) || sd.districts.find(x => x.id === id);
+  return d ? d.polygon : null;
+}
+
+/** Ray-cast point-in-polygon, CET x/y. */
+function inPolygon(poly, x, y) {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i], [xj, yj] = poly[j];
+    if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** Axis-aligned bounds of a polygon, as [minX, minY, maxX, maxY]. */
+function polygonBounds(poly) {
+  let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity;
+  for (const [x, y] of poly) {
+    if (x < a) a = x; if (y < b) b = y;
+    if (x > c) c = x; if (y > d) d = y;
+  }
+  return [a, b, c, d];
+}
+
+module.exports = { DISTRICTS, worldBounds, districtPolygon, inPolygon, polygonBounds };
