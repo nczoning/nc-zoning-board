@@ -1,0 +1,187 @@
+#!/usr/bin/env node
+/**
+ * district_boxes.js: stage 1 of the box-cloud rebuild.
+ *
+ * Takes every placement the world dump recorded inside one district's CET
+ * footprint, joins it to its mesh bounding box, and emits one ORIENTED world
+ * box per placement. Pure arithmetic: no filtering by depot path, because the
+ * cityscape is not under \architecture\ (a ship, a roller coaster and dockyard
+ * cranes are all part of the skyline and none of them live there). Size is the
+ * signal, and the size histogram this prints is the input to that decision.
+ *
+ * Stage 2 (not here) voxelises these and extracts the outer shell. Stage 3
+ * scores the result with scripts/window_faces.js against the real windows.
+ *
+ * Usage:
+ *   node scripts/district_boxes.js city_center
+ *   node scripts/district_boxes.js city_center --dump "d:\\path\\to\\raw"
+ *
+ * Output: data/district-boxes-<name>.bin  (10 float32 per box, 40 bytes)
+ *           centre xyz | half-extent xyz | quaternion xyzw
+ *         data/district-boxes-<name>.json (counts, bounds, size histogram)
+ */
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+const readline = require('readline');
+
+const DEFAULT_DUMP = 'd:\\Modding\\CP2077 Mods\\MyMods\\map_data_export\\source\\raw';
+
+// CET footprints, read off DISTRICT_META in assets/js/three-scene.js.
+// World bbox is transMin/transMax plus the district offset in X and Y; Z is
+// unoffset. Kept here rather than imported because three-scene.js is a browser
+// module that pulls in Three.js.
+const DISTRICTS = {
+  city_center:   { transMin: [-770.609192, -530.549133, -40.6581497], transMax: [1316.82483,  649.75531,  642.893127], offset: [-2116.637,   106.508] },
+  watson:        { transMin: [-1254.46997, -1258.68469, -24.7028503], transMax: [1988.5448,   2032.52405, 475.268005], offset: [-1979.372,  1873.951] },
+  westbrook:     { transMin: [-1078.94739, -1148.69434, -18.4205875], transMax: [1155.12,     1562.87903, 507.894714], offset: [  -97.209,   590.849] },
+  heywood:       { transMin: [-1080.35107,  -418.153046, -38.4002304], transMax: [1136.94556, 1372.15979, 374.181305], offset: [-1576.732, -1002.811] },
+  santo_domingo: { transMin: [-1328.95288, -1880.02502, -37.5960007], transMax: [1555.26318, 1369.01294, 332.348328], offset: [  -15.944, -1610.080] },
+  pacifica:      { transMin: [-4008.396,   -4575.14941, -51.9539986], transMax: [8258.31641, 7254.10059, 264.306946], offset: [-2422.441, -2368.156] },
+  ep1_dogtown:   { transMin: [-2650.0,     -3126.6084,   -0.750015974], transMax: [-1025.51855, -1803.58118, 493.576111], offset: [0.0, 0.0] },
+  ep1_spaceport: { transMin: [-1168.5874,   -765.104614, -41.4592323], transMax: [1219.45483, 1018.70129, 296.498138], offset: [-4200.000,  200.000] },
+};
+
+function worldBounds(d) {
+  return {
+    min: [d.transMin[0] + d.offset[0], d.transMin[1] + d.offset[1], d.transMin[2]],
+    max: [d.transMax[0] + d.offset[0], d.transMax[1] + d.offset[1], d.transMax[2]],
+  };
+}
+
+/** Rotate a vector by a quaternion (x, y, z, w). */
+function rotate(v, q) {
+  const [x, y, z] = v, [qx, qy, qz, qw] = q;
+  const ix =  qw * x + qy * z - qz * y;
+  const iy =  qw * y + qz * x - qx * z;
+  const iz =  qw * z + qx * y - qy * x;
+  const iw = -qx * x - qy * y - qz * z;
+  return [
+    ix * qw + iw * -qx + iy * -qz - iz * -qy,
+    iy * qw + iw * -qy + iz * -qx - ix * -qz,
+    iz * qw + iw * -qz + ix * -qy - iy * -qx,
+  ];
+}
+
+/** Read ncz_assets.csv into id -> mesh-local bounding box. */
+function loadAssets(file) {
+  return new Promise(resolve => {
+    const byId = new Map();
+    const rl = readline.createInterface({ input: fs.createReadStream(file), crlfDelay: Infinity });
+    let header = null;
+    rl.on('line', line => {
+      if (header === null) { header = line; return; }
+      if (!line) return;
+      // id,path,chunks,bbx0,bby0,bbz0,bbx1,bby1,bbz1,mat_names,mat_paths
+      const m = line.match(/^(\d+),"([^"]*)",(\d+),([^,]+),([^,]+),([^,]+),([^,]+),([^,]+),([^,]+),/);
+      if (!m) return;
+      const n = Number(m[1]);
+      const bb = [+m[4], +m[5], +m[6], +m[7], +m[8], +m[9]];
+      if (bb.some(v => !Number.isFinite(v))) return;
+      byId.set(n, { path: m[2], bb });
+    });
+    rl.on('close', () => resolve(byId));
+  });
+}
+
+async function main() {
+  const name = process.argv[2];
+  if (!name || !DISTRICTS[name]) {
+    console.error(`usage: node scripts/district_boxes.js <${Object.keys(DISTRICTS).join('|')}> [--dump DIR]`);
+    process.exit(1);
+  }
+  const di = process.argv.indexOf('--dump');
+  const dumpDir = di > 0 ? process.argv[di + 1] : DEFAULT_DUMP;
+  const bounds = worldBounds(DISTRICTS[name]);
+
+  console.log(`district ${name}`);
+  console.log(`  CET bbox  x ${bounds.min[0].toFixed(0)}..${bounds.max[0].toFixed(0)}` +
+              `  y ${bounds.min[1].toFixed(0)}..${bounds.max[1].toFixed(0)}` +
+              `  z ${bounds.min[2].toFixed(0)}..${bounds.max[2].toFixed(0)}`);
+
+  const assets = await loadAssets(path.join(dumpDir, 'ncz_assets.csv'));
+  console.log(`  assets    ${assets.size.toLocaleString()} with a bounding box`);
+
+  // 10 float32 per box. Grown in slabs so the pass stays single-shot.
+  let cap = 1 << 20, out = new Float32Array(cap * 10), count = 0;
+  let scanned = 0, inside = 0, noAsset = 0;
+  const heights = [];
+
+  const rl = readline.createInterface({
+    input: fs.createReadStream(path.join(dumpDir, 'ncz_instances.csv')), crlfDelay: Infinity,
+  });
+  let header = null;
+  rl.on('line', line => {
+    if (header === null) { header = line; return; }
+    if (!line) return;
+    scanned++;
+    // sector,src,type,asset,prefab,x,y,z,qi,qj,qk,qr,sx,sy,sz,app
+    const p = line.split(',');
+    const x = +p[5], y = +p[6], z = +p[7];
+    if (!(x >= bounds.min[0] && x <= bounds.max[0] && y >= bounds.min[1] && y <= bounds.max[1])) return;
+    inside++;
+    const a = assets.get(+p[3]);
+    if (!a) { noAsset++; return; }
+
+    const q = [+p[8], +p[9], +p[10], +p[11]];
+    const s = [+p[12] || 1, +p[13] || 1, +p[14] || 1];
+    const bb = a.bb;
+
+    // Mesh-local bbox centre and half-extent, scaled. Rotation stays as the
+    // quaternion so the box remains ORIENTED: taking an axis-aligned bound
+    // here is the mistake that made every earlier script read a fat box
+    // (see the-aabb-is-a-different-box).
+    const hx = (bb[3] - bb[0]) * 0.5 * s[0];
+    const hy = (bb[4] - bb[1]) * 0.5 * s[1];
+    const hz = (bb[5] - bb[2]) * 0.5 * s[2];
+    const lc = [(bb[0] + bb[3]) * 0.5 * s[0], (bb[1] + bb[4]) * 0.5 * s[1], (bb[2] + bb[5]) * 0.5 * s[2]];
+    const rc = rotate(lc, q);
+
+    if (count === cap) {
+      cap *= 2;
+      const bigger = new Float32Array(cap * 10);
+      bigger.set(out); out = bigger;
+    }
+    const o = count * 10;
+    out[o]     = x + rc[0]; out[o + 1] = y + rc[1]; out[o + 2] = z + rc[2];
+    out[o + 3] = hx;        out[o + 4] = hy;        out[o + 5] = hz;
+    out[o + 6] = q[0];      out[o + 7] = q[1];      out[o + 8] = q[2]; out[o + 9] = q[3];
+    count++;
+    heights.push(hz * 2);
+  });
+
+  await new Promise(r => rl.on('close', r));
+
+  // Size histogram: the SIZE classifier's evidence, printed rather than
+  // decided here. Buckets are metres of height.
+  const edges = [0, 2, 5, 10, 20, 40, 80, 160, Infinity];
+  const hist = new Array(edges.length - 1).fill(0);
+  for (const h of heights) {
+    for (let i = 0; i < hist.length; i++) if (h >= edges[i] && h < edges[i + 1]) { hist[i]++; break; }
+  }
+
+  const outDir = path.join(__dirname, '..', 'data');
+  const binPath = path.join(outDir, `district-boxes-${name}.bin`);
+  fs.writeFileSync(binPath, Buffer.from(out.buffer, 0, count * 10 * 4));
+  const meta = {
+    district: name, bounds, boxes: count,
+    scanned, insideFootprint: inside, droppedNoAssetBbox: noAsset,
+    stride: 10, layout: 'centre xyz, halfExtent xyz, quat xyzw (float32)',
+    heightHistogram: hist.map((n, i) => ({ from: edges[i], to: edges[i + 1], n })),
+    generated: new Date().toISOString(),
+  };
+  fs.writeFileSync(path.join(outDir, `district-boxes-${name}.json`), JSON.stringify(meta, null, 2));
+
+  console.log(`  scanned   ${scanned.toLocaleString()} placements`);
+  console.log(`  inside    ${inside.toLocaleString()}`);
+  console.log(`  no bbox   ${noAsset.toLocaleString()} (asset id absent from ncz_assets.csv)`);
+  console.log(`  BOXES     ${count.toLocaleString()} -> ${path.relative(process.cwd(), binPath)}`);
+  console.log('\n  height histogram (m):');
+  hist.forEach((n, i) => {
+    const label = `${edges[i]}..${edges[i + 1] === Infinity ? 'inf' : edges[i + 1]}`;
+    console.log(`    ${label.padStart(10)}  ${String(n).padStart(9)}  ${'#'.repeat(Math.round(60 * n / Math.max(...hist)))}`);
+  });
+}
+
+main();
