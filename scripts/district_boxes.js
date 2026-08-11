@@ -16,9 +16,17 @@
  *   node scripts/district_boxes.js city_center
  *   node scripts/district_boxes.js city_center --dump "d:\\path\\to\\raw"
  *
- * Output: data/district-boxes-<name>.bin  (10 float32 per box, 40 bytes)
+ * Output: data/district-boxes-<name>.bin  (13 float32 per box, 52 bytes)
  *           centre xyz | half-extent xyz | quaternion xyzw
- *         data/district-boxes-<name>.json (counts, bounds, size histogram)
+ *           | assetId | typeCode | streamingLevel
+ *         data/district-boxes-<name>.json (counts, bounds, size histogram,
+ *           the type dictionary, and the assets contributing the most volume)
+ *
+ * The assetId, typeCode and streaming level travel with every box on purpose.
+ * Without them a later stage can only report THAT the grid filled up, never
+ * WHAT filled it. The streaming level is the second size signal: it comes off
+ * the sector name's _L<n> suffix, and a level IS an object size (L0 = 64 m
+ * cells = props, L5-L6 = kilometre cells = whole-subdistrict proxies).
  */
 'use strict';
 
@@ -93,6 +101,7 @@ async function main() {
   }
   const di = process.argv.indexOf('--dump');
   const dumpDir = di > 0 ? process.argv[di + 1] : DEFAULT_DUMP;
+  const keepFx = process.argv.includes('--keepfx');
   const bounds = worldBounds(DISTRICTS[name]);
 
   console.log(`district ${name}`);
@@ -103,10 +112,13 @@ async function main() {
   const assets = await loadAssets(path.join(dumpDir, 'ncz_assets.csv'));
   console.log(`  assets    ${assets.size.toLocaleString()} with a bounding box`);
 
-  // 10 float32 per box. Grown in slabs so the pass stays single-shot.
-  let cap = 1 << 20, out = new Float32Array(cap * 10), count = 0;
-  let scanned = 0, inside = 0, noAsset = 0;
+  // 13 float32 per box. Grown in slabs so the pass stays single-shot.
+  const STRIDE = 13;
+  let cap = 1 << 20, out = new Float32Array(cap * STRIDE), count = 0;
+  let scanned = 0, inside = 0, noAsset = 0, droppedFx = 0;
   const heights = [];
+  const typeCode = new Map();   // node type name -> small integer
+  const volByAsset = new Map(); // asset id -> total AABB volume placed
 
   const rl = readline.createInterface({
     input: fs.createReadStream(path.join(dumpDir, 'ncz_instances.csv')), crlfDelay: Infinity,
@@ -124,6 +136,17 @@ async function main() {
     const a = assets.get(+p[3]);
     if (!a) { noAsset++; return; }
 
+    // Visual effects and cyberspace are not the city. This is NOT the
+    // "\architecture\ means building" mistake in reverse: the exclusion is by
+    // what the folder IS (effects, lighting volumes), not by using a folder to
+    // guess what counts as skyline. Measured on city_center, keeping them puts
+    // a solid mass over 2% of the district footprint at 620 m altitude, from
+    // the Mikoshi and cyberspace meshes anchored near Arasaka Tower.
+    if (!keepFx && (a.path.startsWith('base\\fx\\') || a.path.startsWith('base\\lighting\\'))) {
+      droppedFx++;
+      return;
+    }
+
     const q = [+p[8], +p[9], +p[10], +p[11]];
     const s = [+p[12] || 1, +p[13] || 1, +p[14] || 1];
     const bb = a.bb;
@@ -140,15 +163,24 @@ async function main() {
 
     if (count === cap) {
       cap *= 2;
-      const bigger = new Float32Array(cap * 10);
+      const bigger = new Float32Array(cap * STRIDE);
       bigger.set(out); out = bigger;
     }
-    const o = count * 10;
-    out[o]     = x + rc[0]; out[o + 1] = y + rc[1]; out[o + 2] = z + rc[2];
-    out[o + 3] = hx;        out[o + 4] = hy;        out[o + 5] = hz;
-    out[o + 6] = q[0];      out[o + 7] = q[1];      out[o + 8] = q[2]; out[o + 9] = q[3];
+    const t = p[2];
+    if (!typeCode.has(t)) typeCode.set(t, typeCode.size);
+    const aid = +p[3];
+    // Sector names are cell coordinates with a level suffix: -62_39_0_L1.
+    const lm = /_L(\d+)$/.exec(p[0]);
+    const level = lm ? +lm[1] : -1;
+
+    const o = count * STRIDE;
+    out[o]      = x + rc[0]; out[o + 1] = y + rc[1]; out[o + 2] = z + rc[2];
+    out[o + 3]  = hx;        out[o + 4] = hy;        out[o + 5] = hz;
+    out[o + 6]  = q[0];      out[o + 7] = q[1];      out[o + 8] = q[2]; out[o + 9] = q[3];
+    out[o + 10] = aid;       out[o + 11] = typeCode.get(t); out[o + 12] = level;
     count++;
     heights.push(hz * 2);
+    volByAsset.set(aid, (volByAsset.get(aid) || 0) + hx * hy * hz * 8);
   });
 
   await new Promise(r => rl.on('close', r));
@@ -161,14 +193,22 @@ async function main() {
     for (let i = 0; i < hist.length; i++) if (h >= edges[i] && h < edges[i + 1]) { hist[i]++; break; }
   }
 
+  // The assets placing the most volume: the first thing to look at when a
+  // later stage reports a grid that filled up.
+  const topVolume = [...volByAsset].sort((a, b) => b[1] - a[1]).slice(0, 25)
+    .map(([id, v]) => ({ id, path: (assets.get(id) || {}).path || '?', volumeM3: Math.round(v) }));
+
   const outDir = path.join(__dirname, '..', 'data');
   const binPath = path.join(outDir, `district-boxes-${name}.bin`);
-  fs.writeFileSync(binPath, Buffer.from(out.buffer, 0, count * 10 * 4));
+  fs.writeFileSync(binPath, Buffer.from(out.buffer, 0, count * STRIDE * 4));
   const meta = {
     district: name, bounds, boxes: count,
-    scanned, insideFootprint: inside, droppedNoAssetBbox: noAsset,
-    stride: 10, layout: 'centre xyz, halfExtent xyz, quat xyzw (float32)',
+    scanned, insideFootprint: inside, droppedNoAssetBbox: noAsset, droppedFx,
+    stride: STRIDE,
+    layout: 'centre xyz, halfExtent xyz, quat xyzw, assetId, typeCode, streamingLevel (float32)',
+    types: Object.fromEntries([...typeCode].map(([k, v]) => [v, k])),
     heightHistogram: hist.map((n, i) => ({ from: edges[i], to: edges[i + 1], n })),
+    topVolumeAssets: topVolume,
     generated: new Date().toISOString(),
   };
   fs.writeFileSync(path.join(outDir, `district-boxes-${name}.json`), JSON.stringify(meta, null, 2));
@@ -176,6 +216,7 @@ async function main() {
   console.log(`  scanned   ${scanned.toLocaleString()} placements`);
   console.log(`  inside    ${inside.toLocaleString()}`);
   console.log(`  no bbox   ${noAsset.toLocaleString()} (asset id absent from ncz_assets.csv)`);
+  console.log(`  fx/light  ${droppedFx.toLocaleString()} dropped (--keepfx to keep them)`);
   console.log(`  BOXES     ${count.toLocaleString()} -> ${path.relative(process.cwd(), binPath)}`);
   console.log('\n  height histogram (m):');
   hist.forEach((n, i) => {
