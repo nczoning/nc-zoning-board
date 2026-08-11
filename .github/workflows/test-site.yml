@@ -1,0 +1,44 @@
+name: Test site scripts
+
+# The PR gate for the browser-side code that can be tested without a browser:
+# the pure field rules in assets/js/utils.js, loaded the way index.html loads
+# them (test/helpers/load-browser-globals.js).
+#
+# Separate from test-api.yml because the two suites have different roots and
+# different dependencies. This one needs no install: node --test only, against
+# the repository's own files.
+#
+# It notably covers the submit form's coordinate and length limits, which are a
+# MIRROR of worker/src/validate.js. The drift tests read the Worker's own source
+# for the numbers, so the two copies parting ways fails review.
+
+on:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'assets/js/**'
+      - 'test/**'
+      - 'worker/src/config.js'
+      - 'worker/src/validate.js'
+      - 'worker/src/submissions.js'
+      - '.github/workflows/test-site.yml'
+
+concurrency:
+  group: test-site-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Test
+        run: npm test

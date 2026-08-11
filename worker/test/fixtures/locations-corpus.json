@@ -1,0 +1,6798 @@
+[
+  {
+    "id": "00039410-b9c7-478c-a3c5-ba1b4d425b28",
+    "name": "Hayling - Home",
+    "nexus_id": "26046",
+    "category": "new-location",
+    "coordinates": [
+      -2229.5732,
+      3618.9644,
+      12.2151
+    ],
+    "yaw": -121.2,
+    "tags": [
+      "house",
+      "neokitsch"
+    ],
+    "authors": [
+      "B1W"
+    ],
+    "description": "Custom standalone home.",
+    "status": "published",
+    "added_at": "2026-03-12T12:26:09.000Z",
+    "modified_at": "2026-04-06T07:55:08.000Z"
+  },
+  {
+    "id": "011a0908-bf96-47b8-a154-4456e5fb3402",
+    "name": "WWE Animals Safe base",
+    "nexus_id": "22757",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2507.745,
+      -2603.8274,
+      22.9349
+    ],
+    "yaw": -68,
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "8eartic"
+    ],
+    "description": "WWE Animals Safe base.",
+    "status": "published",
+    "added_at": "2026-03-23T18:47:25.000Z",
+    "modified_at": "2026-04-06T07:55:08.000Z"
+  },
+  {
+    "id": "012b358d-dad4-476d-aeb9-f27e558168e5",
+    "name": "NC Beats Pacifica - Player Home and Custom Radio Station",
+    "nexus_id": "27419",
+    "category": "new-location",
+    "coordinates": [
+      -1888.7188,
+      -1826.6836,
+      40.3663
+    ],
+    "yaw": -68.5,
+    "tags": [
+      "apartment",
+      "entertainment",
+      "entropism"
+    ],
+    "authors": [
+      "Seracen"
+    ],
+    "description": "A curated Radio EXT station with stream-safe music and original DJ voice work. Featuring a fully realized club and player home in Pacifica, built with World Builder. Optional lightweight AMM version included.",
+    "status": "published",
+    "added_at": "2026-03-16T03:00:46.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+  },
+  {
+    "id": "030db42e-dbd0-46a5-8b87-ec98ceb305c5",
+    "name": "Judy's Apartment Improved",
+    "nexus_id": "31144",
+    "category": "location-overhaul",
+    "coordinates": [
+      -906.4348,
+      1868.7872,
+      42.36
+    ],
+    "yaw": -99.5407,
+    "tags": [
+      "apartment",
+      "kitsch"
+    ],
+    "authors": [
+      "ThaFunktopus"
+    ],
+    "description": "Vanilla themed renovation of Judy's apartment with QOL improvements for post Judy questline",
+    "status": "published",
+    "added_at": "2026-07-05T05:52:12.000Z",
+    "modified_at": "2026-07-05T05:52:12.000Z"
+  },
+  {
+    "id": "035d56c3-4eb2-485e-900e-d6cfa0ee11c1",
+    "name": "Luxury Palm St. Apartment",
+    "nexus_id": "24912",
+    "category": "location-overhaul",
+    "coordinates": [
+      4.0898056,
+      6.0512314,
+      134.8439
+    ],
+    "yaw": 147.1,
+    "tags": [
+      "apartment",
+      "corpo",
+      "neokitsch"
+    ],
+    "authors": [
+      "1bells"
+    ],
+    "description": "After the gig \"Until Death Do Us Part\", this apartment on Palm Street, Charter Hill, was redecorated and is now available for purchase! Featuring 45+ interactions, a remodeled kitchen, an aquarium and much more, it's among the most luxurious apartments currently on the market in Night City. Made using world builder and NIF.",
+    "status": "published",
+    "added_at": "2026-03-21T03:49:33.000Z",
+    "modified_at": "2026-04-09T06:43:38.000Z"
+  },
+  {
+    "id": "036e135c-0558-479b-986d-51c8fb122a47",
+    "name": "Jackie's Garage Safehouse",
+    "nexus_id": "20780",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1180.613,
+      -995.12274,
+      13.0371
+    ],
+    "yaw": -76.1251,
+    "tags": [
+      "streetkid"
+    ],
+    "authors": [
+      "BlazingTommy"
+    ],
+    "description": "Overhaul for Jackie's garage post Heroes.",
+    "status": "published",
+    "added_at": "2026-03-21T06:21:51.000Z",
+    "modified_at": "2026-04-06T07:55:08.000Z"
+  },
+  {
+    "id": "056e2307-db89-4a78-a5d3-6a38b2a0121a",
+    "name": "Kerry Glen Apartment",
+    "nexus_id": "23166",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1447.6444,
+      -1040.7858,
+      77.5513
+    ],
+    "yaw": 89.338,
+    "tags": [
+      "apartment",
+      "corpo",
+      "neokitsch"
+    ],
+    "authors": [
+      "8eartic"
+    ],
+    "description": "A Rockstar’s RefugeAfter years dodging fame and flame, Kerry finally settled down in this Glen apartment.\nStylish, personal, and now... unlocked.\nThanks to some subtle tweaks, you now have full access to his private space.\nAnd if you wish, you can even share the vibe with the legend himself.",
+    "status": "published",
+    "added_at": "2026-03-21T03:17:51.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "066b92cc-2b74-4e14-a71c-2a35737d67db",
+    "name": "Outdoor V - Canyon Forest",
+    "nexus_id": "27131",
+    "category": "new-location",
+    "coordinates": [
+      5321.252,
+      -226.151,
+      99.817
+    ],
+    "yaw": 0.46743628,
+    "tags": [
+      "nomad",
+      "photos"
+    ],
+    "authors": [
+      "Kaoziun"
+    ],
+    "description": "Extensive forest with multiple customization options and its custom fast travel point, get to the green !",
+    "status": "published",
+    "added_at": "2026-03-07T00:53:22.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "06f4a6e8-aa1d-4b94-92dc-49efc048d243",
+    "name": "Junkyard Safehouse",
+    "nexus_id": "24627",
+    "category": "location-overhaul",
+    "coordinates": [
+      2106.8022,
+      -1813.4827,
+      67.2561
+    ],
+    "tags": [
+      "entropism",
+      "house"
+    ],
+    "authors": [
+      "Chivved"
+    ],
+    "description": "\"EL CAPITAN\" will text you the details of the place. A literal junkyard, it's cheap !",
+    "status": "published",
+    "added_at": "2026-03-21T03:59:10.000Z",
+    "modified_at": "2026-04-06T07:55:08.000Z"
+  },
+  {
+    "id": "07059a81-09f7-4a75-b5c9-8ade85369b41",
+    "name": "Safehouses of Night City - Dogtown Barghest Stash",
+    "nexus_id": "25975",
+    "category": "new-location",
+    "coordinates": [
+      -2045.511,
+      -2531.4382,
+      65.4604
+    ],
+    "yaw": 44.1288,
+    "tags": [
+      "apartment",
+      "entropism",
+      "neomilitarism"
+    ],
+    "authors": [
+      "evafan84"
+    ],
+    "description": "A hidden weapons stash belonging to a couple of enterprising Barghest soldiers who thought they could sell guns right from under their boss's nose.",
+    "status": "published",
+    "added_at": "2026-03-12T04:53:54.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "0760013f-1fcc-47eb-86c0-e071d442c1d6",
+    "name": "Pacifica beach house",
+    "nexus_id": "24297",
+    "category": "new-location",
+    "coordinates": [
+      -2059.5085,
+      -1883.8716,
+      11.37
+    ],
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "bigpoppajuan"
+    ],
+    "description": "What, you DON'T want a house on the beach? Don't be a gonk, you know Judy will want to come shred the waves here.",
+    "status": "published",
+    "added_at": "2026-03-19T01:12:32.000Z",
+    "modified_at": "2026-04-06T07:55:08.000Z"
+  },
+  {
+    "id": "07ca4667-020a-4cc0-bbb6-ed21e6a37e35",
+    "name": "Hotel Raito - Akulov Penthouse Revamped",
+    "nexus_id": "30980",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1205.425,
+      1398.5217,
+      109.4014
+    ],
+    "yaw": -8.5066,
+    "tags": [
+      "apartment",
+      "corpo",
+      "neokitsch",
+      "quest"
+    ],
+    "authors": [
+      "skrittleskittie"
+    ],
+    "description": "The Psycho Penthouse in Kabuki that once belonged to a Russian fixer.",
+    "status": "published",
+    "added_at": "2026-07-06T21:37:01.000Z",
+    "modified_at": "2026-07-06T21:37:01.000Z"
+  },
+  {
+    "id": "07d30c9f-363a-4c06-98f1-b25e6b9391dc",
+    "name": "Dogtown Apartment _VDB",
+    "nexus_id": "22679",
+    "category": "new-location",
+    "coordinates": [
+      -1642.22,
+      -2599.9695,
+      82.991
+    ],
+    "tags": [
+      "apartment",
+      "corpo",
+      "neokitsch"
+    ],
+    "authors": [
+      "8eartic"
+    ],
+    "description": "DogTown Apartment – New Version (Standalone) Night City – DogTown",
+    "status": "published",
+    "added_at": "2026-03-23T18:45:34.000Z",
+    "modified_at": "2026-04-06T07:55:08.000Z"
+  },
+  {
+    "id": "08a8dbad-700b-4f78-9d72-7649dc2da789",
+    "name": "GLEN_AMOEBA_Apartment",
+    "nexus_id": "26759",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1521.956,
+      -973.40356,
+      86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "77reye"
+    ],
+    "description": "Updated overhaul of my Glen apartment edit. Features Archive XL for install and Native Interaction Framework to inject interactions.",
+    "status": "published",
+    "added_at": "2026-03-21T06:53:13.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "08af57b0-6ad6-4dea-9d4c-d2d5aa270184",
+    "name": "Japantown Greenery",
+    "nexus_id": "22203",
+    "category": "location-overhaul",
+    "coordinates": [
+      -751.0852,
+      1396.5695,
+      29.57
+    ],
+    "yaw": -38.5913,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "The Japantown Greenery IS SICK but needed a touchup or two! Now with added Vegetation and lighting, it feels a lot cooler to fight in! BTW Enemies spawn here, so I ALSO ADDED a trap door on the Top of the Greenery you can use to drop down on the enemies and strike like a true assassin!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "09b3b7c1-1ab2-49ed-9649-c5fc6db83158",
+    "name": "Corpo Plaza Rooftop Hideout",
+    "nexus_id": "30665",
+    "category": "new-location",
+    "coordinates": [
+      -1621.7606,
+      -45.0897,
+      97.3348
+    ],
+    "yaw": 27.9975,
+    "tags": [
+      "apartment",
+      "corpo"
+    ],
+    "authors": [
+      "hnovak1"
+    ],
+    "description": "A small but cozy and free place for V in the heart of Corpo Plaza",
+    "status": "published",
+    "added_at": "2026-06-22T17:25:39.000Z",
+    "modified_at": "2026-06-22T17:25:39.000Z"
+  },
+  {
+    "id": "0a15d3bb-8f5f-4b35-abe6-29362de76709",
+    "name": "Black Sapphire Club ( with Apartment )",
+    "nexus_id": "16390",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1887.4384,
+      -2280.203,
+      444.7848
+    ],
+    "yaw": 1.154,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "The Black Sapphire is RESTORED and BETTER THAN EVER! I added an AV Landing pad and Walkway to get to the front of the Club along with adding Fountains, Holo Waterfalls, Vending Machines Tables and Security. Inside the Casino NPCs are Seated, Standing and at the Bar. In the back are the Blackjack/Roulette Tables!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "0a1ca503-c412-4cd8-bf8e-0a8ae2cbedf0",
+    "name": "Las Palapas Tower - Apartment",
+    "nexus_id": "26708",
+    "category": "new-location",
+    "coordinates": [
+      -2252.9622,
+      -1143.7826,
+      40.74
+    ],
+    "yaw": 125.1237,
+    "tags": [
+      "house",
+      "neokitsch"
+    ],
+    "authors": [
+      "Ak3nax"
+    ],
+    "description": "Treat yourself to a refined, exclusive apartment in the Las Palapas tower, with a great view of the Wellsprings beach and all the modern comforts of Night City.",
+    "status": "published",
+    "added_at": "2026-03-12T06:23:25.000Z",
+    "modified_at": "2026-04-08T11:27:55.000Z"
+  },
+  {
+    "id": "0cd57e5c-543d-4122-9cc4-c9eb37ca7fb4",
+    "name": "Urban Garden Grocery Store",
+    "nexus_id": "28520",
+    "category": "new-location",
+    "coordinates": [
+      129.5,
+      -1800.8,
+      -10.0975
+    ],
+    "yaw": -140.4074,
+    "tags": [
+      "entropism",
+      "shop",
+      "streetkid"
+    ],
+    "authors": [
+      "LiquidBronze"
+    ],
+    "description": "Urban Garden is located in the heart of Santo Domingo. Once a prosperous grocery store, but it is now overrun by drugs !",
+    "status": "published",
+    "added_at": "2026-04-04T09:56:14.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+  },
+  {
+    "id": "0d1607f5-ada8-46d2-92be-a2148cb782b0",
+    "name": "Corpo Rooftop Bar",
+    "nexus_id": "16048",
+    "category": "new-location",
+    "coordinates": [
+      -28.126976,
+      -47.11628,
+      130.802
+    ],
+    "yaw": -173.3745,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "This Corpo Bar is themed to the color red to STAND OUT above the rest of the Elite in Night City. This VIP spot features a Bar, Casino/Arcade Games, Hookah tables, Stripper poles, Personalized Spa Baths and even an outdoor Movie Theatre underneath the glow of Holo Dragons!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "0d5afb1b-649a-4db7-a0f3-16f1d9dba27c",
+    "name": "Rancho Coronado Private House",
+    "nexus_id": "29048",
+    "category": "new-location",
+    "coordinates": [
+      -65.209,
+      -1948.5612,
+      4.737
+    ],
+    "yaw": -125.5839,
+    "tags": [
+      "apartment",
+      "house",
+      "infrastructure"
+    ],
+    "authors": [
+      "8eartic"
+    ],
+    "description": "A little private house in rancho",
+    "status": "published",
+    "added_at": "2026-04-21T23:04:56.000Z",
+    "modified_at": "2026-04-21T23:04:56.000Z"
+  },
+  {
+    "id": "0e092325-b185-453e-91cc-cbc15565230c",
+    "name": "7th Hell Bar Enhanced",
+    "nexus_id": "22454",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1932.2175,
+      -42.149864,
+      1.5323715
+    ],
+    "yaw": 92.352,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "After V’s confrontation with Jack Mausser, the 7th Hell Staff found new Club management! Its V ! LOL The Silent Owner has DUMPED MONEY into the Club via Parking spots out front, Front Entrance Lights for better atmosphere, and DOUBLED the vibes inside via Themed Lighting ! Come Party at the TRUE 7th Hell YOU DESERVE (;",
+    "status": "published",
+    "added_at": "2026-03-21T12:24:47.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "0f3d60d4-dc81-40cf-9fdb-44c0f82bffa4",
+    "name": "Corpo Plaza - Tidy Your Trash - Modular Apartment Makeover",
+    "nexus_id": "WIP",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1605.7515,
+      356.4753,
+      49.2
+    ],
+    "yaw": 174.5,
+    "tags": [
+      "apartment",
+      "corpo",
+      "neomilitarism"
+    ],
+    "authors": [
+      "Spuddeh"
+    ],
+    "description": "Future site of the Corpo Plaza apartment overhaul. (When Spuddeh stops getting distracted by Kao)",
+    "status": "published",
+    "added_at": "2026-03-07T00:53:22.000Z",
+    "modified_at": "2026-07-26T11:33:16.000Z"
+  },
+  {
+    "id": "11528cdf-5cf4-4ce0-9e6a-e4351f13a05a",
+    "name": "Jig Jig Revolution",
+    "nexus_id": "28736",
+    "category": "location-overhaul",
+    "coordinates": [
+      -640.1577,
+      883.9499,
+      19.9066
+    ],
+    "yaw": -171.5556,
+    "tags": [
+      "apartment",
+      "entertainment",
+      "streetkid"
+    ],
+    "authors": [
+      "ProximaDust"
+    ],
+    "description": "Overhaul of Jig Jig Street. Includes 100+ new thematic NPCs, dozens of interactions, a purchasable pod apartment with customization, and in-game settings to adjust the extra content to your preference",
+    "status": "published",
+    "added_at": "2026-04-25T09:21:15.000Z",
+    "modified_at": "2026-04-25T09:21:15.000Z"
+  },
+  {
+    "id": "1252c788-7d38-4359-95f7-fb83308bc2db",
+    "name": "Rocky Ridge Safe Haven",
+    "nexus_id": "26152",
+    "category": "new-location",
+    "coordinates": [
+      2781.8496,
+      206.5336,
+      75.2548
+    ],
+    "yaw": -50.6,
+    "tags": [
+      "apartment",
+      "entropism",
+      "nomad"
+    ],
+    "authors": [
+      "barbedvvire"
+    ],
+    "description": "This mod adds a Nomad themed house/Garage in Rocky Ridge, made completely from scratch and with native interactions.",
+    "status": "published",
+    "added_at": "2026-03-12T12:06:57.000Z",
+    "modified_at": "2026-04-07T09:16:33.000Z"
+  },
+  {
+    "id": "134793d5-2df5-43af-89f6-e34cb448e641",
+    "name": "Northside Apartment 1235",
+    "nexus_id": "27658",
+    "category": "new-location",
+    "coordinates": [
+      -1517.3856,
+      2188.6147,
+      22.2
+    ],
+    "yaw": 120.2501,
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "OyVaye"
+    ],
+    "description": "Unique, purchasable, standalone player apartment, located in the Northside Complex. Crafted for a solo with a side hustle.",
+    "status": "published",
+    "added_at": "2026-03-12T11:15:27.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "135dfb80-87f6-493a-9237-2199795010fd",
+    "name": "Petrel Street Apartment Enhanced",
+    "nexus_id": "22524",
+    "category": "location-overhaul",
+    "coordinates": [
+      -981.4862,
+      78.664856,
+      49.4333
+    ],
+    "yaw": 36.1946,
+    "tags": [
+      "apartment",
+      "kitsch"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "After V's Confrontation with Gustavo Orta, the rest of his lil Gang of Valentinos decided to get outta town and that means his Apartment is up for grabs ! The Green Themed Lighting, Fully Decorated Apartment and Av Landing Pad will do V nicely, especially after having such a hard time with Gustavo.....Thanks for the parting Gift !",
+    "status": "published",
+    "added_at": "2026-03-21T11:59:21.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "13b3ae64-7904-4239-bc9d-ba44d958cbb2",
+    "name": "Shaitan Black Market Vendor (The Mercs' Alley - Kabuki)",
+    "nexus_id": "21794",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1098.735,
+      1455.1047,
+      4.3038
+    ],
+    "yaw": -120,
+    "tags": [
+      "neomilitarism",
+      "shop"
+    ],
+    "authors": [
+      "Jmolinares03"
+    ],
+    "description": "Shaitan, one of the legends of Night City, returns to the streets, this time with his best merchandise, including weapons, attachments, and mods.",
+    "status": "published",
+    "added_at": "2026-03-13T23:31:21.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+  },
+  {
+    "id": "145463ce-15d3-49bf-a20b-628a6610832e",
+    "name": "Neon Oasis",
+    "nexus_id": "24850",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1382.787,
+      1270.6815,
+      123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+      "apartment",
+      "neokitsch"
+    ],
+    "authors": [
+      "Kali8229"
+    ],
+    "description": "H10 Apartment makeover that for rp offers an Act I and Act II to show how your apt grows a little over the game. Also offers some customization !",
+    "status": "published",
+    "added_at": "2026-03-21T03:50:54.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "162c46e6-9163-43d9-b4a8-5b2a58d68786",
+    "name": "402 north oak - brutalist apartment house home",
+    "nexus_id": "26437",
+    "category": "new-location",
+    "coordinates": [
+      513.6902,
+      1096.6053,
+      220.4677
+    ],
+    "yaw": 54,
+    "tags": [
+      "house",
+      "neokitsch",
+      "photos"
+    ],
+    "authors": [
+      "thumbsuckerr"
+    ],
+    "credits": "manavortex, ArcadieCalliope, Breezypunk, bnbc",
+    "description": "brutalist home in the north oak hills with a view of the city from the flowing infinite pool",
+    "status": "published",
+    "added_at": "2026-03-13T03:31:45.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+  },
+  {
+    "id": "16da1ff3-ab48-44b7-bb8c-2f8b23e21a6b",
+    "name": "H10 Moxx Makeover (world edit)",
+    "nexus_id": "21418",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1382.787,
+      1270.6815,
+      123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+      "apartment",
+      "kitsch",
+      "streetkid"
+    ],
+    "authors": [
+      "evafan84"
+    ],
+    "description": "A Moxx inspired makeover of V's Megabuilding H10 Apartment. Built using archiveXL / World Builder / Native Interactions.",
+    "status": "published",
+    "added_at": "2026-03-19T23:06:58.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "1764ad2d-a974-4872-a5af-fda83bd2d08d",
+    "name": "Dirty Burger Bar",
+    "nexus_id": "22275",
+    "category": "location-overhaul",
+    "coordinates": [
+      -816.7329,
+      1336.7057,
+      34.3268
+    ],
+    "yaw": 70.3737,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "The Dirty Burger Bar has Re-Opened after Renovations! The Bar itself has Brand New Themed Lighting with better Decorated Walkways. Taking the NEW side Staircase to the Lower Level is where the BRAND NEW Shops have been added and Restored with Parking Spaces!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "187aa042-b297-494d-a024-9cbbdac7de9b",
+    "name": "Gomorrah Night Club",
+    "nexus_id": "23350",
+    "category": "new-location",
+    "coordinates": [
+      -1571.5,
+      1184.6,
+      16.3697
+    ],
+    "yaw": 166.35,
+    "tags": [
+      "entertainment",
+      "shop"
+    ],
+    "authors": [
+      "LiquidBronze"
+    ],
+    "description": "This is a standalone version of the Gomorrah night club on Urmland Street.",
+    "status": "published",
+    "added_at": "2026-03-12T23:40:31.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "197b6694-f2fa-4f3d-8253-13f4516fe105",
+    "name": "Soccer field - Football minigame",
+    "nexus_id": "26224",
+    "category": "new-location",
+    "coordinates": [
+      -1881.7848,
+      2004.3577,
+      18.238426
+    ],
+    "yaw": 0.5533915,
+    "tags": [
+      "entertainment",
+      "infrastructure"
+    ],
+    "authors": [
+      "Kaoziun"
+    ],
+    "description": "Fully playable and modular soccer field near with several options for your soccer balls scales. Play on foot or with a vehicle, shoot a gigantic ball through the streets !",
+    "status": "published",
+    "added_at": "2026-03-12T03:43:08.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "1ad9c631-2d11-4ac1-8c56-e1d754352273",
+    "name": "Rocky Ridge Safehouse",
+    "nexus_id": "24587",
+    "category": "new-location",
+    "coordinates": [
+      2578.363,
+      -81.1889,
+      81.0385
+    ],
+    "yaw": 109.5,
+    "tags": [
+      "entropism",
+      "house",
+      "nomad"
+    ],
+    "authors": [
+      "Chivved"
+    ],
+    "description": "\"EL CAPITAN\" will text you the details of the place. Low price for a place to stay low.",
+    "status": "published",
+    "added_at": "2026-03-21T04:09:47.000Z",
+    "modified_at": "2026-04-07T09:16:12.000Z"
+  },
+  {
+    "id": "1b2fa9fe-9820-4662-8d0d-9f541c3c6e3e",
+    "name": "Oriental Dogtown Apartment Mod - ArchiveXL",
+    "nexus_id": "27435",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2230.1956,
+      -2562.3433,
+      80.301
+    ],
+    "yaw": -130.15,
+    "tags": [
+      "apartment",
+      "neokitsch"
+    ],
+    "authors": [
+      "hnovak1"
+    ],
+    "description": "Heavy Hearts inspired apartment mod for V's Dogtown hideout.",
+    "status": "published",
+    "added_at": "2026-03-31T14:38:54.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "1b7aab35-38f2-4b36-981f-76af7fb59371",
+    "name": "Badlands Farmhouse",
+    "nexus_id": "30094",
+    "category": "location-overhaul",
+    "coordinates": [
+      1822.4675,
+      -1070.8601,
+      58.8573
+    ],
+    "yaw": 86.1352,
+    "tags": [
+      "apartment",
+      "entropism",
+      "house",
+      "quest"
+    ],
+    "authors": [
+      "hnovak1"
+    ],
+    "description": "This is the place where V spends a night with Panam and Saul during the Riders of the Storm quest. Now V can use it as a fully functional home with garage.",
+    "status": "published",
+    "added_at": "2026-05-29T15:41:32.000Z",
+    "modified_at": "2026-05-29T15:41:32.000Z"
+  },
+  {
+    "id": "1c2b7de4-8b7f-4932-aec2-37f5b13c6ab2",
+    "name": "Pacifica Enhanced",
+    "nexus_id": "21848",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2068.9492,
+      -2195.9773,
+      39.999992
+    ],
+    "yaw": 0.57583404,
+    "tags": [
+      "infrastructure"
+    ],
+    "authors": [
+      "WhiteRabbit0110"
+    ],
+    "description": "Adds various props to some empty areas of Pacifica making the area feel more lived in / believable.",
+    "status": "published",
+    "added_at": "2026-03-21T05:51:50.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "1d16d80a-aeac-41e4-b926-aa52bb43bd66",
+    "name": "Outdoor V - City Camps",
+    "nexus_id": "26542",
+    "category": "new-location",
+    "coordinates": [
+      -2325.8926,
+      -2000.3291,
+      67.89406
+    ],
+    "tags": [
+      "apartment",
+      "nomad",
+      "photos"
+    ],
+    "authors": [
+      "Kaoziun"
+    ],
+    "description": "8 mini hideouts spread across all districts, with customization options. Several new vertical access points and striking landscapes, jump of faith pools. Reclusive V is now a cat.",
+    "status": "published",
+    "added_at": "2026-03-13T18:09:52.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "1e3426f7-3965-4eed-b2e2-d7d06c02330d",
+    "name": "Lizzie's Bar Overhaul",
+    "nexus_id": "30128",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1190.954,
+      1566.4596,
+      22.9151
+    ],
+    "yaw": -94.0445,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "LordBLKRamen"
+    ],
+    "description": "Shhheeeee's baaaaaack !! Better than ever !!",
+    "status": "published",
+    "added_at": "2026-05-30T21:13:58.000Z",
+    "modified_at": "2026-05-30T21:13:58.000Z"
+  },
+  {
+    "id": "1f449938-3e0d-4074-87ff-d8402ba22007",
+    "name": "Luxor Heights Penthouse (DogTown)",
+    "nexus_id": "18331",
+    "category": "new-location",
+    "coordinates": [
+      -1672.9697,
+      -2755.2627,
+      210.099
+    ],
+    "yaw": -36.3333,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "Ronusti"
+    ],
+    "description": "DogTown Penthouse AMM",
+    "status": "published",
+    "added_at": "2026-04-18T09:48:39.000Z",
+    "modified_at": "2026-04-18T09:48:39.000Z"
+  },
+  {
+    "id": "2100574f-5c15-4164-9b23-963792a876db",
+    "name": "H10_PINK_Apartment",
+    "nexus_id": "26785",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1382.787,
+      1270.6815,
+      123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "77reye"
+    ],
+    "description": "Overhaul of the H10 apartment. Features Archive XL for install and Native Interactions for injecting interactions. Redesigns key sections of the apartment.",
+    "status": "published",
+    "added_at": "2026-03-21T06:50:37.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "21779088-7c8d-4812-a835-d2cc9408094a",
+    "name": "Impoverished Japantown Hostel",
+    "nexus_id": "29945",
+    "category": "new-location",
+    "coordinates": [
+      -380.5103,
+      1218.7118,
+      23.4524
+    ],
+    "yaw": 122.0588,
+    "tags": [
+      "apartment",
+      "entropism"
+    ],
+    "authors": [
+      "yoimflying"
+    ],
+    "description": "IM back, Chooms, with a new spin on the apartment genre, with housing being expensive in NightCity and almost everyone living in poverty I thought to myself, why not make a hostel where you, the player, can live amongst your fellow impoverished neighbors in squaller.",
+    "status": "published",
+    "added_at": "2026-06-07T14:03:08.000Z",
+    "modified_at": "2026-06-07T14:03:08.000Z"
+  },
+  {
+    "id": "2189690b-50e9-45ea-9054-45c620067905",
+    "name": "dogtown hideout revamp - apartment",
+    "nexus_id": "28680",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2237.8062,
+      -2556.0313,
+      80.3226
+    ],
+    "yaw": -95,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "thumbsuckerr"
+    ],
+    "description": "cleaned up the dogtown hideout",
+    "status": "published",
+    "added_at": "2026-04-13T19:42:11.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+  },
+  {
+    "id": "22c08999-7fe3-4c2b-9a05-75891cace444",
+    "name": "NC Track Circuits - Ovals and Rings",
+    "nexus_id": "25410",
+    "category": "new-location",
+    "coordinates": [
+      -509.99042,
+      -2886.1313,
+      32.394943
+    ],
+    "yaw": -0.13441841,
+    "tags": [
+      "infrastructure",
+      "streetkid"
+    ],
+    "authors": [
+      "Kaoziun"
+    ],
+    "description": "3 toggleable racing tracks. Want to just rev up the engine and do some laps ? I gotchu choom.",
+    "status": "published",
+    "added_at": "2026-03-12T02:57:43.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "23871c0f-cb25-4d5b-a1f2-70dbc0d4435a",
+    "name": "Showroom - Photo Studio (Visual - Photomode space)",
+    "nexus_id": "26078",
+    "category": "new-location",
+    "coordinates": [
+      -667.84863,
+      2668.6604,
+      53.9817
+    ],
+    "yaw": 13.85,
+    "tags": [
+      "corpo",
+      "nomad",
+      "photos",
+      "streetkid"
+    ],
+    "authors": [
+      "Kaoziun"
+    ],
+    "credits": "manavortex, Akiway",
+    "description": "Photo studio and visual room to provide an optimal working space for all sorts of Virtual Photographers needs, get creative !",
+    "status": "published",
+    "added_at": "2026-03-12T03:34:03.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "24110e52-8c41-439b-a894-198a65f0c8f4",
+    "name": "CLUB 27 - Glen Apartment",
+    "nexus_id": "13051",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1521.956,
+      -973.40356,
+      86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+      "apartment",
+      "kitsch"
+    ],
+    "authors": [
+      "brocreate"
+    ],
+    "description": "Flashy eclectic Glen Apartment and/or lobby. Designed for an edgerunner who rocks both expensive and lowbrow tastes.",
+    "status": "published",
+    "added_at": "2026-03-14T09:01:16.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "241f0c87-0218-4e83-9f31-321379fad49c",
+    "name": "Sea Wall Towers Detailed",
+    "nexus_id": "31924",
+    "category": "location-overhaul",
+    "coordinates": [
+      -5782.011,
+      1781.279,
+      195.898
+    ],
+    "tags": [
+      "infrastructure",
+      "photos"
+    ],
+    "authors": [
+      "LordTrilobite"
+    ],
+    "description": "Adds details and collision to the normally low detail towers at the edge of the bay of Night City.",
+    "status": "published",
+    "added_at": "2026-07-26T15:39:10.000Z",
+    "modified_at": "2026-07-26T15:39:10.000Z"
+  },
+  {
+    "id": "24ccf246-612e-4be2-9989-54985873e4e3",
+    "name": "Glen Apartment Garage",
+    "nexus_id": "24407",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1536.1792,
+      -990.8159,
+      9.2653
+    ],
+    "yaw": 2.2257,
+    "tags": [
+      "apartment",
+      "infrastructure"
+    ],
+    "authors": [
+      "Chivved"
+    ],
+    "description": "Adds a BAREBONES garage right beside the entrance to the Glen apartment, direct entrance to lobby. World Builder JSON provided.",
+    "status": "published",
+    "added_at": "2026-03-21T04:19:23.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+  },
+  {
+    "id": "2586d486-2066-445a-b36f-d5bf85394238",
+    "name": "H10 Metro Walkway",
+    "nexus_id": "27541",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1446.6057,
+      1199.9326,
+      37.9153
+    ],
+    "yaw": -160,
+    "tags": [
+      "infrastructure"
+    ],
+    "authors": [
+      "ThaFunktopus"
+    ],
+    "description": "Restores access to the walkway and police station rooftop at the H10 metro station",
+    "status": "published",
+    "added_at": "2026-03-12T06:54:08.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "25dcc964-fc45-4a65-a741-401e53d9e9a4",
+    "name": "NorthSide Garage House",
+    "nexus_id": "22290",
+    "category": "location-overhaul",
+    "coordinates": [
+      -832.6134,
+      2771.8362,
+      39.3294
+    ],
+    "yaw": 125.5153,
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "8eartic"
+    ],
+    "description": "Northside Garage and House.",
+    "status": "published",
+    "added_at": "2026-03-23T18:49:26.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+  },
+  {
+    "id": "27551700-9a67-44af-88fd-496424d788df",
+    "name": "Forest Canyon Campsite",
+    "nexus_id": "27141",
+    "category": "location-overhaul",
+    "coordinates": [
+      5320.874,
+      -240.78528,
+      97.97386
+    ],
+    "yaw": -0.8929913,
+    "tags": [
+      "apartment",
+      "nomad"
+    ],
+    "authors": [
+      "Sirandar888"
+    ],
+    "description": "Adds a simple campsite to the mod Outdoor V - Canyon Forest by Kaoziun.",
+    "status": "published",
+    "added_at": "2026-03-19T22:39:48.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "28663ee0-f8a5-474e-8940-1ede730dad21",
+    "name": "H10 Minimal Apartment Clean Up",
+    "nexus_id": "19605",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1382.3882,
+      1270.984,
+      123.0649
+    ],
+    "yaw": -79.1,
+    "tags": [
+      "apartment",
+      "kitsch",
+      "streetkid"
+    ],
+    "authors": [
+      "LiquidBronze"
+    ],
+    "description": "This is a very minimal mod to clean up the H10 apartment.",
+    "status": "published",
+    "added_at": "2026-05-16T08:47:18.000Z",
+    "modified_at": "2026-05-16T08:47:18.000Z"
+  },
+  {
+    "id": "293c15f0-a2b9-4f31-94fb-936194cb9e9d",
+    "name": "Badlands Garage",
+    "nexus_id": "28630",
+    "category": "new-location",
+    "coordinates": [
+      -1288.348,
+      -4230.471,
+      62.6615
+    ],
+    "yaw": 157.4,
+    "tags": [
+      "apartment",
+      "entropism",
+      "nomad"
+    ],
+    "authors": [
+      "ValerieOSD"
+    ],
+    "description": "\"Choom ! This new preem garage on the outskirts of town just appeared on the market, it's near those solar plants, it's all yours for only 25,000 eds !\"\nThis adds a new purchasable garage with living area in the Solar Farms region of the Badlands.",
+    "status": "published",
+    "added_at": "2026-04-04T09:53:36.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "2999ef0c-300a-4401-943c-c88d569d2ffa",
+    "name": "7th Hell Club Unlocked and Remastered",
+    "nexus_id": "27207",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1932.2175,
+      -42.149864,
+      -1.5324
+    ],
+    "yaw": -92.7,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "Roxterfox"
+    ],
+    "description": "Unlocked all the locked areas of the club, removed and fixed the broken stuff and added some.",
+    "status": "published",
+    "added_at": "2026-03-21T12:23:54.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+  },
+  {
+    "id": "29bf9b31-da51-43d2-a4e7-c8123bd8b28c",
+    "name": "H10 Stripper Den",
+    "nexus_id": "29939",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1388.7671,
+      1271.2734,
+      123.0824
+    ],
+    "yaw": -91.9,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "LordBLKRamen"
+    ],
+    "description": "Transform V's H10 apartment into the ultimate Night City hangout. Pour a whiskey at your personal bar, light up a smoke, hit the dance floor by the stripper pole, or just kick back and soak in the neon glow. Your apartment finally lives up to your reputation.",
+    "status": "published",
+    "added_at": "2026-05-24T12:17:25.000Z",
+    "modified_at": "2026-05-24T12:17:25.000Z"
+  },
+  {
+    "id": "2d364ba6-9901-4291-8fd3-97653619a620",
+    "name": "watson warehouse apartment + garage",
+    "nexus_id": "31383",
+    "category": "new-location",
+    "coordinates": [
+      -953.98456,
+      1867.126,
+      36.49375
+    ],
+    "tags": [
+      "apartment",
+      "photos",
+      "streetkid"
+    ],
+    "authors": [
+      "thumbsuckerr"
+    ],
+    "description": "giant brick warehouse right next to judy's spot. art and music everywhere. huge floor to ceiling windows. black cat companion. share a rooftop with your techie girlfriend. big garage.",
+    "status": "published",
+    "added_at": "2026-07-20T04:37:06.000Z",
+    "modified_at": "2026-07-20T04:37:06.000Z"
+  },
+  {
+    "id": "2d9c390a-7457-4912-be44-d0654fa22f46",
+    "name": "DogTown Stadium Unlocked and Remastered",
+    "nexus_id": "28024",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1397.5463,
+      -2119.9438,
+      68.871
+    ],
+    "yaw": -57.5,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "Roxterfox"
+    ],
+    "description": "Unlocked all secret and locked areas of the Dogtown Stadium with minor fixes and additions.",
+    "status": "published",
+    "added_at": "2026-03-19T22:12:05.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+  },
+  {
+    "id": "2db9e21f-b8d1-4553-9960-683a198b3b21",
+    "name": "Afterlife unit a - apartment",
+    "nexus_id": "28425",
+    "category": "new-location",
+    "coordinates": [
+      -1458.9739,
+      1037.459,
+      32.2907
+    ],
+    "yaw": 95.8628,
+    "tags": [
+      "apartment",
+      "entertainment",
+      "entropism"
+    ],
+    "authors": [
+      "thumbsuckerr"
+    ],
+    "description": "Apartment above Afterlife club.",
+    "status": "published",
+    "added_at": "2026-03-25T21:25:55.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+  },
+  {
+    "id": "2e28a6f9-0df3-4514-a628-f2451491551a",
+    "name": "Red Queens Club Enhanced",
+    "nexus_id": "23883",
+    "category": "location-overhaul",
+    "coordinates": [
+      660.94934,
+      -474.70898,
+      10.5575
+    ],
+    "yaw": 48.7682,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "After V and River Ward put an end to the Animal Boss running this Underground Club, they thought it was over…..Within a week, another New Animal Boss to run the Club……Nothing changes in Night City, except for the Club Itself! New Boss says UP THE NEON LIGHTS and Security and that will be enough. Typical Gonks.",
+    "status": "published",
+    "added_at": "2026-03-21T11:42:43.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "2e468bec-c0b9-4324-91be-f1259e43e6ee",
+    "name": "Pew Pew Plaza Enhanced",
+    "nexus_id": "22586",
+    "category": "location-overhaul",
+    "coordinates": [
+      -830.96027,
+      -267.41006,
+      7.4902
+    ],
+    "yaw": 49.2266,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "This is another Smaller Mod that Enhances an Arcade area! This area even has a little Event going on with Non-Hostile Enemies around the Arcade! Come on in, Play some Arcade Games and have a good time admiring the NEW Colorful Arcade Lights!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "2edaee32-9516-423a-9dec-a11982767990",
+    "name": "Dogtown Hideout Remake - Authentic",
+    "nexus_id": "26694",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2230.1956,
+      -2562.3433,
+      80.301
+    ],
+    "yaw": -130.15,
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "Kaelu2077"
+    ],
+    "description": "A faithful overhaul of the original Dogtown hideout, rebuilt with enhanced detail, atmosphere and story-accurate adjustments.",
+    "status": "published",
+    "added_at": "2026-03-12T19:23:55.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "2f2bf467-4363-4967-b978-641abf146f9e",
+    "name": "Time Machine - Extended",
+    "nexus_id": "24248",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1844.6635,
+      -586.26587,
+      7.6054
+    ],
+    "yaw": -2.1383,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "PixieMattel"
+    ],
+    "description": "This mod adds a few interactions to the Time Machine junk shop in Heywood.",
+    "status": "published",
+    "added_at": "2026-03-19T23:28:03.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "2f9abfec-82df-4e3a-a1a4-4bf447e6e1a7",
+    "name": "H10 Apartment Wooden Recolor",
+    "nexus_id": "25426",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1382.787,
+      1270.6815,
+      123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "Celestria129"
+    ],
+    "description": "A wood recolor/texture of the all redesigns of V's H10 Apartment.",
+    "status": "published",
+    "added_at": "2026-03-19T23:19:13.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "3005a7c6-a311-4c16-ae4e-e40268498318",
+    "name": "Pacifica Shores - Threadbare Crib",
+    "nexus_id": "28598",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2058.6038,
+      -1877.9492,
+      11.33
+    ],
+    "yaw": -116.3698,
+    "tags": [
+      "apartment",
+      "house"
+    ],
+    "authors": [
+      "Guitarsolo"
+    ],
+    "description": "Sunshine, umbrellas, beach houses, sexy, so very sexy scavs, with a view of the ocean you'll never forget! Pacific-AAA+",
+    "status": "published",
+    "added_at": "2026-04-13T17:41:27.000Z",
+    "modified_at": "2026-04-13T17:41:27.000Z"
+  },
+  {
+    "id": "32867cf9-81db-4d7b-a668-623252a9d08c",
+    "name": "Canyon Explorer",
+    "nexus_id": "25617",
+    "category": "other",
+    "coordinates": [
+      3732.2097,
+      820.3253,
+      134.309
+    ],
+    "yaw": -51.3379,
+    "tags": [
+      "infrastructure"
+    ],
+    "authors": [
+      "Oranje3"
+    ],
+    "description": "Explore the full canyon. Removes the player kill zones.",
+    "status": "published",
+    "added_at": "2026-03-12T13:26:02.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "32eeb3f7-1d5b-4867-90d6-a209a6264d9c",
+    "name": "V's Pacifica Cabana Hideout",
+    "nexus_id": "10566",
+    "category": "new-location",
+    "coordinates": [
+      -2011.4167,
+      -2010.3208,
+      22.5533
+    ],
+    "yaw": -120,
+    "tags": [
+      "apartment",
+      "photos"
+    ],
+    "authors": [
+      "ThaFunktopus"
+    ],
+    "description": "Small garage/apartment and rooftop cabana",
+    "status": "published",
+    "added_at": "2026-03-12T06:31:25.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+  },
+  {
+    "id": "36d06751-1853-4f43-a659-d698a5184152",
+    "name": "Canyon Fixes",
+    "nexus_id": "25918",
+    "category": "location-overhaul",
+    "coordinates": [
+      4528.514,
+      589.7748,
+      223.8003
+    ],
+    "yaw": -32.2148,
+    "tags": [
+      "infrastructure"
+    ],
+    "authors": [
+      "Kaoziun"
+    ],
+    "description": "Collection of various visual fixes to correct the eastern Badlands canyon and map border. Entirely customizable through Native Settings UI.",
+    "status": "published",
+    "added_at": "2026-03-12T13:27:36.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "3a920f1f-9498-49b8-8a44-b34be0aeebe0",
+    "name": "South Japantown Home",
+    "nexus_id": "23480",
+    "category": "new-location",
+    "coordinates": [
+      -489.81705,
+      289.4191,
+      60.3793
+    ],
+    "yaw": 3.8464,
+    "tags": [
+      "house",
+      "neokitsch"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "On top of the shutdown Hotel, lies V’s Beautiful Escape from the Night City Streets, YOUR NEW SOUTH JAPANTOWN HOME ! Your New 2 Story Home features a Stunning Interior and Upstairs Bedroom. Outside you’ll find the AV Landing Pad and also a Ladder taking you to the Roof/ 3rd and 4th Floor Viewing spaces ! You can now even go on the NCART Tracks !",
+    "status": "published",
+    "added_at": "2026-03-21T11:45:16.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "3b127491-1cd1-461f-ace5-517091c95dae",
+    "name": "Modern H10 Apartment - ArchiveXL Preset",
+    "nexus_id": "27518",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1382.787,
+      1270.6815,
+      123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+      "apartment",
+      "neokitsch"
+    ],
+    "authors": [
+      "DeVaughnDawn"
+    ],
+    "description": "An Archive preset of V's Apartment (Modern)﻿ by rexxgta, updating its warm and modern design.",
+    "status": "published",
+    "added_at": "2026-03-19T22:26:05.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "3b228260-4a14-4064-9e35-043c135a612c",
+    "name": "Under the moon",
+    "nexus_id": "26298",
+    "category": "new-location",
+    "coordinates": [
+      3672.9102,
+      -1652.1962,
+      123.709
+    ],
+    "yaw": -128.8,
+    "tags": [
+      "entropism",
+      "house",
+      "nomad"
+    ],
+    "authors": [
+      "yaba08211"
+    ],
+    "description": "Just a short walk from the Radio Strange Insight station, Jen’s house sits quietly along the roadside. She once ran a small, cozy restaurant here and hosted improvised karaoke nights for wanderers passing through. Since the live radio shooting and much like Cassandra, Jen has gone missing. What remains is a home frozen in time, filled with memor",
+    "status": "published",
+    "added_at": "2026-03-14T23:51:45.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "3bc0062c-fe63-44c7-8559-c599377b70b6",
+    "name": "The Glen Lizzy Style",
+    "nexus_id": "17058",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1521.956,
+      -973.40356,
+      86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+      "apartment",
+      "entertainment",
+      "neokitsch"
+    ],
+    "authors": [
+      "Loveprettymoney"
+    ],
+    "description": "This is a AMM preset For Your Glen Apartment! Inspired By Lizzy Wizzy with my Twist. Purple Lighting And Marble Floors! Big Aquariums for your Enjoyment! I will be making different Lighting Versions of this preset so stay tuned!",
+    "status": "published",
+    "added_at": "2026-03-21T13:35:56.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "3da7d427-f2e0-4846-98c3-2033d86a5156",
+    "name": "Lakeview Cottage Retreat with Native Interactions",
+    "nexus_id": "23523",
+    "category": "location-overhaul",
+    "coordinates": [
+      1112.9989,
+      -3464.958,
+      180.4531
+    ],
+    "yaw": -162.65,
+    "tags": [
+      "apartment",
+      "entropism"
+    ],
+    "authors": [
+      "Sirandar888"
+    ],
+    "description": "Overhaul for Judy's Laguna Bend cottage.",
+    "status": "published",
+    "added_at": "2026-03-19T22:34:43.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "3e2e168a-5f2e-444b-8517-0a0bf7056f78",
+    "name": "H10 Songbird SF1 Apartment",
+    "nexus_id": "28556",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1382.787,
+      1270.6815,
+      123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+      "apartment",
+      "corpo",
+      "neokitsch"
+    ],
+    "authors": [
+      "hnovak1"
+    ],
+    "description": "H10 apartment mod inspired by Songbird and the beginning of Phantom Liberty, the crash of Space Force One.",
+    "status": "published",
+    "added_at": "2026-03-31T14:32:06.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "3e8019db-4e8e-499e-aa8a-6d69e1444065",
+    "name": "H10 Wooden Floor",
+    "nexus_id": "27555",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1382.787,
+      1270.6815,
+      123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "VasilisaW"
+    ],
+    "description": "Floor repair in apartment H10 and some other improvements.",
+    "status": "published",
+    "added_at": "2026-03-19T22:26:57.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "3f1d4436-6437-4aca-9885-9135b817d66e",
+    "name": "Heavy Hearts Club Unlocked",
+    "nexus_id": "27108",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1597.0299,
+      -2341.358,
+      43.2503
+    ],
+    "yaw": 52.4,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "Roxterfox"
+    ],
+    "description": "Unlocked the areas that were not accessible.",
+    "status": "published",
+    "added_at": "2026-03-21T13:13:18.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "3f2ec0c6-735a-44db-8bd5-eebc90eed162",
+    "name": "esoterica tech den apartment",
+    "nexus_id": "25954",
+    "category": "new-location",
+    "coordinates": [
+      -1542.6659,
+      1168.9929,
+      25.9911
+    ],
+    "yaw": -168.1427,
+    "tags": [
+      "apartment",
+      "kitsch",
+      "streetkid"
+    ],
+    "authors": [
+      "thumbsuckerr"
+    ],
+    "description": "cluttered netrunner's apartment above Misty's",
+    "status": "published",
+    "added_at": "2026-03-13T03:44:22.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+  },
+  {
+    "id": "3f52fb71-2abb-4171-b3fe-5f1a8a1e7780",
+    "name": "V's Sierra Sonora Villa",
+    "nexus_id": "8442",
+    "category": "new-location",
+    "coordinates": [
+      4676.289,
+      -2320.3206,
+      269.4234
+    ],
+    "yaw": 70.7929,
+    "tags": [
+      "house",
+      "photos"
+    ],
+    "authors": [
+      "ThaFunktopus"
+    ],
+    "description": "Scenic player home in the badlands",
+    "status": "published",
+    "added_at": "2026-03-12T06:50:12.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "41708b24-e162-4a46-8d6e-e05d73063389",
+    "name": "Kabuki Slums",
+    "nexus_id": "24416",
+    "category": "new-location",
+    "coordinates": [
+      -1033.4761,
+      1739.1152,
+      31.4029
+    ],
+    "yaw": 99.3089,
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "bigpoppajuan"
+    ],
+    "description": "This adds a new player home with working interactions, I think it fits the vibe quite well.",
+    "status": "published",
+    "added_at": "2026-03-19T01:08:34.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "42956248-242e-43db-ba2c-d8c4b0b38a51",
+    "name": "Arasaka Estate Mansion",
+    "nexus_id": "19169",
+    "category": "location-overhaul",
+    "coordinates": [
+      313.4383,
+      1053.8418,
+      225.9182
+    ],
+    "yaw": 115.3552,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "CONGRATULATIONS! YOU ARE INVITED TO THE ARASAKA ESTATE MANSION PARTY! Enjoy your Free Brand-New Mansion courtesy of Arasaka themselves! This 3-Story Mansion in North Oak is now FULLY KITTED wiith over a whopping 2,100 props of Decorations, NPCs and an AV landing Pad! The Mansion YOU DESERVE!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "441deb7a-4d6a-4a62-bac2-f21746c20320",
+    "name": "Yaiba Tower Apartment",
+    "nexus_id": "30379",
+    "category": "new-location",
+    "coordinates": [
+      -1152.0175,
+      1582.7865,
+      75.6756
+    ],
+    "yaw": -107.4471,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "lovewich"
+    ],
+    "description": "Industrial-chic penthouse with 360° views and a rooftop sanctuary",
+    "status": "published",
+    "added_at": "2026-06-12T23:15:24.000Z",
+    "modified_at": "2026-06-12T23:15:24.000Z"
+  },
+  {
+    "id": "46293fba-083d-4097-b0d3-7a3068d4b3cd",
+    "name": "Ash - Memorial for a Friend",
+    "nexus_id": "26096",
+    "category": "other",
+    "coordinates": [
+      228.42104,
+      592.8148,
+      121.95119
+    ],
+    "yaw": 0.23810945,
+    "tags": [],
+    "authors": [
+      "FiendishAmy"
+    ],
+    "description": "A memorial for a friend, located in the North Oak Columbarium.",
+    "status": "published",
+    "added_at": "2026-03-12T19:21:02.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "46a29b55-5483-40e0-8c6a-4f3a8e3981d4",
+    "name": "More H10 Interactions",
+    "nexus_id": "25651",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1382.787,
+      1270.6815,
+      123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "1bells"
+    ],
+    "description": "Adds more interactions to the H10 apartment; coffee maker, whiskey & smoke spot, guitar, lean spot and more. Also restores access to the shooting range.",
+    "status": "published",
+    "added_at": "2026-03-21T03:45:24.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "46f412ac-b021-465f-a8b0-a3eee2cafb36",
+    "name": "DvS's Garage Car Shop",
+    "nexus_id": "24713",
+    "category": "location-overhaul",
+    "coordinates": [
+      -716.1071,
+      2940.1138,
+      27.3555
+    ],
+    "yaw": -169.65,
+    "tags": [
+      "apartment",
+      "infrastructure",
+      "shop"
+    ],
+    "authors": [
+      "DvSiNt3nTiOnS"
+    ],
+    "description": "Garage Car Shop modification and Player Home.",
+    "status": "published",
+    "added_at": "2026-03-21T03:55:58.000Z",
+    "modified_at": "2026-04-08T23:01:57.000Z"
+  },
+  {
+    "id": "4754ff02-263c-428d-b3f7-f7da65368079",
+    "name": "Crunch Plaza Restoration",
+    "nexus_id": "25795",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1796.0876,
+      139.3349,
+      43.91
+    ],
+    "yaw": -171.1082,
+    "tags": [
+      "corpo",
+      "shop"
+    ],
+    "authors": [
+      "YouCutDream"
+    ],
+    "description": "Restores Crunch Plaza, the unfinished part of the map that the game politely kept you away from. Now walk around, poke corners, feel amused and pretend this was always meant to be.",
+    "status": "published",
+    "added_at": "2026-03-12T23:55:59.000Z",
+    "modified_at": "2026-04-08T11:27:55.000Z"
+  },
+  {
+    "id": "487a99c9-c906-4b9c-9f2c-3524109b5017",
+    "name": "Las Palapas Club",
+    "nexus_id": "25692",
+    "category": "new-location",
+    "coordinates": [
+      -595.4874,
+      366.71826,
+      22.471
+    ],
+    "yaw": -42.5278,
+    "tags": [
+      "entertainment",
+      "kitsch"
+    ],
+    "authors": [
+      "MaxineSkaff"
+    ],
+    "description": "A handcrafted club location featuring a backstage area, sound rooms, gear workshop, VIP lounge, mosh pit bar and entrance hall. Built for cinematic screenshots, immersive storytelling and machinima.",
+    "status": "published",
+    "added_at": "2026-03-13T21:07:52.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "48a25985-a539-47d8-95b7-0f3726c4466d",
+    "name": "Northside Motel - Maelstrom Coding Cave and Ripper Den",
+    "nexus_id": "29277",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1504.1721,
+      2228.3594,
+      22.2
+    ],
+    "yaw": 34.2,
+    "tags": [
+      "apartment",
+      "entropism"
+    ],
+    "authors": [
+      "MaelstromCodefreak"
+    ],
+    "description": "Apartment World Edit that turns the Northside Apartment into a full Maelstrom Netrunner lair. Adds a High-Tech Low-Life feel to the main living area, modifies the stash room into a fully stocked Ripperdoc room and Scav Den, modifies the area surrounding the apartment including a roof hangout, and adds a new deep-dive mainframe room.",
+    "status": "published",
+    "added_at": "2026-05-17T20:53:04.000Z",
+    "modified_at": "2026-05-17T20:53:04.000Z"
+  },
+  {
+    "id": "491fbb93-7e93-4e64-ad32-e756d46573d5",
+    "name": "Japantown Apartment Balcony",
+    "nexus_id": "29466",
+    "category": "location-overhaul",
+    "coordinates": [
+      -784.7092,
+      978.3455,
+      28.2095
+    ],
+    "yaw": 94.3499,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "hnovak1"
+    ],
+    "description": "The same balcony as in my Rockerdoll Japantown Apartment mod, but without changing any other part of the apartmen",
+    "status": "published",
+    "added_at": "2026-05-17T20:33:41.000Z",
+    "modified_at": "2026-05-17T20:33:41.000Z"
+  },
+  {
+    "id": "494ee0c2-3769-4fb5-923e-8195259c8b74",
+    "name": "moxxx lair - apartment",
+    "nexus_id": "26255",
+    "category": "new-location",
+    "coordinates": [
+      -624.67114,
+      880.32336,
+      32.9839
+    ],
+    "yaw": 97.7499,
+    "tags": [
+      "apartment",
+      "kitsch",
+      "streetkid"
+    ],
+    "authors": [
+      "thumbsuckerr"
+    ],
+    "description": "colorful neon apartment fit for a mox with an extra hideout on the roof",
+    "status": "published",
+    "added_at": "2026-03-13T03:27:39.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+  },
+  {
+    "id": "4aa1ef66-a8ad-4f16-96df-da06c1e8945b",
+    "name": "Dark Matter Club ( with Apartment )",
+    "nexus_id": "19905",
+    "category": "location-overhaul",
+    "coordinates": [
+      -331.03992,
+      223.58023,
+      188.918
+    ],
+    "yaw": -32.7456,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "The Dark Matter Club has RE-OPENED with a Vibrant Redesign and has been fitted with lights, NPCs and Vending machines to catch your attention when driving by! The Main Club AND The Top Floor is now FULL with NPCs, Decorations and even an AV Landing Pad!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "4ab472ca-0483-4645-972c-565a767c4a69",
+    "name": "IZAKAYA - Bar and Street Food Location",
+    "nexus_id": "16192",
+    "category": "new-location",
+    "coordinates": [
+      -2195.56,
+      -754.269,
+      8.859184
+    ],
+    "tags": [
+      "entertainment",
+      "shop"
+    ],
+    "authors": [
+      "brocreate"
+    ],
+    "description": "Unlocks two storefronts in Wellsprings, a bar and ramen shop with interactable vendors! Adds decor, effects, real NPC to the area. (Not an AMM preset)",
+    "status": "published",
+    "added_at": "2026-03-14T09:04:07.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "4b35b265-a43f-4ea9-83cd-fa9420e6c39a",
+    "name": "Coyote Cojo's rooftop apartment",
+    "nexus_id": "27269",
+    "category": "new-location",
+    "coordinates": [
+      -1264.1458,
+      -1001.2848,
+      32.2963
+    ],
+    "yaw": -7.35,
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "barbedvvire"
+    ],
+    "description": "This mod adds a two-story apartment above the Coyote Cojo's bar, built completely from scratch and with native interactions.",
+    "status": "published",
+    "added_at": "2026-03-12T12:02:59.000Z",
+    "modified_at": "2026-04-07T09:20:23.000Z"
+  },
+  {
+    "id": "4b43e630-2f4a-40c5-b31d-c1b97ce5a49e",
+    "name": "Impoverished Santo Domingo Apartment",
+    "nexus_id": "28381",
+    "category": "new-location",
+    "coordinates": [
+      -49.3674,
+      -1768.9927,
+      -5.3439
+    ],
+    "yaw": -36.4336,
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "yoimflying"
+    ],
+    "description": "Yoooooo Chooms Im back with another trash bin of an apartment for y'all, this time im taking you straight to the dirty depths of Santo Domingo, where 6th street runs the whole block, and you have kids outside your front door with firearms. What more could a tenant want in Night City !",
+    "status": "published",
+    "added_at": "2026-03-23T18:41:05.000Z",
+    "modified_at": "2026-04-08T23:01:57.000Z"
+  },
+  {
+    "id": "4b64c436-93e3-4e4e-984f-73a376643b7c",
+    "name": "Jig Jig Surprise - Randomized Outcomes Location",
+    "nexus_id": "28278",
+    "category": "new-location",
+    "coordinates": [
+      -625.0426,
+      824.43835,
+      18.3832
+    ],
+    "yaw": -81.3003,
+    "tags": [
+      "entertainment",
+      "kitsch"
+    ],
+    "authors": [
+      "Kaoziun"
+    ],
+    "description": "Enter the parlor… and hope for the best. 20 unique randomized outcomes available so far. Rewarding, goofy, lethal, slightly NSFW. An unique type of location.",
+    "status": "published",
+    "added_at": "2026-03-26T10:42:24.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "4ca3acf3-718d-4a37-938b-0e28f0068691",
+    "name": "Eden Plaza - Charter Hill Player Penthouse",
+    "nexus_id": "25409",
+    "category": "new-location",
+    "coordinates": [
+      -115.73483,
+      -208.03392,
+      104.1474
+    ],
+    "yaw": -67.5915,
+    "tags": [
+      "corpo",
+      "house",
+      "neokitsch"
+    ],
+    "authors": [
+      "Magicman010"
+    ],
+    "description": "Live in luxury in Charter Hill. Spoil yourself and forget about the filth living below as you look down from your new Penthouse suite, offering spectacular waterfront views.",
+    "status": "published",
+    "added_at": "2026-03-12T05:10:47.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "4d2ac5a3-7f8a-4acf-a99a-5763469768df",
+    "name": "Revgo - Modular Track Builder and Demo Circuits",
+    "nexus_id": "28059",
+    "category": "new-location",
+    "coordinates": [
+      -2676.679,
+      -774.5576,
+      8.367989
+    ],
+    "yaw": 0.9851844,
+    "tags": [
+      "infrastructure",
+      "nomad",
+      "streetkid"
+    ],
+    "authors": [
+      "Kaoziun"
+    ],
+    "description": "Resource to easily create tracks and roads, with a demo build featuring several circuits and a few visual options.",
+    "status": "published",
+    "added_at": "2026-03-12T03:50:59.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "512f5b49-2136-4190-9f30-c1f4d90a752c",
+    "name": "Megabuilding 8 Expanded ( with Apartments )",
+    "nexus_id": "22164",
+    "category": "location-overhaul",
+    "coordinates": [
+      -708.9285,
+      824.1237,
+      323.2522
+    ],
+    "yaw": -75.4401,
+    "tags": [
+      "apartment",
+      "neokitsch"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "The Megabuilding 8 YOU DESERVE ! Basically 2 mods IN ONE! Now the Top Floor Penthouse is FULLY DECORATED and ready for you to move in to ! AMM also unlocks a New Elevator floor, taking you to the NEW Floating Glass House with great views of NC as well ! AMM IS NEEDED TO RESTORE DOORS AND THE ELEVATOR. RESTORING THE ELEVATOR UNLOCKS A SECRET FLOOR !",
+    "status": "published",
+    "added_at": "2026-03-21T12:10:11.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "51620707-0534-43bb-857e-7a2943935aed",
+    "name": "Rancho Car Parts Garage",
+    "nexus_id": "25979",
+    "category": "location-overhaul",
+    "coordinates": [
+      233.004,
+      -1463.6902,
+      9.5692
+    ],
+    "yaw": -35,
+    "tags": [
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "8eartic"
+    ],
+    "description": "Small House In Rancho with the essential .",
+    "status": "published",
+    "added_at": "2026-03-21T02:43:12.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "5308bb1c-769c-46dd-98f2-47a80a0d03a0",
+    "name": "Urmland Street Arcade",
+    "nexus_id": "23908",
+    "category": "new-location",
+    "coordinates": [
+      -1574.739,
+      1197.2,
+      17.0283
+    ],
+    "yaw": 128.2393,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "LiquidBronze"
+    ],
+    "description": "This is a standalone version of the arcade on Urmland Street.",
+    "status": "published",
+    "added_at": "2026-03-12T23:42:00.000Z",
+    "modified_at": "2026-04-08T11:27:55.000Z"
+  },
+  {
+    "id": "534f1940-aa4d-4979-9606-e2e4e5b9b699",
+    "name": "Be Hot Sex Shop",
+    "nexus_id": "27915",
+    "category": "new-location",
+    "coordinates": [
+      -2350.3,
+      -376.7,
+      12.9854
+    ],
+    "yaw": 1.2771,
+    "tags": [
+      "entertainment",
+      "shop"
+    ],
+    "authors": [
+      "LiquidBronze"
+    ],
+    "description": "The \"Be Hot\" sex shop is located in the Heywood district and now has an interior along with potential for modder collaboration!",
+    "status": "published",
+    "added_at": "2026-03-12T23:51:57.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "54af8b0b-4564-49cd-8cdb-a9b828b464df",
+    "name": "Downtown Yacht",
+    "nexus_id": "16046",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2532.6025,
+      11.325111,
+      2.5531
+    ],
+    "yaw": -96.5588,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "WHY CAN'T YOU OWN A YACHT? SAY NO MORE! Located in the Downtown area of City Center enjoy your Brand-New FULLY KITTED Yacht. I decorated the Interior with Drinks, Trinkets, TVs, Stripper Poles and in the back of the Yacht I added a Gated Hot tub and an area with Tables, Chairs, and a Grill!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "54c5a677-d134-4458-a2d1-d7681d69c3e2",
+    "name": "Militech Regional Headquarters (Militech Tower)",
+    "nexus_id": "24779",
+    "category": "new-location",
+    "coordinates": [
+      -1272.2385,
+      -261.805,
+      55.7316
+    ],
+    "yaw": -20.7352,
+    "tags": [
+      "corpo",
+      "neomilitarism"
+    ],
+    "authors": [
+      "LiquidBronze"
+    ],
+    "description": "Militech regional headquarters has opened its top floor lounge, showroom and AV Port to the people of Night City!",
+    "status": "published",
+    "added_at": "2026-03-12T23:53:26.000Z",
+    "modified_at": "2026-04-08T23:01:57.000Z"
+  },
+  {
+    "id": "5572cc9b-b9f9-442c-83a0-658a7636fd7c",
+    "name": "North Oak Impala Automatics Climbable Tower",
+    "nexus_id": "29786",
+    "category": "location-overhaul",
+    "coordinates": [
+      243.93,
+      1491.18,
+      405.2
+    ],
+    "tags": [
+      "infrastructure",
+      "photos"
+    ],
+    "authors": [
+      "LordTrilobite"
+    ],
+    "description": "Makes the big tower in the North Oak Impala Automatics area climbable by adding ladders and catwalks all the way to the top.",
+    "status": "published",
+    "added_at": "2026-05-18T13:52:07.000Z",
+    "modified_at": "2026-05-18T13:52:07.000Z"
+  },
+  {
+    "id": "56f74caa-60df-4e42-b730-5f818aaeb8bf",
+    "name": "North Oak Safe Base Enchanced",
+    "nexus_id": "22439",
+    "category": "location-overhaul",
+    "coordinates": [
+      285.4598,
+      1468.6056,
+      162.9839
+    ],
+    "yaw": 120,
+    "tags": [
+      "apartment",
+      "neokitsch"
+    ],
+    "authors": [
+      "8eartic"
+    ],
+    "description": "North Oak Safe Base Enchanced.",
+    "status": "published",
+    "added_at": "2026-03-23T18:48:17.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "5781c618-ba94-45f0-8ee9-53c188fc9729",
+    "name": "Glen Apartment Expanded - Redux",
+    "nexus_id": "24075",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1525.6667,
+      -978.3817,
+      86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+      "apartment",
+      "infrastructure"
+    ],
+    "authors": [
+      "ThaFunktopus"
+    ],
+    "description": "Vanilla themed overhaul with added garage, landing pad, and balcony",
+    "status": "published",
+    "added_at": "2026-03-12T06:45:11.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "58afd83e-732c-4b5a-8823-95bebeca02f9",
+    "name": "H10_BONE_Apartment",
+    "nexus_id": "26731",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1382.787,
+      1270.6815,
+      123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "77reye"
+    ],
+    "description": "Updated overhaul of my H10 apartment design. Features Archive XL for install and Native Interactions for injecting interactions. Redesigns key sections of the apartment. More smart frames addon available under optional files",
+    "status": "published",
+    "added_at": "2026-03-21T06:51:21.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "5925958b-7794-4b90-9d16-9d5619ea0a37",
+    "name": "Santo Serenity Residence",
+    "nexus_id": "30483",
+    "category": "new-location",
+    "coordinates": [
+      533.1677,
+      -1797.6965,
+      29.2349
+    ],
+    "yaw": 153.773,
+    "tags": [
+      "apartment",
+      "house",
+      "kitsch"
+    ],
+    "authors": [
+      "ex1k"
+    ],
+    "description": "A modern and peaceful player home located in Santo Domingo, featuring a spacious garden, private pool, custom interior, and all the amenities needed to call it home.",
+    "status": "published",
+    "added_at": "2026-06-15T00:37:13.000Z",
+    "modified_at": "2026-06-15T00:37:13.000Z"
+  },
+  {
+    "id": "592ffe29-2a2d-476a-a4a9-6a545ff3411f",
+    "name": "Vik's Recovery",
+    "nexus_id": "26403",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1548.6864,
+      1232.2092,
+      11.5202
+    ],
+    "yaw": 90,
+    "tags": [
+      "photos"
+    ],
+    "authors": [
+      "1bells"
+    ],
+    "description": "Adds a small bed / recovery area in Vik's clinic. Mostly for photography purposes.",
+    "status": "published",
+    "added_at": "2026-03-19T23:15:16.000Z",
+    "modified_at": "2026-04-08T11:27:55.000Z"
+  },
+  {
+    "id": "5bc9a18b-2a0e-4206-9ab1-62feabc65d1a",
+    "name": "Dicky Twister Club Unlocked",
+    "nexus_id": "27101",
+    "category": "location-overhaul",
+    "coordinates": [
+      -817.1961,
+      -83.989334,
+      8.680855
+    ],
+    "yaw": 0.95912755,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "Roxterfox"
+    ],
+    "description": "Unlocked all the locked areas in the Dicky Twister Club.",
+    "status": "published",
+    "added_at": "2026-03-21T12:16:22.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "5c5a4028-41c7-41e3-b2e4-4e671cbea17e",
+    "name": "The Empathy Club Unlocked",
+    "nexus_id": "27380",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1628.5947,
+      385.0413,
+      7.6949844
+    ],
+    "yaw": -0.17811729,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "Roxterfox"
+    ],
+    "description": "Unlocked all the closed sections of The Empathy Club with optional visual Remaster.",
+    "status": "published",
+    "added_at": "2026-03-21T12:25:44.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "5d31183a-0904-419b-a164-2b39055e95ad",
+    "name": "Kabuki Diner Apartment",
+    "nexus_id": "24577",
+    "category": "new-location",
+    "coordinates": [
+      -1164.3862,
+      1748.7799,
+      31.37
+    ],
+    "yaw": 86.9052,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "brocreate"
+    ],
+    "description": "Adds a new purchasable apartment in Kabuki above a Tom's Diner.",
+    "status": "published",
+    "added_at": "2026-03-14T09:08:00.000Z",
+    "modified_at": "2026-04-08T23:01:57.000Z"
+  },
+  {
+    "id": "5d37efd8-18d6-4f85-afbf-e83c8626e222",
+    "name": "Mizu - Home",
+    "nexus_id": "22572",
+    "category": "new-location",
+    "coordinates": [
+      84.730194,
+      1409.2559,
+      136.0819
+    ],
+    "yaw": 92.8912,
+    "tags": [
+      "entropism",
+      "neomilitarism"
+    ],
+    "authors": [
+      "B1W"
+    ],
+    "description": "Custom semi traditional Japanese home for V.",
+    "status": "published",
+    "added_at": "2026-03-12T12:19:23.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "5e1e1897-e104-446c-8958-badaf466fdc1",
+    "name": "Pacifica Apartment",
+    "nexus_id": "16045",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2476.6553,
+      -2440.4321,
+      17.5875
+    ],
+    "yaw": -71.0413,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "Across From 2nd Amendment is a COMPLETELY PIMPED OUT Apartment and Bedroom! Outside on the right is an AV landing pad and on the left I added a garage, with a 2nd floor to hold off from Police and MaxTac!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "5eb51855-9523-43be-a2e6-a3eb0237782c",
+    "name": "S H I T H O L E",
+    "nexus_id": "29887",
+    "category": "new-location",
+    "coordinates": [
+      936.9875,
+      -2465.3289,
+      78.4334
+    ],
+    "yaw": 21.4,
+    "tags": [
+      "apartment",
+      "entropism"
+    ],
+    "authors": [
+      "ThaFunktopus"
+    ],
+    "description": "In the pit between the two dams just outside Santo Domingo. This mod also adds a new custom fast travel marker you can use to get to it",
+    "status": "published",
+    "added_at": "2026-05-22T23:43:17.000Z",
+    "modified_at": "2026-05-22T23:43:17.000Z"
+  },
+  {
+    "id": "5f4b9cc7-1977-4cd8-b237-b7e4a4b9fb6e",
+    "name": "Behavioral Health Center Terrace",
+    "nexus_id": "21415",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1901.2146,
+      457.98615,
+      66.32
+    ],
+    "yaw": -83.7359,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "This Mod FULLY Renovates the Behavioral Health Center Terrace by adding in Lights, NPCs, Vegetation, and Decorations! Now you can Relax in the Luxurious Garden Retreat and escape the GUNFIRE of Night City!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "60eae637-2f81-4471-8d50-54e40dd5871b",
+    "name": "laguna oasis (apartment house)",
+    "nexus_id": "26855",
+    "category": "new-location",
+    "coordinates": [
+      944.7812,
+      -3452.2825,
+      185.2488
+    ],
+    "yaw": -1.1804,
+    "tags": [
+      "house",
+      "neokitsch",
+      "photos"
+    ],
+    "authors": [
+      "thumbsuckerr"
+    ],
+    "description": "japanese style luxury home on laguna bend",
+    "status": "published",
+    "added_at": "2026-03-13T03:37:25.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+  },
+  {
+    "id": "61998408-16ad-4077-9eed-381edcdcef04",
+    "name": "E3 Open Police Station",
+    "nexus_id": "21152",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1458.9916,
+      1227.6635,
+      22.2293
+    ],
+    "yaw": 127.6169,
+    "tags": [
+      "corpo",
+      "infrastructure",
+      "neomilitarism"
+    ],
+    "authors": [
+      "NicolasBsst"
+    ],
+    "description": "This mod reopen the police station visible in the E3 48 minutes gameplay video.",
+    "status": "published",
+    "added_at": "2026-03-21T05:39:32.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+  },
+  {
+    "id": "61d55c48-747e-45e6-b74b-4d0aec9f67ca",
+    "name": "Viktor Vektors Garage ( Working Car Mods and Repair )",
+    "nexus_id": "20793",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1530.388,
+      1265.0466,
+      17.8003
+    ],
+    "yaw": 36.7844,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "credits": "dmiitryx, Deberara",
+    "description": "This Mod adds in Viks Cut Vehicle Garage, letting you access his place even EASIER than before! HUGE THANKS for other Modders for making the Mod Extensions of this garage that allows you to Customize and Repair your vehicles!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "650af2ad-b9f6-41ad-a4b7-80b5ebe4864c",
+    "name": "Kujira",
+    "nexus_id": "23677",
+    "category": "new-location",
+    "coordinates": [
+      -3760.2864,
+      1731.3693,
+      44.665695
+    ],
+    "yaw": 0.9999923,
+    "tags": [
+      "corpo",
+      "neomilitarism"
+    ],
+    "authors": [
+      "B1W"
+    ],
+    "description": "The big boat offshore with more details.",
+    "status": "published",
+    "added_at": "2026-03-12T12:21:39.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "6575bd5a-8672-4ed6-b2ac-1fb8afe6326f",
+    "name": "Watson Tattoo Shops: Little China Pink Ink",
+    "nexus_id": "23896",
+    "category": "new-location",
+    "coordinates": [
+      -1279.1998,
+      1404.5665,
+      21.1161
+    ],
+    "yaw": 85.7,
+    "tags": [
+      "kitsch",
+      "shop",
+      "streetkid"
+    ],
+    "authors": [
+      "LordTrilobite"
+    ],
+    "description": "Adds a Mox themed Tattoo Shop in Watson, Little China with character customization.",
+    "status": "published",
+    "added_at": "2026-03-13T01:07:39.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "691eeb5c-ae43-4399-a2fe-d259f219bdba",
+    "name": "Vs House by Viks",
+    "nexus_id": "25193",
+    "category": "new-location",
+    "coordinates": [
+      -1520.9395,
+      1245.1738,
+      23.101
+    ],
+    "yaw": -143.3425,
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "bigpoppajuan"
+    ],
+    "description": "Adds a new player home where there was nothing before, so this will work at any time. Located right across the street from the Bradbury & Buran fast travel point by Viktors clinic.",
+    "status": "published",
+    "added_at": "2026-03-16T02:57:44.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "6be81acd-4390-437c-b680-a1a054718d59",
+    "name": "DIGITAL OASIS - H10 Apartment",
+    "nexus_id": "10925",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1382.787,
+      1270.6815,
+      123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+      "apartment",
+      "kitsch",
+      "streetkid"
+    ],
+    "authors": [
+      "brocreate"
+    ],
+    "description": "Kitschy maximalist H10 Apartment. Extra interactions : sit, drink tea, netrunning chair. Adds a radio, netrunning chair, tub, kitchenette, washer/dryer, playable arcade machine, plenty of neons, plants, clutter, stickers, etc",
+    "status": "published",
+    "added_at": "2026-03-12T04:47:38.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "6c0ab913-768b-4a16-81e1-00cd4abf5651",
+    "name": "Arroyo Petrochem Backlot",
+    "nexus_id": "31332",
+    "category": "location-overhaul",
+    "coordinates": [
+      -248.26,
+      -696.44,
+      7.36
+    ],
+    "tags": [
+      "entropism",
+      "neomilitarism"
+    ],
+    "authors": [
+      "LordTrilobite"
+    ],
+    "description": "Adds collision and details to the lot behind the three big Petrochem buildings in Arroyo.",
+    "status": "published",
+    "added_at": "2026-07-09T10:49:46.000Z",
+    "modified_at": "2026-07-09T10:49:46.000Z"
+  },
+  {
+    "id": "6c27f6a2-6e5e-4aee-b027-3e94262a30e1",
+    "name": "Rooftop Pool Party",
+    "nexus_id": "22163",
+    "category": "location-overhaul",
+    "coordinates": [
+      -740.62115,
+      940.5494,
+      294.689
+    ],
+    "yaw": 173.8703,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "Finally ! You can now Party at one of Night City’s most Exclusive spots! This Rooftop Pool Party is the perfect place to take in Night City’s phenomenal views and to reminisce on your close calls down below in the streets of NC.",
+    "status": "published",
+    "added_at": "2026-03-21T12:07:14.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "6ed5cba0-902d-4ce9-a609-1b6a9fdef2b0",
+    "name": "Trailer home in the Badlands",
+    "nexus_id": "23122",
+    "category": "new-location",
+    "coordinates": [
+      3278.9236,
+      368.14096,
+      111.7834
+    ],
+    "yaw": -155.303,
+    "tags": [
+      "entropism",
+      "house",
+      "nomad"
+    ],
+    "authors": [
+      "eddfou"
+    ],
+    "description": "Adds a trailer home in the Badlands with a view on Rocky Ridge and the Night City skyline.",
+    "status": "published",
+    "added_at": "2026-03-19T10:47:35.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "6f407d55-b427-465d-a318-590241448823",
+    "name": "Arasaka Villa Enchanced",
+    "nexus_id": "22263",
+    "category": "location-overhaul",
+    "coordinates": [
+      303.73785,
+      1035.5779,
+      233.92534
+    ],
+    "yaw": 0.71141267,
+    "tags": [
+      "corpo",
+      "neokitsch",
+      "neomilitarism"
+    ],
+    "authors": [
+      "8eartic"
+    ],
+    "description": "An enhanced version of the North Oak Arasaka Estate.",
+    "status": "published",
+    "added_at": "2026-03-21T02:51:30.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "6fc2e465-e93e-4c1e-8a86-9b751c547207",
+    "name": "Jig Jig Unleashed",
+    "nexus_id": "16580",
+    "category": "location-overhaul",
+    "coordinates": [
+      -637.181,
+      864.77386,
+      19.1553
+    ],
+    "yaw": 155,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "ProximaDust"
+    ],
+    "credits": "ProximaDust",
+    "description": "Off the leash !",
+    "status": "published",
+    "added_at": "2026-03-20T19:08:53.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "6ffd4ff3-c516-407a-8ea3-cf252c526161",
+    "name": "Dogtown Car Meet ( with Apartment )",
+    "nexus_id": "16252",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1948.215,
+      -2731.905,
+      84.7373
+    ],
+    "yaw": -2.6396,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "All the Dogtown rats link up at the Broken Globe for a Car Meet. Black Market Dealers, Addicts, Gamblers and Undercover Barghest NPCs attend this Meet. The area is FULLY DECKED OUT with Cars, Lights, Smoke, NPCs, Decorations AND a House even THEY don't know about...",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "70aa56c8-c7fa-48df-828c-2fd9b0181293",
+    "name": "V's H10 Garage - with Hidden Bunker",
+    "nexus_id": "8542",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1377.5641,
+      1273.8601,
+      23.5778
+    ],
+    "yaw": -177.8,
+    "tags": [
+      "apartment",
+      "infrastructure"
+    ],
+    "authors": [
+      "ThaFunktopus"
+    ],
+    "description": "Private H10 garage with a hidden bunker apartment",
+    "status": "published",
+    "added_at": "2026-03-12T07:04:49.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "70d62c52-3414-463a-ae80-b82cffbecea6",
+    "name": "Glen Glass Den",
+    "nexus_id": "30207",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1525.4438,
+      -968.4882,
+      86.9683
+    ],
+    "yaw": 176.9297,
+    "tags": [
+      "apartment",
+      "neokitsch"
+    ],
+    "authors": [
+      "LordBLKRamen"
+    ],
+    "description": "Glass themed glen apartment where repairs can become expensive.",
+    "status": "published",
+    "added_at": "2026-06-02T18:06:06.000Z",
+    "modified_at": "2026-06-02T18:06:06.000Z"
+  },
+  {
+    "id": "70f12a60-6f8e-412b-a489-0db7cd69e298",
+    "name": "Terminal Motel Northside Apartment Mod",
+    "nexus_id": "26985",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1506.1044,
+      2231.2832,
+      22.2
+    ],
+    "yaw": 36.55,
+    "tags": [
+      "apartment",
+      "entropism",
+      "kitsch"
+    ],
+    "authors": [
+      "hnovak1"
+    ],
+    "description": "Space/Motel themed mod for V's Northside Apartment, entropy/kitsch style.",
+    "status": "published",
+    "added_at": "2026-03-19T22:50:11.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "718dc97a-d9a4-46e3-8421-a96c2c3997fc",
+    "name": "Lizzies Bar Enhanced ( with Apartment )",
+    "nexus_id": "22714",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1212.0918,
+      1563.8628,
+      22.9201
+    ],
+    "yaw": -79.6091,
+    "tags": [
+      "apartment",
+      "entertainment"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "Lizzies Bar is by far one of the Coolest Bars to Visit in Night City and the numbers show ! Lizzie has been given a huge sum of eddies from a “PriVate” Investor, and she’s dumped it straight into the Club ! An Expanded Front Parking Lot, New Neon Decals, your own Place, and even Restoring the Good Ole Basketball Court !",
+    "status": "published",
+    "added_at": "2026-03-21T11:49:37.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "71a81c06-3790-4d9c-9853-64de7f7587c0",
+    "name": "Dogtown Highland Apartment",
+    "nexus_id": "30907",
+    "category": "new-location",
+    "coordinates": [
+      -2158.5708,
+      -2797.9546,
+      47.089
+    ],
+    "yaw": -76.3647,
+    "tags": [
+      "apartment",
+      "entropism",
+      "house"
+    ],
+    "authors": [
+      "Mazamp"
+    ],
+    "description": "In the forgotten backstreets of dogtown, there is this one shack made of shipping crates that stil resembles a home",
+    "status": "published",
+    "added_at": "2026-06-27T13:13:21.000Z",
+    "modified_at": "2026-06-27T13:13:21.000Z"
+  },
+  {
+    "id": "72ca7aff-8999-4287-9929-302589ca6361",
+    "name": "V's Kabuki Compound",
+    "nexus_id": "22546",
+    "category": "new-location",
+    "coordinates": [
+      -1018.585,
+      1789.1313,
+      45.6686
+    ],
+    "yaw": 59.6,
+    "tags": [
+      "apartment",
+      "entropism",
+      "neomilitarism"
+    ],
+    "authors": [
+      "ProximaDust"
+    ],
+    "description": "A highly modular hideout home for V made using World Builder.",
+    "status": "published",
+    "added_at": "2026-03-20T19:05:33.000Z",
+    "modified_at": "2026-04-08T11:27:55.000Z"
+  },
+  {
+    "id": "7418710e-b2be-4ff8-9a24-aa84cfc371cd",
+    "name": "northside garage flat",
+    "nexus_id": "28911",
+    "category": "new-location",
+    "coordinates": [
+      -1717.1772,
+      2045.8051,
+      18.1563
+    ],
+    "yaw": 28.5252,
+    "tags": [
+      "apartment",
+      "infrastructure"
+    ],
+    "authors": [
+      "thumbsuckerr"
+    ],
+    "description": "flat above a garage in northside",
+    "status": "published",
+    "added_at": "2026-04-15T16:46:04.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+  },
+  {
+    "id": "74600501-e110-4ddf-b6c0-43a3afe5b9b8",
+    "name": "The Secret Chic Atelier",
+    "nexus_id": "15300",
+    "category": "new-location",
+    "coordinates": [
+      -1715.6635,
+      169.74834,
+      43.7
+    ],
+    "yaw": 59.2,
+    "tags": [
+      "shop"
+    ],
+    "authors": [
+      "downsource"
+    ],
+    "description": "The Virtual Atelier Coiffeur for your pubic hair styles.",
+    "status": "published",
+    "added_at": "2026-03-21T12:49:11.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "74f6a260-56eb-40b9-ae95-1df356bf5e2f",
+    "name": "H10 Apartment - Open Bedroom Window",
+    "nexus_id": "24845",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1382.787,
+      1270.6815,
+      123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "YouCutDream"
+    ],
+    "description": "Adds an interactable windows to H10's bedroom.",
+    "status": "published",
+    "added_at": "2026-03-19T23:10:13.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "7502c54d-e4ab-4da9-81a1-8a10e2f26500",
+    "name": "Roller Coaster Expanded",
+    "nexus_id": "20487",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2375.514,
+      -1971.6543,
+      15.9362
+    ],
+    "yaw": 83.4341,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "Once the Pacifica Gonks rebooted the Malls power for the Movie Theatre, it was only a matter of time until they discovered the Roller Coaster out back........This Expanded Roller Coaster is now a Front for Eddies, Packed with Npcs Standing In-Line and Sitting around the Pavilion. Courtesy the Gangs of Pacifica!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "75564ef9-dfd1-4d22-ad52-b00e03f6bc7b",
+    "name": "Megabuilding H8 Dojo - World Edit",
+    "nexus_id": "26453",
+    "category": "new-location",
+    "coordinates": [
+      -705.10754,
+      804.5818,
+      132.2625
+    ],
+    "yaw": 12.5761,
+    "tags": [
+      "corpo",
+      "neomilitarism",
+      "streetkid"
+    ],
+    "authors": [
+      "evafan84"
+    ],
+    "description": "This adds a martial arts dojo (with some customisable décor options) to the inside of Megabuilding H8 in Japantown.\nThe dojo can be found inside Megabuilding H8, just ride the lift to clouds, and go up the stairs on the left when you come out of the lift.",
+    "status": "published",
+    "added_at": "2026-03-12T04:40:14.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+  },
+  {
+    "id": "77237db3-76f5-4921-828a-806585571bc0",
+    "name": "Japantown North Penthouse - Player Apartment",
+    "nexus_id": "26587",
+    "category": "new-location",
+    "coordinates": [
+      -399.0492,
+      1517.7688,
+      173.0869
+    ],
+    "yaw": -129.9002,
+    "tags": [
+      "house",
+      "neokitsch"
+    ],
+    "authors": [
+      "LordTrilobite"
+    ],
+    "description": "A luxurious Japanese penthouse in the north tip of Japantown. This property hosts of many features, interactions, customization and is fully integrated into the game world with lower floors of the building.",
+    "status": "published",
+    "added_at": "2026-03-13T00:15:15.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "772aa606-324e-4a75-b153-de1933574ef2",
+    "name": "PENT_FLOW_Apartment",
+    "nexus_id": "21417",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1343.9843,
+      1204.115,
+      114.8
+    ],
+    "yaw": -0.22282475,
+    "tags": [
+      "apartment",
+      "house"
+    ],
+    "authors": [
+      "77reye"
+    ],
+    "description": "Edit of the V's Edgerunners Mansion mod using Archive XL for plug-and-play install. Part of reye's redesign repository (rrr).",
+    "status": "published",
+    "added_at": "2026-03-21T06:56:19.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "7747cdee-679d-4acf-8d96-2881cf912610",
+    "name": "Glorias House ( with Garage )",
+    "nexus_id": "22341",
+    "category": "location-overhaul",
+    "coordinates": [
+      451.1811,
+      -2051.195,
+      0.9917
+    ],
+    "yaw": -133.6931,
+    "tags": [
+      "house"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "After Some Time, Gloria Passed Away and her daughter Zuleikha needed to move on, so she Sold the House to V! Gloria in her final Years discovered that she had a Green Thumb and has grown All-New Plant Life all around her property in honor of her loved ones following the tragedy with Joshua </3",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "79435271-bc90-4c6d-8229-463c96023bcf",
+    "name": "Garage for V's Edgerunners Mansion apartment",
+    "nexus_id": "25051",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1388.1171,
+      1166.802,
+      23.070549
+    ],
+    "yaw": 0.75888515,
+    "tags": [
+      "infrastructure"
+    ],
+    "authors": [
+      "BlazingTommy"
+    ],
+    "description": "A 25 car garage next to H10, made as an accessory for the Edgerunners mansion but made to work standalone as well.",
+    "status": "published",
+    "added_at": "2026-03-21T06:03:49.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "7aafd7f1-75ae-483b-928e-9a83fba2f981",
+    "name": "Viktor Vektor clinic overhaul and opened garage ramp",
+    "nexus_id": "25704",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1562.6539,
+      1269.5852,
+      11.887
+    ],
+    "yaw": 164.55,
+    "tags": [
+      "infrastructure"
+    ],
+    "authors": [
+      "BlazingTommy"
+    ],
+    "description": "Vik's ripper clinic is one of the biggest interior spaces there is in game, made to be both a clinic and a garage. So, why not let us also drive right into it, maybe avoid having to ask Misty \"how's business doing?\" for her to tell us we are her first client in weeks.",
+    "status": "published",
+    "added_at": "2026-03-19T23:13:32.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "7af40c70-5b95-4644-b161-15364d978f3f",
+    "name": "Japantown Apartment - Neokitsch",
+    "nexus_id": "22095",
+    "category": "location-overhaul",
+    "coordinates": [
+      -786.4785,
+      978.493,
+      28.2095
+    ],
+    "yaw": 97.6499,
+    "tags": [
+      "apartment",
+      "neokitsch"
+    ],
+    "authors": [
+      "PixieMattel"
+    ],
+    "description": "A Japantown apartment edit, Neokitsch style.",
+    "status": "published",
+    "added_at": "2026-03-19T23:22:16.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "7b85e857-236d-4161-a9d9-b0f6770b1f49",
+    "name": "Badlands Nomad Home",
+    "nexus_id": "24336",
+    "category": "new-location",
+    "coordinates": [
+      1817.5009,
+      2208.8804,
+      180.7776
+    ],
+    "yaw": 72.6,
+    "tags": [
+      "apartment",
+      "neomilitarism",
+      "nomad"
+    ],
+    "authors": [
+      "bigpoppajuan"
+    ],
+    "description": "Adds a new player home with interactions in the badlands, at the new Aldecaldos camp location.",
+    "status": "published",
+    "added_at": "2026-03-19T01:21:44.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "7c963e30-e470-4867-b0ae-8a6c9d514b00",
+    "name": "Sheng Noods Ramenshop",
+    "nexus_id": "25294",
+    "category": "new-location",
+    "coordinates": [
+      -402.56494,
+      1276.3997,
+      37.4164
+    ],
+    "yaw": 166.6981,
+    "tags": [
+      "entertainment",
+      "shop"
+    ],
+    "authors": [
+      "Kaoziun"
+    ],
+    "description": "A fully featured ramen restaurant with numerous NPCs, including custom characters, each with intricate schedules, interactions, vendors, and plenty of hidden Easter eggs.",
+    "status": "published",
+    "added_at": "2026-03-12T01:19:19.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "7cdcf93b-2d0d-4b11-b653-8fac0e95346a",
+    "name": "Cyberpsycho Pocket Dimension ( Lex Luthor)",
+    "nexus_id": "23195",
+    "category": "new-location",
+    "coordinates": [
+      -2144.717,
+      -490.83902,
+      7.4219
+    ],
+    "yaw": -108.2078,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "Murkmans biggest Rival, Jim B ( The Joker ) has been tying to put an end to Murk and his whole shtick since the Dawn of Night City. It seems Jim partnered with Lex Luthor giving him a Pocket Dimension, Cutting a tear through reality and Destabilizing the surrounding area! Seize his Lair and harness the Power of Under The Map Multiversal Traversal !",
+    "status": "published",
+    "added_at": "2026-03-21T11:40:32.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "7d0ed1d9-4b1f-4674-8513-bd51e7cfc9f3",
+    "name": "Dogtown Airship ( with Apartment and NPC Party Below )",
+    "nexus_id": "19363",
+    "category": "new-location",
+    "coordinates": [
+      -2152.0488,
+      -2828.1619,
+      149.1273
+    ],
+    "yaw": -31.6369,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "The Floating Behemoth now has collision to the floors and walls! My main idea was making Cyberpunks version of the Prydwen from Fallout 4 equipped with AV landing pads, Guards and a Custom Interior! Below the Airship is a NPC Party with Decorations and Lights!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "7e20d216-ad35-4347-aa1a-790f7b1165ec",
+    "name": "Outdoor V - Canyon Camp",
+    "nexus_id": "25924",
+    "category": "new-location",
+    "coordinates": [
+      4512.355,
+      25.611,
+      159.12648
+    ],
+    "tags": [
+      "apartment",
+      "nomad",
+      "quest"
+    ],
+    "authors": [
+      "Kaoziun"
+    ],
+    "description": "Fully functional free outdoor apartment set inside a grotto. Shower under the waterfall and sleep in a bedroll. Includes Nibbles and Johnny integration. Packed with features and extensive in-game customization options, plus a pretty sweet secret area to discover.",
+    "status": "published",
+    "added_at": "2026-03-07T00:53:22.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "7e4ac849-a1e6-4c5e-a685-6c3edc9402d7",
+    "name": "End of the Road Garage and Hangout",
+    "nexus_id": "17903",
+    "category": "new-location",
+    "coordinates": [
+      -2237.1501,
+      3609.5208,
+      7.525
+    ],
+    "yaw": 87.254,
+    "tags": [
+      "apartment",
+      "infrastructure"
+    ],
+    "authors": [
+      "Ronusti"
+    ],
+    "description": "New Garage and Hangout to kick back in, because why not. AMM",
+    "status": "published",
+    "added_at": "2026-04-18T11:54:00.000Z",
+    "modified_at": "2026-04-18T11:54:00.000Z"
+  },
+  {
+    "id": "7f14b7a5-708e-4abb-a076-cee8074508b0",
+    "name": "Licks Club",
+    "nexus_id": "28068",
+    "category": "new-location",
+    "coordinates": [
+      -1574.6687,
+      1234.2981,
+      17.207275
+    ],
+    "yaw": 0.995603,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "citizendbcc"
+    ],
+    "description": "In the neon-soaked, chrome-drenched streets of Night City, a new temptation has opened its doors… LICKS.",
+    "status": "published",
+    "added_at": "2026-03-12T11:11:38.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "7f505943-25dc-4747-a813-177568e9610d",
+    "name": "Church From Hell - Devils Luck",
+    "nexus_id": "29542",
+    "category": "new-location",
+    "coordinates": [
+      -3458.1965,
+      -4038.4612,
+      74.8636
+    ],
+    "yaw": 42.4,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "Fully Decorated Church Interior, Lit Up and with Custom Teleport Interactions Traveling To and From The Church for Repeated Communal Confessions",
+    "status": "published",
+    "added_at": "2026-05-24T12:10:38.000Z",
+    "modified_at": "2026-05-24T12:10:38.000Z"
+  },
+  {
+    "id": "8016ee16-3b5e-4699-b8ea-52e48d4b111a",
+    "name": "Impoverished Chinatown Apartment",
+    "nexus_id": "28658",
+    "category": "new-location",
+    "coordinates": [
+      -1560.2471,
+      1116.7795,
+      17.1549
+    ],
+    "yaw": 93.1194,
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "yoimflying"
+    ],
+    "description": "This is an apartment mod for Chinatown, to help you feel immersed in the true poverty of Night City, let's get into the detes below. This apartment is located near Vicks Clinic in the bustling streets of Chinatown. Here, you will find all types of debauchery !",
+    "status": "published",
+    "added_at": "2026-04-12T19:47:08.000Z",
+    "modified_at": "2026-04-13T07:05:21.000Z"
+  },
+  {
+    "id": "806697a1-e49a-4e83-a366-a671b092bc5f",
+    "name": "V's Edgerunners Mansion Reloaded",
+    "nexus_id": "26023",
+    "category": "new-location",
+    "coordinates": [
+      -2455.6133,
+      109.1816,
+      36.4526
+    ],
+    "yaw": 171.1977,
+    "tags": [
+      "house",
+      "neokitsch"
+    ],
+    "authors": [
+      "Kaoziun"
+    ],
+    "description": "V's Edgerunners mansion relocated and edited.",
+    "status": "published",
+    "added_at": "2026-03-07T00:53:22.000Z",
+    "modified_at": "2026-04-08T23:01:57.000Z"
+  },
+  {
+    "id": "814ed57b-757e-4d11-b529-77e6aedb0f40",
+    "name": "Canyon Bridge",
+    "nexus_id": "25611",
+    "category": "new-location",
+    "coordinates": [
+      3732.2097,
+      820.3253,
+      134.309
+    ],
+    "yaw": -51.3379,
+    "tags": [
+      "infrastructure"
+    ],
+    "authors": [
+      "Oranje3"
+    ],
+    "description": "Out there in the badlands there's a canyon. Restoring the missing bridge.",
+    "status": "published",
+    "added_at": "2026-03-12T13:23:30.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "8207f59a-1c05-46ec-be5d-7c40a46c4734",
+    "name": "Lina Malinas Mansion",
+    "nexus_id": "28860",
+    "category": "location-overhaul",
+    "coordinates": [
+      -212.1001,
+      -1831.4183,
+      18.7065
+    ],
+    "yaw": -125.4597,
+    "tags": [
+      "apartment",
+      "house",
+      "streetkid"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "WELCOME to your Brand-New Lina Malinas Mansion ! After your confrontation with Lina in the PL DLC, she was nice enough to share the blueprints of her Mansion so that you can build your own! Now YOU TOO can geek out and be a Super-Fan while living in a luxurious Lina Malina Themed Mansion with an added Garage and an Outdoor Firepit/seating Area !",
+    "status": "published",
+    "added_at": "2026-04-20T11:58:32.000Z",
+    "modified_at": "2026-04-20T11:58:32.000Z"
+  },
+  {
+    "id": "838e0e1c-88dc-489a-8bab-d5ed07ae6c07",
+    "name": "Petrochem Dam Apartment",
+    "nexus_id": "24739",
+    "category": "new-location",
+    "coordinates": [
+      554.5476,
+      -2180.8003,
+      34.0876
+    ],
+    "yaw": 75.1385,
+    "tags": [
+      "apartment",
+      "entropism"
+    ],
+    "authors": [
+      "scornthegreat"
+    ],
+    "description": "This mod adds a new, standalone apartment in a run down neighborhood near the Petrochem Dam in Rancho Coronado !",
+    "status": "published",
+    "added_at": "2026-03-13T17:14:39.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "83c7e86f-4f22-4f4a-93ab-9f39e76896de",
+    "name": "Johnny's Trailer",
+    "nexus_id": "27739",
+    "category": "location-overhaul",
+    "coordinates": [
+      1168.99,
+      -573.8667,
+      30.5923
+    ],
+    "yaw": -162.7732,
+    "tags": [
+      "apartment",
+      "entropism"
+    ],
+    "authors": [
+      "temprnce"
+    ],
+    "description": "Turns out Johnny had a place he could crash at back in the '20s. Who could've guessed he didn't just couchsurf? In any case, the place is all yours now. | Semi-apartment, semi-immersion location made with World Builder.",
+    "status": "published",
+    "added_at": "2026-03-19T22:09:49.000Z",
+    "modified_at": "2026-04-08T23:01:57.000Z"
+  },
+  {
+    "id": "84469136-b676-4150-bd54-bca57fdc5288",
+    "name": "Laguna Drained",
+    "nexus_id": "25782",
+    "category": "location-overhaul",
+    "coordinates": [
+      1954.8369,
+      -3282.62,
+      54.330124
+    ],
+    "yaw": -0.39634663,
+    "tags": [
+      "infrastructure"
+    ],
+    "authors": [
+      "Kaoziun"
+    ],
+    "description": "Drains the Laguna Bend dam lake. For all you drought enjoyers. Also added a trampoline jump for the broken road. Compatible with Night City Flooded !",
+    "status": "published",
+    "added_at": "2026-03-12T03:13:43.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "86492441-759e-4583-b0fc-94b154958922",
+    "name": "Japantown Shooting Range",
+    "nexus_id": "21800",
+    "category": "location-overhaul",
+    "coordinates": [
+      -449.38403,
+      1452.8348,
+      37.3881
+    ],
+    "yaw": 91.671,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "credits": "Sammmy1036",
+    "description": "This mod Restores area access to the Shooting Range as well as adding decorations! Now you can Visit the Range and test your accuracy whenever!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "8981d6d8-ae7d-4ebf-b842-f35c27f2cf48",
+    "name": "Watson Tattoo Shops: Northside Tattoo & Body Mods",
+    "nexus_id": "23896",
+    "category": "new-location",
+    "coordinates": [
+      -1771.9393,
+      2170.6707,
+      18.4501
+    ],
+    "yaw": -60,
+    "tags": [
+      "entropism",
+      "shop",
+      "streetkid"
+    ],
+    "authors": [
+      "LordTrilobite"
+    ],
+    "description": "Adds a Maelstrom themed Tattoo Shop in Watson, Northside with character customization.",
+    "status": "published",
+    "added_at": "2026-03-13T01:12:33.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "89c30bee-fe5a-43fb-9882-f4b68bd815dd",
+    "name": "Atlantis Club Expanded",
+    "nexus_id": "19960",
+    "category": "location-overhaul",
+    "coordinates": [
+      -763.56104,
+      1079.508,
+      28.2
+    ],
+    "yaw": -81.0057,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "Club Atlantis has been Expanded and now has a renovated Courtyard with Shop Vendors and even New Road access! 50 years after Silverhand and his gang shot up the club, people can finally return to their once favorite club in Night City!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "89fa5cdb-cc24-443b-9eda-4e8ba7042848",
+    "name": "RWB Garage Inspired with apartment house",
+    "nexus_id": "27921",
+    "category": "new-location",
+    "coordinates": [
+      -646.5449,
+      2955.5977,
+      27.0869
+    ],
+    "yaw": -72.9163,
+    "tags": [
+      "streetkid"
+    ],
+    "authors": [
+      "oguraoguri"
+    ],
+    "description": "RWB Garage Inspired with apartment house that player can stay in using world builder.",
+    "status": "published",
+    "added_at": "2026-03-17T22:59:23.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "8a5c6a36-bdc3-4f93-992d-9d5a76ab9770",
+    "name": "Dogtown Longshore vendor fixes",
+    "nexus_id": "27593",
+    "category": "other",
+    "coordinates": [
+      -2392.9,
+      -2672.8,
+      22.1895
+    ],
+    "yaw": -116.4219,
+    "tags": [],
+    "authors": [
+      "LiquidBronze"
+    ],
+    "description": "This is a minimal mod that fixes some things with two of the background street vendors in Dogtown.",
+    "status": "published",
+    "added_at": "2026-03-12T23:45:35.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "8ae1ae78-7290-424b-8cd0-c009d8132b88",
+    "name": "I Cacciatori Restaurant",
+    "nexus_id": "23885",
+    "category": "new-location",
+    "coordinates": [
+      -1211.6,
+      -545,
+      9.009903
+    ],
+    "yaw": -0.9486697,
+    "tags": [
+      "corpo",
+      "entertainment",
+      "shop"
+    ],
+    "authors": [
+      "LiquidBronze"
+    ],
+    "description": "The I Cacciatori restaurant is now open! Welcome to Night City’s newest minimalist modern restaurant, located right outside Corpo Plaza.",
+    "status": "published",
+    "added_at": "2026-03-12T23:43:39.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "8b91dc3e-fe20-4eb4-90d7-9bea48bd1376",
+    "name": "Grey rd House - Santo Domingo",
+    "nexus_id": "30699",
+    "category": "new-location",
+    "coordinates": [
+      141.5926,
+      -2118.6399,
+      16.6663
+    ],
+    "yaw": 23.78,
+    "tags": [
+      "apartment",
+      "house"
+    ],
+    "authors": [
+      "DevilDevil868"
+    ],
+    "description": "A new home for V in Santo Domingo.",
+    "status": "published",
+    "added_at": "2026-06-21T21:16:02.000Z",
+    "modified_at": "2026-06-21T21:16:02.000Z"
+  },
+  {
+    "id": "8c3bcd49-dc88-41ac-8df7-410b37934624",
+    "name": "APEX - Sonora Canyon and Safehouse",
+    "nexus_id": "25999",
+    "category": "new-location",
+    "coordinates": [
+      4684.4287,
+      -2359.75,
+      271.3593
+    ],
+    "yaw": 4.6147,
+    "tags": [
+      "house",
+      "neomilitarism",
+      "quest"
+    ],
+    "authors": [
+      "Nox2182",
+      "MrBilL61"
+    ],
+    "credits": "TPMG",
+    "description": "Militech Black Site: APEX. Features a lore friendly quest, player safehouse, garage, other smaller buildings and an overhaul of the surrounding area into 'Sonora Canyon'.",
+    "status": "published",
+    "added_at": "2026-03-07T00:53:22.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "8cdfa89d-1819-4339-b496-af9b1e8df118",
+    "name": "Marmur Bank (Watson District Branch)",
+    "nexus_id": "22048",
+    "category": "new-location",
+    "coordinates": [
+      -1485.663,
+      1196.6736,
+      19.1841
+    ],
+    "yaw": 122.4,
+    "tags": [
+      "corpo",
+      "neokitsch",
+      "shop"
+    ],
+    "authors": [
+      "LiquidBronze"
+    ],
+    "description": "Marmur Bank has opened up in Night City!",
+    "status": "published",
+    "added_at": "2026-03-12T23:38:21.000Z",
+    "modified_at": "2026-04-08T11:27:55.000Z"
+  },
+  {
+    "id": "8e758ce9-d27a-44b9-b1a7-b248b327dc4d",
+    "name": "RIOT penthouse - apartment",
+    "nexus_id": "27515",
+    "category": "new-location",
+    "coordinates": [
+      -1658.3568,
+      1010.26654,
+      159.8267
+    ],
+    "yaw": 167.1226,
+    "tags": [
+      "apartment",
+      "corpo"
+    ],
+    "authors": [
+      "thumbsuckerr"
+    ],
+    "description": "cozy penthouse with wall to wall city views",
+    "status": "published",
+    "added_at": "2026-03-13T03:46:10.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+  },
+  {
+    "id": "8ea870d6-8a97-43a9-bdbd-03744a22b2a9",
+    "name": "Night City Flooded",
+    "nexus_id": "25770",
+    "category": "location-overhaul",
+    "coordinates": [
+      1014.8014,
+      -2582.2385,
+      207.77574
+    ],
+    "yaw": 0.92545646,
+    "tags": [
+      "photos"
+    ],
+    "authors": [
+      "Kaoziun"
+    ],
+    "description": "Add various bodies of water across the game world at non-intrusive locations, fully customizable experience through Native Settings UI now !",
+    "status": "published",
+    "added_at": "2026-03-13T18:03:36.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "8eb62679-9c3d-497e-b859-b9de0f22d007",
+    "name": "Baskin Office Location - Japantown",
+    "nexus_id": "29646",
+    "category": "new-location",
+    "coordinates": [
+      -467.9308,
+      843.791,
+      32.6726
+    ],
+    "yaw": 143.0992,
+    "tags": [
+      "corpo"
+    ],
+    "authors": [
+      "MrCole"
+    ],
+    "description": "Adds a small office space intended to be used with the Baskin Job mod but can be used as standalone.",
+    "status": "published",
+    "added_at": "2026-05-17T20:11:00.000Z",
+    "modified_at": "2026-05-17T20:11:00.000Z"
+  },
+  {
+    "id": "8f3f8f4b-830f-4570-a981-a7990a425971",
+    "name": "Pacifica_Beach_House",
+    "nexus_id": "28580",
+    "category": "new-location",
+    "coordinates": [
+      -2086.2092,
+      -1898.6732,
+      11.53
+    ],
+    "yaw": -115.1198,
+    "tags": [
+      "apartment",
+      "house"
+    ],
+    "authors": [
+      "Rodrigo51098"
+    ],
+    "description": "This is the decoration of a house in the beach area of Pacifica, with a pretty good view of the Night City pier. It includes some basic interactions to make the gameplay more comfortable.",
+    "status": "published",
+    "added_at": "2026-04-13T17:49:15.000Z",
+    "modified_at": "2026-04-13T17:49:15.000Z"
+  },
+  {
+    "id": "916ccde0-fe56-4d84-b4a7-0c864988ee74",
+    "name": "Dedka Car Dealership - Working Vehicle Shop Framework",
+    "nexus_id": "24887",
+    "category": "new-location",
+    "coordinates": [
+      618.02,
+      -385.87253,
+      10.1301
+    ],
+    "yaw": -78.946,
+    "tags": [
+      "neokitsch",
+      "shop"
+    ],
+    "authors": [
+      "dederara",
+      "Kaoziun"
+    ],
+    "description": "Dedka Dealership is a location that allows you to purchase any vehicles physically at a showroom. Fully compatible with Virtual Car Dealer and Auto Fixer.",
+    "status": "published",
+    "added_at": "2026-03-12T06:01:55.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "924ea351-ab6a-4a2e-95ff-699d23e919c9",
+    "name": "Neon Isolation",
+    "nexus_id": "31233",
+    "category": "new-location",
+    "coordinates": [
+      -1152.6123,
+      1457.2716,
+      54.0579
+    ],
+    "yaw": -91.6504,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "DevilDevil868"
+    ],
+    "description": "A netrunners hideout in Kabuki.",
+    "status": "published",
+    "added_at": "2026-07-06T20:19:39.000Z",
+    "modified_at": "2026-07-06T20:19:39.000Z"
+  },
+  {
+    "id": "936a0b31-1583-4ee4-a85b-9a6fd70464d3",
+    "name": "A Gift For Jack - Columbarium",
+    "nexus_id": "20952",
+    "category": "location-overhaul",
+    "coordinates": [
+      228.42104,
+      592.8148,
+      121.95119
+    ],
+    "yaw": 0.23810945,
+    "tags": [],
+    "authors": [
+      "MaIevoIa"
+    ],
+    "description": "V left an offering for Jackie at his columbarium niche after attending his ofrenda. Next time you're in North Oak, visit the columbarium to find the gifts.",
+    "status": "published",
+    "added_at": "2026-03-12T06:04:48.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "94e99030-7dc1-4057-804f-c8a703dd2276",
+    "name": "Silicon Mirage Villa",
+    "nexus_id": "30702",
+    "category": "new-location",
+    "coordinates": [
+      506.8265,
+      -2754.2583,
+      191.118
+    ],
+    "yaw": -3.6511,
+    "tags": [
+      "apartment",
+      "house"
+    ],
+    "authors": [
+      "AikoHayashi"
+    ],
+    "description": "Enjoy your small oasis with a view of the Night City.",
+    "status": "published",
+    "added_at": "2026-06-22T17:20:25.000Z",
+    "modified_at": "2026-06-22T17:20:25.000Z"
+  },
+  {
+    "id": "95acccee-8026-4f4a-b619-c52864f83b95",
+    "name": "Chill Heywood Apartment",
+    "nexus_id": "26263",
+    "category": "new-location",
+    "coordinates": [
+      -1875.4535,
+      -1037.4564,
+      40.6079
+    ],
+    "yaw": -91.8323,
+    "tags": [
+      "apartment",
+      "entropism",
+      "shop"
+    ],
+    "authors": [
+      "DesertPirate77"
+    ],
+    "description": "A new apartment now available in Heywood. Featuring several custom interactable items and a store located on the ground floor.",
+    "status": "published",
+    "added_at": "2026-03-12T06:20:37.000Z",
+    "modified_at": "2026-04-06T09:33:50.000Z"
+  },
+  {
+    "id": "963bac62-258f-475a-a550-0cb6f9cb841e",
+    "name": "Under the bridge",
+    "nexus_id": "25492",
+    "category": "location-overhaul",
+    "coordinates": [
+      -123.2152,
+      607.8815,
+      63.9817
+    ],
+    "yaw": -67.0455,
+    "tags": [
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "yaba08211"
+    ],
+    "description": "A new location for my quest project based on the Strange Insight radio.",
+    "status": "published",
+    "added_at": "2026-03-14T23:53:32.000Z",
+    "modified_at": "2026-04-06T20:03:35.000Z"
+  },
+  {
+    "id": "971b95ba-0d02-4e44-ba8f-7f10506457ac",
+    "name": "The Moth Bar Lair",
+    "nexus_id": "22207",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2429.0085,
+      -2664.9116,
+      9.8
+    ],
+    "yaw": -33.6083,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "The Moth Lair GOT AN UPGRADE! The Bars Secret Lair has been fitted for WAR with every Gun you could think of, all the Mechs and every bit of Information on Dogtown displayed from the Master Control Center!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "978b7304-d256-42d0-af9b-591677fcb835",
+    "name": "Santo Domingo Player Home and Garage",
+    "nexus_id": "24335",
+    "category": "location-overhaul",
+    "coordinates": [
+      449.86444,
+      -2046.914,
+      0.9917
+    ],
+    "yaw": -46.9069,
+    "tags": [
+      "entropism",
+      "house",
+      "streetkid"
+    ],
+    "authors": [
+      "Magicman010"
+    ],
+    "description": "Have you ever wanted to own your own home and property in the suburbs of Night City? There is now such a property available to purchase in the Rancho Coronado neighborhood in Santo Domingo !",
+    "status": "published",
+    "added_at": "2026-03-12T05:19:19.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "97cd1e3b-34be-4470-9ec3-3a48ec797e7f",
+    "name": "NCPD Precinct",
+    "nexus_id": "26929",
+    "category": "location-overhaul",
+    "coordinates": [
+      134.66187,
+      -1587.7252,
+      8.256683
+    ],
+    "yaw": -0.9650959,
+    "tags": [
+      "corpo",
+      "neomilitarism"
+    ],
+    "authors": [
+      "FamilyOfSoul"
+    ],
+    "description": "The Precinct in 2076. Before Vega and his C-team.",
+    "status": "published",
+    "added_at": "2026-03-19T22:44:44.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "9a6110d6-4604-4ba4-99a4-fac1c3c2cfca",
+    "name": "Grand Imperial Mall Theater",
+    "nexus_id": "20450",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2278.4692,
+      -1992.3429,
+      20.57
+    ],
+    "yaw": 41.9649,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "credits": "dmiitryx",
+    "description": "Can you believe that the Pacifica Gonks ACTUALLY figured out how to reroute the Malls backup power? God forbid they actually use that talent for anything else productive in Night City.....Now the Theater is Lit Up, Decorated and Ready to Watch Movies!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "9a9ebc33-5ce3-4cff-9335-9b2b953f7df9",
+    "name": "little china loft - apartment",
+    "nexus_id": "27348",
+    "category": "new-location",
+    "coordinates": [
+      -1465.7048,
+      1085.5989,
+      24.5275
+    ],
+    "yaw": 125.0872,
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "thumbsuckerr"
+    ],
+    "description": "tiny dark cluttered loft in little china",
+    "status": "published",
+    "added_at": "2026-03-13T03:20:28.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+  },
+  {
+    "id": "9c21a28f-10c1-4d4e-83d2-b5655dc211e8",
+    "name": "Liberty Walk Garage",
+    "nexus_id": "23052",
+    "category": "location-overhaul",
+    "coordinates": [
+      -771.9979,
+      2968.7554,
+      26.1781
+    ],
+    "yaw": 15.2547,
+    "tags": [
+      "infrastructure",
+      "shop"
+    ],
+    "authors": [
+      "8eartic"
+    ],
+    "description": "Liberty Walk Garage for car modification shop mod.",
+    "status": "published",
+    "added_at": "2026-03-21T03:28:02.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "9c47e4a5-20c4-458e-9235-f7515ec393f8",
+    "name": "DGT Arena Garage Safe Base",
+    "nexus_id": "22518",
+    "category": "new-location",
+    "coordinates": [
+      -1629.2701,
+      -2112.9873,
+      39.0378
+    ],
+    "yaw": -48.9816,
+    "tags": [
+      "apartment",
+      "neokitsch"
+    ],
+    "authors": [
+      "8eartic"
+    ],
+    "description": "Secret Garage Apartment.",
+    "status": "published",
+    "added_at": "2026-03-23T18:46:28.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "9d3d9d16-2daa-4dd9-bcd8-625041e8ad72",
+    "name": "Impoverished Glen Apartment",
+    "nexus_id": "28057",
+    "category": "new-location",
+    "coordinates": [
+      -1569.0581,
+      -1064.3286,
+      9.2589
+    ],
+    "yaw": -86.9561,
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "yoimflying"
+    ],
+    "description": "YO CHOOM GANGOON ever wanted to be a disgusting, poor, lowlife but never had the apartment that suited your immersiveness? FEAR NOT, because this flat is here to make you feel all types of nasty, vile, best of all BROKE!!!",
+    "status": "published",
+    "added_at": "2026-03-13T21:04:14.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "9e707cfd-8d48-4af7-a2ae-ff509f8b159e",
+    "name": "Dogtown Nomad Hideout Apartment - ArchiveXL",
+    "nexus_id": "28378",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2230.1956,
+      -2562.3433,
+      80.301
+    ],
+    "yaw": -130.15,
+    "tags": [
+      "apartment",
+      "entropism",
+      "nomad"
+    ],
+    "authors": [
+      "hnovak1"
+    ],
+    "description": "A hideout for nomads (and city nomads) in Dogtown, where they can fuel and repair their bikes.",
+    "status": "published",
+    "added_at": "2026-03-23T18:43:51.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "9f092594-d88f-4e57-94e5-3d680f1b8bc3",
+    "name": "Badlands Garage Safehouse (Militech)",
+    "nexus_id": "24436",
+    "category": "location-overhaul",
+    "coordinates": [
+      3642.4697,
+      -935.825,
+      121.3324
+    ],
+    "yaw": -98.8279,
+    "tags": [
+      "corpo",
+      "neomilitarism"
+    ],
+    "authors": [
+      "Chivved"
+    ],
+    "description": "Militech presence reported. Kill any hostiles found on arrival, and claim the place as your own.",
+    "status": "published",
+    "added_at": "2026-03-21T04:13:26.000Z",
+    "modified_at": "2026-04-08T23:01:57.000Z"
+  },
+  {
+    "id": "9f6a7b50-838b-4bc2-828b-541151d97461",
+    "name": "Peralez Penthouse",
+    "nexus_id": "23424",
+    "category": "location-overhaul",
+    "coordinates": [
+      -78.23038,
+      -117.377304,
+      111.1668
+    ],
+    "yaw": 145.8,
+    "tags": [
+      "apartment",
+      "corpo",
+      "neokitsch"
+    ],
+    "authors": [
+      "8eartic"
+    ],
+    "description": "After the events with SSI and their election win, the Peralezes decided it was time for a change.\nThey moved to a new home, leaving this one behind… and in a gesture of gratitude, gifted it to you, V, for all you did.\nIt’s yours now — a quiet place in the hills… mostly quiet.\nBut tell me, have you noticed that he is watching",
+    "status": "published",
+    "added_at": "2026-03-21T03:12:51.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+  },
+  {
+    "id": "9fba3750-843b-4299-852a-983c632b3349",
+    "name": "Kabuki Central Nights (Apartment)",
+    "nexus_id": "30360",
+    "category": "new-location",
+    "coordinates": [
+      -1144.9467,
+      1364.5614,
+      33.7405
+    ],
+    "yaw": -84.3502,
+    "tags": [
+      "apartment",
+      "kitsch"
+    ],
+    "authors": [
+      "Mazamp"
+    ],
+    "description": "I always fantasized about the idea that there is something real behind those fake reflections in the windows. So I made it true in Kabuki, with my favorite view: the Japantown skyline.",
+    "status": "published",
+    "added_at": "2026-06-12T23:15:48.000Z",
+    "modified_at": "2026-06-12T23:15:48.000Z"
+  },
+  {
+    "id": "a1ee8689-6c2d-4f04-9fe2-1e0c90843050",
+    "name": "orbital nest - apartment",
+    "nexus_id": "28045",
+    "category": "new-location",
+    "coordinates": [
+      -729.8433,
+      619.52466,
+      330.028
+    ],
+    "yaw": -34.6005,
+    "tags": [
+      "apartment",
+      "corpo",
+      "house",
+      "neokitsch",
+      "neomilitarism",
+      "photos"
+    ],
+    "authors": [
+      "thumbsuckerr"
+    ],
+    "description": "stark white space nest",
+    "status": "published",
+    "added_at": "2026-03-13T03:47:56.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+  },
+  {
+    "id": "a3dba0df-92d2-4ba3-b9c1-a0e465d064e0",
+    "name": "Megabuilding H10 Ultimate Experience",
+    "nexus_id": "20986",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1449.1093,
+      1282.1422,
+      123.0824
+    ],
+    "yaw": 0.8092075,
+    "tags": [
+      "infrastructure"
+    ],
+    "authors": [
+      "NicolasBsst"
+    ],
+    "description": "This mod improve the overhaul experience of the Megabuilding H10 by adding a tone of props and bring life in some of the dead areas of the building.\n\nThis is in addition to the H10 Megabuilding Unlocked and H10 Enhanced mod.",
+    "status": "published",
+    "added_at": "2026-03-21T05:50:07.000Z",
+    "modified_at": "2026-04-08T11:27:55.000Z"
+  },
+  {
+    "id": "a545be13-1029-4481-b87a-9427dffaf6d8",
+    "name": "NeonShard Drug Lab",
+    "nexus_id": "24741",
+    "category": "location-overhaul",
+    "coordinates": [
+      674.18896,
+      -470.34335,
+      -5.3425
+    ],
+    "yaw": 62.1804,
+    "tags": [
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "lubiejescpapier1"
+    ],
+    "description": "Small underground drug lab.",
+    "status": "published",
+    "added_at": "2026-03-21T02:28:53.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "a5b74253-7d00-4455-bb5c-0055ae1ac6a9",
+    "name": "Impoverished Kabuki Apartment",
+    "nexus_id": "27976",
+    "category": "new-location",
+    "coordinates": [
+      -1080.4222,
+      1670.4395,
+      18.3993
+    ],
+    "yaw": -169,
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "yoimflying"
+    ],
+    "description": "Ever wanted to rp truly feel like you're living in an actual dystopian hellscape where rent is high, your environment is disgusting, you walk outside, and the smell of piss smacks you in the face? Well lucky for you i created this apartment JUST FOR YOU.",
+    "status": "published",
+    "added_at": "2026-03-19T21:26:43.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "a82517d4-33a9-4ff8-ba56-c8ed3502abfb",
+    "name": "Neon Zen H10 Apartment",
+    "nexus_id": "26736",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1382.787,
+      1270.6815,
+      123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+      "apartment",
+      "neokitsch"
+    ],
+    "authors": [
+      "hnovak1"
+    ],
+    "description": "My Version of V's Original H10 Apartment in Watson. I removed most of the trash, added a kitchen area, a little window garden, custom made cat furniture for Nibbles and interactions for a more immersive gameplay.",
+    "status": "published",
+    "added_at": "2026-03-19T22:46:59.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "a8cedde8-5bde-4778-8512-fc299f568a6c",
+    "name": "pacifica pier hideout - apartment",
+    "nexus_id": "26964",
+    "category": "new-location",
+    "coordinates": [
+      -1930.3829,
+      -1675.9966,
+      12.9459
+    ],
+    "yaw": 66.3221,
+    "tags": [
+      "entropism",
+      "house"
+    ],
+    "authors": [
+      "thumbsuckerr"
+    ],
+    "description": "grungey hideout at pacifica pier",
+    "status": "published",
+    "added_at": "2026-03-13T03:40:31.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+  },
+  {
+    "id": "a8dcd538-670f-4044-9649-57fd3af33c60",
+    "name": "Japantown Rooftop Temples",
+    "nexus_id": "23081",
+    "category": "location-overhaul",
+    "coordinates": [
+      -412.0287,
+      1196.8372,
+      196.626
+    ],
+    "yaw": 8.6162,
+    "tags": [
+      "infrastructure",
+      "neokitsch"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "The GRAND OPENING of the Japantown Rooftop Temples is here ! The BRAND NEW Arasaka funded Rooftop Temples are a monument to all those who have fallen, protecting this Great City but also as a symbol of Arasakas Power and Wealth. High above the rest of Night Citys Japantown, even the dead now look down on the living peasants of Night City...",
+    "status": "published",
+    "added_at": "2026-03-21T11:47:38.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "a9290975-39cd-4497-9899-b2ac6ae79f7f",
+    "name": "LongShore Hide out",
+    "nexus_id": "26546",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2338.5393,
+      -2705.1479,
+      34.565
+    ],
+    "yaw": -145,
+    "tags": [
+      "apartment",
+      "entropism"
+    ],
+    "authors": [
+      "8eartic"
+    ],
+    "description": "LongShore Hide out, Hasan hide out enhancement.",
+    "status": "published",
+    "added_at": "2026-03-20T19:00:33.000Z",
+    "modified_at": "2026-04-08T11:27:55.000Z"
+  },
+  {
+    "id": "a984b84d-86f2-4ba4-8ecb-5c5971e2ce5b",
+    "name": "GLEN_OASIS_Apartment",
+    "nexus_id": "21288",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1521.956,
+      -973.40356,
+      86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "77reye"
+    ],
+    "description": "Updated overhaul of my Glen apartment edit. Features Archive XL for install and Native Interaction Framework to inject interactions.",
+    "status": "published",
+    "added_at": "2026-03-21T06:54:21.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "a9c832ed-d806-4791-9141-14f6e2906163",
+    "name": "The Glen - Netrunner Den",
+    "nexus_id": "25387",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1521.956,
+      -973.40356,
+      86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+      "apartment",
+      "neomilitarism"
+    ],
+    "authors": [
+      "PixieMattel"
+    ],
+    "description": "The Glen apartment now suited for a netrunner.",
+    "status": "published",
+    "added_at": "2026-03-19T23:18:07.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "aaa910c7-26a3-49e4-a80f-9dfb757fd29a",
+    "name": "Nomad Trailer Apartment",
+    "nexus_id": "27369",
+    "category": "new-location",
+    "coordinates": [
+      1949.0994,
+      2364.854,
+      191.3913
+    ],
+    "yaw": 28.1514,
+    "tags": [
+      "apartment",
+      "nomad"
+    ],
+    "authors": [
+      "Kaelu2077"
+    ],
+    "description": "A peaceful, fully interactive Nomad \"Apartment\" – On the plateau of the Aldecaldos camp. This Trailer is your quiet home between the chaos.",
+    "status": "published",
+    "added_at": "2026-03-12T11:21:34.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "aad09102-3763-48c1-a86f-8883bd9a0ef0",
+    "name": "Mr. Blue Eyes and Akira Bodyguard (Dark Matter Club)",
+    "nexus_id": "22696",
+    "category": "location-overhaul",
+    "coordinates": [
+      -320.1562,
+      229.5967,
+      213.07407
+    ],
+    "yaw": 0.82415396,
+    "tags": [
+      "corpo",
+      "neomilitarism",
+      "shop"
+    ],
+    "authors": [
+      "Jmolinares03"
+    ],
+    "description": "Add one of the most influential and enigmatic characters in all of Night City (Mr. Blue Eyes) along with his bodyguard Akira, offering you the entire iconic arsenal (ranged weapons and melee weapons).",
+    "status": "published",
+    "added_at": "2026-03-13T23:39:50.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "aaf42786-0878-452f-90a7-3480d34164e2",
+    "name": "Totentanz Club Unlocked",
+    "nexus_id": "27333",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1716.1333,
+      2202.5403,
+      86.211624
+    ],
+    "yaw": 0.18180656,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "Roxterfox"
+    ],
+    "description": "Unlocked all the closed areas of the Totentanz Club",
+    "status": "published",
+    "added_at": "2026-03-19T21:51:49.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "abdf2987-bdff-4a5e-a538-20c6833b118c",
+    "name": "Afterlife Expanded ( with Apartment )",
+    "nexus_id": "20983",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1453.3766,
+      1018.5073,
+      16.5
+    ],
+    "yaw": -146.8139,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "The Bar Roof Entrance has been Renovated to allow AVs to land in Style without ever having to touch foot in Night City! Rogue's so impressed with your recent success that she even gave you a place to stay at the Bar!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "ad300be8-cb6e-4d5f-ba87-732e0ed0398f",
+    "name": "Ho-Oh Casino Unlocked And Remastered",
+    "nexus_id": "27426",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1031.4825,
+      1344.5405,
+      5.284561
+    ],
+    "yaw": 0.6276565,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "Roxterfox"
+    ],
+    "description": "Unlocked all the locked doors in The OH-HO Casino. Minor remaster.",
+    "status": "published",
+    "added_at": "2026-03-19T22:30:52.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "ad3102f6-e9d2-48f8-8fb1-b062ed0de80b",
+    "name": "Rancho East Hideout",
+    "nexus_id": "25555",
+    "category": "new-location",
+    "coordinates": [
+      429.9929,
+      -2143.5132,
+      14.609
+    ],
+    "yaw": -81.6474,
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "bigpoppajuan"
+    ],
+    "description": "Adds a new player home with interactions, and a cat of course!",
+    "status": "published",
+    "added_at": "2026-03-18T20:43:07.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "af1400fe-bba4-4eb4-99ef-f6e259fe1242",
+    "name": "OnShore - Home",
+    "nexus_id": "22362",
+    "category": "new-location",
+    "coordinates": [
+      -2704.004,
+      3551.6392,
+      4.1097
+    ],
+    "yaw": -178.9004,
+    "tags": [
+      "house",
+      "neokitsch"
+    ],
+    "authors": [
+      "B1W"
+    ],
+    "description": "Custom home for V at the shore.",
+    "status": "published",
+    "added_at": "2026-03-12T12:15:42.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "b0265816-eb10-4436-b95c-13ce327fb465",
+    "name": "Rocky Ridge Garage Safehouse",
+    "nexus_id": "27675",
+    "category": "location-overhaul",
+    "coordinates": [
+      2568.414,
+      -11.57634,
+      80.9719
+    ],
+    "yaw": -49,
+    "tags": [
+      "entropism",
+      "nomad"
+    ],
+    "authors": [
+      "fluffyking888"
+    ],
+    "description": "Add a new home/garage in Rocky Ridge.",
+    "status": "published",
+    "added_at": "2026-03-19T22:18:34.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "b0bf26d3-c9b4-4650-9b8c-2266560784a4",
+    "name": "h10 v.1",
+    "nexus_id": "29962",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1388.7671,
+      1271.2734,
+      123.0824
+    ],
+    "yaw": -91.9,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "thumbsuckerr"
+    ],
+    "description": "a nice clean h10 for a nice clean netrunner. usable netrunner chair with ability to change appearance, and ice bath inside the secret room. wardrobe prompt is in the same spot, but now is the fridge. tons of smartframes, and open bed window",
+    "status": "published",
+    "added_at": "2026-05-24T16:22:27.000Z",
+    "modified_at": "2026-05-24T16:22:27.000Z"
+  },
+  {
+    "id": "b2740e84-81fa-499e-b6a3-5f3323d14ae1",
+    "name": "Dicky Twisters Enhanced",
+    "nexus_id": "27035",
+    "category": "location-overhaul",
+    "coordinates": [
+      -817.1961,
+      -83.989334,
+      8.6809
+    ],
+    "yaw": -31.4546,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "Dicky Twisters has been Enhanced! Now with an Improved Parking Lot, More Signage and even Improved Interior Club Lighting, we know your visit will be memorable!!! Cum get twisted with us anytime of the day! (:",
+    "status": "published",
+    "added_at": "2026-03-21T11:35:02.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "b28729e4-7497-4802-ad89-8091b74fefce",
+    "name": "Lizzie Walk Garage - Liberty Walk Garage Inspired -",
+    "nexus_id": "27223",
+    "category": "new-location",
+    "coordinates": [
+      -713.1996,
+      2976.2917,
+      27.1714
+    ],
+    "yaw": 17.7793,
+    "tags": [
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "oguraoguri"
+    ],
+    "description": "A Liberty Walk Garage Inspired, using the IRL location for reference.",
+    "status": "published",
+    "added_at": "2026-03-17T22:57:51.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "b53521ef-ace7-4a87-911c-1aa6b6317b42",
+    "name": "Dark Neon - Glen Apartment Overhaul",
+    "nexus_id": "19030",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1521.956,
+      -973.40356,
+      86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+      "apartment",
+      "corpo",
+      "neomilitarism"
+    ],
+    "authors": [
+      "Scourched"
+    ],
+    "description": "The Glen Apartment designed with a bit of a maximalist take to give a real cyberpunk vibe. This is for mercs with a busy life of running and gunning, who focus more on their gear then on pretty furniture.",
+    "status": "published",
+    "added_at": "2026-03-21T13:36:44.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "b5b555bf-af91-4b32-9608-c101c59fefe5",
+    "name": "Watson Northside Garage - Workshop",
+    "nexus_id": "28859",
+    "category": "new-location",
+    "coordinates": [
+      -626.7283,
+      2047.3363,
+      36.3254
+    ],
+    "yaw": 90.3998,
+    "tags": [
+      "infrastructure"
+    ],
+    "authors": [
+      "jokaj"
+    ],
+    "description": "This mod will add a new garage to your game. Located in Watson Northside",
+    "status": "published",
+    "added_at": "2026-04-13T07:06:16.000Z",
+    "modified_at": "2026-04-13T07:06:16.000Z"
+  },
+  {
+    "id": "b5f5faef-3e2e-48c0-9b0f-567a5ec7b05c",
+    "name": "NC Track Circuits - Mount Choombatta (Touge drift)",
+    "nexus_id": "25586",
+    "category": "new-location",
+    "coordinates": [
+      414.7662,
+      3232.6902,
+      243.40591
+    ],
+    "yaw": 0.9230425,
+    "tags": [
+      "infrastructure",
+      "nomad",
+      "streetkid"
+    ],
+    "authors": [
+      "Kaoziun"
+    ],
+    "description": "Touge type racing track on an activation toggle. Deja vu ! I've just been in this place before !",
+    "status": "published",
+    "added_at": "2026-03-12T03:06:50.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "b7b7d86e-c89d-41a1-a6bd-b7d5f740e038",
+    "name": "MURKMAN Cave ( BATMAN )",
+    "nexus_id": "19445",
+    "category": "location-overhaul",
+    "coordinates": [
+      1862.6079,
+      9.48111,
+      54.5526
+    ],
+    "yaw": 85.4499,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "The man that Night City doesn’t deserve, DOES DESERVE the cave of his dreams. Fitted with detective gear, terminals and map of the city, Murkman has EVERYTHING he needs to protect this city from DECAY. On the opposite side is his hangout and workout room and ABOVE THAT are pipes you can use to stay undetected!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "b80e448a-3924-46f4-ab1f-ac634c28aef3",
+    "name": "V's Mansion Redux - NeoZen",
+    "nexus_id": "17300",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1343.9843,
+      1204.115,
+      114.8
+    ],
+    "yaw": 0.24361488,
+    "tags": [
+      "corpo",
+      "house",
+      "neokitsch"
+    ],
+    "authors": [
+      "ProximaDust"
+    ],
+    "description": "A noir neokitsch mansion for your V !",
+    "status": "published",
+    "added_at": "2026-03-20T19:10:34.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "bb524c35-4978-4738-a34e-3fe1f9cc97f4",
+    "name": "Rockerdoll Japantown Apartment",
+    "nexus_id": "28839",
+    "category": "location-overhaul",
+    "coordinates": [
+      -784.5212,
+      978.1372,
+      28.2095
+    ],
+    "yaw": 45,
+    "tags": [
+      "apartment",
+      "kitsch",
+      "neokitsch"
+    ],
+    "authors": [
+      "hnovak1"
+    ],
+    "description": "My take on V's Japantown Apartment, with added interactions, Kitsch/Neokitsch style.",
+    "status": "published",
+    "added_at": "2026-04-13T19:37:19.000Z",
+    "modified_at": "2026-04-13T19:37:19.000Z"
+  },
+  {
+    "id": "bb79e638-8481-4c0d-b662-53d002d24fb6",
+    "name": "Casino Reforged - Phase 1 : Access areas and fixes",
+    "nexus_id": "25430",
+    "category": "new-location",
+    "coordinates": [
+      834.0293,
+      1434.8807,
+      210.0864
+    ],
+    "yaw": -117.0652,
+    "tags": [
+      "entertainment",
+      "infrastructure",
+      "neokitsch"
+    ],
+    "authors": [
+      "Kaoziun",
+      "Oranje3"
+    ],
+    "credits": "CRF team",
+    "description": "A collaborative project between multiple mods and authors to restore the North Oak Casino district. This mod grants physical access for V to the zone and introduces several area fixes and improvements.",
+    "status": "published",
+    "added_at": "2026-03-07T00:53:22.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "bd094489-3e1d-46bb-916e-aa354cce6a2d",
+    "name": "Judy's Lake House - Player Apartment",
+    "nexus_id": "21549",
+    "category": "location-overhaul",
+    "coordinates": [
+      1102.2855,
+      -3489.335,
+      180.161
+    ],
+    "yaw": -51.3486,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "brocreate"
+    ],
+    "description": "Adds bed, mirror, shower, coffee, stash, closet interactions (and more) to Judy's lake shack.",
+    "status": "published",
+    "added_at": "2026-03-14T09:09:10.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "bda4565c-c63e-4d1f-93a8-4ba124cbb599",
+    "name": "West Wind Estate Beach House",
+    "nexus_id": "22569",
+    "category": "new-location",
+    "coordinates": [
+      -2987.484,
+      -2610.4092,
+      9.351
+    ],
+    "yaw": -52.4384,
+    "tags": [
+      "house",
+      "neokitsch"
+    ],
+    "authors": [
+      "8eartic"
+    ],
+    "description": "West Wind Estate Beach House End of the road – West Wind Estate, Pacifica, Night City.",
+    "status": "published",
+    "added_at": "2026-03-21T03:31:40.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "bf0b8bda-a891-4d21-baf6-ea83e2b10d33",
+    "name": "H10 Enhanced",
+    "nexus_id": "20892",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1449.1093,
+      1282.1422,
+      123.0824
+    ],
+    "yaw": 0.8092075,
+    "tags": [
+      "infrastructure"
+    ],
+    "authors": [
+      "WhiteRabbit0110"
+    ],
+    "description": "Pretty much just fills out some of the empty spaces and adds some lights in MegaBuilding H-10 so it doesn't feel as empty and dark.",
+    "status": "published",
+    "added_at": "2026-03-21T05:52:35.000Z",
+    "modified_at": "2026-04-08T11:27:55.000Z"
+  },
+  {
+    "id": "bf755272-3cd7-4328-bbe9-739453ee5003",
+    "name": "DBRV Memorial - Goodbye to a friend",
+    "nexus_id": "23820",
+    "category": "other",
+    "coordinates": [
+      228.42104,
+      592.8148,
+      121.95119
+    ],
+    "yaw": 0.23810945,
+    "tags": [],
+    "authors": [
+      "ErebusEquity"
+    ],
+    "description": "A memorial to everyone's favourite modding frog. Rest easy Andrii.",
+    "status": "published",
+    "added_at": "2026-03-12T05:39:35.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "c04110d2-ee63-4381-887e-3fef980f8d85",
+    "name": "Improved Aldecaldos Camp",
+    "nexus_id": "13821",
+    "category": "location-overhaul",
+    "coordinates": [
+      1803.5422,
+      2249.821,
+      180.254
+    ],
+    "yaw": 141.1519,
+    "tags": [
+      "nomad"
+    ],
+    "authors": [
+      "Akiway"
+    ],
+    "description": "Improves the realism of the new Aldecaldos camp (once they moved after the quest Queen of the Highway) with new content and QoL stuff.",
+    "status": "published",
+    "added_at": "2026-03-07T00:53:22.000Z",
+    "modified_at": "2026-04-08T23:01:57.000Z"
+  },
+  {
+    "id": "c0bf3441-3d27-4086-a765-4b82ad26c81b",
+    "name": "Sandra Dorsette Apartment",
+    "nexus_id": "23150",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1277.292,
+      1515.3153,
+      45
+    ],
+    "yaw": -78.0868,
+    "tags": [
+      "apartment",
+      "corpo",
+      "neokitsch"
+    ],
+    "authors": [
+      "8eartic"
+    ],
+    "description": "After you helped her recover her databank and scrubbed her name from the corpos' systems,\nSandra Dorsett now considers you someone she can trust.\nAs a token of gratitude, she’s given you access to her hidden Kabuki apartment.\nA quiet, secure place — and more functional than it looks.",
+    "status": "published",
+    "added_at": "2026-03-21T03:25:46.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "c4091af9-4726-4f32-a045-92e3d44628e8",
+    "name": "Empathy Bar Enhanced",
+    "nexus_id": "22478",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1628.5947,
+      385.0413,
+      7.695
+    ],
+    "yaw": 147.6161,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "After Club Owners Adam Ibrahimovic and Larry Fanghorns dispute over “suspicious malware” found on their Clubs Main Computer, the pair broke-up ! With New Management the Club has decided to Renovate the Club and upgrade ALL the Clubs Lighting and Dance Floor ! “Whoever” uploaded that suspicious malware awhile ago to break up the two, THANKS !",
+    "status": "published",
+    "added_at": "2026-03-21T12:26:43.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "c4ca8c21-91d6-4453-ae52-5203109b6b49",
+    "name": "Drive In Theater ( Working Movie Screen )",
+    "nexus_id": "19729",
+    "category": "location-overhaul",
+    "coordinates": [
+      -85.1499,
+      1952.4254,
+      100.6728
+    ],
+    "yaw": 143.9554,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "credits": "dmiitryx",
+    "description": "This Mod Re-Opens the Drive in for all the Movie-Goers who needed that escape from the harsh reality of Night City! The Drive-In is now FULLY PACKED with Cars, People, Vegetation and a stocked Concession Stand! Enjoy your Movie viewing!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "c8afbf86-39c6-4376-8c1f-fec050d4ab8f",
+    "name": "Room 206 (Rent a Motel)",
+    "nexus_id": "21729",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1137.5416,
+      1320.3446,
+      28
+    ],
+    "yaw": 175.4787,
+    "tags": [
+      "apartment",
+      "entertainment",
+      "kitsch"
+    ],
+    "authors": [
+      "Hepero"
+    ],
+    "credits": "Kaoziun - Room 206",
+    "description": "Rent a Motel lets you stay for the night or the week at several motels including the room 206 at no tell motel.",
+    "status": "published",
+    "added_at": "2026-03-15T19:20:12.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "ca162223-9f6e-44f8-9b64-3ab2d0235a79",
+    "name": "Dogtown - The Moth's rooftop apartment",
+    "nexus_id": "28709",
+    "category": "new-location",
+    "coordinates": [
+      -2427.5952,
+      -2672.7024,
+      27.9911
+    ],
+    "yaw": 121.9699,
+    "tags": [
+      "apartment",
+      "house",
+      "streetkid"
+    ],
+    "authors": [
+      "barbedvvire"
+    ],
+    "description": "This mod adds an apartment on the empty floor above The Moth's bar in Dogtown, fully refurbished and with native interactions.",
+    "status": "published",
+    "added_at": "2026-04-12T16:00:02.000Z",
+    "modified_at": "2026-04-12T16:00:02.000Z"
+  },
+  {
+    "id": "ca612abd-ab82-4ff0-af11-d575f88c0b0e",
+    "name": "Dandelion Cocktail Bar Enhanced",
+    "nexus_id": "22516",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1005.4378,
+      -35.4143,
+      11.403
+    ],
+    "yaw": 175.4794,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "This is a SMALL but awesome little mod Enhancing the Dandelion Cocktail Bar I found one day running around Night City ! Now it STANDS OUT with the matching Green Lights, Arcade Machines and even a Player Stash ! The New Decorations and Native interactions now makes this lil Bar feel like an actual spot to visit now !",
+    "status": "published",
+    "added_at": "2026-03-21T12:08:41.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "cbf065f7-097a-4e96-b37b-34dd34f5fc26",
+    "name": "Japantown North Verticality Expanded",
+    "nexus_id": "25441",
+    "category": "location-overhaul",
+    "coordinates": [
+      -407.59,
+      1514.09,
+      79.65
+    ],
+    "tags": [
+      "corpo",
+      "infrastructure",
+      "kitsch",
+      "photos",
+      "streetkid"
+    ],
+    "authors": [
+      "LordTrilobite"
+    ],
+    "description": "Drastically expands the vertical space in the north of Japantown by connecting several existing pedestrian walkways to the main game world and adding new interior spaces in between.",
+    "status": "published",
+    "added_at": "2026-05-18T13:56:01.000Z",
+    "modified_at": "2026-05-18T13:56:01.000Z"
+  },
+  {
+    "id": "cc5e0028-09fb-4ae0-aacc-f97799aec7c6",
+    "name": "Afterlife Unlocked and Remastered",
+    "nexus_id": "27242",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1442.9069,
+      1011.4383,
+      16.825
+    ],
+    "yaw": 173.09,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "Roxterfox"
+    ],
+    "description": "Unlocked and enhanced the look of Afterlife club.",
+    "status": "published",
+    "added_at": "2026-03-21T13:15:21.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+  },
+  {
+    "id": "ccdf1095-75c8-4802-b365-d7fce0d57687",
+    "name": "Under the sun",
+    "nexus_id": "25506",
+    "category": "new-location",
+    "coordinates": [
+      3616.1416,
+      -1695.1285,
+      118.2966
+    ],
+    "yaw": 7.3644,
+    "tags": [
+      "entropism",
+      "nomad"
+    ],
+    "authors": [
+      "yaba08211"
+    ],
+    "description": "Hidden deep in the dusty Badlands, Under the Sun adds a mysterious new location to Cyberpunk 2077: the abandoned Strange Insight Radio Station, a forgotten voice of truth and rebellion once broadcasting freely beyond the city’s walls.",
+    "status": "published",
+    "added_at": "2026-03-14T23:50:11.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "cd0f7870-1e5f-4480-8ff9-fce9431e2dae",
+    "name": "Glen Rockerboy Apartment (world edit)",
+    "nexus_id": "21596",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1521.956,
+      -973.40356,
+      86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+      "apartment",
+      "neokitsch"
+    ],
+    "authors": [
+      "evafan84"
+    ],
+    "description": "The Glen apartment has had a makeover to fit music lovers, in particular Rockerboys. Features new décor, memorabilia, and interactions.",
+    "status": "published",
+    "added_at": "2026-03-19T23:08:43.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "cdaa6c4a-6fa6-4ba1-8d97-e5ecb7719c4c",
+    "name": "V's Santo Domingo Safehouse",
+    "nexus_id": "24408",
+    "category": "new-location",
+    "coordinates": [
+      443.63907,
+      -2091.798,
+      15.9486
+    ],
+    "yaw": -133.3089,
+    "tags": [
+      "apartment",
+      "neomilitarism"
+    ],
+    "authors": [
+      "ThaFunktopus"
+    ],
+    "description": "Player compound in Rancho Coronado with several amenities.",
+    "status": "published",
+    "added_at": "2026-03-12T06:39:28.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "ce829e6e-e83c-4494-b3ea-c1585a219495",
+    "name": "The Zenitex Military Store",
+    "nexus_id": "21735",
+    "category": "new-location",
+    "coordinates": [
+      37.888023,
+      115.85715,
+      14.7604
+    ],
+    "yaw": -119.188,
+    "tags": [
+      "corpo",
+      "neomilitarism",
+      "shop"
+    ],
+    "authors": [
+      "ScorpionTank",
+      "krat0es",
+      "Saltypigloaf"
+    ],
+    "description": "Welcome to Zenitex. Adds a lore-friendly faction with a unique aesthetic, interior location, vendors, NPCs and collectible data. Purchase Zenitex equipment at up to 50% discount.",
+    "status": "published",
+    "added_at": "2026-03-21T12:33:13.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "d05c6f9c-4a33-450f-9977-42b240b68774",
+    "name": "H10 Elevator Expanded",
+    "nexus_id": "19792",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1375.9819,
+      1287.8365,
+      123.0824
+    ],
+    "yaw": -95.3,
+    "tags": [
+      "infrastructure",
+      "photos"
+    ],
+    "authors": [
+      "ThaFunktopus"
+    ],
+    "description": "Overhauls megabuilding H10's exterior elevator, adding additional stops and floors",
+    "status": "published",
+    "added_at": "2026-03-12T06:57:36.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "d0e285ae-1628-4858-99f5-eb555f1044d3",
+    "name": "The Afterlife Overhaul",
+    "nexus_id": "29959",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1458.6594,
+      1025.6885,
+      16.9199
+    ],
+    "yaw": 173.1998,
+    "tags": [
+      "entertainment",
+      "quest"
+    ],
+    "authors": [
+      "LordBLKRamen"
+    ],
+    "description": "I brought it back, the first mod I ever created. The Afterlife overhaul is exactly what it is.",
+    "status": "published",
+    "added_at": "2026-05-24T12:22:44.000Z",
+    "modified_at": "2026-05-24T12:22:44.000Z"
+  },
+  {
+    "id": "d15883c5-123f-41ce-9a2a-42a2245e2efb",
+    "name": "The Atlantis - Restored",
+    "nexus_id": "20072",
+    "category": "location-overhaul",
+    "coordinates": [
+      -775.3824,
+      1108.1885,
+      61
+    ],
+    "yaw": 0.35631442,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "brocreate"
+    ],
+    "description": "Reopens The Atlantis from Johnny's flashback. Unlocks club entrance, adds real NPC, interactable bartenders, and fast travel point to the location.",
+    "status": "published",
+    "added_at": "2026-03-14T08:58:37.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "d2ef86ff-c41e-4c4c-8fe9-d4b8c08032db",
+    "name": "V's Modest Netrunner Apartment",
+    "nexus_id": "7923",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1381.9185,
+      1271.4558,
+      123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "ThaFunktopus"
+    ],
+    "description": "Overhaul of V's H10 apartment with additional netrunning room",
+    "status": "published",
+    "added_at": "2026-03-12T07:00:16.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "d36eeff8-1acd-4fcd-b2af-128fa7be7971",
+    "name": "TactiCool V's H10 Apartment",
+    "nexus_id": "9169",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1382.787,
+      1270.6815,
+      123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+      "apartment",
+      "kitsch",
+      "neomilitarism"
+    ],
+    "authors": [
+      "Roxterfox"
+    ],
+    "description": "Improved V's H10 apartment. All the tactical needs you desire in the bed or out in the field.",
+    "status": "published",
+    "added_at": "2026-03-21T13:26:57.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "d3d4b0d0-ae06-4282-aac3-c14b09883ff5",
+    "name": "Bliss club Jigjig Street Changes",
+    "nexus_id": "19133",
+    "category": "location-overhaul",
+    "coordinates": [
+      -621.1278,
+      879.801,
+      23.906
+    ],
+    "yaw": 145,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "LiquidBronze"
+    ],
+    "description": "This is a minimal mod that changes some things with the Bliss club on Jigjig street.",
+    "status": "published",
+    "added_at": "2026-03-12T23:35:37.000Z",
+    "modified_at": "2026-04-08T11:27:55.000Z"
+  },
+  {
+    "id": "d41ea958-e4e5-4350-9576-b1a226e389cd",
+    "name": "Heavy Heart Vip Room Appartment",
+    "nexus_id": "22643",
+    "category": "new-location",
+    "coordinates": [
+      -1568.323,
+      -2331.8086,
+      57.8963
+    ],
+    "yaw": -151,
+    "tags": [
+      "apartment",
+      "corpo",
+      "neokitsch"
+    ],
+    "authors": [
+      "8eartic"
+    ],
+    "description": "Heavy Heart Vip Room Appartment Heavy Earth – Just across from Mr. Hand’s Room, Night City.",
+    "status": "published",
+    "added_at": "2026-03-20T18:53:13.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "d46ff1de-e7a4-427c-976d-ac85b4ce1177",
+    "name": "Golden Glen Apartment - ArchiveXL",
+    "nexus_id": "29106",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1525.6711,
+      -969.4567,
+      9.0737
+    ],
+    "yaw": -0.8,
+    "tags": [
+      "apartment",
+      "neokitsch",
+      "neomilitarism"
+    ],
+    "authors": [
+      "hnovak1"
+    ],
+    "description": "A makeover of V's Glen apartment inspired by Jackie and the Valentinos. Style: neokitsch/neomilitary",
+    "status": "published",
+    "added_at": "2026-04-24T07:31:03.000Z",
+    "modified_at": "2026-04-24T07:31:03.000Z"
+  },
+  {
+    "id": "d4e86832-97c8-4d26-a512-8f18b1fce385",
+    "name": "EL Cojote Cojo Unlocked",
+    "nexus_id": "27123",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1257.1562,
+      -999.8193,
+      12.0372
+    ],
+    "yaw": -148.7,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "Roxterfox"
+    ],
+    "description": "Unlocked the locked areas in the bar with minor fixes. Unlocked Jackie's garage as an option.",
+    "status": "published",
+    "added_at": "2026-03-21T13:18:31.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "d55e754a-dc79-4485-b937-1e7d52153009",
+    "name": "No-Tell Motel Upper Floors Unlocked",
+    "nexus_id": "26159",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1176.327,
+      1323.3492,
+      31.7503
+    ],
+    "yaw": 71.5105,
+    "tags": [
+      "entertainment",
+      "kitsch"
+    ],
+    "authors": [
+      "LordTrilobite",
+      "1bells"
+    ],
+    "description": "Unlocks and repairs the upper floors of the No-Tell Motel.",
+    "status": "published",
+    "added_at": "2026-03-13T00:25:28.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "d7ab72f5-0567-4aff-b960-a8b30f658445",
+    "name": "Corpo Plaza Garage - Redux",
+    "nexus_id": "24148",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1654.1001,
+      354.56592,
+      8.1902
+    ],
+    "yaw": -87.6405,
+    "tags": [
+      "infrastructure"
+    ],
+    "authors": [
+      "BlazingTommy"
+    ],
+    "description": "Among the benefits of urban planning is taking trouble spots and turning them into amenities for our hard-working citizens. Why live next to trash, dirt, rust and gang graffities when you can take away an underutilized space and give it back to the most important group of our community: rich tenants.",
+    "status": "published",
+    "added_at": "2026-03-21T06:09:40.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "da455133-b91d-447d-8f0a-bf3ab324567f",
+    "name": "Crunch Plaza Expanded",
+    "nexus_id": "21675",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1806.1534,
+      146.14085,
+      43.9181
+    ],
+    "yaw": -155.9159,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "Crunch Plaza has been Expanded and Enhanced! Be sure to Get some VIP Parking, take in the beautiful sights and Visit the NEW Shooting Range!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "db58aeec-f226-4f66-8673-6f8b2c63c2f7",
+    "name": "Lucy Apartment Remastered 2025",
+    "nexus_id": "23239",
+    "category": "location-overhaul",
+    "coordinates": [
+      -807.3178,
+      845.1145,
+      36.7671
+    ],
+    "yaw": 98.25,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "t1993810"
+    ],
+    "description": "Edgerunners Lucy's apartment in the location from the anime with the signature look out of the window and from the roof.",
+    "status": "published",
+    "added_at": "2026-04-09T08:25:34.000Z",
+    "modified_at": "2026-04-09T08:25:34.000Z"
+  },
+  {
+    "id": "dcac1434-e556-46da-ba7b-4db7d425f1c3",
+    "name": "Regina's NCPD Headquarters",
+    "nexus_id": "22429",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1149.4181,
+      1579.973,
+      71.7124
+    ],
+    "yaw": -131.5084,
+    "tags": [
+      "corpo",
+      "neomilitarism"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "It seems helping Regina with the Cyberphyscos problem REALLY DID pay off in the end: She’s been “Hired” by the NCPD and the “Official” Headquarters is now FULLY DECKED OUT with NCPD Tracking Equipment, Display Screens and even a BRAND NEW AV Landing Pad on the Roof for easy access to the HQ ! Night City WILL, BE SAVE UNDER OUR EYES !",
+    "status": "published",
+    "added_at": "2026-03-21T12:04:46.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "dd470da6-7a5e-4ca9-bbb8-5a17d4a51ba1",
+    "name": "Dogtown Natural History Museum Enhanced",
+    "nexus_id": "30073",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2132.3486,
+      -3067.1846,
+      121.2386
+    ],
+    "yaw": -163.125,
+    "tags": [
+      "corpo",
+      "entertainment",
+      "entropism"
+    ],
+    "authors": [
+      "LordTrilobite"
+    ],
+    "description": "Enhances the Organitopia natural history museum in the south of Dogtown by adding several new fossils and fixes.",
+    "status": "published",
+    "added_at": "2026-05-29T15:35:22.000Z",
+    "modified_at": "2026-05-30T21:15:20.000Z"
+  },
+  {
+    "id": "dec96fbc-166d-417e-938c-031cdf1b06fe",
+    "name": "Riot Club Unlocked and Remastered",
+    "nexus_id": "27261",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1637.8081,
+      1018.9681,
+      24.86
+    ],
+    "yaw": 3.61,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "Roxterfox"
+    ],
+    "description": "Riot Club unlocked and enhanced.",
+    "status": "published",
+    "added_at": "2026-03-21T12:15:33.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+  },
+  {
+    "id": "e0eab8d4-f4f5-4578-b204-8df439cc2bcf",
+    "name": "Vault 404 ( Fallout Shelter )",
+    "nexus_id": "26988",
+    "category": "new-location",
+    "coordinates": [
+      1794.2333,
+      -112.7607,
+      52.5362
+    ],
+    "yaw": 107.9555,
+    "tags": [
+      "apartment",
+      "corpo",
+      "kitsch"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "credits": "Kaoziun",
+    "description": "WELCOME VAULT DWELLER to your new home!.........FOREVER! Vault 404 is proudly funded by the Vault-Tec AND Arasaka Corporation ensuring you have EVERYTHING YOU NEED to live a FULL LIFE in complete isolation! Vault-Tec ensures our Vault dwellers have a Room of their own, a Green Room, Gym and their very own Bathroom! What more can you need?!?!?!",
+    "status": "published",
+    "added_at": "2026-03-13T11:30:13.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "e1a3c56e-d75e-4912-a841-5c83c3198c0d",
+    "name": "Santo Domingo Garage Home",
+    "nexus_id": "24483",
+    "category": "new-location",
+    "coordinates": [
+      581.5887,
+      -2195.1768,
+      46.1298
+    ],
+    "yaw": 35.0064,
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "bigpoppajuan"
+    ],
+    "description": "WE'RE LIVIN' IN SANTO DOMINGO CHOOMBA!!! This mod reworks what was a closed off and destroyed building right by the gun store and ripperdoc at the bottom of the SanDom dam. Has native interactions.",
+    "status": "published",
+    "added_at": "2026-03-18T20:44:07.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "e279053f-c77c-4f7f-a9dc-badb1216a262",
+    "name": "Arroyo Safehouse",
+    "nexus_id": "29732",
+    "category": "new-location",
+    "coordinates": [
+      -685.7589,
+      -914.7684,
+      8.0033
+    ],
+    "yaw": -126.2372,
+    "tags": [
+      "apartment",
+      "house",
+      "neokitsch"
+    ],
+    "authors": [
+      "skrittleskittie"
+    ],
+    "description": "An unassuming safehouse right in the middle of Arroyo, right past Red Dirt bar. Need to be purchased first on the terminal right by the front door",
+    "status": "published",
+    "added_at": "2026-05-17T15:51:07.000Z",
+    "modified_at": "2026-05-17T17:15:52.000Z"
+  },
+  {
+    "id": "e2dd74dd-e3a9-40fa-9ba3-5b340c7e1d80",
+    "name": "Tengu Garage and Dojo",
+    "nexus_id": "17902",
+    "category": "new-location",
+    "coordinates": [
+      -786.9177,
+      959.5507,
+      12.0103
+    ],
+    "yaw": -79.9501,
+    "tags": [
+      "apartment",
+      "infrastructure"
+    ],
+    "authors": [
+      "Ronusti"
+    ],
+    "description": "A tight bike garage with a hangout and a touch of Zen. AMM",
+    "status": "published",
+    "added_at": "2026-04-19T00:13:18.000Z",
+    "modified_at": "2026-04-19T00:13:18.000Z"
+  },
+  {
+    "id": "e4d9d20a-2d8c-4ba1-812c-e53dff5122b7",
+    "name": "Hanami - japantown (japanese restaurant)",
+    "nexus_id": "30272",
+    "category": "new-location",
+    "coordinates": [
+      -881.6379,
+      792.1102,
+      23.3377
+    ],
+    "yaw": 110.0701,
+    "tags": [
+      "corpo",
+      "entertainment"
+    ],
+    "authors": [
+      "thumbsuckerr"
+    ],
+    "description": "japanese restaurant in japantown",
+    "status": "published",
+    "added_at": "2026-06-12T23:30:57.000Z",
+    "modified_at": "2026-06-12T23:30:57.000Z"
+  },
+  {
+    "id": "e50c4953-23b2-4caa-8766-05ea08d7dc65",
+    "name": "Dogtown Sewer Hideout",
+    "nexus_id": "24246",
+    "category": "new-location",
+    "coordinates": [
+      -2062.1663,
+      -2536.4302,
+      23.007
+    ],
+    "yaw": 38.65,
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "bigpoppajuan"
+    ],
+    "description": "Adds a new player home with interactions. Since this is Dogtown, you live in the gutter, literally. And no, Panam doesn't want to stay at your house... Oh well, it still beats waiting for elevators, and nobody expects you to pay rent!",
+    "status": "published",
+    "added_at": "2026-03-19T01:16:36.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "e90cca11-cfad-4b7d-99ca-2a5f1a18b7a9",
+    "name": "JUNGLE RUNNER - H10 Apartment",
+    "nexus_id": "17796",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1382.787,
+      1270.6815,
+      123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "brocreate"
+    ],
+    "description": "Space themed decoration for Apartment H10. Designed for a netrunner who loves plants. Available standalone or as AMM preset.",
+    "status": "published",
+    "added_at": "2026-03-14T09:18:38.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "e93bf752-72fe-4725-857b-c57be3e9e2ef",
+    "name": "Yaiba Bike Showroom",
+    "nexus_id": "28552",
+    "category": "new-location",
+    "coordinates": [
+      175.0685,
+      195.7454,
+      40.2795
+    ],
+    "yaw": 61.388,
+    "tags": [
+      "corpo",
+      "neokitsch"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "WELCOME BACK to the Yaiba Bike Showroom ! This is ALMOST an exact copy of the area from the Mission \"Nitro Youth Energy\" with an AV Landing Pad, Added Back Sitting Area and Parking Lot! Stop by this Luxurious Showroom, check out the latest and greatest models of most Cyberpunk bikes, and even use a computer to buy some vehicles while you're here !",
+    "status": "published",
+    "added_at": "2026-03-31T16:36:11.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "ec8df79f-d3d4-4144-990e-a1fc104995ff",
+    "name": "Tucker Albachs Apartment Enhanced",
+    "nexus_id": "22582",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1681.488,
+      -980.23,
+      18.7895
+    ],
+    "yaw": 156.7397,
+    "tags": [
+      "apartment",
+      "neokitsch"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "After dealing with Tucker Albach, her Apartment was listed under her next of kin, ( secretly changed to V ) SO CONGRATS on your new Apartment given to you by your loving family member ! It has been Enhanced with Better Lighting, Roof AV Landing Pad and even your own Room catered to its Style ! Truthfully a place worthy of V, and not Tucker Albach...",
+    "status": "published",
+    "added_at": "2026-03-21T11:53:06.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "ee368d37-05f1-4273-be07-9a22bd01cf2b",
+    "name": "Handsome Squidward (Brainporium - Dogtown)",
+    "nexus_id": "27412",
+    "category": "other",
+    "coordinates": [
+      -1724.6251,
+      -2404.615,
+      86.94687
+    ],
+    "yaw": 0.9561772,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "MisterChedda"
+    ],
+    "description": "Replaces the Brainporium sculpture building in Dogtown with Handsome Squidward.",
+    "status": "published",
+    "added_at": "2026-03-12T11:54:42.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "ee7db4e9-c600-4626-8a3c-520c561c479d",
+    "name": "Little China Apartment (Usable from Act 1)",
+    "nexus_id": "30892",
+    "category": "new-location",
+    "coordinates": [
+      -1289.4954,
+      1369.0415,
+      24.7042
+    ],
+    "yaw": 93.6497,
+    "tags": [
+      "apartment",
+      "house"
+    ],
+    "authors": [
+      "Paulsvision"
+    ],
+    "description": "An Apartment on the edge of Little China with both a fully furnished and also 2 non decorated versions to build with AMM or World Builder one is just the building",
+    "status": "published",
+    "added_at": "2026-06-27T13:20:46.000Z",
+    "modified_at": "2026-06-27T13:20:46.000Z"
+  },
+  {
+    "id": "ee8fc5c6-089f-49fb-a881-dd9050da9950",
+    "name": "Pacifica Hotel Pistis Sophia Apartment",
+    "nexus_id": "31015",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2630.1057,
+      -2450.5002,
+      35.0366
+    ],
+    "yaw": -145.7413,
+    "tags": [
+      "apartment",
+      "quest"
+    ],
+    "authors": [
+      "hnovak1"
+    ],
+    "description": "The same floor where Johnny takes V after the Dashi Parade, but different apartment, with great view to the Pacifica Pier.",
+    "status": "published",
+    "added_at": "2026-07-06T20:57:55.000Z",
+    "modified_at": "2026-07-06T20:57:55.000Z"
+  },
+  {
+    "id": "ef2f7cc4-a493-4780-b488-e0681545f69e",
+    "name": "Satellite Tower Apartment (in trailer park)",
+    "nexus_id": "30114",
+    "category": "new-location",
+    "coordinates": [
+      1176.7655,
+      -558.0649,
+      42.6665
+    ],
+    "yaw": 17.8999,
+    "tags": [
+      "apartment",
+      "entropism"
+    ],
+    "authors": [
+      "Mazamp"
+    ],
+    "description": "Did you ever want to live in an abandoned communications tower in a trailer park? Well of course not, but now you can! \nTurns out you're too stinky even for the trailer park. Thankfully the good people gave you this abandoned place.",
+    "status": "published",
+    "added_at": "2026-05-30T21:14:40.000Z",
+    "modified_at": "2026-05-30T21:14:40.000Z"
+  },
+  {
+    "id": "ef98c6cd-6c5a-4ff8-b560-d370f80a4c7a",
+    "name": "Japantown Rooftop Mansion",
+    "nexus_id": "22274",
+    "category": "new-location",
+    "coordinates": [
+      -783.2472,
+      981.29614,
+      125.1391
+    ],
+    "yaw": -144.6862,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "credits": "rexxgta",
+    "description": "This Luxury Japantown Mansion is now fitted with an AV Landing Pad and an entire Top Floor Garden with AMAZING views!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "ef9f55c3-2ab4-4b6e-a5fe-db8513a69d9c",
+    "name": "NC Beats - Player Home and Radio EXT Station",
+    "nexus_id": "7554",
+    "category": "new-location",
+    "coordinates": [
+      2453.8979,
+      -747.4419,
+      67.712
+    ],
+    "yaw": -57.4282,
+    "tags": [
+      "apartment",
+      "house"
+    ],
+    "authors": [
+      "Seracen"
+    ],
+    "description": "Meticulously crafted Player home, and curated Radio EXT Station, with stream friendly music and DJ voice work. Reworked with WB and Native Interactions. Also some custom followers for AMM",
+    "status": "published",
+    "added_at": "2026-06-07T13:58:51.000Z",
+    "modified_at": "2026-06-07T13:58:51.000Z"
+  },
+  {
+    "id": "efa15c8f-8354-47ab-a319-871f720f12d6",
+    "name": "Casino Reforged - Phase 2 : Access Road and Entrance",
+    "nexus_id": "25556",
+    "category": "new-location",
+    "coordinates": [
+      1062.8049,
+      1534.3431,
+      218.6555
+    ],
+    "yaw": 111.2147,
+    "tags": [
+      "entertainment",
+      "infrastructure",
+      "neokitsch"
+    ],
+    "authors": [
+      "Oranje3",
+      "Kaoziun"
+    ],
+    "credits": "CRF Team",
+    "description": "North Oaks Resort and Casino. All new interior, updated access road, car park and Casino entrance - Phase 2 of the Casino Reforged project",
+    "status": "published",
+    "added_at": "2026-03-07T00:53:22.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "eface149-2492-4c7a-b9b1-c156feab4392",
+    "name": "Japantown Garage",
+    "nexus_id": "19850",
+    "category": "location-overhaul",
+    "coordinates": [
+      -787.8556,
+      965.8151,
+      12.0253
+    ],
+    "yaw": -47.3554,
+    "tags": [
+      "infrastructure"
+    ],
+    "authors": [
+      "Sammmy1036"
+    ],
+    "description": "Adds a two car garage to V's Japantown Apartment. Removes construction debris and adds an accessible door inside added garage.",
+    "status": "published",
+    "added_at": "2026-03-21T04:26:43.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "f00dfdc8-11d3-4640-ab12-a9b976129ae4",
+    "name": "Underground Casino ( Working Roulette )",
+    "nexus_id": "20280",
+    "category": "location-overhaul",
+    "coordinates": [
+      -43.03415,
+      -289.326,
+      0.5063
+    ],
+    "yaw": 54.2042,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "This Mod brings more attention to the Underground Casino from the Gig: Tyger and Vulture. Now with added street detail you'll never miss the Casino driving by again! Inside the Casino feature lights to set the mood and Holo Fish Tanks to look at while gambling!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "f011d495-3b9a-4f1f-a9d1-239e040e1f2f",
+    "name": "Totentanz Club Enhanced",
+    "nexus_id": "27678",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1716.1333,
+      2202.5403,
+      18.2
+    ],
+    "yaw": 148.43,
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "WELCOME BACK TO HELL! While Maelstorm Crimes are soaring, so is V on their way up to the Newly Enhanced Club! Fitted with Red Lights to match the Gangs Theme, Data Screens displaying the Gangs Illicit activities on the Black Market and even a MAXXED OUT Club Vibe, Thanks to the BURNING Passion of DJ Tinnitus endorsing the Club Renovations!",
+    "status": "published",
+    "added_at": "2026-03-19T21:52:46.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "f0235e7b-6587-4d4a-968f-7155017c7a64",
+    "name": "JUNGLE RUNNER - H10 Apt - Enhanced",
+    "nexus_id": "22061",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1382.787,
+      1270.6815,
+      123.0649
+    ],
+    "yaw": 79.1,
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "ellios2normandie"
+    ],
+    "credits": "Brocreate  (Jungle Runner is a remix of Brocreate’s DIGITAL OASIS)",
+    "description": "Space greenhouse decor for apartment H10. Adding 5 new Smart Frames (7 total available) and 10 interactions : drink coffee and tea, eat yakitori, play guitar, use netrunner chair, meditate, etc.",
+    "status": "published",
+    "added_at": "2026-03-12T04:45:24.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "f08ea2fc-4c05-4894-b3a9-f30632d4dfab",
+    "name": "Cliffside Abode Player Home",
+    "nexus_id": "26488",
+    "category": "new-location",
+    "coordinates": [
+      4512.6216,
+      25.654678,
+      159.11772
+    ],
+    "yaw": 0.99002445,
+    "tags": [
+      "apartment",
+      "neokitsch"
+    ],
+    "authors": [
+      "Sirandar888"
+    ],
+    "description": "This mod adds a Corpo style retreat player home on a cliffside overlooking a canyon. It has Native Interactions and was inspired by Outdoor V Canyon by Ka0ziun. Version 10 adds a dockside area. Special thanks to MorganLeFaye79 for her props mod Victorian Style Sofa",
+    "status": "published",
+    "added_at": "2026-03-19T22:37:17.000Z",
+    "modified_at": "2026-04-09T00:26:56.000Z"
+  },
+  {
+    "id": "f0e63021-6c7b-41a8-8288-9ce7bfdb1ecc",
+    "name": "The Glen Windows addon - Interactive Shutters",
+    "nexus_id": "27286",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1521.956,
+      -973.40356,
+      86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+      "apartment",
+      "neokitsch"
+    ],
+    "authors": [
+      "Kaoziun"
+    ],
+    "description": "Small addition to have some interactive shutters at every windows from The Glen apartment. Compatible with most if not every Glen overhaul mods. With switches to control all shutters at once.",
+    "status": "published",
+    "added_at": "2026-03-12T04:18:24.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "f29e6e5d-ca59-4cc0-9427-bdaa2efff4ce",
+    "name": "Hobo's El Coyote Dumpster crib",
+    "nexus_id": "29400",
+    "category": "new-location",
+    "coordinates": [
+      -1223.9955,
+      -1001.8901,
+      14.9385
+    ],
+    "yaw": -174.4171,
+    "tags": [
+      "entropism",
+      "nomad",
+      "streetkid"
+    ],
+    "authors": [
+      "HoboOfFerelden"
+    ],
+    "description": "Visit one of my digs by El Coyote. :) (first attempt at WB/NIF mods) :)))",
+    "status": "published",
+    "added_at": "2026-05-03T13:51:54.000Z",
+    "modified_at": "2026-05-03T13:51:54.000Z"
+  },
+  {
+    "id": "f49bccfc-2546-4b6d-8733-a99977f95243",
+    "name": "Denny's Villa Enchanced",
+    "nexus_id": "24614",
+    "category": "location-overhaul",
+    "coordinates": [
+      486.96082,
+      1298.1526,
+      234.4587
+    ],
+    "yaw": 91.349,
+    "tags": [
+      "house",
+      "neokitsch"
+    ],
+    "authors": [
+      "8eartic"
+    ],
+    "description": "Unlock Denny's villa and add some interaction and nex rooms.",
+    "status": "published",
+    "added_at": "2026-03-21T02:48:14.000Z",
+    "modified_at": "2026-04-08T07:17:30.000Z"
+  },
+  {
+    "id": "f55fac03-3fc8-4134-944e-ed18f27f3fc7",
+    "name": "Santo Domingo Overlook - Artistic Safehouse",
+    "nexus_id": "24131",
+    "category": "new-location",
+    "coordinates": [
+      429.69156,
+      -2254.4045,
+      50.5552
+    ],
+    "yaw": 140.6134,
+    "tags": [
+      "apartment",
+      "entropism"
+    ],
+    "authors": [
+      "Guitarsolo"
+    ],
+    "description": "Flip an unfinished, empty room in a backwater building in Santo Domingo, turn it into an artistic apartment/safehouse.",
+    "status": "published",
+    "added_at": "2026-03-13T17:05:38.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "f65c8847-cf18-497d-8170-f2fa21c9d662",
+    "name": "Kabuki tech terrarium - apartment",
+    "nexus_id": "29664",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1155.2279,
+      1279.0404,
+      67.8113
+    ],
+    "yaw": 79.8803,
+    "tags": [
+      "apartment",
+      "corpo",
+      "neomilitarism"
+    ],
+    "authors": [
+      "thumbsuckerr"
+    ],
+    "description": "Dark techy hideout with a view",
+    "status": "published",
+    "added_at": "2026-05-17T17:17:46.000Z",
+    "modified_at": "2026-05-17T17:17:46.000Z"
+  },
+  {
+    "id": "f72661ad-3491-4836-b0f7-e84e137f13b7",
+    "name": "Konpeki Plaza Expanded ( with Apartment )",
+    "nexus_id": "20233",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2210.0337,
+      1754.9215,
+      20
+    ],
+    "yaw": -68.0112,
+    "tags": [
+      "apartment"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "The Konpeki Plaza has RE-OPENED AND EXPANDED! Now Featuring Vegetation, Statues, Lights and even a FULL BAR! Below is the Garage with plenty of space! On the 44th floor is the AV Pad and the Apartments where you'll find your room welcoming you back to Konpeki Plaza!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "f7329c4b-d610-411d-b8b2-4e6317d1feff",
+    "name": "Crystal Palace Resort",
+    "nexus_id": "26683",
+    "category": "new-location",
+    "coordinates": [
+      322.9296,
+      -1017.5965,
+      1524.5823
+    ],
+    "yaw": -80.4172,
+    "tags": [
+      "entertainment",
+      "kitsch"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "credits": "Kaoziun",
+    "description": "WELCOME! The Crystal Palace Resort is now OPEN 24/7 hovering over Night City waiting for your arrival! The Resort has everything a RICH CORPO needs for a getaway, Shopping Strip, Casino/Resort, Pools and an Outdoor Kitchen! Feel free to Fly A Vehicle up to the Resort Landing Strip anytime OR take the NEW Fast Travel Station via Street Level !",
+    "status": "published",
+    "added_at": "2026-03-21T11:37:17.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "f8c6f097-43d8-435e-bc66-cebc96f4d4d0",
+    "name": "Talent Academy Enhanced",
+    "nexus_id": "29791",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1997.8904,
+      -2990.7563,
+      84.5199
+    ],
+    "yaw": -131.273,
+    "tags": [
+      "entertainment",
+      "quest"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "WELCOME BACK to the Talent Academy! After V's Deal with Fiona Vargas, she has given you access to her Personal Apartment below the Club! Feel Free to visit whenever, grab a drink and HOPEFULLY see some New, Next Level Talent formed...if they ever fix that Display case from Tommy....",
+    "status": "published",
+    "added_at": "2026-05-30T21:14:17.000Z",
+    "modified_at": "2026-05-30T21:14:17.000Z"
+  },
+  {
+    "id": "fa1d35ba-a60a-4207-8ed8-013a50e23607",
+    "name": "Biotechnica Hotel Enhanced ( with Apartment )",
+    "nexus_id": "22502",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2137.6067,
+      480.3441,
+      89.4722
+    ],
+    "yaw": 94.5737,
+    "tags": [
+      "apartment",
+      "corpo"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "After the \"Mysterious\" passing of Joanne Koch, the Biotechnica Hotel has Enhanced their entire Hotel with Better Visibility and even started letting Clients back to rent a room again ! BIOTECHNICA WELCOMES YOU BACK and even invites you to Joanne's old room! The NEW AV Landing Pad added on the Roof will let Clients come and go as they please !",
+    "status": "published",
+    "added_at": "2026-03-21T12:02:18.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "fa42386e-0859-4c7b-a6b8-25b03d8f7657",
+    "name": "Gaston Slaytons Apartment Enhanced",
+    "nexus_id": "22549",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1457.0339,
+      -1028.4769,
+      77.6877
+    ],
+    "yaw": -0.3832,
+    "tags": [
+      "apartment",
+      "neokitsch"
+    ],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "description": "After Gaston Slaytons Apartment was \"Mysteriously\" robbed, he was so scared of the rest of his PRIZE POSSESIONS being stolen in the future, that he bolted out of Night City ! \"Whoever\" robbed them ended up scoring you his DOPE Apartment ! Fully Decorated with better Lighting like a Psychofan would and decked out with Samuri Merch on all the walls !",
+    "status": "published",
+    "added_at": "2026-03-21T11:56:19.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "fc1097ab-1eef-42e5-90be-180a0cb51405",
+    "name": "Lina Malina house enchanced",
+    "nexus_id": "22818",
+    "category": "location-overhaul",
+    "coordinates": [
+      -2225.1167,
+      -2645.5527,
+      34.4427
+    ],
+    "yaw": -9.2524,
+    "tags": [
+      "apartment",
+      "entropism"
+    ],
+    "authors": [
+      "8eartic"
+    ],
+    "description": "Lina Malina house enhanced with new interactions.",
+    "status": "published",
+    "added_at": "2026-03-20T19:02:18.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "fc5c9819-755a-415c-ae35-a8e19c3a04fe",
+    "name": "the glen v.1 apartment",
+    "nexus_id": "26020",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1521.956,
+      -973.40356,
+      86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+      "apartment",
+      "streetkid"
+    ],
+    "authors": [
+      "thumbsuckerr"
+    ],
+    "description": "bold flashy neon glen redesign with wraparound balcony",
+    "status": "published",
+    "added_at": "2026-03-13T03:34:24.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+  },
+  {
+    "id": "fd105a52-717b-4c3f-8d74-d98e915a21c1",
+    "name": "Petrel st unit - apartment",
+    "nexus_id": "27849",
+    "category": "new-location",
+    "coordinates": [
+      -892.55206,
+      136.5025,
+      17.2291
+    ],
+    "yaw": -148.6441,
+    "tags": [
+      "apartment",
+      "streetkid"
+    ],
+    "authors": [
+      "thumbsuckerr"
+    ],
+    "description": "cozy brick rocker apartment",
+    "status": "published",
+    "added_at": "2026-03-13T03:13:18.000Z",
+    "modified_at": "2026-04-27T21:54:34.000Z"
+  },
+  {
+    "id": "fd71c89f-6955-4a1d-93ba-e83865f2019d",
+    "name": "Charterhill Skatepark",
+    "nexus_id": "16319",
+    "category": "new-location",
+    "coordinates": [
+      425.58658,
+      -58.21237,
+      24.0065
+    ],
+    "yaw": 1.4351,
+    "tags": [],
+    "authors": [
+      "TheRealJonCross"
+    ],
+    "credits": "Kaoizun",
+    "description": "The Skatepark is open 24/7 for REAL CYBERPSYCHOS to go berserk in! Happily funded by the Adverts of Night City, provides City Wide Access all year round for all residents! (; The Skatepark Features multiple different ramp types to ride and do Stunts on!",
+    "status": "published",
+    "added_at": "2026-04-11T12:18:48.000Z",
+    "modified_at": "2026-04-11T12:18:48.000Z"
+  },
+  {
+    "id": "fdf86d7b-3c47-4bce-a1ab-4334b449fb8d",
+    "name": "Canyon construction ramp",
+    "nexus_id": "27013",
+    "category": "location-overhaul",
+    "coordinates": [
+      3732.2097,
+      820.3253,
+      134.309
+    ],
+    "yaw": -51.3379,
+    "tags": [
+      "infrastructure"
+    ],
+    "authors": [
+      "Oranje3"
+    ],
+    "description": "Adds an access ramp down to the bottom of the canyon.",
+    "status": "published",
+    "added_at": "2026-03-12T13:24:51.000Z",
+    "modified_at": "2026-04-07T07:15:04.000Z"
+  },
+  {
+    "id": "nexus-16445",
+    "name": "Safehouses of Night City - V's Northside Autoshop",
+    "nexus_id": "16445",
+    "category": "new-location",
+    "coordinates": [
+      -853.5757,
+      2777.656,
+      38.5754
+    ],
+    "yaw": 69.2034,
+    "tags": [
+      "apartment",
+      "house",
+      "kitsch",
+      "nomad",
+      "streetkid"
+    ],
+    "authors": [
+      "evafan84"
+    ],
+    "description": "It’s a garage in a warehouse in the Northside part of the Watson district.Now includes more interactions including smartframes, arcade machines, basketball, sleep, shower, ect.",
+    "status": "published",
+    "added_at": "2026-07-26T05:46:29.225Z",
+    "modified_at": "2026-07-26T05:46:29.225Z"
+  },
+  {
+    "id": "nexus-25124",
+    "name": "H10 - Tidy Your Trash - Modular Apartment Makeover",
+    "nexus_id": "25124",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1382.3882,
+      1270.984,
+      123.0649
+    ],
+    "yaw": -79.1,
+    "tags": [
+      "apartment",
+      "kitsch",
+      "streetkid"
+    ],
+    "authors": [
+      "Spuddeh"
+    ],
+    "description": "Another attempt to tidy up the H10 apartment. The aim of this one wasn't to remove all the trash, but instead to make it look like V can walk to a bin every once in a while.The mod also includes options to redecorate, allowing you to",
+    "status": "published",
+    "added_at": "2026-07-26T05:46:29.225Z",
+    "modified_at": "2026-07-26T05:46:29.225Z"
+  },
+  {
+    "id": "nexus-25251",
+    "name": "Northside - Tidy Your Trash - Modular Apartment Makeover",
+    "nexus_id": "25251",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1505.9731,
+      2230.9961,
+      22.2
+    ],
+    "yaw": 36.55,
+    "tags": [
+      "apartment",
+      "entropism",
+      "streetkid"
+    ],
+    "authors": [
+      "Spuddeh"
+    ],
+    "description": "Another attempt to tidy up the Northside apartment. The aim of this one wasn't to remove all the trash, but instead to make it look like V can walk to a bin every once in a while. They've also gone out and bought some cleaning supplies and",
+    "status": "published",
+    "added_at": "2026-07-26T05:46:29.225Z",
+    "modified_at": "2026-07-26T05:46:29.225Z"
+  },
+  {
+    "id": "nexus-25536",
+    "name": "Japantown - Tidy Your Trash - Modular Apartment Makeover",
+    "nexus_id": "25536",
+    "category": "location-overhaul",
+    "coordinates": [
+      -787.1183,
+      980.1387,
+      28.2095
+    ],
+    "yaw": 97.6499,
+    "tags": [
+      "apartment",
+      "kitsch"
+    ],
+    "authors": [
+      "Spuddeh"
+    ],
+    "description": "Another attempt to tidy up the Japantown apartment. The aim of this one wasn't to remove all the trash, but instead to make it look like V can walk to a bin every once in a while.The mod also includes options to redecorate certain areas.",
+    "status": "published",
+    "added_at": "2026-07-26T05:46:29.225Z",
+    "modified_at": "2026-07-26T05:46:29.225Z"
+  },
+  {
+    "id": "nexus-26011",
+    "name": "Glen - Tidy Your Trash - Modular Apartment Makeover",
+    "nexus_id": "26011",
+    "category": "location-overhaul",
+    "coordinates": [
+      -1525.8024,
+      -974.0538,
+      86.9754
+    ],
+    "yaw": -165.3515,
+    "tags": [
+      "apartment",
+      "entropism"
+    ],
+    "authors": [
+      "Spuddeh"
+    ],
+    "description": "Another attempt to tidy up the Glen apartment. The aim of this one wasn't to remove all the trash, but instead to make it look like V can walk to a bin every once in a while.The mod also includes options to redecorate certain areas.",
+    "status": "published",
+    "added_at": "2026-07-26T05:46:29.225Z",
+    "modified_at": "2026-07-26T05:46:29.225Z"
+  },
+  {
+    "id": "nexus-27618",
+    "name": "Atari Canyon - Blade Runner",
+    "nexus_id": "27618",
+    "category": "other",
+    "coordinates": [
+      -1647.5304,
+      436.9953,
+      43.1649
+    ],
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "ellios2normandie"
+    ],
+    "credits": "Hologram ads created by BillZarro",
+    "description": "A bit more Blade Runner. Adds Atari hologram ads created by BillZarro﻿ to several locations in the City Center.",
+    "status": "published",
+    "added_at": "2026-07-26T05:46:29.225Z",
+    "modified_at": "2026-07-26T05:46:29.225Z"
+  },
+  {
+    "id": "nexus-27888",
+    "name": "Kujira - Rafale-F22-F35",
+    "nexus_id": "27888",
+    "category": "other",
+    "coordinates": [
+      -3701.5332,
+      1655.634,
+      24.6071
+    ],
+    "tags": [
+      "entertainment"
+    ],
+    "authors": [
+      "ellios2normandie"
+    ],
+    "credits": "For B1W’s Kujira supercarrier",
+    "description": "New aircraft models for B1W’s Kujira supercarrier : Rafale, F-22, and F-35. Variant with F117s.",
+    "status": "published",
+    "added_at": "2026-07-26T05:46:29.225Z",
+    "modified_at": "2026-07-26T05:46:29.225Z"
+  },
+  {
+    "id": "nexus-4371",
+    "name": "Stone Manor Player Home",
+    "nexus_id": "4371",
+    "category": "new-location",
+    "coordinates": [
+      2036.4189,
+      2797.0078,
+      42.918
+    ],
+    "yaw": 3.7095,
+    "tags": [
+      "corpo",
+      "house",
+      "photos"
+    ],
+    "authors": [
+      "JamieCross1477"
+    ],
+    "description": "Once belonging to an heir of Arasaka, This house is looking for its third owner. It's Paradise.",
+    "status": "published",
+    "added_at": "2026-07-26T05:46:29.225Z",
+    "modified_at": "2026-07-26T05:46:29.225Z"
+  },
+  {
+    "id": "nexus-8108",
+    "name": "The Hollywood Cliffhanger Player Mansion",
+    "nexus_id": "8108",
+    "category": "new-location",
+    "coordinates": [
+      517.4078,
+      1131.3531,
+      213.0206
+    ],
+    "yaw": 175.0032,
+    "tags": [
+      "corpo",
+      "house",
+      "photos"
+    ],
+    "authors": [
+      "JamieCross1477"
+    ],
+    "description": "A Magnificent Modern Wonder Home for Night City!",
+    "status": "published",
+    "added_at": "2026-07-26T05:46:29.225Z",
+    "modified_at": "2026-07-26T05:46:29.225Z"
+  }
+]

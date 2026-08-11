@@ -81,7 +81,7 @@ const ThreeScene = (() => {
   let renderPipeline = null, scenePass = null, _bloomPass = null, _sceneScaleUniform = null;
   let _hazePass = null;   // second wide bloom: night atmospheric light-pollution haze
   let initialized = false;
-  // True only when the renderer ended up on a real WebGPU backend. The webgpu
+  // True only when the renderer resolved to a real WebGPU backend. The webgpu
   // build reports renderer.isWebGPURenderer === true even on its WebGL2
   // fallback, so that flag can't be trusted; renderer.backend.isWebGPUBackend
   // (set by r184's WebGPUBackend, absent on WebGLBackend) is the real signal.
@@ -719,9 +719,9 @@ const ThreeScene = (() => {
       reversedDepthBuffer: true,
       requiredLimits,
     };
-    // TEMP: verification only, remove before dev→main. ?forcewebgl forces
-    // the WebGL2 backend so the WebGPU-unavailable → 2D-Leaflet fallback can
-    // be exercised on any browser (no about:config / exotic browser needed).
+    // Permanent test gate: ?forcewebgl forces the WebGL2 backend so the
+    // WebGPU-unavailable → 2D-Leaflet fallback can be exercised on any
+    // browser (no about:config / exotic browser needed).
     if (new URLSearchParams(window.location.search).has('forcewebgl')) {
       _rendererInitParams.forceWebGL = true;
       console.warn('[NCZ] ?forcewebgl — forcing WebGL2 backend (test gate).');

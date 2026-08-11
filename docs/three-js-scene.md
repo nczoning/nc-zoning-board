@@ -1,6 +1,6 @@
 # Three.js 3D Scene: Reference Documentation
 
-Full documentation for the Three.js schematic view. For pending phase-by-phase work see the [GitHub Project](https://github.com/users/spuddeh/projects/1) (WebGPU Migration stream). For the overall app architecture see [`architecture.md`](architecture.md).
+Full documentation for the Three.js schematic view. For pending phase-by-phase work see the [GitHub Project](https://github.com/orgs/nczoning/projects/1) (3D Scene stream). For the overall app architecture see [`architecture.md`](architecture.md).
 
 ---
 
@@ -455,7 +455,7 @@ All in `utils.js`. Both views call these: nothing view-specific lives here.
 
 | Function | Description |
 |----------|-------------|
-| `NCZ.isRecentlyUpdated(mod)` | True if mod was recently updated on Nexus. Reads the API's server-computed `recently_updated` bool; on the API-down fallback path, computes from `_updatedAt` vs the effective window (`NCZ.recentlyUpdatedDays`, default `NCZ.RECENTLY_UPDATED_DAYS`) |
+| `NCZ.isRecentlyUpdated(mod)` | True if mod was recently updated on Nexus. Computed here from `_updatedAt` vs the effective window (`NCZ.recentlyUpdatedDays`, default `NCZ.RECENTLY_UPDATED_DAYS`); the API serves no recency bool |
 | `NCZ.cetToThree(cetX, cetY, cetZ)` | CET → Three.js `[x, y, z]` |
 | `NCZ.buildPopupHtml(mod, catStyle, nexusThumbs, tagsDict)` | Full popup HTML string, used by both views |
 | `NCZ.prepareModRenderData(mod, nexusThumbs, tagsDict)` | Returns `{ catStyle, popupHtml, thumbSrc, fullSrc, nexusUrl, nexusLabel }` |

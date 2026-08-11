@@ -1595,8 +1595,8 @@
           ]
         },
         {
-          "id": "north_oaks_casino",
-          "name": "North Oaks Casino",
+          "id": "north_oak_casino",
+          "name": "North Oak Casino",
           "trigger": null,
           "canonical": false,
           "note": "Cut content \u2014 never released in the base game. Part of a community restoration mod led by Kao. Polygon computed from the void between North Oak, Red Peaks, and Rocky Ridge via triple-buffer intersection.",

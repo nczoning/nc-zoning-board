@@ -42,7 +42,7 @@ Current active work: **[Spuddeh](https://www.nexusmods.com/profile/Spuddeh/mods?
 
 ### ⚙️ GitHub Automation & Tools
 
-Into DevOps and automation? We maintain the **GitHub Actions submission pipeline**, **tile generation**, **deployment workflow**, and **Discord integrations**. Node.js + YAML + a bit of GitHub API knowledge.
+Into DevOps and automation? We maintain the **Cloudflare Worker and its D1 registry**, **tile generation**, **deployment workflows**, **API health monitoring** and **Discord alerting**. Node.js + YAML + a bit of Cloudflare and GitHub API knowledge.
 
 Areas that sometimes need tweaks: submission workflows, CI/CD validation, secrets management, tile generation improvements.
 

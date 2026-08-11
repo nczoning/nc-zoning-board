@@ -59,20 +59,21 @@ test('outside every polygon defaults to Badlands (game rule)', () => {
   });
 });
 
-test('every real location gets a district (Badlands catch-all included)', () => {
-  const locDir = join(repoRoot, 'data', 'locations');
-  const files = readdirSync(locDir).filter((f) => f.endsWith('.json'));
-  assert.ok(files.length > 200, `expected >200 location files, got ${files.length}`);
+test('every location in the frozen corpus gets a district (Badlands catch-all included)', () => {
+  // See the header of validate.test.js for what this fixture is and is not.
+  const records = JSON.parse(
+    readFileSync(join(repoRoot, 'worker', 'test', 'fixtures', 'locations-corpus.json'), 'utf8'),
+  );
+  assert.equal(records.length, 297, `expected the frozen corpus, got ${records.length}`);
   let assigned = 0, subs = 0;
-  for (const f of files) {
-    const mod = JSON.parse(readFileSync(join(locDir, f), 'utf8'));
+  for (const mod of records) {
     const { district, subdistrict } = assignDistrict(mod.coordinates, districts);
     if (district) assigned++;
     if (subdistrict) subs++;
   }
-  assert.equal(assigned, files.length, 'district must never be null on real data');
-  assert.ok(subs / files.length > 0.6,
-    `only ${subs}/${files.length} locations got a subdistrict`);
+  assert.equal(assigned, records.length, 'district must never be null on real data');
+  assert.ok(subs / records.length > 0.6,
+    `only ${subs}/${records.length} locations got a subdistrict`);
 });
 
 test('districtsPayload flattens boundaries (DTO rule: no arrays-of-arrays)', () => {

@@ -76,30 +76,59 @@ NCZ.CATEGORY_STYLES = {
   },
 };
 
-// Nexus Mods API
-NCZ.NEXUS_GAME_ID = 3333; // Cyberpunk 2077
-NCZ.NEXUS_GQL_ENDPOINT = "https://api.nexusmods.com/v2/graphql";
-NCZ.NEXUS_BATCH_SIZE = 50;
-
-// Data API (B7): the site consumes the server-built /v1 dataset instead of
-// running the Nexus auto-discovery merge client-side. Base URL is chosen by
-// hostname so environments line up with the API's: prod → prod API; everything
-// else (dev.nczoning.net, *.pages.dev previews, localhost) → staging API.
+// Data API (v1): the site's sole data source is the server-built /v1 dataset.
+// The Nexus auto-discovery merge that once ran client-side now lives entirely in
+// the API (worker/); the browser makes no Nexus calls.
+//
+// EVERY origin reads PRODUCTION by default: dev.nczoning.net, *.pages.dev
+// previews and localhost included. The old hostname split sent them to the
+// staging API on the premise that it "reflects staging data", but there has
+// never been a deliberate dev dataset: dev differs from main only when merged
+// locations haven't been copied across, i.e. dev is BEHIND. So the split served
+// drift as if it were data, and previewing a map feature on dev meant previewing
+// it against a stale location set. Staging also has no cron now (see
+// worker/wrangler.jsonc), so its dataset is stale by design between manual
+// refreshes.
+//
+// Opt in with ?api=dev when the thing being tested is an API CHANGE rather than
+// the map. URLSearchParams inline matches app.js's idiom; constants.js loads
+// before utils.js, so no shared helper is available here.
 NCZ.API_BASE =
-  location.hostname === "nczoning.net" || location.hostname === "www.nczoning.net"
-    ? "https://api.nczoning.net"
-    : "https://api-dev.nczoning.net";
-// { etag, data } for the full-locations list. Freshness is driven by the ETag
+  new URLSearchParams(location.search).get("api") === "dev"
+    ? "https://api-dev.nczoning.net"
+    : "https://api.nczoning.net";
+// { etag, data } for the locations list. Freshness is driven by the ETag
 // (If-None-Match → 304), not a TTL, so this is stored raw rather than via the
 // TTL-based cacheGet/cacheSet.
-NCZ.API_LOCATIONS_CACHE_KEY = "nc_api_locations_full";
+//
+// Renamed off `nc_api_locations_full` with the `?full=1` alias: the "_full"
+// suffix named the slim/full split, which no longer exists. Renaming orphans
+// any existing entry, which costs one extra fetch and nothing else, and this
+// cache had never populated anyway, because the API did not expose `ETag`
+// through CORS, so `res.headers.get("ETag")` was always null.
+NCZ.API_LOCATIONS_CACHE_KEY = "nc_api_locations";
 
-// Data paths
-NCZ.DATA_MODS_PATH = "mods.json";
+// How often an open tab asks whether the dataset changed.
+//
+// 60s is not a cost decision: it cannot be. `/v1/locations` is `max-age=300`,
+// so the browser answers most of these locally and the Worker sees roughly one
+// request per tab per 5 minutes whatever this is set to. Polling every 60s and
+// every 300s cost the same; 60s just means the tab notices promptly once the
+// cached copy does expire.
+//
+// Chrome throttles timers in hidden tabs to about once a minute, which this
+// already matches, and a tab that is merely unfocused (another monitor) is not
+// throttled at all.
+NCZ.DATASET_POLL_MS = 60 * 1000;
+
+// The tag registry now comes from /v1/tags alongside the locations: one origin,
+// one contract, rather than a same-origin fetch of data/tags.json, which was
+// fine while the file was the source of truth; from Phase 4 the D1 `tags`
+// table is, edited in the dashboard rather than by pull request.
+//
+// Kept only as the fallback if /v1/tags cannot be reached, so a tag-registry
+// hiccup degrades tooltips rather than the map.
 NCZ.DATA_TAGS_PATH = "data/tags.json";
-// nexus_ids tagged "NCZoning" on Nexus but intentionally kept off the map
-// (mistaken/minor tags). Honoured by auto-discovery and the health monitor.
-NCZ.DATA_EXCLUDED_PATH = "data/excluded_mods.json";
 
 // 3D scene GLB source folder. The committed runtime path is "assets/glb-meshopt"
 // (gltfpack-compressed via EXT_meshopt_compression, decoded by MeshoptDecoder).
@@ -113,6 +142,44 @@ NCZ.GLB_DIR = "assets/glb-meshopt";
 NCZ.DESCRIPTION_MAX_LENGTH = 500;
 NCZ.COPY_FEEDBACK_MS = 2000;
 NCZ.SEARCH_DEBOUNCE_MS = 200;
+
+// ── Submissions (POST /submissions) ──────────────────────────────────────────
+
+// Turnstile widget site key. Public by design: it names the widget in the
+// markup, and the secret it pairs with is a Worker secret.
+//
+// The widget's allowed-hostnames list must cover every origin that renders the
+// form, dev.nczoning.net and localhost included, or Turnstile refuses to draw
+// and the form cannot be submitted from there.
+NCZ.TURNSTILE_SITE_KEY = "0x4AAAAAAD_ZV_WBiAX688lD";
+
+// Field limits the Worker enforces on a submission. Mirrored here so a
+// submitter is told before sending rather than by a 400 afterwards.
+// Sources: NOTE_MAX and CONTACT_MAX in worker/src/submissions.js,
+// DESCRIPTION_MAX in worker/src/validate.js.
+NCZ.SUBMISSION_NOTE_MAX = 1000;
+NCZ.SUBMISSION_CONTACT_MAX = 200;
+NCZ.NAME_MIN_LENGTH = 3;
+
+// Coordinate bounds for the write path, mirroring TERRAIN_* and COORD_Z_* in
+// worker/src/config.js. The server is the enforcement point; these exist so the
+// form can refuse the same values inline.
+//
+// DELIBERATELY NOT NCZ.WORLD_MIN_X and friends above, which describe the
+// satellite tile projection and are tighter than the terrain in every
+// direction: they would refuse a location standing on rendered ground.
+NCZ.TERRAIN_MIN_X = -8000;
+NCZ.TERRAIN_MAX_X = 8000;
+NCZ.TERRAIN_MIN_Y = -8000;
+NCZ.TERRAIN_MAX_Y = 8000;
+NCZ.COORD_Z_MIN = -1000;
+NCZ.COORD_Z_MAX = 2000;
+
+// Advisory, not the limit: where Night City coordinates usually land. Quoted in
+// the form as guidance so a value inside the terrain bounds but far outside the
+// city reads as worth checking.
+NCZ.COORD_TYPICAL_XY = 4000;
+NCZ.COORD_TYPICAL_Z = 300;
 
 // Deep-linking / URL sharing
 NCZ.SITE_URL      = "https://nczoning.net";
@@ -145,17 +212,12 @@ NCZ.CET_UNITS_PER_METER = 1;
 // LocalStorage cache keys & TTLs
 NCZ.THEME_PREFERENCE_KEY = "nc_theme_id";
 NCZ.SHOWCASE_OPTIONS_KEY = "nc_showcase_options";
-// Fallback recency window (days). The API owns this rule: it computes each
-// mod's `recently_updated` bool and publishes the window as
+// Default recency window (days). The API owns the rule and publishes it as
 // `recently_updated_days` on the response envelope, which the app adopts into
-// NCZ.recentlyUpdatedDays. This constant is only used when the API is
-// unavailable (client-side fallback path) or omits the field.
+// NCZ.recentlyUpdatedDays; the site applies it itself in NCZ.isRecentlyUpdated.
+// This constant is only the safety default for when the envelope omits it.
 NCZ.RECENTLY_UPDATED_DAYS = 7;
 NCZ.UPDATED_LABEL = "RECENTLY UPDATED";
-NCZ.THUMB_CACHE_KEY = "nc_nexus_thumbs";
-NCZ.THUMB_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
-NCZ.AUTODISCOVERY_CACHE_KEY = "nc_nexus_autodiscovery";
-NCZ.AUTODISCOVERY_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 // Three.js Object3D.layers: bitmask channels that cameras opt into via Camera.layers.
 // Layer 0 (default) carries the static scene (terrain, water, buildings, roads, metro,

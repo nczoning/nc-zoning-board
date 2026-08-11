@@ -9,7 +9,7 @@ Style for both views shared via [`assets/css/style.css`](../assets/css/style.css
 Cross-view glue (sidebar, filter, cluster panel, deep-link) lives in
 [`assets/js/app.js`](../assets/js/app.js).
 
-For pending parity work and open questions, see the [GitHub Project](https://github.com/users/spuddeh/projects/1)
+For pending parity work and open questions, see the [GitHub Project](https://github.com/orgs/nczoning/projects/1)
 under the **Three.js Parity** stream. For 3D scene infrastructure (renderer,
 terrain, buildings, camera), see [`three-js-scene.md`](three-js-scene.md).
 
@@ -44,7 +44,7 @@ ThreeScene.init()           ─► NCZ.ThreeMarkers.attach(scene, camera, contai
                                   │  (rAF-debounced). Builds pins immediately if data already
                                   │  arrived (data path A below).
 
-NCZ.fetchModData() resolves ─► NCZ.ThreeMarkers.setMods(mods, nexusThumbs, tagsDict)
+NCZ.fetchLocationsFromApi() resolves ─► NCZ.ThreeMarkers.setMods(mods, nexusThumbs, tagsDict)
                                   │  Caches data in _modsState. If pinsLayer exists (attach
                                   │  has run), buildPins(). Otherwise data sits idle until
                                   │  attach is called (data path B below).
@@ -173,7 +173,8 @@ sections at `.three-popup`, `.three-tooltip-anchor`, etc.
 
 Both views share, by design:
 
-- **Mod data**: `mods.json` parsed once, fed into both layers.
+- **Mod data**: the `/v1/locations` response, fetched once, fed into both layers.
+  (The site has read the Data API since v1.4.1; `mods.json` no longer exists.)
 - **Filter logic**: `NCZ.computeVisibleMods(mods, filterState)` returns a `Set<modId>` consumed by both views' `applyFilters`.
 - **Popup HTML**: `NCZ.buildPopupHtml(mod, catStyle, nexusThumbs, tagsDict)`.
 - **Cluster panel DOM**: `#cluster-panel` in `index.html`, populated by `populateClusterPanel(modsList, opts)`.
@@ -211,6 +212,6 @@ from sharing the renderer.
 ## Related documents
 
 - [three-js-scene.md](three-js-scene.md): 3D scene infrastructure (renderer, GLBs, camera, lighting, shadows). ThreeMarkers attaches to it.
-- [GitHub Project](https://github.com/users/spuddeh/projects/1): current pending parity work, tracked under the Three.js Parity stream.
+- [GitHub Project](https://github.com/orgs/nczoning/projects/1): current pending parity work, tracked under the 3D Scene stream.
 - [coordinate-system-3d.md](coordinate-system-3d.md): CET ↔ Three.js coordinate spaces, including the validated CET-Z = terrain-GLB-Y finding that lets `pinYFor()` work without a raycast.
 - [architecture.md](architecture.md): repo-wide file structure and module loading order.

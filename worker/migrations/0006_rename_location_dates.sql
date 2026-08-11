@@ -1,0 +1,38 @@
+-- Rename the location registry's own timestamps.
+--
+--   created_at -> added_at      when we logged the location
+--   updated_at -> modified_at   when we last edited the record
+--
+-- WHY. There were two different things called `updated_at`, and the collision is
+-- part of why nobody noticed these columns were meaningless.
+--
+--   locations.updated_at    a registry timestamp, never served
+--   nexus_cache.updated_at  when the MOD last changed on Nexus, and the
+--                           `updated_at` that every /v1 record actually carries
+--
+-- Renaming only the registry side leaves one `updated_at` in the codebase, and
+-- it means what a reader expects. `nexus_cache.updated_at` is untouched: it is a
+-- served field name and a Nexus concept, not ours to rename.
+--
+-- SCOPE. `locations` only. `submissions.created_at`, `tags.created_at` and
+-- `tags.updated_at` keep their names; they were never ambiguous and renaming
+-- them would be churn.
+--
+-- NOT AN API CHANGE. Neither column is served. The /v1 record carries
+-- `updated_at` from `nexus_cache`, and `materialize.js` reads neither of these.
+-- So no version bump, and the parity gate cannot see this.
+--
+-- THE VALUES ARE STILL WRONG AFTER THIS RUNS. Every row currently holds the
+-- moment the Phase 1 importer ran (2026-07-26), because that is when the rows
+-- were created, so both columns say the same thing for all 297 records. The
+-- real history lives in git: `data/locations/*.json` carries a first-commit date
+-- and a last-modified date per file, 288 of 288 files, spanning 2026-03-07 to
+-- 2026-07-26. `scripts/backfill-location-dates.mjs` derives them and emits SQL.
+--
+-- The nine auto-discovered records have never existed as files, so git has
+-- nothing for them and they keep the import date. Decided rather than
+-- overlooked: inventing a plausible date from Nexus data would be worse than an
+-- honest "this is when it became a row".
+
+ALTER TABLE locations RENAME COLUMN created_at TO added_at;
+ALTER TABLE locations RENAME COLUMN updated_at TO modified_at;

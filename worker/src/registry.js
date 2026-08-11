@@ -1,0 +1,289 @@
+/**
+ * Writes against the location registry, shared by the two routes that perform
+ * them: the admin editor (admin.js) and the review queue (review.js).
+ *
+ * One definition, two callers, because approving a submission has to produce a
+ * record indistinguishable from one an admin typed in by hand. The parity gate
+ * rebuilds all 18 served fields from D1, so a second INSERT with its own idea
+ * of the defaults surfaces there as a difference that depends on which route
+ * wrote the row.
+ *
+ * The tag join is part of a write, not a follow-up to it. resolveTags treats
+ * location_tags as authoritative, so an INSERT without syncLocationTags
+ * materializes a record with no tags at all. Both helpers here own the join
+ * rather than leaving it to the caller to remember.
+ */
+
+import { runRefresh } from './refresh.js';
+import { syncLocationTags, readTagsForLocations } from './tag-registry.js';
+import { parseNexusFiles } from './materialize.js';
+
+/** Payload field -> column, for the fields that map one to one. */
+const COLUMN_FOR = {
+  name: 'name', nexus_id: 'nexus_id', category: 'category', description: 'description',
+  credits: 'credits', status: 'status', admin_notes: 'admin_notes',
+  yaw: 'yaw',
+};
+
+export async function getRow(env, id) {
+  return env.DB.prepare('SELECT * FROM locations WHERE id = ?').bind(id).first();
+}
+
+/**
+ * Row -> the admin representation (everything, including admin-only fields).
+ *
+ * `tags` comes from the `location_tags` join, passed in by the caller. That is
+ * the only representation since migration 0007 dropped the JSON column.
+ *
+ * The synthetic `nczoning` marker is absent by construction: it is not a
+ * registry row, so it has no join rows. Nothing adds it at serve time either.
+ */
+export function rowToAdmin(row, tags = [], nexusUpdatedAt = null) {
+  return {
+    id: row.id,
+    name: row.name,
+    nexus_id: row.nexus_id,
+    category: row.category,
+    coordinates: row.z === null || row.z === undefined ? [row.x, row.y] : [row.x, row.y, row.z],
+    yaw: row.yaw,
+    description: row.description ?? '',
+    credits: row.credits,
+    authors: JSON.parse(row.authors ?? '[]'),
+    tags,
+    status: row.status,
+    admin_notes: row.admin_notes,
+    // Array or null, never the raw JSON string: the dashboard renders it as a
+    // set of checkboxes and should not have to parse.
+    nexus_files: parseNexusFiles(row.nexus_files),
+    added_at: row.added_at,
+    modified_at: row.modified_at,
+    // The MOD's update time on Nexus, which is a different thing from both of
+    // the above and is the `updated_at` a /v1 record carries. Named in full here
+    // so the dashboard cannot show three dates that look interchangeable.
+    nexus_updated_at: nexusUpdatedAt,
+  };
+}
+
+/**
+ * A `nexus_cache` row -> the Nexus-derived view the dashboard shows.
+ *
+ * `archives_state` is the three-way answer the served `archives: []` cannot
+ * give, because /v1 collapses "unknown" and "ships none" into the same empty
+ * array on purpose (docs/api-reference.md). Here they are worth separating:
+ *
+ * - `unknown`  the listing has never been read. `archives` column is NULL.
+ * - `stale`    read, but against an older upload -- the mod has re-uploaded
+ *              since and the refetch has not come round yet.
+ * - `known`    read against the current upload. An empty list here is a real
+ *              answer: a loose-file mod ships no `.archive`/`.xl` at all.
+ *
+ * The predicate mirrors refreshArchives' own due-rule (nexus-cache.js) exactly,
+ * `archives != null && archives_at === updated_at`, so the panel says "pending"
+ * for precisely the mods the next cron tick will go and fetch. Do not switch
+ * the freshness test to `archives_at != null`: a mod whose Nexus `updated_at`
+ * is itself null stores a null `archives_at` on a perfectly good fetch.
+ */
+export function archivesView(row) {
+  if (!row) return { archives: [], archives_state: 'unknown', archives_at: null };
+  let names = [];
+  try {
+    const parsed = JSON.parse(row.archives ?? '[]');
+    if (Array.isArray(parsed)) names = parsed.filter((n) => typeof n === 'string');
+  } catch {
+    // A malformed cell reads as unknown rather than as an error: one mod's file
+    // list is not worth failing an admin page load over, and the cron rewrites
+    // it on the next re-upload anyway.
+    return { archives: [], archives_state: 'unknown', archives_at: null };
+  }
+  const at = row.archives_at ?? null;
+  const known = row.archives != null;
+  return {
+    archives: names,
+    archives_state: !known ? 'unknown' : at === (row.updated_at ?? null) ? 'known' : 'stale',
+    archives_at: at,
+  };
+}
+
+/**
+ * `nexus_id` -> `{ updated_at, ...archivesView }`, for every cached mod.
+ *
+ * One query for the whole list rather than a lookup per record: the admin list
+ * route already reads tags in bulk for the same reason.
+ *
+ * Deliberately NOT folded into rowToAdmin. That function's output is what the
+ * audit log stores as a write's `before` and `after`, and archives are
+ * cron-owned data no editor can change; a file list in an edit diff is noise at
+ * best, and a phantom change nobody made if a sweep lands between the two
+ * reads. `nexus_updated_at` is in there for historical reasons and is not a
+ * precedent to extend.
+ */
+export async function readNexusModMap(env) {
+  const { results } = await env.DB.prepare(
+    'SELECT nexus_id, updated_at, archives, archives_by_file, archives_at FROM nexus_cache',
+  ).all();
+  const map = new Map();
+  for (const r of results ?? []) {
+    let archivesByFile = {};
+    try {
+      const parsed = JSON.parse(r.archives_by_file ?? '{}');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) archivesByFile = parsed;
+    } catch {
+      // Same posture as archivesView: a malformed cell degrades to no
+      // breakdown, which the caller resolves as an unsplit page.
+    }
+    map.set(String(r.nexus_id), {
+      updated_at: r.updated_at ?? null, archivesByFile, ...archivesView(r),
+    });
+  }
+  return map;
+}
+
+/** One location, joined to its tags and the mod's Nexus update time. */
+export async function loadAdminRecord(env, row) {
+  const map = await readTagsForLocations(env, [row.id]);
+  const nexus = await env.DB.prepare(
+    'SELECT updated_at FROM nexus_cache WHERE nexus_id = ?',
+  ).bind(String(row.nexus_id)).first();
+  return rowToAdmin(row, map.get(row.id) ?? [], nexus?.updated_at ?? null);
+}
+
+/** The same, by id. Returns null when the record is gone. */
+export async function loadAdminRecordById(env, id) {
+  const row = await getRow(env, id);
+  return row ? loadAdminRecord(env, row) : null;
+}
+
+/**
+ * Rebuild the KV read path from D1 after a write, so an approved change appears
+ * in seconds rather than at the next cron tick.
+ *
+ * Unconditional: D1 is the only source, so every admin write is a write to
+ * what the map serves. Do not reintroduce a source gate here. One existed to
+ * stop an admin write performing the cutover as a side effect, and with a
+ * single source it can only switch the write-through off.
+ */
+export function materializeAfterWrite(env, ctx) {
+  // Fire-and-forget: the admin gets their response immediately, and a failed
+  // rebuild leaves last-known-good in place exactly as a failed cron does.
+  ctx?.waitUntil?.(runRefresh(env).catch((err) => {
+    console.error('write-through materialize failed:', String(err).slice(0, 200));
+  }));
+}
+
+/**
+ * Build the SET clause for a validated patch.
+ *
+ * `tags` is deliberately NOT here: it lives in the join now, and
+ * syncLocationTags owns both representations. Setting the column here as well
+ * would write it twice with two different normalisations.
+ */
+function buildUpdate(payload) {
+  const sets = [];
+  const binds = [];
+  for (const [field, column] of Object.entries(COLUMN_FOR)) {
+    if (Object.prototype.hasOwnProperty.call(payload, field)) {
+      sets.push(`${column} = ?`);
+      binds.push(payload[field] === undefined ? null : payload[field]);
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'authors')) {
+    sets.push('authors = ?'); binds.push(JSON.stringify(payload.authors));
+  }
+  // Which Nexus download(s) this record is, when its page hosts more than one
+  // location. JSON array of download names, like `authors`, so it cannot be
+  // bound raw. An empty array clears the mapping back to NULL rather than
+  // storing `[]`: "not mapped" and "mapped to no downloads" must not be two
+  // different states, because the second would be indistinguishable from a
+  // half-saved edit. See migration 0011.
+  if (Object.prototype.hasOwnProperty.call(payload, 'nexus_files')) {
+    const files = Array.isArray(payload.nexus_files)
+      ? payload.nexus_files.filter((n) => typeof n === 'string' && n.length)
+      : [];
+    sets.push('nexus_files = ?');
+    binds.push(files.length ? JSON.stringify(files) : null);
+  }
+  if (Object.prototype.hasOwnProperty.call(payload, 'coordinates')) {
+    const [x, y, z] = payload.coordinates;
+    sets.push('x = ?', 'y = ?', 'z = ?');
+    binds.push(x, y, z === undefined ? null : z);
+  }
+  return { sets, binds };
+}
+
+/**
+ * Insert a validated location. Returns the server-generated id.
+ *
+ * The id is server-generated, never client-supplied: a caller-chosen id is how
+ * a deep link gets silently repointed at a different mod. That holds for an
+ * approved submission too, where the "caller" is an anonymous submitter.
+ */
+export async function insertLocation(env, payload, nowIso = new Date().toISOString()) {
+  const id = crypto.randomUUID();
+  const [x, y, z] = payload.coordinates;
+
+  await env.DB.prepare(`
+    INSERT INTO locations (id, name, nexus_id, category, x, y, z, yaw, description,
+      credits, authors, status, admin_notes, added_at, modified_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    id, payload.name, payload.nexus_id, payload.category,
+    x, y, z === undefined ? null : z,
+    payload.yaw ?? null,
+    payload.description ?? '',
+    payload.credits || null,
+    JSON.stringify(payload.authors),
+    payload.status ?? 'published',
+    payload.admin_notes ?? null, nowIso, nowIso,
+  ).run();
+
+  // The join, not just the column. Without this the record materializes with
+  // no tags at all, because resolveTags treats the join as authoritative.
+  await syncLocationTags(env, id, payload.tags);
+  return id;
+}
+
+/**
+ * Apply a validated partial patch. `{empty: true}` when the payload names no
+ * column and no tags, which is a caller error rather than a no-op write.
+ *
+ * OPTIMISTIC CONCURRENCY. Pass `ifMatch` as the `modified_at` the caller read,
+ * and the write applies only while the record still carries it. Three admins
+ * share one registry and one queue, so without this the second save silently
+ * replaces the first: the audit log records both, but nobody is told, and the
+ * admin who saved first sees their change vanish on next load.
+ *
+ * Returns `{conflict: true}` when the row moved underneath. SQLite counts a
+ * matched row as changed even when the values are identical, so `changes === 0`
+ * means the WHERE did not match rather than "nothing needed writing". The
+ * caller has already established the row exists, so the only way to miss is a
+ * stale `ifMatch`.
+ *
+ * Omitting `ifMatch` is an unguarded write. That is correct only for a caller
+ * that genuinely means "apply this regardless": approving a REMOVAL, which
+ * pulls the pin whatever else changed, and restoring a hidden record, which has
+ * no competing version to lose. Approving an EDIT is guarded like any other
+ * write, on the version the submission was made against; see review.js.
+ */
+export async function patchLocation(
+  env, id, payload, nowIso = new Date().toISOString(), { ifMatch = null } = {},
+) {
+  const patchesTags = Object.prototype.hasOwnProperty.call(payload, 'tags');
+  const { sets, binds } = buildUpdate(payload);
+  if (!sets.length && !patchesTags) return { empty: true };
+
+  // A tags-only patch still has to move modified_at, so the column write is
+  // unconditional rather than gated on `sets`.
+  sets.push('modified_at = ?');
+  binds.push(nowIso, id);
+
+  let sql = `UPDATE locations SET ${sets.join(', ')} WHERE id = ?`;
+  if (ifMatch) {
+    sql += ' AND modified_at = ?';
+    binds.push(ifMatch);
+  }
+  const res = await env.DB.prepare(sql).bind(...binds).run();
+  if (ifMatch && res?.meta?.changes === 0) return { conflict: true };
+
+  if (patchesTags) await syncLocationTags(env, id, payload.tags);
+  return { empty: false };
+}

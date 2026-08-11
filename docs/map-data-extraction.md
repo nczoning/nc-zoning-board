@@ -234,7 +234,7 @@ World extent constants were derived by inverting the existing `cetToLeaflet` for
 - All buildings include `hz` (height half-extent) for shadow/extrusion rendering
 - **8** landmark meshes with names and district classification
 - **8** district-level trigger polygons, **16** city sub-district polygons, **10** Badlands sub-district polygons (from streaming sectors)
-- **1** non-canonical sub-district: North Oaks Casino (cut content, Westbrook)
+- **1** non-canonical sub-district: North Oak Casino (cut content, Westbrook)
 
 ### Delivery
 

@@ -83,7 +83,7 @@ export function resolveArea(pt, districts) {
 
 /**
  * The game's default district: anywhere outside every district polygon is
- * Badlands (which is why it has no polygon of its own: its subdistricts
+ * Badlands (so it has no polygon of its own: its subdistricts
  * are trigger areas transformed into polygons for the map, but the parent
  * is the catch-all). The API mirrors that rule so in-game consumers and
  * the game itself can never disagree.

@@ -12,7 +12,11 @@ on:
 
 permissions:
   contents: read
-  actions: read   # read this workflow's own run history to detect the recovery edge
+  # write (implies read): read this workflow's own history for the recovery edge,
+  # read deploy-api.yml history for the self-heal budget, and dispatch it to
+  # redeploy a wedged cron (#849 Phase 2). workflow_dispatch fires even from
+  # GITHUB_TOKEN, so no PAT is needed.
+  actions: write
 
 # A slow/queued run shouldn't stack; keep only the latest.
 concurrency:
@@ -49,17 +53,33 @@ jobs:
             echo "prev_outage=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Probe /v1 and alert on outage
+      - name: Probe /v1, alert, and self-heal a wedged cron
         env:
-          # Dedicated map-alerts channel, kept separate from submissions.
-          NCZ_ALERTS_DISCORD_WEBHOOK_URL: ${{ secrets.NCZ_ALERTS_DISCORD_WEBHOOK_URL }}
+          # Alerts go to the Worker, which records them in the `alerts` table
+          # and forwards to the map-alerts channel. Posting to Discord from here
+          # would leave the dashboard with no history of anything this monitor
+          # said. The Worker holds the webhook now; this job holds only the
+          # ingest secret.
+          #
+          # This is a GitHub Actions secret. The Worker's copy is a Cloudflare
+          # Worker secret (`npx wrangler secret put ALERTS_INGEST_SECRET`), a
+          # separate store: setting one does not set the other.
+          ALERTS_INGEST_SECRET: ${{ secrets.ALERTS_INGEST_SECRET }}
           # Was the API down last run? A clean run after a down one is the
           # recovery edge → the script posts a green all-clear exactly once.
           API_HEALTH_PREV_OUTAGE: ${{ steps.prev.outputs.prev_outage }}
-          # Both matter: prod (api.nczoning.net) is what in-game mods hit;
-          # staging (api-dev) is what the dev site consumes during the B7 bake,
-          # where an outage would otherwise be hidden by the client fallback.
-          # The script retries 3× before declaring an outage, so a momentary
-          # deploy blip won't page. Drop api-dev here if it ever gets noisy.
-          API_HEALTH_TARGETS: 'https://api.nczoning.net,https://api-dev.nczoning.net'
+          # Self-heal: on a wedged cron, dispatch deploy-api.yml (per env) to
+          # revive it, budget-guarded (#849 Phase 2). GH_TOKEN authorises the
+          # dispatch + the budget read; GITHUB_REPOSITORY/GITHUB_API_URL are set
+          # by Actions automatically.
+          API_HEALTH_SELF_HEAL: 'true'
+          GH_TOKEN: ${{ github.token }}
+          # Production only. api-dev was dropped when staging lost its cron: a
+          # cronless Worker's heartbeat never advances, so it would report an
+          # ever-growing refresh_age_seconds, page this channel every 15 min and
+          # trip the self-heal redeploy in a loop. Staging is refreshed on demand
+          # (see worker/wrangler.jsonc) and the dev site now reads production, so
+          # there is nothing there to monitor. The script retries 3× before
+          # declaring an outage, so a momentary deploy blip won't page.
+          API_HEALTH_TARGETS: 'https://api.nczoning.net'
         run: node scripts/monitor_api_health.js

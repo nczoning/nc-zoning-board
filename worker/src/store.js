@@ -6,8 +6,19 @@
  * - dataset:v1:districts /v1/districts payload
  * - dataset:v1:tags      tag dictionary ({ tagId: description })
  * - dataset:v1:meta      { schema, generated_at, dataset_version,
- *                          discovery_stale, skipped }; a failed cycle also
- *                          writes last_error and last_error_at
+ *                          discovery_stale, skipped, last_refresh_at }; a failed
+ *                          cycle also writes last_error and last_error_at.
+ *                          last_refresh_at is the cron liveness heartbeat,
+ *                          stamped every completed cycle (unlike generated_at,
+ *                          which only moves on content change); /v1/health serves
+ *                          it so a wedged cron can be detected (issue #849).
+ * - dataset:v1:archives  { [nexus_id]: { updatedAt, archives: [name, ...] } }:
+ *                        RETIRED. `nexus_cache.archives` in D1 holds this now.
+ *                        Read once more, by the sweep, to carry the existing
+ *                        entries across (including the hand-built listings from
+ *                        scripts/archive-seeds.json, which a refetch cannot
+ *                        reproduce for mods whose Nexus file preview is broken).
+ *                        Nothing writes it. Delete the key at cutover.
  *
  * dataset_version is a content hash: the cron writes only when it changes,
  * and it doubles as the ETag for the read path.
@@ -18,6 +29,7 @@ export const KEYS = {
   districts: 'dataset:v1:districts',
   tags: 'dataset:v1:tags',
   meta: 'dataset:v1:meta',
+  archives: 'dataset:v1:archives',
 };
 
 /** SHA-256 hex of a string, via Web Crypto (Workers + Node 24). */
@@ -50,4 +62,13 @@ export async function writeDataset(env, { full, districts, tags, meta }) {
 /** Update only the meta record (last-known-good touch on a failed refresh). */
 export async function writeMeta(env, meta) {
   await env.DATASET.put(KEYS.meta, JSON.stringify(meta));
+}
+
+/**
+ * Read the retired archive-name cache ({ [nexus_id]: { updatedAt, archives } }),
+ * or {} once it is gone. Carry-over only: see the key note above.
+ */
+export async function readArchives(env) {
+  if (!env.DATASET) return {};
+  return (await env.DATASET.get(KEYS.archives, 'json')) || {};
 }

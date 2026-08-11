@@ -5,7 +5,299 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.12.0] - 2026-08-10
+
+### Added
+
+- Submission alerts in Discord say what landed: kind, name, and either the category, Nexus id and coordinates (a create) or the field names an edit changes. The submitter's note, contact and removal reason are still not quoted.
+- The alert links straight to the submission. `/admin/?submission=<id>` opens the Queue tab with it selected, and the Alerts tab gets an "Open submission" button.
+
+### Changed
+
+- An acknowledged alert turns green with a tick in Discord, edited in place, signed with who cleared it.
+- Approving or rejecting a submission acknowledges its alert automatically. Holding does not.
+
+## [2.11.0] - 2026-08-09
+
+### Added
+
+- Locations sharing a Nexus page can be mapped to the specific download they ship, from a picker in the dashboard. It appears only for a record whose page holds another location.
+
+### Fixed
+
+- The admin locations search box accepts spaces. It trimmed on every keystroke and echoed the result back into the input, so a space was deleted before the next character could be typed and no multi-word query was possible.
+- Two locations sharing one Nexus page are no longer served each other's `.archive` files, which made both report as installed when the player had either one. Archive listings are now kept per download, and a record on a shared page is mapped to its own download from the dashboard.
+- A record on a shared page with no mapping is served no archives rather than the whole page. A missing install badge is recoverable; a false one is not.
+
+## [2.10.1] - 2026-08-09
+
+### Fixed
+
+- The cut-content casino subdistrict is now "North Oak Casino" (id `north_oak_casino`), matching the game's own display name. `Districts.NorthOaks` is only the internal TweakDB record ID; every player-facing string is singular.
+- Two locations served `subdistrict: "North Oaks Casino"` and now serve `"North Oak Casino"`. Consumers matching that string need updating.
+
+## [2.10.0] - 2026-08-07
+
+### Removed
+
+- The API no longer serves a per-record `recently_updated` bool (API surface `0.6.0`). `updated_at` and the envelope's `recently_updated_days` stay; every consumer now has a clock and computes recency itself.
+- Installs still on an older NCZoningCore lose the in-game recency badge until they update. No error, no crash.
+
+## [2.9.1] - 2026-08-06
+
+### Fixed
+
+- A mod refetched within minutes of its own re-upload no longer records an empty install-file list. Nexus publishes a file's contents manifest after the upload, so the listing is retried for a day instead of being frozen as "ships nothing".
+- Arroyo Petrochem Backlot showed as unknown in-game for this reason; its listing is restored.
+
+### Changed
+
+- The API docs now say to filter `archives` to `.archive` before deciding a mod is installed. An `.xl` is a manifest, not a mounted archive, and no in-game lookup can match one.
+
+## [2.9.0] - 2026-08-06
+
+### Added
+
+- The dashboard shows a location's install files: the `.archive` and `.xl` names a player's mod folder is matched against.
+- It says which of three things an empty list means, where the API can only say "unknown": never read, read against an older upload, or genuinely none.
+
+## [2.8.0] - 2026-08-03
+
+### Added
+
+- The audit log filters by who, what and which record, combinable. The filter reads the entries already loaded, so it answers instantly and asks the API for nothing extra.
+- Filtering by a location finds both halves of an approval, including the submission row that names it only in its recorded values.
+- The action filter reads as English, with the stored action beside each label so it still matches what the entry shows.
+
+## [2.7.0] - 2026-08-03
+
+### Added
+
+- The review queue compares a resubmission against the hidden record it matches, field by field, instead of showing one distance in metres.
+- A third outcome on that panel: restore the record **and** apply the submitted values. Restore-as-is is unchanged and stays the default; the audit tells the two apart.
+
+## [2.6.0] - 2026-08-03
+
+### Changed
+
+- Discord only gets alerts a person has to act on. Every alert is still recorded and readable in the dashboard, marked "log only" when it was not posted.
+- A failed refresh posts on the third consecutive failure rather than the first, then every three hours while it lasts. Recoveries and a wedged cron that self-heal has already redeployed for are recorded only.
+- A mod returning to Nexus posts only when a record was hidden by hand and needs republishing; otherwise nothing was left to do.
+
+## [2.5.2] - 2026-08-02
+
+### Fixed
+
+- A refresh alert names the fetch that broke, with its URL, status, content type and the start of the body. "Unexpected token '<'" could have come from either of two upstreams and said which of them neither.
+- A failed refresh is recorded even when there is no stored metadata to update, and is written to the Worker log. It was silent on both counts.
+
+## [2.5.1] - 2026-08-02
+
+### Fixed
+
+- Dealing with a flagged mod no longer announces that the mod is back on Nexus. Repointing a pin at a successor, or deleting the pin outright, stops the registry tracking that mod: it does not mean the mod recovered, and saying so was false.
+- The audit log reads as English for a dismissal, and no longer reports a mod hidden on Nexus as "off the map" one line above saying its pin is still up.
+
+## [2.5.0] - 2026-08-02
+
+A mod that leaves Nexus no longer leaves its pin behind. Nexus states a
+mod's status outright and the sweep now asks for it, so a deletion is a
+fact rather than an inference. Deleted pulls the pin by itself; hidden
+never does, because the API will not say whether an author is mid-upload
+or a moderator is holding the page, and only the reason on the mod page
+answers that. Nothing changes a location's status but a person.
+
+### Added
+
+- A pin whose Nexus mod has been deleted drops off the map on its own again, three sweeps after Nexus reports it. The location record is not edited, so the pin returns by itself if Nexus changes its mind.
+- A pin whose mod is hidden on Nexus is flagged for review and left on the map: only the reason the author gave says whether that is temporary, and the API does not expose it.
+- The dashboard's Overview lists both, with the pins each one affects and a control to dismiss the flag or put a withheld pin back.
+- A mod published on Nexus again restores its own pin and says so. If someone had hidden the record by hand meanwhile, the alert names it: that stays hidden until a person republishes it.
+- Alerts link to the mod they are about, in the dashboard and in Discord.
+
+## [2.4.1] - 2026-08-02
+
+### Fixed
+
+- The dataset freshness pill sits beside Rebuild again on desktop. Restructuring the top bar for the mobile drawer moved it next to the wordmark, away from the control it exists to prompt.
+
+## [2.4.0] - 2026-08-02
+
+The admin dashboard works on a phone, and says what it means. Nothing about
+the map changes. "D1" was the name of a Cloudflare product showing through in
+labels an admin reads, and the audit log's expanded record was column names and
+JSON; both now read as English, with the verbatim record kept one fold deeper so
+a friendlier log is still a checkable one. The dashboard had two media queries
+and no mobile design: eight tabs on one row, and an editor that opened below the
+table and off the bottom of the screen.
+
+### Changed
+
+- The admin dashboard says "the registry", never "D1", in every string a person reads: the stats panel, the health rows and the rebuild banner.
+- The audit log renders field names and enum values in English, with the verbatim record kept one fold deeper so the sentence stays checkable.
+
+### Added
+
+- A mobile layout for the dashboard: a nav drawer that keeps its badge counts on the closed button, a collapsing header, touch-sized rows, and a list-to-editor view switch that the Android back gesture closes.
+
+## [2.3.0] - 2026-08-02
+
+The folder of location files in git is gone. It had been read by nothing since
+the registry moved into the database in 2.0.0, and it was never a complete copy
+of it; the nightly backup added in 2.2.0 is, so the half-copy could go. Nothing
+about the map changes.
+
+### Removed
+
+- **The static location build is gone**: `data/locations/`, `mods.json`, `build_mods.js`, `validate_tags.js` and the two coordinate-import scripts. D1 has been the registry since 2.0.0 and the nightly export has been the backup since 2.2.0.
+- `DATA_SOURCE`, with the `mods.json` code path it selected (`merge.js`, `parse.js`, `parity-ab.mjs`). Rolling back to the static build is now a revert of the release, not a config change.
+- The Cloudflare Pages build command, on both projects. A deploy uploads the repo as it stands.
+
+### Changed
+
+- API `0.5.0` to `0.5.1`. `/v1/meta.skipped` now lists every open candidate; it used to hide the ones whose description carried a metadata block, which nothing reads any more.
+- `mods.schema.json` accepts the `nexus-<modId>` ids of the nine pre-cutover records. It never did, and nothing caught it because those nine were the records missing from the git mirror.
+
+## [2.2.1] - 2026-08-01
+
+Approving a submission no longer quietly undoes an admin's work. A submission can
+sit in the queue for days while the record it describes keeps changing, and until
+now approving it wrote the submitter's older values straight over anything edited
+in the meantime, with nothing said to anyone.
+
+### Fixed
+
+- **Approving an edit can no longer silently overwrite an admin's change.** A submission now records the version of the location it was written against, and approving it applies only while the record still carries that version.
+- A refused approval says what changed, leaves the submission pending, and offers to apply it over the current record. That retry is still a guarded write, not a force.
+- Three stale claims in the contributor docs: the location example used a tag as its category, the tag registry still referred to the retired issue form, and the reviewer guide still described the overwrite above as unavoidable.
+
+## [2.2.0] - 2026-08-01
+
+The registry gets a backup again. When locations moved into the database, the
+folder of JSON files in git quietly stopped being a complete copy of them; ten
+records have been living in one place ever since. A job now writes the whole
+registry out every night, to a branch kept separate from everything else.
+
+### Added
+
+- **A nightly backup of the location registry**, committed to a `data-snapshots` branch that shares no history with `main` or `dev`. It covers the ten records the git mirror was missing, so the copy is complete for the first time since the cutover.
+- The backup alerts under its own `export` source when a run fails, and says so in the dashboard rather than only going red in Actions.
+- [An infrastructure map](docs/infrastructure-map.md): what each Pages project, Worker, database and branch is, and which one to look at when something breaks.
+
+### Fixed
+
+- The importer can now restore from a snapshot: `--files-only` skips the live-API read that would duplicate the auto-discovered records, and the dismissed-candidate and tag files are accepted in both shapes.
+
+## [2.1.0] - 2026-08-01
+
+Alerts get somewhere to live. Everything the site raises, from a new submission
+to a free-tier cap running down, is recorded and shown in the dashboard rather
+than only being posted to Discord and scrolling away. The registry's own
+housekeeping is tidied up behind it: real dates, sortable columns, and edits that
+cannot silently overwrite each other.
+
+### Added
+
+- **A submission now tells someone it arrived.** Since the cutover a submission reached the review queue silently and the only way to find one was to open the dashboard and look. The map-alerts channel gets a post linking to the dashboard.
+- **An Alerts tab in the dashboard**, with a count beside it and an acknowledge button. Every alert is recorded before it is sent to Discord, so the history is complete even when Discord drops or buries a message.
+- **The Overview tab opens with what is still unacknowledged**, most severe first rather than most recent, because the first question on a landing page is whether anything is wrong.
+- **A warning when any free-tier cap passes 80% for the day**, checked hourly and said once per cap per day. This is the alert that would have caught the KV write limit before Cloudflare emailed about it.
+
+### Changed
+
+- The locations table sorts by any of Name, Category, Status, Added or Modified. Click a heading to sort, click it again to reverse. Dates start newest-first, text starts A to Z, because that is the question each one is usually being asked. Keyboard reachable, and the current sort is announced to screen readers.
+- The dashboard shows when a location was **added** and when it was last **modified**, in the locations table as well as the detail pane, alongside when the mod itself was last **updated on Nexus**. Three different dates, named so they cannot be confused: the one a `/v1` record carries is the Nexus one.
+- Tags are stored one way, in the join the map reads. The duplicate JSON column that was kept alongside it while the two were proven identical is gone, so there is no second copy to drift.
+
+### Removed
+
+- The daily auto-discovery health alert is retired. It warned that a tagged mod's metadata block was missing or unparseable, but the block itself retired at 2.0.0, so a missing block is now the normal case and the alert had started firing on every ordinary candidate. The dashboard's candidates panel already shows that set.
+
+### Fixed
+
+- A restore from the location files would have produced a registry where every location had no tags. The importer wrote the tag column but not the join the map actually reads, so the database would have looked complete and served untagged. It writes both now, and the generated file ends with a check that prints what landed.
+- Location dates were all the same timestamp: the moment the registry was imported, so every record claimed it was added and last edited at the same instant on 26 July. Backfilled from git history, which is the only place the real dates survived. 288 records now carry their true dates, spanning 7 March to 26 July, and 212 of them show a modified date genuinely later than their added date. The nine auto-discovered records keep the import date, because they have never existed as files and nothing recorded when they arrived.
+- Two admins editing the same location no longer overwrite each other. A save applies only while the record still looks the way it did when the editor was opened; if it moved, the save is refused, nothing is written, and the current version is loaded so the change can be reapplied. Previously the second save won silently and the first admin's edit disappeared on next load.
+- An acknowledged alert was dimmed so far that it became hard to read. It now recedes by losing its severity colour rather than its contrast.
+- The maintainer docs told you to run `wrangler`, which only works from inside an npm script. Every instruction now says `npx wrangler`, and the refresh cron is described as 5 minutes rather than 15, which is the health monitor's interval.
+
+## [2.0.0] - 2026-07-31
+
+Submissions move onto the map. A location can now be added, corrected or reported
+from the map itself, and everything goes through a review queue before it appears.
+The registry moves out of git into a database, with a dashboard for maintainers.
+
+### Added
+
+- **Submit a location from the map.** Pick your mod, fill in the form, send it for review. Coordinates are checked as you type, and every problem in the row is named at once beside the field it belongs to.
+- **Correct any pin from its own popup.** *Suggest a fix* opens the form filled in from the record and sends only the fields you change. The same form switches to asking for a pin to be taken down, with a reason. The pin is unchanged until a reviewer decides.
+- **A review queue.** Nothing reaches the map without a reviewer approving it. Each submission shows a diff of what it changes and a mini-map of the proposed pin. A new pin for a mod already on the map lists the records it would sit alongside and how far away they are, since one mod can legitimately supply several locations.
+- **An admin dashboard** at `/admin/`, signed in with GitHub and open to repository collaborators: browse and edit the registry, manage tags, work the queue, review tagged mods that have no pin yet, and watch API health and free-tier usage. Every change is recorded in an audit log.
+- **A privacy note** at [docs/privacy.md](docs/privacy.md). Submissions are the first personal data the site collects: a salted one-way hash of the submitter's address, kept 90 days and then cleared automatically.
+- The map notices when locations change while a tab is left open, and offers to refresh instead of showing its load-time snapshot indefinitely.
+
+### Changed
+
+- **The location registry lives in a database rather than in git.** The move itself changes nothing a visitor sees: same pins, same data. It removes the gap where a merged pull request and the live map could disagree.
+- **The `NCZoning` tag is prefill only.** Tagging a mod puts it in the submit form's picker with its name, description and uploader ready to use. It no longer publishes a pin on its own.
+- ⚠️ **Editing the block in a Nexus description no longer moves a pin.** Authors who kept their location up to date that way now do it from the map. Pins already on the map are unaffected.
+- **API `0.3.0` to `0.5.0`, breaking twice.** `/v1/tags` returns an array of `{slug, name, description, sort_order}` instead of a `{tag: description}` map, matching `/v1/locations` and the shape the in-game parser maps most easily; `name` falls back to the slug, so nothing renders differently. And two fields leave every location record: `source` (`manual` / `auto`) and the synthetic `nczoning` tag, neither of which describes anything now that nothing auto-publishes. Where a record came from is still readable, because the auto-discovered nine keep their `nexus-<id>` ids. **The `/v1` API is versioned separately from the site**, and is still pre-1.0, where breaking changes cost a MINOR and the path stays `/v1`. Both were taken now because the only consumers are unreleased; the API returns to `1.0.0` when the first in-game mod ships.
+- **The NCZONING filter button disappears** from the sidebar, and the small Nexus icon next to auto-discovered pins goes with it. Both marked a distinction that no longer exists: every location now arrives the same way, through the review queue.
+- Tags are registry data, edited in the dashboard rather than by pull request. A mistyped tag is refused on write instead of caught in CI afterwards.
+- `robots.txt` keeps `/admin` out of search results. The collaborator gate is what actually protects it.
+
+### Fixed
+
+- Share links pointed at the mod rather than the pin, so when one Nexus mod supplied two locations both produced the same link and it always opened the first. Links now use the location's own id. Links shared before this keep working.
+- Admin tag edits reached the legacy column but not the one the map reads, so they reported success and changed nothing.
+- The API never told browsers they could read the `ETag` header, so the site's own conditional-request cache had never stored anything and its `304` handling was unreachable. The browser's built-in cache masked it, which is why nothing looked wrong.
+
+### Removed
+
+- **The GitHub issue forms for submitting and editing locations**, and the three workflows behind them. They wrote locations into git, and the registry no longer lives there, so a submission could no longer reach the map: the form accepted it, a PR opened, CI passed, the merge went green, and no pin appeared. Submitting from the map replaces both.
+- **The BBCode generator.** The block had to be placed and formatted by hand, most attempts needed correcting, and it published a pin with no review step. The submit form replaces it.
+
+## [1.7.2] - 2026-07-26
+
+### Changed
+
+- The Data API Worker deploys to the project-owned Cloudflare account, with its production and staging KV namespaces repointed to match.
+- The API surface returns to pre-1.0: `version` at `/v1/health` is now **0.3.0**, down from 1.3.0. While on `0.x`, breaking changes bump MINOR, additive changes bump PATCH, and the path stays `/v1`. `1.0.0` returns when the first in-game mod ships.
+
+## [1.7.1] - 2026-07-25
+
+### Changed
+
+- Daily Workers KV writes cut from ~576–700 to ~100–200 (of a 1,000/day per-account free-tier cap): the staging Worker's cron is removed, and the cron liveness heartbeat is now written at most every 15 minutes on an unchanged tick instead of on all 288.
+- The health monitor's staleness threshold moves 20 → 45 minutes to match, and no longer probes staging (a cronless Worker's heartbeat never advances, so it would page and self-heal in a loop).
+- The site reads the **production** API from every origin (dev, previews and localhost included). Use `?api=dev` to opt into staging when testing an API change. There was never a deliberate dev dataset; dev only differed from main by being behind.
+
+## [1.7.0] - 2026-07-22
+
+### Changed
+
+- The API's `version` (served at `/v1/health`) is now real SemVer for the API surface (MINOR on an additive field or route, MAJOR on a break) instead of a static `0.1.0`. Backfilled to **1.3.0** for the three additive changes already shipped: `recently_updated` (1.1.0), `archives` (1.2.0), the cron heartbeat (1.3.0). It is not the in-game `ApiVersion()`, which gates only on breaking changes. ([#857](https://github.com/spuddeh/nc-zoning-board/issues/857))
+- CI now fails if `openapi.json`'s shape changes without an `API_VERSION` bump, or if the four places the version is declared disagree. The worker suite also runs on pull requests now, not only at deploy. ([#857](https://github.com/spuddeh/nc-zoning-board/issues/857))
+
+## [1.6.0] - 2026-07-21
+
+### Added
+
+- `/v1/health` now reports the refresh cron's liveness: `last_refresh_at` (stamped every cron cycle, unlike the content-driven `generated_at`) and a server-computed `refresh_age_seconds`. The health monitor alerts on the map-alerts Discord when the heartbeat stops advancing, so a wedged-but-still-serving cron no longer freezes the dataset silently. ([#849](https://github.com/spuddeh/nc-zoning-board/issues/849))
+- The health monitor now self-heals a wedged cron: it redeploys the affected Worker (which re-registers the Cron Trigger), capped at 2 attempts/env/hour before escalating to a "manual fix needed" alert. ([#849](https://github.com/spuddeh/nc-zoning-board/issues/849))
+
+## [1.5.0] - 2026-07-20
+
+### Added
+
+- Each `/v1` location record now carries an `archives` array: the `.archive` and `.xl` filenames the mod installs to `archive/pc/mod/` (so removal-only mods are detectable too), letting an in-game mod detect which location mods a player has installed. ([#841](https://github.com/spuddeh/nc-zoning-board/issues/841))
+
+## [1.4.1] - 2026-07-19
+
+### Changed
+
+- The website now loads exclusively from the `/v1` Data API; the legacy client-side Nexus merge and its fallback are removed, so the browser makes no Nexus calls at all.
+- If the API is unreachable the map shows a loud "temporarily unavailable" state that auto-retries, instead of silently blanking. This keeps the site an honest canary for API outages.
 
 ## [1.4.0] - 2026-07-16
 

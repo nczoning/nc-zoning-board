@@ -673,10 +673,8 @@ const ThreeMarkers = (() => {
   // URL deep-link sync: matches the Leaflet popupopen/popupclose handlers
   // so refreshing or switching views re-opens the same pin.
   function syncUrlForMod(mod) {
-    const isNum = /^\d+$/.test(String(mod.nexus_id));
-    const lid = isNum ? String(mod.nexus_id) : mod.id;
     const url = new URL(window.location.href);
-    url.searchParams.set(NCZ.URL_PARAM_MOD, lid);
+    url.searchParams.set(NCZ.URL_PARAM_MOD, NCZ.modLinkId(mod));
     history.replaceState(null, '', url.toString());
   }
   function clearUrlMod() {

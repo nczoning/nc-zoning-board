@@ -1,0 +1,32 @@
+-- Drop the legacy `locations.tags` JSON column.
+--
+-- `location_tags` has been the authoritative representation since migration
+-- 0002. That migration was additive on purpose: keeping both in step let the
+-- switch be proven byte-for-byte before either was removed. It has been, twice
+-- over. The parity gate ran green against the join, and its `tag removed`
+-- negative control now mutates the join rather than this column, so a tag
+-- difference is provably detectable.
+--
+-- WHAT HAD TO GO FIRST, and why this waited:
+--
+--   `import-locations.mjs` listed `tags` in its INSERT columns and never wrote
+--   the join at all. Dropping this column would have broken the restore path
+--   outright, and leaving it would have kept producing databases that serve
+--   every location untagged. Fixed before this ran: the importer now writes the
+--   join, verified by building a database from nothing and counting 572 links,
+--   exactly what production holds.
+--
+--   `resolveTags` fell back to this column when no join was supplied. The
+--   fallback is gone and a missing join now throws, because defaulting to an
+--   empty tag list serves 297 untagged records while looking like it worked.
+--
+--   `tag-registry.js` dual-wrote both representations. One write now.
+--
+-- NOT AN API CHANGE. The served `tags` array is built from the join and has
+-- been since Phase 4. `/v1` is byte-identical across this, so no version bump,
+-- and the parity gate cannot see it.
+--
+-- SQLite rewrites the table for a DROP COLUMN, so `location_tags` rows pointing
+-- at `locations(id)` are unaffected: the primary key does not move.
+
+ALTER TABLE locations DROP COLUMN tags;

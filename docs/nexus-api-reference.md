@@ -12,7 +12,7 @@ This document covers the Nexus Mods GraphQL API implementation used by NC Zoning
 
 **Status:** ⚠️ **Technically Unsupported**
 
-The V2 API is not officially supported by Nexus Mods. Per direct conversation with Nexus Mods staff (Pickysaurus), they intend to eventually migrate back to REST. Since B7 the auto-discovery + thumbnail fetches run **server-side** in [`worker/src/nexus.js`](../worker/src/nexus.js) (the Data API cron); the copy in [`services.js`](../assets/js/services.js) is now only the client-side fallback. Monitor [Nexus announcements](https://www.nexusmods.com) for any V2 retirement notices.
+The V2 API is not officially supported by Nexus Mods. Per direct conversation with Nexus Mods staff (Pickysaurus), they intend to eventually migrate back to REST. The auto-discovery + thumbnail fetches run **entirely server-side** in [`worker/src/nexus.js`](../worker/src/nexus.js) (the Data API cron); the client-side copy that once lived in `services.js` has been removed, so the browser makes **no Nexus calls at all** — it consumes the server-built `/v1` dataset. The queries below are what the worker sends. Monitor [Nexus announcements](https://www.nexusmods.com) for any V2 retirement notices.
 
 **Rate Limits:** No rate limits are publicly documented for V2 GraphQL, and none have been encountered in practice. For scale: the REST API's documented limits are **20,000 requests/day + 500 requests/hour**. Our 5-minute cron makes ~8 Nexus requests/run → ~96/hour (~2,300/day), comfortably under either figure.
 
@@ -35,6 +35,8 @@ query modsByUid($uids: [ID!]!, $count: Int!) {
   modsByUid(uids: $uids, count: $count) {
     nodes {
       modId
+      name
+      status
       pictureUrl
       thumbnailUrl
       updatedAt
@@ -42,6 +44,24 @@ query modsByUid($uids: [ID!]!, $count: Int!) {
   }
 }
 ```
+
+**⚠️ `modsByUid` does NOT filter by status; the `mods` search query does.**
+
+Measured against the live API on 2026-08-02. A deleted or hidden mod comes back from `modsByUid` looking like any other node, and only `status` says otherwise. The tag-search query returns published mods only, which is why an auto-discovered mod used to drop off the map by itself while a manually pinned one never does.
+
+| `status` | Means | Where it comes from |
+| --- | --- | --- |
+| `published` | On the site | The normal case |
+| `hidden` | Not visible to visitors. Author-hidden **or** staff-hidden, and the API does not distinguish them | Only the reason on the mod page says which |
+| `wastebinned` | Deleted | Mod 17513 (Starfield) is a live example; its `name` also carries " - DELETED" |
+
+`status` is a `String`, not an enum, so the values above are observed rather than exhaustive. Treat anything that is not `published` as not-published, and treat **null as published**: a missing field must never be read as evidence.
+
+**The reason a mod is hidden is not reachable.** `Mod` has no moderation field, `moderationWarnings` requires a login ("You must be logged in to retrieve moderation warnings"), and the mod page returns 403 to a non-browser. `moderationReasons()` is readable anonymously but is only the catalogue (7 entries, including "Under review" and "DMCA investigation"), not any given mod's record.
+
+**`updatedAt` is not "when it went away".** For a deleted mod it is the deletion; for a hidden one it can be the last real file update months earlier. `nexus_mod_status.first_seen_at` records when the sweep first saw the status, which is the only timestamp that means one thing.
+
+Consumed by `worker/src/nexus-status.js`; see [`architecture.md`](architecture.md).
 
 **Input Variables:**
 - `uids`: Array of composite Nexus UIDs (see UID Construction below)
@@ -74,20 +94,17 @@ The Nexus API silently truncates `modsByUid` responses for large batches:
 - **Fixed 2026-03-13:** If the `count` variable is omitted, only the first 20 results are returned regardless of UID count. Mitigation: always pass `count: validIds.length`.
 - **Fixed 2026-05-04:** Even with `count` set correctly, batches of ~250 UIDs return only a partial subset of nodes, manifesting as missing pin thumbnails on first page load that "self-heal" on subsequent reloads (incremental cache fills the gaps as each retry sends a smaller batch). Mitigation: chunk into 50-UID batches before dispatch. Live testing showed *residual* per-UID flakiness even at chunk sizes well below 50, so each chunk also gets a single in-flight retry of just the dropped UIDs before the result is returned. Two warnings are logged for visibility:
   - `Thumbnails: chunk dropped X/Y UIDs (...); retrying`: first attempt dropped some UIDs; will be retried automatically.
-  - `Thumbnails: N UIDs still missing after retry (...); likely deleted or hidden on Nexus`: both attempts failed for these UIDs. Persistent appearance of the same UIDs across reloads indicates a stale `nexus_id` in `data/locations/*.json` (mod hidden or deleted).
+  - `Thumbnails: N UIDs still missing after retry (...); likely deleted or hidden on Nexus`: both attempts failed for these UIDs. Persistent appearance of the same UIDs across reloads indicates a stale `nexus_id` on a D1 record (mod hidden or deleted).
 
-**Caching:**
-- Cache key: `nc_nexus_thumbs`
-- TTL: 24 hours
-- Strategy: Incremental. Checks which IDs are cached, fetches only missing ones, merges result with existing cache before re-saving
+**Caching:** Handled server-side by the Data API cron (the browser no longer caches Nexus responses); see [Caching Strategy](#caching-strategy) below.
 
-**Implementation:** [`fetchNexusThumbnails()` in services.js](../assets/js/services.js)
+**Implementation:** [`fetchNexusThumbnails()` in worker/src/nexus.js](../worker/src/nexus.js)
 
 ---
 
 ### 2. `NCZoningMods` (`mods`): Auto-Discovery Query
 
-**Purpose:** Finds all mods on Nexus Mods for Cyberpunk 2077 that have been tagged `NCZoning` by their authors. These mods' descriptions are parsed for an `[NCZoning]` metadata block.
+**Purpose:** Finds all mods on Nexus Mods for Cyberpunk 2077 that have been tagged `NCZoning` by their authors. **The tag is prefill only.** A tagged mod that is neither a location nor dismissed becomes a *candidate*: it appears in the submit form's picker and in the dashboard's Candidates tab. Nothing here publishes a pin.
 
 **Query:**
 
@@ -121,7 +138,7 @@ query NCZoningMods($filter: ModsFilter!, $count: Int!, $offset: Int!) {
 - `modId`: Numeric Nexus mod ID
 - `name`: Mod title
 - `summary`: Short description; used as the pin popup description (truncated to 500 chars)
-- `description`: Full mod description; parsed for `[NCZoning]` metadata block
+- `description`: Full mod description. No longer read for content; the block parser runs only to populate the `skipped` monitoring list
 - `pictureUrl`: Featured image URL (full resolution)
 - `thumbnailUrl`: Featured image thumbnail URL
 - `updatedAt`: ISO 8601 timestamp of the mod's last update on Nexus; used to drive the recently-updated badge
@@ -140,23 +157,123 @@ The Nexus API does not document pagination for the `mods` query, but it supports
   - `page` is absent from response
   - Network or parse error
 
-**Caching:**
-- Cache key: `nc_nexus_autodiscovery`
-- TTL: 10 minutes
-- Strategy: Full result set cached; re-filtered against current manual entries on every cache hit to suppress duplicates without waiting for expiry
+**Caching:** Handled server-side by the Data API cron (the browser no longer caches Nexus responses); see [Caching Strategy](#caching-strategy) below.
 
 **Post-Fetch Processing:**
-1. For mods whose `modId` already exists in manual `mods.json`: collect `pictureUrl`, `thumbnailUrl`, and `updatedAt` into a `meta` map keyed by `nexusId`, then skip (manual entry wins for all other data)
-2. Parse `node.description` for `[NCZoning]` metadata block (see [`parseNcZoningBlock()`](../assets/js/utils.js) in utils.js)
-3. If block missing or invalid, skip the mod with a log message
-4. Construct authors array: Nexus uploader name + any additional authors from the block
-5. Truncate `summary` to 500 characters for the popup description
-6. Prepend `"nczoning"` tag automatically (identifies auto-discovered mods in the UI)
-7. Store `updatedAt` as `_updatedAt` on the mod object; if within `NCZ.RECENTLY_UPDATED_DAYS` days, an `UPDATED` badge is shown in the popup, sidebar, and cluster flyout
+1. A tagged mod that already has a location contributes nothing further here: its images and `updatedAt` reach the record through `nexus_cache` like every other record's
+2. A tagged mod that is neither a location nor dismissed is a **candidate**, offered in the submit form's picker and the dashboard
+3. `name`, `summary` (truncated to 500 characters) and `uploader.name` prefill the submit form when a candidate is selected. All three stay editable
+4. `updatedAt` is served as each record's `updated_at`, from which every consumer computes recency itself: the site shows an `UPDATED` badge in the popup, sidebar and cluster flyout
 
-The function returns `{ mods, meta }` where `meta` contains image/timestamp data for manually registered mods that are also NCZoning-tagged. In `app.js`, `meta` is merged into `nexusThumbs` so those manual mods receive their thumbnails and `_updatedAt` without a separate `modsByUid` call. Mods covered by `meta` are excluded from the `modsByUid` batch.
+> **Retired at 2.0.0.** `node.description` used to be parsed for an `[NCZoning]`
+> metadata block, and a valid block published a pin with no human step. The
+> parser (`parseNcZoningBlock()`) still runs, but **only** to collect the
+> `skipped` list on `/v1/meta`; it never creates a record. The synthetic
+> `nczoning` tag it used to prepend is gone from the served payload. Nothing
+> alerts on `skipped` any more either: with the block retired, a tagged mod
+> having no block is the normal case, so the list is now close to a restatement
+> of the dashboard's candidates panel and is kept only as an informational field.
 
-**Implementation:** [`fetchNexusTaggedMods()` in services.js](../assets/js/services.js)
+The function returns `{ mods, meta }` where `meta` contains image/timestamp data for registered mods that are also NCZoning-tagged. Server-side, the cron folds both channels into `nexus_cache` in one sweep ([`worker/src/nexus-cache.js`](../worker/src/nexus-cache.js)) and the materializer reads images from there, so a mod covered by the tagged query is not fetched again by `modsByUid`.
+
+**Implementation:** [`fetchNexusTaggedMods()` in worker/src/nexus.js](../worker/src/nexus.js)
+
+---
+
+### 3. `modFiles` + file-contents: Archive-name Fetch (installed-mod detection)
+
+**Purpose:** Collect the `.archive` filenames each mod ships, published on every
+location record as `archives` so an in-game consumer can match them against the
+player's `archive/pc/mod/` folder and detect which location mods are installed.
+
+Two hops per mod, both **unauthenticated**, on **different hosts** from the V2
+endpoint above:
+
+**Hop 1 — `modFiles` (list a mod's downloadable files).** Endpoint:
+`https://api-router.nexusmods.com/graphql` (the newer public router; the
+`api.nexusmods.com/v2` endpoint does not expose `modFiles`).
+
+```graphql
+query ModFiles($modId: ID!, $gameId: ID!) {
+  modFiles(modId: $modId, gameId: $gameId) { uri }
+}
+```
+
+- **`modId` and `gameId` are `ID!`, not `Int!`** — pass them as strings
+  (`"27618"`, `"3333"`). Passing ints returns a `variableMismatch` error.
+- Returns a flat array of files (main + optional). We take every file's `uri`
+  (e.g. `Atari Canyon AIO-27618-1-0-1771273179.7z`).
+
+**Hop 2 — file contents.** Each file's contents live at **one of two hosts**,
+because Nexus changed its storage scheme around mid-2026. Route by the shape of
+the file's `uri`:
+
+- **Old scheme — `uri` is the friendly filename** (`Atari Canyon AIO-27618-…-.7z`):
+
+  ```text
+  https://file-metadata.nexusmods.com/file/nexus-files-s3-meta/{gameId}/{modId}/{uri}.json
+  ```
+
+  A recursive **tree** of `{ name, type: "directory"|"file", children }` (root is
+  `{ children: [...] }`). Walk it; collect every `type:"file"` whose `name` ends
+  in `.archive`.
+
+- **New scheme — `uri` is a UUID storage path** (contains `/`, e.g.
+  `b9/e3/70/b9e37068-…`):
+
+  ```text
+  https://file-manifests.nexusmods.com/{uri}.json
+  ```
+
+  A **flat array** of `{ file_path, file_size, file_hashes }`. Take the basename
+  of each `file_path` ending in `.archive` (e.g.
+  `archive/pc/mod/Foo.archive` → `Foo.archive`).
+
+(The friendly `uri` does *not* work on the manifest host and vice-versa — each
+scheme is served by exactly one host.) We collect both **`.archive`** load files
+and **`.xl`** (ArchiveXL) files — both install to `archive/pc/mod/` and are
+readable by an in-game mod, and `.xl` is the only fingerprint a removal-only mod
+has. CET/AMM `.json` files are NOT collected (they live in CET's sandboxed
+folder, unreadable by other mods). Names are unioned across the mod's fetched
+files, deduped and sorted.
+
+**Which files we fetch:** both schemes are fetchable, so we **prefer current
+categories** (`MAIN`/`OPTIONAL`/`UPDATE`), falling back to older files
+(`ARCHIVED`/`OLD_VERSION`) only when a mod has no current file, and cap contents
+fetches per mod (`ARCHIVE_FILES_PER_MOD`) so one mod with many optional variants
+can't exhaust the run's subrequest budget. Coverage is **near-total**; the
+residual `[]` are loose-file mods with no `.archive`, WIP/Dummy entries (no Nexus
+page), or not-yet-filled records.
+
+> **History:** the first cut fetched *all* files via the file-metadata host and
+> got `[]` for every mod, because new-scheme (UUID) files 404 there. A second cut
+> skipped UUID files (~94% coverage). The `file-manifests` host — which serves the
+> new scheme — closed the gap to near-total. See
+> [[NC-Zoning-Board/wiki/learnings/nexus-file-contents-two-hosts-by-scheme]].
+
+**Output field:** `archives: string[]` on each `LocationFull` record (bare
+filenames, not paths). Always present; `[]` means "not determinable / not yet
+fetched", never "ships no archives".
+
+**Caching & cadence (the load-bearing part):** archive names are near-static —
+they only change on a re-upload, which bumps the mod's `updatedAt`. So the cron
+caches them in KV (`dataset:v1:archives`, keyed by `nexus_id`) and refetches a
+mod **only when its `updatedAt` moves**. Steady state makes **zero** archive
+requests. A cold cache (or a fresh dataset) is filled **incrementally**, capped
+per cron run (`ARCHIVE_MOD_BUDGET` mods / `ARCHIVE_SUBREQUEST_BUDGET`
+subrequests in [`worker/src/refresh.js`](../worker/src/refresh.js)) so archive
+work can never breach the Worker's 50-subrequest-per-invocation limit alongside
+discovery + thumbnails.
+
+**Error handling:** entirely **non-throwing / non-fatal**. `modFiles` returns
+`{ ok:false }` on failure and a partial file-contents read marks the whole mod
+`ok:false`; either way the cron leaves that mod's cached archives untouched and
+retries next run — it **never** marks the dataset `discovery_stale` (unlike the
+tagged-discovery query, whose failure is fatal). Archives are supplementary.
+
+**Implementation:** `fetchModArchiveNames()` (+ `fetchModFileUris`,
+`fetchArchiveNamesForFile`) in [`worker/src/nexus.js`](../worker/src/nexus.js);
+budgeted refresh in [`worker/src/refresh.js`](../worker/src/refresh.js).
 
 ---
 
@@ -178,21 +295,10 @@ This limitation has been **confirmed directly with Nexus Mods staff (Pickysaurus
 
 ## Caching Strategy
 
-Both API calls use browser `localStorage` for caching via `cacheGet()`/`cacheSet()` helpers in [`utils.js`](../assets/js/utils.js).
+These Nexus calls now run only inside the Data API cron (`worker/`), not the browser — the old client-side `localStorage` caches (`nc_nexus_thumbs`, `nc_nexus_autodiscovery`) are gone. Freshness for the site is driven by the Data API instead:
 
-| Cache Key | TTL | What's Stored | Merge Strategy |
-|---|---|---|---|
-| `nc_nexus_thumbs` | 24 hours | Map of `nexus_id → { pictureUrl, thumbnailUrl }` | Incremental, only missing IDs fetched |
-| `nc_nexus_autodiscovery` | 10 minutes | `{ mods: [...], meta: { nexusId → { pictureUrl, thumbnailUrl, updatedAt } } }` | Full replacement, re-filtered on read; backwards-compatible with old array format |
-
-### Cache Envelope
-
-Both caches use a `{ ts, data }` envelope:
-```javascript
-{ ts: <timestamp-ms>, data: <cached-value> }
-```
-
-On read, `Date.now() - ts > ttl` determines expiry.
+- **Server side:** the cron re-runs auto-discovery + thumbnail fetches on its schedule and bakes the result into the `/v1` dataset. Nexus responses are not persisted between runs.
+- **Browser side:** the site fetches `/v1/locations` once per load and revalidates with `If-None-Match`/`304` against a single `localStorage` entry (`nc_api_locations`). See `fetchLocationsFromApi()` in [`services.js`](../assets/js/services.js).
 
 ---
 
@@ -224,7 +330,6 @@ On read, `Date.now() - ts > ttl` determines expiry.
 ## References
 
 - **Nexus GraphQL API Docs:** https://graphql.nexusmods.com/
-- **Auto-Discovery Workflow:** See [`docs/nczoning-auto-discovery.md`](./nczoning-auto-discovery.md) for how mod authors tag mods and provide metadata
-- **Services Implementation:** [`assets/js/services.js`](../assets/js/services.js)
-- **Constants & Config:** [`assets/js/constants.js`](../assets/js/constants.js)
-- **Utility Functions:** [`assets/js/utils.js`](../assets/js/utils.js)
+- **The NCZoning tag:** See [`docs/nczoning-auto-discovery.md`](./nczoning-auto-discovery.md) for what tagging prefills, and what it no longer does
+- **Nexus fetch implementation (server-side):** [`worker/src/nexus.js`](../worker/src/nexus.js), image/archive sweep in [`worker/src/nexus-cache.js`](../worker/src/nexus-cache.js), dataset build in [`worker/src/materialize.js`](../worker/src/materialize.js). The `merge.js` static-build path and the `parse.js` block parser were deleted at Phase 6.
+- **Site data loader:** `fetchLocationsFromApi()` in [`assets/js/services.js`](../assets/js/services.js)

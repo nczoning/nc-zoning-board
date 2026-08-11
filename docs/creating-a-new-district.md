@@ -2,7 +2,7 @@
 
 This guide explains how to add a new district or subdistrict to the in-game map.
 
-It uses the **North Oaks Casino** as a worked example, a cut-content area between North Oak, Red Peaks, and Rocky Ridge that the NC Zoning Board has computed a boundary polygon for.
+It uses the **North Oak Casino** as a worked example, a cut-content area between North Oak, Red Peaks, and Rocky Ridge that the NC Zoning Board has computed a boundary polygon for.
 
 ---
 
@@ -12,7 +12,7 @@ It uses the **North Oaks Casino** as a worked example, a cut-content area betwee
 - A **boundary polygon**: a list of X, Y coordinates in CET world-space that form the outline of your district
 - A **TweakDB record**: configuration for the district (name, parent, colours, etc.)
 
-The NC Zoning Board has already computed the boundary polygon for North Oaks Casino. See [Step 1](#step-1-the-boundary-polygon) below.
+The NC Zoning Board has already computed the boundary polygon for North Oak Casino. See [Step 1](#step-1-the-boundary-polygon) below.
 
 ---
 
@@ -28,7 +28,7 @@ The NC Zoning Board has already computed the boundary polygon for North Oaks Cas
 
 ## Step 1: The Boundary Polygon
 
-The polygon for North Oaks Casino has been computed from the void between the three surrounding districts. It has **50 points** and fits exactly in the gap.
+The polygon for North Oak Casino has been computed from the void between the three surrounding districts. It has **50 points** and fits exactly in the gap.
 
 **Location:** X[397, 1565] Y[1219, 2069] (CET world-space)
 
@@ -66,12 +66,12 @@ The district needs a record in TweakDB with its name, parent district, and visua
 
 ### 2.1 Create a `.yaml` file
 
-Create a file called `north_oaks_casino.yaml` in your mod's `r6/tweaks/` folder:
+Create a file called `north_oak_casino.yaml` in your mod's `r6/tweaks/` folder:
 
 ```yaml
-Districts.NorthOaksCasino:
+Districts.NorthOakCasino:
   $type: gamedataDistrict_Record
-  localizedName: LocKey#NorthOaksCasino
+  localizedName: LocKey#NorthOakCasino
   parentDistrict: Districts.NorthOaks
   uiState: Westbrook
   uiIcon: None
@@ -86,10 +86,10 @@ Districts.NorthOaksCasino:
 
 | Line | What it means |
 | ---- | ------------- |
-| `Districts.NorthOaksCasino` | The TweakDB path for your district. Other mods reference it by this name. |
+| `Districts.NorthOakCasino` | The TweakDB path for your district. Other mods reference it by this name. |
 | `$type: gamedataDistrict_Record` | Tells the game this is a district record. Do not change this. |
-| `localizedName: LocKey#NorthOaksCasino` | The display name (we will set the actual text in Step 2.2). |
-| `parentDistrict: Districts.NorthOaks` | North Oaks is the parent. The game uses this for the district hierarchy. |
+| `localizedName: LocKey#NorthOakCasino` | The display name (we will set the actual text in Step 2.2). |
+| `parentDistrict: Districts.NorthOaks` | North Oak is the parent. The game uses this for the district hierarchy. The record ID really is plural (`NorthOaks`) even though the display name is singular, so leave it as-is. |
 | `uiState: Westbrook` | Uses Westbrook's orange colour (`#ff5100`) on the map. Change if you want a different colour (see colour list below). |
 | `uiIcon: None` | No map icon. Set to `ico_district_westbrook_large` or similar if you add an icon. |
 | `isQuestDistrict: False` | Set to `True` if quests reference this district. |
@@ -109,14 +109,14 @@ Districts.NorthOaksCasino:
 
 ### 2.2 Add the localised name
 
-Create a file called `north_oaks_casino_loc.json` in your mod's `r6/tweaks/` folder (or use an existing localisation file):
+Create a file called `north_oak_casino_loc.json` in your mod's `r6/tweaks/` folder (or use an existing localisation file):
 
 ```json
 {
   "LocalizationPersistenceOnScreenEntries": [
     {
-      "secondaryKey": "NorthOaksCasino",
-      "femaleVariant": "North Oaks Casino",
+      "secondaryKey": "NorthOakCasino",
+      "femaleVariant": "North Oak Casino",
       "maleVariant": ""
     }
   ]
@@ -137,8 +137,8 @@ In WolvenKit, create a new file:
 
 1. In the **Project Explorer**, right-click your project folder
 2. Select **New File → Entity (.ent)**
-3. Name it `north_oaks_casino_district.ent`
-4. Save it at a path like: `your_mod\districts\north_oaks_casino_district.ent`
+3. Name it `north_oak_casino_district.ent`
+4. Save it at a path like: `your_mod\districts\north_oak_casino_district.ent`
 
 ### 3.2 Add a trigger area component
 
@@ -149,7 +149,7 @@ In JSON format (WolvenKit can import this), the structure looks like this:
 ```json
 {
   "$type": "gameStaticTriggerAreaComponent",
-  "name": { "$type": "CName", "$storage": "string", "$value": "north_oaks_casino_trigger" },
+  "name": { "$type": "CName", "$storage": "string", "$value": "north_oak_casino_trigger" },
   "isEnabled": 1,
   "outline": {
     "HandleId": "1",
@@ -217,7 +217,7 @@ In JSON format (WolvenKit can import this), the structure looks like this:
         "districtID": {
           "$type": "TweakDBID",
           "$storage": "string",
-          "$value": "Districts.NorthOaksCasino"
+          "$value": "Districts.NorthOakCasino"
         }
       }
     }
@@ -227,7 +227,7 @@ In JSON format (WolvenKit can import this), the structure looks like this:
 
 **Key things to check:**
 
-- The `"$value": "Districts.NorthOaksCasino"` in the `districtID` must match exactly the TweakDB path you defined in Step 2.1.
+- The `"$value": "Districts.NorthOakCasino"` in the `districtID` must match exactly the TweakDB path you defined in Step 2.1.
 - The `"Z": 0` on each point is fine: the game extends the trigger volume up and down automatically.
 
 ### 3.3 Set the entity's world position
@@ -254,7 +254,7 @@ streaming:
           type: nodeRef
           patches:
             - op: add
-              entity: your_mod\districts\north_oaks_casino_district.ent
+              entity: your_mod\districts\north_oak_casino_district.ent
 ```
 
 > **Note:** The exact sector file and injection method depends on your Archive XL version. Check the Archive XL documentation for the current method.
@@ -273,10 +273,10 @@ You can add the entity directly to a streaming sector that covers the North Oak 
 1. Install your mod
 2. Load a save near the North Oak area
 3. Walk into the casino zone
-4. The HUD should show **"North Oaks Casino"** as the current district
+4. The HUD should show **"North Oak Casino"** as the current district
 
 If the HUD does not update:
-- Check that `Districts.NorthOaksCasino` in the trigger's `districtID` exactly matches the TweakDB record path
+- Check that `Districts.NorthOakCasino` in the trigger's `districtID` exactly matches the TweakDB record path
 - Check that the entity is loaded (use CET console: `GetPlayer():GetCurrentDistrict()` to query the active district)
 - Check that the polygon points are correct: use CET to print your current position (`print(GetPlayer():GetWorldPosition())`) and verify you are inside the expected coordinate range: X[397, 1565] Y[1219, 2069]
 
@@ -284,7 +284,7 @@ If the HUD does not update:
 
 ## Coordinate Reference
 
-These are the approximate boundary positions between North Oaks Casino and its neighbours:
+These are the approximate boundary positions between North Oak Casino and its neighbours:
 
 | Neighbour | Shared border direction |
 | -------- | ---------------------- |
@@ -300,9 +300,9 @@ The approximate centre of the casino area is around **(880, 1640)** in CET world
 
 | File | Location | Purpose |
 | ---- | -------- | ------- |
-| `north_oaks_casino.yaml` | `r6/tweaks/` | TweakDB district record |
-| `north_oaks_casino_loc.json` | `r6/tweaks/` | Localised display name |
-| `north_oaks_casino_district.ent` | `your_mod/districts/` | Trigger area entity |
+| `north_oak_casino.yaml` | `r6/tweaks/` | TweakDB district record |
+| `north_oak_casino_loc.json` | `r6/tweaks/` | Localised display name |
+| `north_oak_casino_district.ent` | `your_mod/districts/` | Trigger area entity |
 
 ---
 
@@ -312,4 +312,4 @@ The 50-point polygon in this document was computed mathematically by the NC Zoni
 
 This gives the natural "pocket" shape of the cut-content zone. If you need to adjust edges (for example if your mod adds geometry that changes where the district boundary should be), you can modify individual points in the polygon freely.
 
-The polygon is stored in `data/subdistricts.json` in the NC Zoning Board repository with `"canonical": false`, which means it is included in the map data but hidden by default in the public map unless a user specifically enables it. When the North Oaks Casino mod releases, this flag can be updated.
+The polygon is stored in `data/subdistricts.json` in the NC Zoning Board repository with `"canonical": false`, which means it is included in the map data but hidden by default in the public map unless a user specifically enables it. When the North Oak Casino mod releases, this flag can be updated.

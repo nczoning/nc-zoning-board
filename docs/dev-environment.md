@@ -17,6 +17,15 @@ Both environments deploy via Cloudflare Pages Git integration: production on
 every push to `main`, staging on every push to `dev` (separate Pages projects on
 the same repo).
 
+**Both read the same location data.** dev.nczoning.net loads from the production
+Data API (`api.nczoning.net`), exactly like the live site — so what differs
+between the two is *code*, never the mods on the map. There has never been a
+deliberate dev dataset: `dev` only ever differed from `main` by being behind on
+merged locations, and pointing the dev site at the staging API just served that
+drift as though it were data. The staging API (`api-dev.nczoning.net`) still
+exists for testing API changes, has no cron, and is opt-in per page load with
+`?api=dev` (see [`url-parameters.md`](url-parameters.md)).
+
 ---
 
 ## Branch Strategy
@@ -45,9 +54,9 @@ The staging deployment is hosted on Cloudflare Pages under the project `nc-zonin
 |---------|-------|
 | Platform | Cloudflare Pages |
 | Project name | `nc-zoning-board-dev` |
-| Connected repository | `spuddeh/nc-zoning-board` |
+| Connected repository | `nczoning/nc-zoning-board` |
 | Production branch | `dev` |
-| Build command | `node scripts/build_mods.js` |
+| Build command | *(empty)*: the site is static, nothing is compiled at deploy |
 | Build output directory | `/` |
 | Custom domain | `dev.nczoning.net` |
 
@@ -58,9 +67,8 @@ No GitHub Actions secrets or API tokens are required. Cloudflare's native Git in
 1. Cloudflare detects the push via GitHub webhook
 2. Clones the repository at the pushed commit
 3. Runs `npm clean-install` (installs dependencies from `package.json`)
-4. Runs `node scripts/build_mods.js`: generates `mods.json` from `data/locations/*.json`
-5. Uploads all files (including the generated `mods.json`) to Cloudflare's global network
-6. Site is live at `dev.nczoning.net` within ~60 seconds of pushing
+4. Uploads the files as they are in the repo to Cloudflare's global network
+5. Site is live at `dev.nczoning.net` within ~60 seconds of pushing
 
 ### Cloudflare Pages dashboard
 
@@ -88,7 +96,7 @@ git checkout -b feat/three-js-phase-N
 
 1. Push the feature branch to GitHub
 2. Open a PR targeting `dev` (not `main`)
-3. Verify the preview looks correct locally with `npx serve .` after running `node scripts/build_mods.js`
+3. Verify the preview looks correct locally with `npx serve .`
 4. Merge the PR into `dev`
 5. Cloudflare automatically deploys: verify at `dev.nczoning.net`
 
@@ -115,14 +123,18 @@ Once all phases of the Three.js migration are complete and verified on `dev.nczo
 
 ## Local Development
 
-Always rebuild `mods.json` before running the local server, otherwise you may be testing against stale data:
-
 ```bash
-node scripts/build_mods.js
 npx serve .
 ```
 
-`mods.json` is gitignored and is never committed: it is built fresh on every Cloudflare deploy and must be built manually for local testing.
+That is all you need. **The map reads `/v1/locations` from the production API**
+from every origin, localhost included, so locations are always live and there is
+nothing to rebuild. Use `?api=dev` to point at staging when testing an API
+change.
+
+There is nothing to build. `mods.json`, `build_mods.js` and `data/locations/`
+went at Phase 6, and the Pages build command is empty. A deploy uploads the
+repo as it stands.
 
 ---
 
@@ -130,4 +142,4 @@ npx serve .
 
 The `dev` branch exists specifically to support the Three.js 3D map migration. Each phase ships as a PR into `dev`. The full feature will not touch `main` until all phases are complete and verified.
 
-Current phase-by-phase work is tracked in the [GitHub Project](https://github.com/users/spuddeh/projects/1): see the **WebGPU Migration** and **Three.js Parity** streams. For the current implementation reference see [`three-js-scene.md`](three-js-scene.md).
+Current phase-by-phase work is tracked in the [GitHub Project](https://github.com/orgs/nczoning/projects/1): see the **3D Scene** stream. For the current implementation reference see [`three-js-scene.md`](three-js-scene.md).

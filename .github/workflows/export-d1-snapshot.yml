@@ -1,0 +1,115 @@
+name: Export D1 snapshot
+
+# The registry's off-Cloudflare backup. D1 is the source of truth for locations
+# since the cutover; this mirrors it nightly to the `data-snapshots` orphan
+# branch, which shares no history with `main` or `dev` and is never merged.
+#
+# WHY NOT `main` OR `dev`: a nightly commit to `main` is 365 bot commits a year
+# that `dev` does not have, so "is dev in sync with main?" becomes permanently
+# false and useless as a signal. It would also trigger a nightly production
+# Pages rebuild for data the site no longer reads. Committing to `dev` is worse:
+# the same problems, in the branch PRs flow through.
+#
+# PAIRED CLOUDFLARE CONFIG, NOT IN THIS REPO: Pages preview branch control
+# (Settings -> Builds & deployments -> Branch control) must be set to build only
+# `dev`. Pages builds every non-production branch by default and would otherwise
+# deploy a preview of the snapshot branch every night.
+#
+# SCHEDULED RUNS FIRE FROM THE DEFAULT BRANCH ONLY. Until this file is on `main`
+# the cron does not exist, however green it looks on a feature branch. Use
+# workflow_dispatch to test it from a branch, which does work.
+
+on:
+  schedule:
+    # 16:17 UTC = 02:17 AEST. Off the hour: the top of the hour is when GitHub's
+    # scheduler is most congested and a cron run is most likely to be delayed.
+    - cron: '17 16 * * *'
+  workflow_dispatch:
+
+# Pushing to `data-snapshots` is the whole job. `main` is protected by ruleset
+# 13449449 and is not written here.
+permissions:
+  contents: write
+
+# Never cancel a run mid-push: a half-written snapshot is worse than a late one.
+concurrency:
+  group: export-d1-snapshot
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      # Two checkouts: the exporter comes from this ref, the tree it writes into
+      # comes from the snapshot branch. They share no history, so they cannot be
+      # the same working directory.
+      - name: Checkout the exporter
+        uses: actions/checkout@v7
+        with:
+          path: repo
+
+      - name: Checkout data-snapshots
+        uses: actions/checkout@v7
+        with:
+          ref: data-snapshots
+          path: snapshot
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      # No `npm ci`: the exporter uses only node: builtins and fetch. Nothing to
+      # install means nothing to break at 02:17 in a job nobody is watching.
+      - name: Export the registry
+        env:
+          # An account-owned token holding only Account -> D1 -> Read. NOT
+          # CLOUDFLARE_API_TOKEN, which deploys the Workers: that one is built
+          # from the "Edit Cloudflare Workers" template and carries no D1
+          # permission, and a read-only backup has no business holding deploy
+          # rights. No fallback to it either, so a missing secret fails here
+          # rather than half-working under the wrong identity.
+          CLOUDFLARE_D1_READ_TOKEN: ${{ secrets.CLOUDFLARE_D1_READ_TOKEN }}
+          # Production `nczoning-data`. Stated rather than defaulted so the
+          # database this backs up is readable from the workflow.
+          D1_DATABASE_ID: 4365740b-76be-4a99-b985-16641e68703a
+        run: node repo/scripts/export_d1_snapshot.mjs --out snapshot
+
+      - name: Commit if anything changed
+        working-directory: snapshot
+        run: |
+          git config user.name 'nczoning-bot'
+          git config user.email 'noreply@nczoning.net'
+          git add -A data
+          # An if/else, not `git diff --quiet || commit`: under `set -e` the
+          # short-circuit form exits the step with the diff's own status.
+          if git diff --cached --quiet; then
+            echo 'No change since the last snapshot. Nothing to commit.'
+          else
+            git diff --cached --stat
+            git commit -m "data: D1 snapshot $(date -u +%Y-%m-%d)"
+            git push origin HEAD:data-snapshots
+          fi
+
+      # A backup that stops running silently is not a backup. This posts through
+      # the Worker's alert fan-out, so the failure is recorded in D1 and shown in
+      # the dashboard rather than only being a red run nobody subscribes to.
+      # `|| true`: an alert about a failure must never become a second failure.
+      - name: Alert on failure
+        if: failure()
+        env:
+          ALERTS_INGEST_SECRET: ${{ secrets.ALERTS_INGEST_SECRET }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$ALERTS_INGEST_SECRET" ]; then
+            echo 'ALERTS_INGEST_SECRET not set; the run is red but nothing was alerted.'
+            exit 0
+          fi
+          BODY="The registry backup to the data-snapshots branch did not complete. Until it does, D1 Time Travel (30 days) is the only backup. Run: $RUN_URL"
+          # jq builds the JSON so the body cannot break the payload it sits in.
+          PAYLOAD=$(jq -nc --arg body "$BODY" \
+            '{source: "export", severity: "error", title: "Nightly D1 snapshot failed", body: $body}')
+          curl -sS -X POST https://api.nczoning.net/internal/alerts \
+            -H "Authorization: Bearer $ALERTS_INGEST_SECRET" \
+            -H 'Content-Type: application/json' \
+            -d "$PAYLOAD" || true

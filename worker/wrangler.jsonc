@@ -18,7 +18,7 @@
 	// Set so CI's scoped API token doesn't need User→Memberships→Read to
 	// discover the account (wrangler skips the /memberships lookup). Account
 	// IDs are not secret. Inherited by all environments.
-	"account_id": "ab7ff2fad6832c2db0a25d22e3287227",
+	"account_id": "b9937d8d595fad7de8d1549b22390281",
 	// Custom domain: deploying creates the DNS record + cert on the zone
 	// automatically (the zone must be on the same Cloudflare account).
 	"routes": [
@@ -28,10 +28,47 @@
 		}
 	],
 	"vars": {
-		// Bumped manually on releases; reported by /v1/health.
-		"API_VERSION": "0.1.0",
-		// Origin the cron pulls source files from (mods.json, tags, subdistricts).
-		"SITE_ORIGIN": "https://nczoning.net"
+		// SemVer for the API *surface*, reported by /v1/health.
+		//
+		// PRE-1.0 WINDOW. Rolled back 1.3.0 -> 0.3.0: the surface claimed a
+		// stability it does not have, because nothing consuming it has shipped
+		// yet and the D1 work takes shape changes rather than deferring them.
+		// On a 1.x line every one of those would need MAJOR + a /v1 -> /v2 move,
+		// standing up a parallel surface with no consumers to preserve.
+		//
+		// While on 0.x:  breaking -> MINOR,  additive -> PATCH,  path stays /v1
+		// (SemVer permits breaking changes pre-1.0, which is what resolves this).
+		// Returns to 1.0.0 — and to the MINOR-additive/MAJOR-breaking rules in
+		// decisions/api-version-semver-policy — the day the first in-game mod
+		// ships. The three MINORs already made are preserved as 0.3.0.
+		//
+		// Bump here, in the staging block below, in openapi.json and
+		// package.json, then run `npm run version:lock` —
+		// test/api-version.test.js enforces all four. There is no monotonicity
+		// check, so a decrease passes provided all four move together.
+		"API_VERSION": "0.6.0",
+		// Origin the cron pulls subdistricts from. Locations and tags are in D1;
+		// this is the last thing served as a static file.
+		"SITE_ORIGIN": "https://nczoning.net",
+		// `DATA_SOURCE` was removed at Phase 6, along with mods.json and the
+		// merge path it selected. D1 is the only registry. Rolling back to the
+		// static build now means reverting the release, not setting a var.
+		// --- Admin auth (Phase 3) -------------------------------------------
+		// Not secrets: an App id and an OAuth client id are both public. The
+		// private key and client secret are Worker secrets — see README.
+		"GITHUB_APP_ID": "4397308",
+		"GITHUB_OAUTH_CLIENT_ID": "Iv23lixJitjZqJuIwhDW",
+		// Repo whose collaborator list IS the admin list. Adding an admin is a
+		// repo-collaborator change; there is no separate allowlist to drift.
+		"GITHUB_REPO": "nczoning/nc-zoning-board",
+		// Where /auth/callback sends the browser back to.
+		"ADMIN_ORIGIN": "https://nczoning.net",
+		// --- Quota burn-down (Phase 4c) -------------------------------------
+		// Not a secret: the account tag appears in every wrangler invocation and
+		// in worker/README.md. The ANALYTICS TOKEN is the secret
+		// (CF_ANALYTICS_TOKEN, Account Analytics:Read), and it never leaves the
+		// Worker: the dashboard reads /admin/quota instead of Cloudflare.
+		"CF_ACCOUNT_ID": "b9937d8d595fad7de8d1549b22390281"
 	},
 	// Dataset store (dashboard title: nczoning-api-dataset). Recreate with:
 	//   npx wrangler kv namespace create nczoning-api-dataset
@@ -40,26 +77,69 @@
 	"kv_namespaces": [
 		{
 			"binding": "DATASET",
-			"id": "d86735e00790417e948e423c3df01d68"
+			"id": "2f547f4c22ab4d5fb2cf4636e50a2559"
+		}
+	],
+	// The location registry, and the only source. Unlike KV, this content is
+	// NOT derived: losing it loses data, so it is never "recreate at any
+	// time". D1 Time Travel covers 30 days, and the nightly export to the
+	// data-snapshots branch is the longer backstop. There is no git mirror.
+	//
+	// STAGING HAS ITS OWN DATABASE (see env.staging). Named environments do not
+	// inherit bindings, so `wrangler d1 migrations apply` must be run against
+	// BOTH database names, every time.
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "nczoning-data",
+			"database_id": "4365740b-76be-4a99-b985-16641e68703a"
 		}
 	],
 	// Rebuild the dataset every 5 minutes (faster mod propagation after a
 	// submission). Nexus load stays well under limits; see docs/nexus-api-reference.md.
+	// Production is the ONLY environment with a cron (see env.staging below).
+	// KV writes stay cheap because the cron writes only when the content hash
+	// changes, and the liveness heartbeat on an unchanged tick is rate-limited
+	// to HEARTBEAT_MIN_INTERVAL_MS (worker/src/config.js) rather than firing on
+	// all 288 daily ticks. Keep that guard in step with MAX_REFRESH_AGE_S in
+	// scripts/monitor_api_health.js — they are one parameter pair.
 	"triggers": {
 		"crons": [
 			"*/5 * * * *"
 		]
 	},
-	// Refresh-failure alerts post to the dedicated map-alerts channel:
-	//   wrangler secret put NCZ_ALERTS_DISCORD_WEBHOOK_URL           (production)
-	//   wrangler secret put NCZ_ALERTS_DISCORD_WEBHOOK_URL --env staging
+	// Every alert (refresh failure, quota threshold, new submission, and the
+	// api-health monitor's) is recorded in the `alerts` table and forwarded to
+	// the dedicated map-alerts channel by the Worker:
+	//   npx wrangler secret put NCZ_ALERTS_DISCORD_WEBHOOK_URL           (production)
+	//   npx wrangler secret put NCZ_ALERTS_DISCORD_WEBHOOK_URL --env staging
 	// Falls back to the legacy DISCORD_WEBHOOK_URL secret if the new one isn't
 	// set (no alerting gap during the move). Secrets aren't committed here.
-	// Optional: refresh runs without either.
+	// Optional: refresh runs without either, and the alert is still recorded.
+	//
+	// POST /internal/alerts lets scripts/monitor_api_health.js (GitHub Actions)
+	// use that same fan-out. It authenticates with a shared secret:
+	//   npx wrangler secret put ALERTS_INGEST_SECRET                      (production)
+	//   npx wrangler secret put ALERTS_INGEST_SECRET --env staging
+	// (from inside worker/: wrangler is a devDependency, not a global install)
+	// The SAME value must also be a GitHub Actions secret of the same name.
+	// They are separate stores; setting one does not set the other. Unset here,
+	// the endpoint answers 503 and records nothing rather than accepting an
+	// empty bearer token.
 
 	"env": {
 		// Staging: pulls source files from the dev site, writes to a separate
-		// KV namespace, serves the dev site (B7). Isolated from production.
+		// KV namespace. Isolated from production.
+		//
+		// NO CRON, deliberately. KV's free tier is 1,000 writes/day PER ACCOUNT,
+		// shared by both Workers, and every tick writes at least the liveness
+		// heartbeat — so a 5-min staging cron cost 288 writes/day (~29% of the
+		// account budget) to keep a dataset nobody reads fresh. The dev site now
+		// reads the PRODUCTION API (assets/js/constants.js), because there has
+		// never been a deliberate dev dataset: dev only ever differed from main
+		// by being behind. Refresh staging on demand when testing API changes:
+		//   npx wrangler deploy --env staging   (a deploy runs no cron; trigger
+		//   scheduled() via `npx wrangler dev --env staging --test-scheduled`)
 		"staging": {
 			"name": "nczoning-api-staging",
 			"routes": [
@@ -69,20 +149,65 @@
 				}
 			],
 			"vars": {
-				"API_VERSION": "0.1.0",
-				"SITE_ORIGIN": "https://dev.nczoning.net"
+				// Pre-1.0 window — see the production block above.
+				"API_VERSION": "0.6.0",
+				"SITE_ORIGIN": "https://dev.nczoning.net",
+				// STAGING IS THE D1 CANARY: it runs the D1 path while production
+				// stays on mods.json, so the binding, the reads and the whole
+				// refresh cycle are exercised on a deployed Worker without the
+				// live map depending on any of it.
+				//
+				// This is the one thing unit tests and the local parity scripts
+				// cannot prove — that env.DB actually resolves at runtime in a
+				// deployed environment that inherits no bindings.
+				//
+				// Staging has no cron, so trigger a cycle by hand:
+				//   npx wrangler dev --env staging --remote --test-scheduled
+				//   curl "http://127.0.0.1:8787/__scheduled"
+				// Space repeat triggers ~60s apart: KV reads are eventually
+				// consistent, so back-to-back cycles re-read the pre-write
+				// archive cache and appear to stall.
+				// Seed its database first: an empty `locations` is refused, by
+				// design, rather than materialized as an empty map.
+				// Admin auth — see the production block. One App carries BOTH
+				// callback URLs (api.nczoning.net and api-dev.nczoning.net), so
+				// it serves both environments. SESSION_SECRET must DIFFER
+				// between them: a shared signing key means a staging session
+				// token is accepted as valid by production.
+				"GITHUB_APP_ID": "4397308",
+				"GITHUB_OAUTH_CLIENT_ID": "Iv23lixJitjZqJuIwhDW",
+				"GITHUB_REPO": "nczoning/nc-zoning-board",
+				"ADMIN_ORIGIN": "https://dev.nczoning.net",
+				// Same account as production: the quotas being burned down are
+				// per-ACCOUNT, so staging must report the same numbers rather
+				// than a staging-only slice that would always look healthy.
+				"CF_ACCOUNT_ID": "b9937d8d595fad7de8d1549b22390281"
 			},
 			// dashboard title: nczoning-api-dataset-staging
 			"kv_namespaces": [
 				{
 					"binding": "DATASET",
-					"id": "ac85bf5c0b6f47afac35085408857d4b"
+					"id": "9fe7b7d13d6348d1913b8a01aca1fef6"
 				}
 			],
+			// Same binding name as production, different database. Declared in
+			// full because named environments inherit nothing — omitting this
+			// block does not fall back to the production database, it leaves
+			// env.DB undefined and every query throws at runtime.
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "nczoning-data-staging",
+					"database_id": "43bc0232-5f32-49c3-863d-ff3e53422827"
+				}
+			],
+			// MUST be an explicit empty array, not an omitted block. Wrangler
+			// treats an undefined `triggers`/`crons` as "leave the deployed Cron
+			// Triggers in place" and only an empty array as "remove them all", so
+			// deleting this key would silently keep the 5-minute staging cron
+			// running. https://developers.cloudflare.com/workers/configuration/cron-triggers/
 			"triggers": {
-				"crons": [
-					"*/5 * * * *"
-				]
+				"crons": []
 			}
 		}
 	}

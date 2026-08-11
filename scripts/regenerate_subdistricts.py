@@ -481,7 +481,7 @@ def main():
         city_union_p3 = unary_union(city_district_shapes)
 
         GAP_BUFFER = 50
-        GAP_MAX_AREA = 50_000   # Excludes the North Oaks Casino void (~96,949 sq)
+        GAP_MAX_AREA = 50_000   # Excludes the North Oak Casino void (~96,949 sq)
                                 # which is handled separately as a non-canonical subdistrict
 
         buffered = bl_union.buffer(GAP_BUFFER)
@@ -545,15 +545,15 @@ def main():
     if badlands_entry["subdistricts"]:
         output["districts"].append(badlands_entry)
 
-    # ── North Oaks Casino (optional, cut-content district) ───────────────
-    # The North Oaks Casino is cut content: a district void between North Oak
+    # ── North Oak Casino (optional, cut-content district) ───────────────
+    # The North Oak Casino is cut content: a district void between North Oak
     # (Westbrook), Red Peaks, and Rocky Ridge. It exists as empty space in-game
     # and is the target of a community restoration mod led by Kao.
     #
     # Computed via triple-buffer intersection: the area within 1200 CET units
     # of all three surrounding districts, minus those districts themselves.
     # canonical=False flags this as non-canon / mod-specific.
-    print("\n--- North Oaks Casino (cut content, optional) ---")
+    print("\n--- North Oak Casino (cut content, optional) ---")
     _noc_north_oak = None
     _noc_red_peaks = None
     _noc_rocky_ridge = None
@@ -595,7 +595,7 @@ def main():
                                for x, y in list(_casino.exterior.coords)[:-1]]
             xs = [p[0] for p in _casino_polygon]
             ys = [p[1] for p in _casino_polygon]
-            print(f"  north_oaks_casino      {len(_casino_polygon):3d} pts  "
+            print(f"  north_oak_casino       {len(_casino_polygon):3d} pts  "
                   f"X [{min(xs):8.0f}, {max(xs):8.0f}]  "
                   f"Y [{min(ys):8.0f}, {max(ys):8.0f}]")
 
@@ -603,8 +603,8 @@ def main():
             for _dist in output["districts"]:
                 if _dist["id"] == "westbrook":
                     _dist["subdistricts"].append({
-                        "id": "north_oaks_casino",
-                        "name": "North Oaks Casino",
+                        "id": "north_oak_casino",
+                        "name": "North Oak Casino",
                         "trigger": None,
                         "canonical": False,
                         "note": (
@@ -617,7 +617,7 @@ def main():
                     })
                     break
         else:
-            print("  WARNING: Could not compute North Oaks Casino polygon")
+            print("  WARNING: Could not compute North Oak Casino polygon")
     else:
         print("  WARNING: Missing required district polygons for casino computation")
 

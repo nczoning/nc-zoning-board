@@ -36,7 +36,7 @@ test('every documented v1 path is actually served (no stale spec paths)', () => 
 });
 
 test('GET / serves the HTML docs page', async () => {
-  const res = await worker.fetch(new Request('https://api.nczoning.net/'), { API_VERSION: '0.1.0' });
+  const res = await worker.fetch(new Request('https://api.nczoning.net/'), { API_VERSION: '9.9.9-test' });
   assert.equal(res.status, 200);
   assert.match(res.headers.get('Content-Type'), /text\/html/);
   const body = await res.text();
@@ -45,7 +45,7 @@ test('GET / serves the HTML docs page', async () => {
 });
 
 test('GET /openapi.json serves the spec', async () => {
-  const res = await worker.fetch(new Request('https://api.nczoning.net/openapi.json'), { API_VERSION: '0.1.0' });
+  const res = await worker.fetch(new Request('https://api.nczoning.net/openapi.json'), { API_VERSION: '9.9.9-test' });
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.openapi, '3.1.0');

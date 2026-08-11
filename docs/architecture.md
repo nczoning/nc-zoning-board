@@ -10,11 +10,14 @@ This document explains how the NC Zoning Board is organised and how data flows t
 nc-zoning-board/
 ├── index.html              # Single-page app entry point
 ├── data/
-│   ├── locations/          # Individual mod JSON files (tracked by Git)
-│   └── tags.json           # Registry of all valid tags and definitions
-├── mods.json               # Compiled registry (Git-ignored, built in CI)
-├── mods.schema.json        # JSON Schema for compiled data
-├── package.json            # Node.js deps (sharp, build scripts)
+│   ├── tags.json           # Registry of all valid tags and definitions
+│   ├── subdistricts.json   # District polygons, fetched by the Worker cron
+│   └── excluded_mods.json  # Legacy exclusions (D1 dismissals supersede these)
+├── mods.schema.json        # JSON Schema for a stored location record.
+│                           # Nothing reads it at runtime: it is the cross-check
+│                           # worker/test/validate.test.js runs ajv against, so
+│                           # the hand-rolled Worker validator cannot drift.
+├── package.json            # Node.js deps (sharp, tile/GLB scripts)
 │
 ├── assets/
 │   ├── css/style.css       # Cyberpunk-themed styles (Orbitron + Rajdhani fonts)
@@ -28,9 +31,8 @@ nc-zoning-board/
 │       └── {z}/{x}/{y}.webp
 │
 ├── scripts/
-│   ├── build_mods.js       # Compiles data/locations/*.json -> mods.json
-│   ├── validate_tags.js    # Validates tags in data/ against tags.json
-│   └── generate_tiles.js   # Slices 16k source image into 256×256 WebP tiles
+│   ├── generate_tiles.js   # Slices 16k source image into 256×256 WebP tiles
+│   └── export_d1_snapshot.mjs  # Nightly D1 -> data-snapshots branch backup
 │
 ├── raw maps/               # Source map images (not committed - too large)
 │   ├── 4k/night_city.png   # 4096×4096, 27 MB
@@ -40,12 +42,15 @@ nc-zoning-board/
 │
 ├── .github/
 │   ├── ISSUE_TEMPLATE/
-│   │   ├── mod_submission.yml      # GitHub Issue form for mod submissions
-│   │   └── suggest_edit.yml        # GitHub Issue form for suggesting edits
+│   │   ├── bug_report.yml          # Locations are submitted from the map, not
+│   │   ├── feature_request.yml     # from an issue form. The submission
+│   │   └── feedback.yml            # templates retired at the D1 cutover.
 │   └── workflows/
-│       ├── auto-pr-submission.yml       # Bot: submission issue → PR with new JSON
-│       ├── modify-location-submission.yml # Bot: edit issue → PR with modified JSON
-│       └── validate-mods.yml            # CI: validates mods.json against schema
+│       └── validate-mods.yml            # CI: the `validate-json` job required by
+│                                        # main's ruleset. Location data lives in D1
+│                                        # and is validated on the Worker write path,
+│                                        # so this only guards against the deleted
+│                                        # files reappearing. Keep the job id.
 │                                        # (deploys via Cloudflare Pages Git integration, not a workflow)
 │
 └── docs/                   # You are here
@@ -53,58 +58,63 @@ nc-zoning-board/
 
 ## Data Flow
 
-> For a full breakdown of the bot implementation, see the [Submission Pipeline](submission-pipeline.md) documentation.
+> For what happens between pressing Submit and the pin appearing, see the
+> [Submission Pipeline](submission-pipeline.md).
 
 ```text
-┌─────────────┐     ┌──────────────┐     ┌───────────────┐
-│ Mod Author  │────▶│ GitHub Issue  │────▶│  Auto-PR Bot  │
-│ submits CET │     │   Form       │     │  (Actions)    │
-│ coordinates │     └──────────────┘     └───────┬───────┘
-└─────────────┘                                  │
-                                                 ▼
-                                         ┌──────────────┐
-                                         │ data/locations│
-                                         │ <UUID>.json  │
-                                         └──────┬───────┘
-                                                │
-                                                ▼
-                                         ┌──────────────┐
-                                         │  build_mods  │
-                                         │  → mods.json │
-                                         └──────┬───────┘
-                                                │
-                                                ▼
-                                    ┌────────────────────────┐
-                                    │     services.js        │
-                                    │  cetToLeaflet(x, y)    │
-                                    │  → [lat, lng] on map   │
-                                    └────────────┬───────────┘
-                                                 │
-                                                 ▼
-                                    ┌────────────────────────┐
-                                    │    Leaflet Map         │
-                                    │  Sidebar GUI           │
-                                    │  Category Filtering    │
-                                    │  L.marker (pins)       │
-                                    └────────────────────────┘
+┌─────────────┐     ┌────────────────────┐     ┌──────────────────┐
+│ Mod Author  │────▶│  Map: [+] Submit   │────▶│ POST /submissions│
+│ submits CET │     │  or "Suggest a fix"│     │ Turnstile + rate │
+│ coordinates │     └────────────────────┘     │ limit            │
+└─────────────┘                                └────────┬─────────┘
+                                                        │
+                                                        ▼
+                                              ┌────────────────────┐
+                                              │ D1 `submissions`   │
+                                              │ status: pending    │
+                                              └────────┬───────────┘
+                                                       │  admin approves
+                                                       ▼
+                                              ┌────────────────────┐
+                                              │ D1 `locations`     │
+                                              │ + `audit_log` row  │
+                                              └────────┬───────────┘
+                                                       │  write-through
+                                                       ▼
+                                              ┌────────────────────┐
+                                              │ materialize → KV   │
+                                              │ /v1/locations      │
+                                              └────────┬───────────┘
+                                                       │
+                                                       ▼
+                                              ┌────────────────────┐
+                                              │ services.js        │
+                                              │ cetToLeaflet(x, y) │
+                                              │ → [lat, lng]       │
+                                              └────────┬───────────┘
+                                                       │
+                                                       ▼
+                                              ┌────────────────────┐
+                                              │ Leaflet map        │
+                                              │ Three.js scene     │
+                                              │ Sidebar            │
+                                              └────────────────────┘
 ```
 
 ## Key Components
 
 ### JavaScript Architecture
 
-The core frontend JS is four files loaded via `<script>` tags (no ES modules, no bundler). All shared symbols live on the `window.NCZ` namespace.
+The frontend JS is nine files loaded via `<script>` tags (no bundler; two are ES modules). All shared symbols live on the `window.NCZ` namespace.
 
 | File | Role |
 | --- | --- |
 | `constants.js` | All config values: category styles, API endpoints, cache keys, UI sizing, 3D scene constants |
-| `utils.js` | Pure functions: `escapeHtml`, `cetToLeaflet`, `cetToThree`, positioning algorithm, BBCode parser |
-| `services.js` | Fetch functions: Nexus thumbnail API, auto-discovery, `fetchModData()` |
+| `utils.js` | Pure functions: `escapeHtml`, `cetToLeaflet`, `cetToThree`, positioning algorithm, submit-form validation (`collectLocationForm`) |
+| `services.js` | Fetch functions: the `/v1` Data API loader (`fetchLocationsFromApi()`) and the submissions POST |
 | `app.js` | DOM logic: map init, sidebar, cluster panel, modals, image gallery, view switching |
 
-Load order on `main`: `constants.js` → `utils.js` → `services.js` → `app.js`
-
-**Three.js migration** (in progress on `dev` branch) adds four more files:
+The 3D scene ships on `main`. These are the other five files:
 
 | File | Role |
 | --- | --- |
@@ -113,7 +123,10 @@ Load order on `main`: `constants.js` → `utils.js` → `services.js` → `app.j
 | `three-markers.js` | 3D pin/popup/tooltip/cluster layer: interactive parity with Leaflet (`NCZ.ThreeMarkers`). See [three-markers.md](three-markers.md) for the full architecture. |
 | `flyover.js` | Optional cinematic flyover showcase, include/exclude via `<script>` tag |
 
-Load order on `dev`/feature branches: `constants.js` → `utils.js` → `services.js` → `overlay.js` → `three-scene.js` (module) → `three-markers.js` (module) → `app.js` → `[flyover.js optional]`
+**Load order, identical on `main` and `dev`** (verified against `index.html`, 2026-07-31):
+
+`constants.js` → `utils.js` → `district-info.js` → `services.js` → `overlay.js` →
+`three-scene.js` (module) → `three-markers.js` (module) → `flyover.js` → `app.js`
 
 ### Map Layer (`app.js`)
 
@@ -129,12 +142,20 @@ Load order on `dev`/feature branches: `constants.js` → `utils.js` → `service
 - `NCZ.cetToThree(x, y, z)` converts CET coordinates to Three.js scene space (`[x, z||0, -y]`)
 - See [Coordinate System](coordinate-system.md) for full details
 
-### Mod Data (`data/locations/*.json`)
+### Location Data (D1)
 
-- Individual JSON files per mod to prevent merge conflicts.
-- **Attributes**: `id` (UUID), `name`, `authors` (array), `coordinates` ([X, Y]), `nexus_id` (ID string, "WIP", or "Dummy"), `category`, `tags` (array), and `description`.
-- **Credits**: Optional field for team-based acknowledgements.
-- **Validation**: Individual tags are checked against `data/tags.json` and the final compiled `mods.json` is validated against `mods.schema.json` in CI.
+- **The registry is a Cloudflare D1 database**, served at `/v1/locations`. It stopped living in git at the 2.0.0 cutover.
+- **Attributes**: `id` (UUID, or `nexus-<id>` for the nine legacy auto-discovered records), `name`, `authors` (array), `coordinates` ([X, Y, Z]), `yaw`, `nexus_id` (ID string, "WIP" or "Dummy"), `category`, `tags` (via the `location_tags` join), `description`, `credits`, `status` and `admin_notes`.
+- **Never served**: `admin_notes` is admin-only and is deliberately withheld from `/v1`.
+- **Validation** happens on the write path in the Worker, so a bad value is refused at submission rather than caught in CI afterwards.
+- **The registry is not in git.** `data/locations/*.json`, `mods.json` and `build_mods.js` were deleted at Phase 6. The backup is the nightly export to the `data-snapshots` branch, plus D1 Time Travel's 30 days.
+- A frozen copy of 297 records lives at `worker/test/fixtures/locations-corpus.json`. It is a **test fixture**, not a backup: it does not track the registry and is not restored from.
+- **A pin whose mod stops being published on Nexus is acted on by status, not by absence.** `modsByUid` returns deleted and hidden mods like any other node, carrying a `status`; only the tag-search query filters. `nexus_mod_status` records how many consecutive sweeps have seen each non-published status (#900).
+  - `wastebinned` (deleted), confirmed over 3 sweeps: the pin is **withheld from the built dataset**. `locations.status` is never written, so a reversal on Nexus restores the pin with nobody involved, and no sweep may withhold more than 5 pins at once.
+  - `hidden`, confirmed over 3 sweeps: **review list only**. It covers an author mid-upload and a moderation hold equally and the API will not say which, so a person reads the reason on the mod page and decides.
+  - absent from the response, 6 sweeps and 24 hours: review list only. The weakest signal, because a failed `modsByUid` chunk manufactures it.
+  - Only a person writes `locations.status`. The dashboard's drift row subtracts the withheld pins, so a deliberate withdrawal is not reported as a fault.
+  - **The up edge is reported too.** A mod returning to `published` clears its row and restores any withheld pin automatically, and raises a `recovery` alert. The alert exists for the asymmetric half: withholding reverses itself, but a record an admin hid by hand does not, and this is the only moment anyone is told it can be republished. A status that was never confirmed does not produce a recovery.
 
 ### Styling (`style.css`)
 
@@ -147,26 +168,119 @@ Load order on `dev`/feature branches: `constants.js` → `utils.js` → `service
 
 ## Repo Setup (for new maintainers)
 
-The auto-PR pipeline and Discord notifications require two secrets configured in **repo Settings → Secrets and variables → Actions**:
+Discord alerting uses secrets configured in **repo Settings → Secrets and variables → Actions**. The Worker's own secrets are a **separate store**, set with `npx wrangler secret put` from inside `worker/`:
+
+```powershell
+cd worker
+$env:CLOUDFLARE_ACCOUNT_ID='b9937d8d595fad7de8d1549b22390281'
+npx wrangler secret put <NAME>              # production
+npx wrangler secret put <NAME> --env staging
+```
+
+`wrangler` is a devDependency of `worker/`, not a global install, so it resolves only through `npx` (or an npm script, which puts `node_modules/.bin` on PATH). Running it from the repo root fails twice over: npm cannot find the binary, and `wrangler.jsonc` is not there either.
 
 | Secret | Value |
 | --- | --- |
-| `ACTIONS_PAT` | A GitHub Personal Access Token (fine-grained) with `Contents: Read/Write` and `Pull requests: Read/Write` on this repo |
-| `DISCORD_WEBHOOK_URL` | Webhook for the **submissions** channel: new/modified submission embeds and their PR-status edits (channel Settings → Integrations → Webhooks) |
-| `NCZ_ALERTS_DISCORD_WEBHOOK_URL` | Webhook for the dedicated **map-alerts** channel: auto-discovery parse failures and Data API health/outage alerts, kept separate from submissions |
+| `DISCORD_WEBHOOK_URL` | Legacy webhook for the retired **submissions** channel. Nothing writes to it now; it survives only as a fallback for the alerts webhook below, and retires at Phase 6 |
+| `NCZ_ALERTS_DISCORD_WEBHOOK_URL` | Webhook for the dedicated **map-alerts** channel. Held by the **Worker** now (`npx wrangler secret put`), because the Worker is what posts to Discord. The Actions copy is unused |
+| `ALERTS_INGEST_SECRET` | Bearer token for `POST /internal/alerts`. Needed in **both** stores: a GitHub Actions secret for `monitor_api_health.js`, and a Cloudflare Worker secret for the Worker that checks it. Setting one does not set the other |
 
-> **Why ACTIONS_PAT?** GitHub's `GITHUB_TOKEN` cannot trigger other workflow runs (a security design). Using a PAT for `create-pull-request` allows the `validate-json` check to fire automatically on the generated PR.
+### Alerts
 
-### Discord Notifications
+Every alert goes through one place: **`POST /internal/alerts` on the Worker**,
+which **records it in the `alerts` table and then forwards it to Discord**.
 
-Two channels, two webhooks. **Submissions** (`DISCORD_WEBHOOK_URL`) covers the mod
-submission lifecycle:
+The ordering is the point. The table exists so alert history survives Discord
+burying or dropping a message, and forwarding first would mean a Discord outage
+loses the record as well as the notification. The two steps fail independently:
+a failed D1 write still notifies, and a failed Discord post still leaves the
+alert in the dashboard's **Alerts** tab, where it can be acknowledged.
 
-- **`auto-pr-submission.yml`**: Posts a new embed when a submission PR is created (status: ⏳ Awaiting review). Stores the Discord message ID as a hidden comment on the issue.
-- **`modify-location-submission.yml`**: Posts an embed for modification/removal requests.
-- **`notify-discord-pr-status.yml`**: When the PR is merged or closed, edits the original embed in-place to show the outcome (✅ Approved or ❌ Closed). Must use the same webhook that posted the message.
+Alerts come from five sources, and the `source` column names them:
 
-**Alerts** (`NCZ_ALERTS_DISCORD_WEBHOOK_URL`) covers operational health on a separate channel:
+| Source | Raised by | When |
+| --- | --- | --- |
+| `api-health` | `monitor-api-health.yml`, every 15 min | The Data API (`/v1`) is not serving, **or** its refresh cron has wedged (a frozen `/v1/health.last_refresh_at` heartbeat older than 45 min; the API can serve stale data silently, see #849). On a wedged cron it also **self-heals**: it dispatches `deploy-api.yml` to redeploy the affected Worker (re-registers the Cron Trigger), capped at 2 redeploys/env/hour before escalating for a human |
+| `refresh` | `worker/src/refresh.js`, on the 5-minute cron | A dataset rebuild failed (amber: last-known-good is still served), and the matching all-clear when one later succeeds. Both are recorded every time; see [what reaches Discord](#what-reaches-discord) for which of them are posted |
+| `submissions` | `worker/src/submissions.js` | A submission reached the review queue. A plain "one is waiting" post linking to the dashboard, deliberately not the old edit-in-place embed |
+| `quota` | `worker/src/quota.js`, hourly on the cron | A free-tier cap passed 80% for the UTC day. Checked on one tick an hour, and suppressed to once per cap per UTC day |
+| `export` | `export-d1-snapshot.yml`, nightly | The registry backup to the `data-snapshots` branch did not complete. Its own source rather than folded into `refresh`: the 5-minute dataset cron and the nightly git mirror fail for unrelated reasons and are fixed in different places. See [`infrastructure-map.md`](infrastructure-map.md) |
 
-- **`monitor-auto-discovery.yml`**: Daily scan; alerts when a NCZoning-tagged mod fails to parse and isn't covered by a manual entry.
-- **`monitor-api-health.yml`**: Every 15 min; alerts when the Data API (`/v1`) isn't serving. The Worker's own refresh-failure alert (`worker/src/refresh.js`) posts here too (Cloudflare Worker secret, set separately via `wrangler secret put`).
+**In-Worker producers call `raiseAlert()` directly** rather than making an HTTP
+request to their own Worker. `/internal/alerts` is the remote entry point to the
+same function, and exists because a GitHub Action cannot hold a session.
+
+#### What reaches Discord
+
+Every alert is recorded. The `notify` flag on the alert decides whether it is
+also posted, so the channel carries only what a person has to act on and the
+dashboard keeps everything (log-only rows are marked "log only", and are left
+out of the unacknowledged badge because nothing can clear them).
+
+| Posted | Log-only |
+| --- | --- |
+| The API is not serving | A wedged cron that self-heal has already dispatched a redeploy for |
+| Self-heal exhausted, so a human must redeploy | Every all-clear: refresh recovered, API recovered |
+| A refresh failing for 3 consecutive cycles, then once every 3 hours | The first two consecutive refresh failures |
+| A pinned mod hidden or deleted on Nexus | A mod returning to Nexus with nothing left to do |
+| A mod returning to Nexus while a record is still hidden by hand | `discovery_stale` reported as context by the health monitor |
+| A quota cap past 80%, once per cap per UTC day | |
+| A submission waiting in the queue | |
+
+Two rules keep this from going wrong:
+
+- **The producer decides.** Routing on severity or on a title match would put the
+  decision where it cannot see the context: a `recovery` is silent unless a
+  record was hidden by hand, and a wedged cron is silent only because a redeploy
+  was actually dispatched. `notify` is part of the `/internal/alerts` payload for
+  the same reason, so the remote producer keeps the same say as the local ones.
+- **The default is to notify.** Omitting `notify` means true, so a producer that
+  has not considered routing is noisy rather than silent. Silence is the
+  expensive failure.
+
+#### Closing an alert
+
+An alert is posted once and then **edited** when it is resolved: the cyan "!"
+becomes a green "✅" on the original message, signed with who closed it. The
+Worker posts every alert with `?wait=true` so Discord returns the message id,
+and stores it in `alerts.discord_message_id`. The edit is best-effort and never
+gates the acknowledgement: a row raised before this existed, or one Discord
+refused, has no id and is acknowledged in the dashboard exactly as before.
+
+Two things close an alert:
+
+- **The Acknowledge button** in the dashboard's Alerts tab.
+- **Resolving what it was about.** `alerts.ref` holds a `type:id` string
+  (today only `submission:123`), and approving or rejecting that submission
+  acknowledges every open alert carrying its ref. A **hold** does not: the
+  submission is still waiting on somebody. Only the first close counts, so the
+  channel and the dashboard name the same reviewer.
+
+#### What a submission alert says
+
+The post carries the kind, the subject, and either the payload's category /
+Nexus id / coordinates (a create) or the **names** of the fields being changed
+(an edit). It does **not** quote `submitter_note`, `submitter_contact`, or a
+removal's `reason`: those are unreviewed free text from an anonymous caller and
+the channel is not behind the collaborator gate. The alert says one exists; the
+reviewer reads it in the dashboard. Everything submitter-controlled that *is*
+quoted goes through `escapeDiscord()`, so a mod named `@everyone` renders as its
+own name.
+
+The embed title links to `/admin/?submission=<id>`, which the dashboard reads at
+boot: it opens the Queue tab with that submission selected, clearing the pending
+filter first so an already-resolved one still opens. A query parameter, not a
+hash: the hash belongs to the dashboard's overlay history.
+
+**Why `/internal/` and not `/admin/`.** Every `/admin/*` route is gated on GitHub
+collaborator status, and `index.js` states that as an invariant. The machine
+surface authenticates with a shared secret instead, so it sits on its own prefix
+and the invariant stays literally true. Reading and acknowledging alerts *are*
+on `/admin/alerts`, behind the session, because those are done by a person.
+
+The legacy **submissions** channel (`DISCORD_WEBHOOK_URL`) covered the mod
+submission lifecycle: a bot posted an embed when a submission PR opened, then
+edited that message in place to show merged or closed. Discord was acting as the
+queue's UI. The dashboard holds that state now, and all three producing workflows
+retired at the D1 cutover. It survives only as a fallback for the alerts webhook,
+and retires at Phase 6.
