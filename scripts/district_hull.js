@@ -44,7 +44,11 @@ const flag = (k, d) => { const i = args.indexOf(`--${k}`); return i > 0 ? Number
 const VOXEL    = flag('voxel', 4);      // cell size in metres
 const MIN_SIZE = flag('minsize', 2);    // skip placements whose largest dimension is under this
 const MAX_SIZE = flag('maxsize', 1000); // and whose largest dimension is over this
-const MIN_MASS = flag('minmass', 24);   // drop components smaller than this many voxels
+// Cell-counted thresholds scale with the cell, so changing resolution changes
+// the resolution and nothing else. The defaults are quoted at a 4 m cell:
+// 24 cells is 1,536 m3 of clutter, 3 cells is a 12 m column.
+const SCALE = 4 / VOXEL;
+const MIN_MASS = flag('minmass', Math.round(24 * SCALE ** 3)); // drop components smaller than this many cells
 const PROXY_L  = flag('proxylevel', 5); // drop area-proxy meshes at this streaming level and above
 
 // Area proxies are low-detail stand-ins for a whole subdistrict, and the real
@@ -66,7 +70,7 @@ const AREA_PROXY = new Set([
 // occluder box that alone marks 30,708 cells.
 const NEVER = new Set(['StaticOccluderMesh', 'StaticLight', 'Advertisement', 'WaterPatch', 'Foliage', 'Mirror']);
 
-const MIN_COL = flag('mincol', 3);   // drop columns with fewer than this many solid cells
+const MIN_COL = flag('mincol', Math.round(3 * SCALE)); // drop columns with fewer than this many solid cells
 const BELOW   = flag('below', 16);   // keep this many metres below the terrain surface, cut deeper than that
 
 if (!name) {
@@ -191,10 +195,14 @@ if (process.argv.includes('--why')) {
 // ── 2. Fill enclosed space ────────────────────────────────────────────────
 // Flood the empty cells inward from every face of the grid. Anything empty the
 // flood never reaches is sealed, so it is interior and becomes solid.
+// A stack sized to the grid would be 845 MB at a 2 m cell. It only ever holds
+// the frontier, not everything visited, because a cell is marked the moment it
+// is pushed, so it grows on demand instead.
 const OUTSIDE = 2;
-const stack = new Int32Array(N);
+let stack = new Int32Array(1 << 20);
 let sp = 0;
-const push = k => { if (solid[k] === 0) { solid[k] = OUTSIDE; stack[sp++] = k; } };
+const spush = k => { if (sp === stack.length) { const b = new Int32Array(stack.length * 2); b.set(stack); stack = b; } stack[sp++] = k; };
+const push = k => { if (solid[k] === 0) { solid[k] = OUTSIDE; spush(k); } };
 
 for (let z = 0; z < NZ; z++) for (let y = 0; y < NY; y++) { push(idx(0, y, z)); push(idx(NX - 1, y, z)); }
 for (let z = 0; z < NZ; z++) for (let x = 0; x < NX; x++) { push(idx(x, 0, z)); push(idx(x, NY - 1, z)); }
@@ -284,69 +292,69 @@ for (let y = 0; y < NY; y++) {
 console.log(`  ground    ${strippedGround.toLocaleString()} cells stripped from columns under ${MIN_COL} cells tall`);
 
 // ── 3. Label components, drop the small ones ──────────────────────────────
-const label = new Int32Array(N);
+// A per-cell label array would be another 845 MB at a 2 m cell, and the label
+// itself is never wanted: only whether the component it belongs to is big
+// enough. So components are walked one at a time, their cells collected, and
+// the verdict written straight back into `solid`. VISITED (3) survives, and
+// the pass ends by folding it back to 1.
+const VISITED = 3;
 let nComp = 0, kept = 0, keptCells = 0, droppedCells = 0;
-const compSize = [0];
+let comp = new Int32Array(1 << 16);
+const compSizes = [];
 
 for (let s = 0; s < N; s++) {
-  if (solid[s] !== 1 || label[s] !== 0) continue;
-  const id = ++nComp;
+  if (solid[s] !== 1) continue;
+  nComp++;
   let size = 0;
-  sp = 0; stack[sp++] = s; label[s] = id;
+  sp = 0; spush(s); solid[s] = VISITED;
   while (sp > 0) {
     const k = stack[--sp];
-    size++;
+    if (size === comp.length) { const b = new Int32Array(comp.length * 2); b.set(comp); comp = b; }
+    comp[size++] = k;
     const x = k % NX, y = ((k / NX) | 0) % NY, z = (k / (NX * NY)) | 0;
-    const nb = [];
-    if (x > 0)      nb.push(k - 1);
-    if (x < NX - 1) nb.push(k + 1);
-    if (y > 0)      nb.push(k - NX);
-    if (y < NY - 1) nb.push(k + NX);
-    if (z > 0)      nb.push(k - NX * NY);
-    if (z < NZ - 1) nb.push(k + NX * NY);
-    for (const n of nb) if (solid[n] === 1 && label[n] === 0) { label[n] = id; stack[sp++] = n; }
+    if (x > 0      && solid[k - 1] === 1)       { solid[k - 1] = VISITED;       spush(k - 1); }
+    if (x < NX - 1 && solid[k + 1] === 1)       { solid[k + 1] = VISITED;       spush(k + 1); }
+    if (y > 0      && solid[k - NX] === 1)      { solid[k - NX] = VISITED;      spush(k - NX); }
+    if (y < NY - 1 && solid[k + NX] === 1)      { solid[k + NX] = VISITED;      spush(k + NX); }
+    if (z > 0      && solid[k - NX * NY] === 1) { solid[k - NX * NY] = VISITED; spush(k - NX * NY); }
+    if (z < NZ - 1 && solid[k + NX * NY] === 1) { solid[k + NX * NY] = VISITED; spush(k + NX * NY); }
   }
-  compSize[id] = size;
-  if (size >= MIN_MASS) { kept++; keptCells += size; } else droppedCells += size;
+  if (size >= MIN_MASS) { kept++; keptCells += size; compSizes.push(size); }
+  else { droppedCells += size; for (let i = 0; i < size; i++) solid[comp[i]] = 0; }
 }
+for (let k = 0; k < N; k++) if (solid[k] === VISITED) solid[k] = 1;
+
 console.log(`  components ${nComp.toLocaleString()} found, ${kept.toLocaleString()} kept at >= ${MIN_MASS} cells`);
 console.log(`             ${keptCells.toLocaleString()} cells kept, ${droppedCells.toLocaleString()} dropped as clutter`);
 
-// Clear the cells belonging to dropped components.
-for (let k = 0; k < N; k++) if (label[k] && compSize[label[k]] < MIN_MASS) solid[k] = 0;
-
 // ── 4. Greedy-merge into axis-aligned boxes ───────────────────────────────
 // Grow each seed as far as it goes in x, then y, then z, claiming as it goes.
-const claimed = new Uint8Array(N);
+// Claiming is recorded in `solid` itself rather than a parallel byte array,
+// which is another 211 MB at a 2 m cell.
+const CLAIMED = 4;
 const out = [];
 for (let z = 0; z < NZ; z++) {
   for (let y = 0; y < NY; y++) {
     for (let x = 0; x < NX; x++) {
       const k = idx(x, y, z);
-      if (solid[k] !== 1 || claimed[k]) continue;
+      if (solid[k] !== 1) continue;
 
       let ex = x;
-      while (ex + 1 < NX && solid[idx(ex + 1, y, z)] === 1 && !claimed[idx(ex + 1, y, z)]) ex++;
+      while (ex + 1 < NX && solid[idx(ex + 1, y, z)] === 1) ex++;
 
       let ey = y;
       grow: while (ey + 1 < NY) {
-        for (let i = x; i <= ex; i++) {
-          const kk = idx(i, ey + 1, z);
-          if (solid[kk] !== 1 || claimed[kk]) break grow;
-        }
+        for (let i = x; i <= ex; i++) if (solid[idx(i, ey + 1, z)] !== 1) break grow;
         ey++;
       }
 
       let ez = z;
       growZ: while (ez + 1 < NZ) {
-        for (let j = y; j <= ey; j++) for (let i = x; i <= ex; i++) {
-          const kk = idx(i, j, ez + 1);
-          if (solid[kk] !== 1 || claimed[kk]) break growZ;
-        }
+        for (let j = y; j <= ey; j++) for (let i = x; i <= ex; i++) if (solid[idx(i, j, ez + 1)] !== 1) break growZ;
         ez++;
       }
 
-      for (let c = z; c <= ez; c++) for (let b = y; b <= ey; b++) for (let a = x; a <= ex; a++) claimed[idx(a, b, c)] = 1;
+      for (let c = z; c <= ez; c++) for (let b = y; b <= ey; b++) for (let a = x; a <= ex; a++) solid[idx(a, b, c)] = CLAIMED;
       out.push([x, y, z, ex, ey, ez]);
     }
   }
@@ -367,7 +375,7 @@ out.forEach(([x0, y0, z0, x1, y1, z1], i) => {
 });
 fs.writeFileSync(path.join(dataDir, `district-hull-${name}.bin`), Buffer.from(buf.buffer));
 
-const sizes = compSize.slice(1).filter(s => s >= MIN_MASS).sort((a, b) => b - a);
+const sizes = compSizes.sort((a, b) => b - a);
 fs.writeFileSync(path.join(dataDir, `district-hull-${name}.json`), JSON.stringify({
   district: name, bounds: meta.bounds,
   voxel: VOXEL, minSize: MIN_SIZE, maxSize: MAX_SIZE, minMass: MIN_MASS, proxyLevel: PROXY_L,
