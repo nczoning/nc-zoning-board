@@ -50,11 +50,9 @@ if (CLOUD === 'hull') {
 } else {
   // CDPR's shipped texture, decoded exactly as loadBuildings does but kept in
   // CET rather than remapped to THREE.
-  const META = {
-    city_center: { transMin: [-770.609192, -530.549133, -40.6581497], transMax: [1316.82483, 649.75531, 642.893127], offset: [-2116.637, 106.508], cubeSize: 168.289993, dds: 'city_center_data.dds' },
-  }[name];
-  if (!META) { console.error(`no CDPR texture mapping for ${name}`); process.exit(1); }
-  const set = args.includes('--vanilla') ? 'assets/dds' : 'assets/dds/fixed';
+  const META = require('./district_meta').DISTRICTS[name];
+  if (!META) { console.error(`unknown district ${name}`); process.exit(1); }
+  const set = (args.includes('--vanilla') || META.noFixed) ? 'assets/dds' : 'assets/dds/fixed';
   const buf = fs.readFileSync(path.join(__dirname, '..', set, META.dds));
   const hdr = new Uint32Array(buf.buffer, buf.byteOffset, 32);
   const texH = hdr[3], texW = hdr[4], blockW = texW / 3;

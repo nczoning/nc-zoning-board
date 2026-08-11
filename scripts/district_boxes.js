@@ -36,27 +36,7 @@ const readline = require('readline');
 
 const DEFAULT_DUMP = 'd:\\Modding\\CP2077 Mods\\MyMods\\map_data_export\\source\\raw';
 
-// CET footprints, read off DISTRICT_META in assets/js/three-scene.js.
-// World bbox is transMin/transMax plus the district offset in X and Y; Z is
-// unoffset. Kept here rather than imported because three-scene.js is a browser
-// module that pulls in Three.js.
-const DISTRICTS = {
-  city_center:   { transMin: [-770.609192, -530.549133, -40.6581497], transMax: [1316.82483,  649.75531,  642.893127], offset: [-2116.637,   106.508] },
-  watson:        { transMin: [-1254.46997, -1258.68469, -24.7028503], transMax: [1988.5448,   2032.52405, 475.268005], offset: [-1979.372,  1873.951] },
-  westbrook:     { transMin: [-1078.94739, -1148.69434, -18.4205875], transMax: [1155.12,     1562.87903, 507.894714], offset: [  -97.209,   590.849] },
-  heywood:       { transMin: [-1080.35107,  -418.153046, -38.4002304], transMax: [1136.94556, 1372.15979, 374.181305], offset: [-1576.732, -1002.811] },
-  santo_domingo: { transMin: [-1328.95288, -1880.02502, -37.5960007], transMax: [1555.26318, 1369.01294, 332.348328], offset: [  -15.944, -1610.080] },
-  pacifica:      { transMin: [-4008.396,   -4575.14941, -51.9539986], transMax: [8258.31641, 7254.10059, 264.306946], offset: [-2422.441, -2368.156] },
-  ep1_dogtown:   { transMin: [-2650.0,     -3126.6084,   -0.750015974], transMax: [-1025.51855, -1803.58118, 493.576111], offset: [0.0, 0.0] },
-  ep1_spaceport: { transMin: [-1168.5874,   -765.104614, -41.4592323], transMax: [1219.45483, 1018.70129, 296.498138], offset: [-4200.000,  200.000] },
-};
-
-function worldBounds(d) {
-  return {
-    min: [d.transMin[0] + d.offset[0], d.transMin[1] + d.offset[1], d.transMin[2]],
-    max: [d.transMax[0] + d.offset[0], d.transMax[1] + d.offset[1], d.transMax[2]],
-  };
-}
+const { DISTRICTS, worldBounds } = require('./district_meta');
 
 /** Rotate a vector by a quaternion (x, y, z, w). */
 function rotate(v, q) {
