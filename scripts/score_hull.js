@@ -108,10 +108,70 @@ function toBox(v, q) {
   return [v[0] + w * tx + (y * tz - z * ty), v[1] + w * ty + (z * tx - x * tz), v[2] + w * tz + (x * ty - y * tx)];
 }
 
+// ── the occupancy grid, when the hull run published one ──────────────────
+// Depth alone does not mean the cloud is wrong. Some of the game's glass is
+// genuinely interior: partitions, atrium walls, glass deep inside a mass that
+// no exterior face could ever carry. Some of it is recessed facade, light well
+// or courtyard glass that IS visible from outside and should land on a face.
+//
+// The grid separates them by asking a question about the real geometry rather
+// than about either cloud: march out from the window along each axis and find
+// the distance to open air.
+//
+//   air within REACH_AIR  -> the window sits on a real exterior surface, so a
+//                            cloud that buries it has a box too fat there.
+//                            THE CLOUD IS AT FAULT.
+//   no air within REACH   -> genuinely interior glass. No exterior face can
+//                            carry it, so no cloud can be blamed for it.
+//
+// CAVEAT when judging the rebuilt cloud with this: the grid and the boxes come
+// from the same voxelisation, so a window buried in the grid is buried in the
+// boxes almost by construction, and the "excusable" bucket flatters the
+// rebuild. Against CDPR's texture the test is independent and the number
+// stands on its own.
+let vox = null;
+try {
+  const hm = JSON.parse(fs.readFileSync(path.join(dataDir, `district-hull-${name}.json`), 'utf8'));
+  const bits = fs.readFileSync(path.join(dataDir, `district-grid-${name}.bin`));
+  vox = {
+    bits: new Uint8Array(bits.buffer, bits.byteOffset, bits.length),
+    nx: hm.grid.nx, ny: hm.grid.ny, nz: hm.grid.nz,
+    o: hm.gridOrigin, v: hm.voxel,
+  };
+  vox.get = (x, y, z) => {
+    if (x < 0 || y < 0 || z < 0 || x >= vox.nx || y >= vox.ny || z >= vox.nz) return 0;
+    const k = (z * vox.ny + y) * vox.nx + x;
+    return (vox.bits[k >> 3] >> (k & 7)) & 1;
+  };
+} catch (e) { /* no vox published: depth is reported without a visibility split */ }
+
+const REACH = 24;     // metres of marching before the search gives up
+const REACH_AIR = 4;  // air this close means the window is on a real exterior surface
+
+/** Metres from a world point to open air along the nearest axis, or Infinity. */
+function escapeDistance(cx, cy, cz) {
+  const gx = Math.floor((cx - vox.o[0]) / vox.v);
+  const gy = Math.floor((cy - vox.o[1]) / vox.v);
+  const gz = Math.floor((cz - vox.o[2]) / vox.v);
+  if (!vox.get(gx, gy, gz)) return 0;
+  const steps = Math.ceil(REACH / vox.v);
+  const dirs = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+  let best = Infinity;
+  for (const [dx, dy, dz] of dirs) {
+    for (let s = 1; s <= steps; s++) {
+      if (s * vox.v >= best) break;
+      if (!vox.get(gx + dx * s, gy + dy * s, gz + dz * s)) { best = s * vox.v; break; }
+    }
+  }
+  return best;
+}
+
 const MARGINS = [0.5, 1, 2, 4, 8];
 const landed = new Array(MARGINS.length).fill(0);
 const depths = [];
 let scored = 0, noBox = 0;
+let cloudFault = 0, trulyInterior = 0;
+const escapes = [];
 
 for (let i = 0; i < n; i++) {
   // THREE (x, y, z) was written from CET (x, z, -y), so invert it.
@@ -143,7 +203,15 @@ for (let i = 0; i < n; i++) {
   }
   if (!isFinite(best)) { noBox++; continue; }
   for (let m = 0; m < MARGINS.length; m++) if (best <= MARGINS[m]) landed[m]++;
-  if (bestDepth !== null) depths.push(bestDepth);
+  if (bestDepth !== null) {
+    depths.push(bestDepth);
+    // Only windows the surface test already failed are worth asking about.
+    if (vox && bestDepth > 2) {
+      const esc = escapeDistance(cx, cy, cz);
+      escapes.push(isFinite(esc) ? esc : REACH);
+      if (esc <= REACH_AIR) cloudFault++; else trulyInterior++;
+    }
+  }
 }
 
 depths.sort((a, b) => a - b);
@@ -154,3 +222,16 @@ console.log('\ndistance from the window to the nearest box surface:');
 MARGINS.forEach((m, i) => console.log(`  within ${String(m).padStart(4)} m   ${(100 * landed[i] / scored).toFixed(1).padStart(5)}%   ${landed[i].toLocaleString()}`));
 console.log(`\ninside a box: ${depths.length.toLocaleString()} (${(100 * depths.length / scored).toFixed(1)}%)`);
 console.log(`  depth p50 ${pct(0.5)} m   p90 ${pct(0.9)} m   p99 ${pct(0.99)} m`);
+
+if (vox) {
+  const deep = cloudFault + trulyInterior;
+  escapes.sort((a, b) => a - b);
+  const ep = p => escapes.length ? escapes[Math.floor(escapes.length * p)].toFixed(1) : 'n/a';
+  console.log(`\nof the ${deep.toLocaleString()} windows more than 2 m inside a box:`);
+  console.log(`  ${cloudFault.toLocaleString()} (${(100 * cloudFault / deep).toFixed(1)}%) have open air within ${REACH_AIR} m in the real geometry:`);
+  console.log(`      real exterior glass, swallowed by a box that is too fat. THE CLOUD IS AT FAULT.`);
+  console.log(`      = ${(100 * cloudFault / scored).toFixed(1)}% of every window in the district`);
+  console.log(`  ${trulyInterior.toLocaleString()} (${(100 * trulyInterior / deep).toFixed(1)}%) do not: genuinely interior glass, which no exterior face can carry.`);
+  console.log(`  distance to air: p50 ${ep(0.5)} m   p90 ${ep(0.9)} m   (capped at ${REACH} m)`);
+  if (CLOUD === 'hull') console.log(`  NOTE: grid and boxes share a voxelisation, so the interior bucket flatters this cloud.`);
+}

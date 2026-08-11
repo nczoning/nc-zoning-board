@@ -327,6 +327,19 @@ for (let k = 0; k < N; k++) if (solid[k] === VISITED) solid[k] = 1;
 console.log(`  components ${nComp.toLocaleString()} found, ${kept.toLocaleString()} kept at >= ${MIN_MASS} cells`);
 console.log(`             ${keptCells.toLocaleString()} cells kept, ${droppedCells.toLocaleString()} dropped as clutter`);
 
+// ── 3b. Publish the occupancy grid ────────────────────────────────────────
+// The solid volume is final here, and it answers a question the boxes cannot:
+// can you SEE a given point from outside? A window several metres inside a box
+// is not automatically an error. Recessed facades, light wells, atriums and
+// courtyards all put real, visible glass deep inside a building's bounding
+// mass, and only the grid knows whether air is reachable from there.
+// Bit-packed: 211 million cells is 26 MB this way and 211 MB as bytes.
+{
+  const bits = new Uint8Array((N + 7) >> 3);
+  for (let k = 0; k < N; k++) if (solid[k] === 1) bits[k >> 3] |= (1 << (k & 7));
+  fs.writeFileSync(path.join(dataDir, `district-grid-${name}.bin`), Buffer.from(bits.buffer));
+}
+
 // ── 4. Greedy-merge into axis-aligned boxes ───────────────────────────────
 // Grow each seed as far as it goes in x, then y, then z, claiming as it goes.
 // Claiming is recorded in `solid` itself rather than a parallel byte array,
@@ -378,7 +391,9 @@ fs.writeFileSync(path.join(dataDir, `district-hull-${name}.bin`), Buffer.from(bu
 const sizes = compSizes.sort((a, b) => b - a);
 fs.writeFileSync(path.join(dataDir, `district-hull-${name}.json`), JSON.stringify({
   district: name, bounds: meta.bounds,
-  voxel: VOXEL, minSize: MIN_SIZE, maxSize: MAX_SIZE, minMass: MIN_MASS, proxyLevel: PROXY_L,
+  voxel: VOXEL, minSize: MIN_SIZE, maxSize: MAX_SIZE, minMass: MIN_MASS, minCol: MIN_COL,
+  below: BELOW, proxyLevel: PROXY_L,
+  gridOrigin: [minX, minY, minZ],
   grid: { nx: NX, ny: NY, nz: NZ, cells: N },
   inputBoxes: nBox, skippedSmall, skippedHuge, skippedProxy,
   occupiedCells: voxelised, filledCells: filled,
