@@ -351,14 +351,37 @@ const realCells = voxelised;
 // larger shell is tested the space it claims is already solid, so it is
 // rejected. Largest first inverts that and lets the emptiest grid accept the
 // coarsest geometry.
-let proxyUsed = 0, proxyCovered = 0;
+//
+// An ACCEPTED proxy marks its TRIANGLES, not its box. A proxy's box includes
+// the air between the towers it stands in for: cct_cpz_building_a_v1_horizontal
+// stamped 1,644,921 cells (6% of the district) as one solid slab when marked as
+// a box. Its shell voxelises hollow, and the interior fill afterwards closes
+// the massing the shell actually traces. The box remains the probe (the
+// redundancy question is about the space the proxy claims) and the fallback
+// (8 meshes in the game have no render blob to export).
+let proxyUsed = 0, proxyCovered = 0, proxyMeshed = 0;
+const proxyTrisCache = new Map();
+function proxyTris(aid) {
+  if (proxyTrisCache.has(aid)) return proxyTrisCache.get(aid);
+  let tris = null;
+  const p = assetPath[aid] || '';
+  if (useMeshes && p) {
+    const file = glbPathFor(RAW_ROOT, p);
+    if (fs.existsSync(file)) {
+      try { tris = meshTriangles(file); if (!tris.length) tris = null; } catch { tris = null; }
+    }
+  }
+  proxyTrisCache.set(aid, tris);
+  return tris;
+}
 proxies.sort((a, b) =>
   box[a * S + 3] * box[a * S + 4] * box[a * S + 5] - box[b * S + 3] * box[b * S + 4] * box[b * S + 5]);
 for (const i of proxies) {
   const { seen, occupied } = visit(i, 'probe');
   if (seen === 0) continue;
   if (occupied / seen >= PROXY_COVER) { proxyCovered++; continue; }
-  visit(i, 'mark');
+  const tris = proxyTris(box[i * S + 10]);
+  if (tris) { visitMesh(i, tris); proxyMeshed++; } else visit(i, 'mark');
   proxyUsed++;
 }
 
@@ -366,7 +389,7 @@ console.log(`  voxelised ${voxelised.toLocaleString()} cells occupied (${(100 * 
 console.log(`  real      ${realCells.toLocaleString()} cells from real geometry`);
 console.log(`  meshes    ${meshHits.toLocaleString()} assets rasterised from ${Math.round(meshTris).toLocaleString()} triangles ` +
             `over ${meshPlacements.toLocaleString()} placements; ${meshMisses.toLocaleString()} assets fell back to their box`);
-console.log(`  proxies   ${proxyUsed.toLocaleString()} used where nothing real stood, ${proxyCovered.toLocaleString()} rejected as already covered (>= ${(PROXY_COVER * 100).toFixed(0)}%)`);
+console.log(`  proxies   ${proxyUsed.toLocaleString()} used where nothing real stood (${proxyMeshed.toLocaleString()} as triangle shells), ${proxyCovered.toLocaleString()} rejected as already covered (>= ${(PROXY_COVER * 100).toFixed(0)}%)`);
 console.log(`  skipped   ${skippedSmall.toLocaleString()} under ${MIN_SIZE} m, ${skippedHuge.toLocaleString()} over ${MAX_SIZE} m, ` +
             `${skippedNever.toLocaleString()} never-geometry, ${skippedProxy.toLocaleString()} area proxies at L${PROXY_L}+, ${tests.toLocaleString()} cell tests`);
 if (hugeSamples.length) hugeSamples.forEach(s => console.log(`            dropped as too large: ${s}`));
