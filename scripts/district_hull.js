@@ -50,6 +50,7 @@ const MAX_SIZE = flag('maxsize', 1000); // and whose largest dimension is over t
 const SCALE = 4 / VOXEL;
 const MIN_MASS = flag('minmass', Math.round(24 * SCALE ** 3)); // drop components smaller than this many cells
 const PROXY_L  = flag('proxylevel', 5); // drop area-proxy meshes at this streaming level and above
+const PROXY_COVER = flag('proxycover', 0.25); // a proxy is redundant once this much of it is already solid
 
 // Area proxies are low-detail stand-ins for a whole subdistrict, and the real
 // geometry they stand in for is in the dump as well, so keeping both double
@@ -67,8 +68,31 @@ const AREA_PROXY = new Set([
 
 // Never geometry, at any level. An occluder is an invisible helper volume the
 // engine uses to cull what is behind it, and city_center places one editor
-// occluder box that alone marks 30,708 cells.
-const NEVER = new Set(['StaticOccluderMesh', 'StaticLight', 'Advertisement', 'WaterPatch', 'Foliage', 'Mirror']);
+// occluder box that alone marks 30,708 cells. Terrain is not a building and
+// the hull is clipped against the terrain surface anyway.
+const NEVER = new Set([
+  'StaticOccluderMesh', 'StaticLight', 'Advertisement', 'WaterPatch', 'Foliage', 'Mirror',
+  'TerrainProxyMesh',
+]);
+
+/**
+ * A PROXY is the game's low-detail stand-in for geometry that is not streamed
+ * at distance: one coarse box where the real building is a hundred kit panels.
+ *
+ * Voxelising both yields a pile of rectangles. Measured on city_center with
+ * both included, 69.2% of the cloud comes from sectors\_external\proxy and
+ * only 7.9% from real architecture: a proxy marks thousands of cells as one
+ * solid mass, while the detailed meshes describing the same building mark a
+ * few hundred each and are swallowed by it. Four sector-scale proxies alone
+ * (exterior.mesh, ccd_06_architecture.mesh) account for 9.9% of the district
+ * and render as a slab the size of its bbox.
+ *
+ * They cannot simply be dropped: thousands of tall glazed towers exist in the
+ * dump ONLY as their proxy. So real geometry wins, and a proxy is voxelised
+ * only where nothing real already occupies its footprint.
+ */
+const isProxy = p => p.includes('\\_external\\proxy\\');
+const isTerrain = p => p.includes('\\_global\\terrain\\');
 
 const MIN_COL = flag('mincol', Math.round(3 * SCALE)); // drop columns with fewer than this many solid cells
 const BELOW   = flag('below', 16);   // keep this many metres below the terrain surface, cut deeper than that
@@ -110,27 +134,50 @@ const hugeSamples = [];
 // definition (boxes overlap), and enough to name what is filling the grid.
 const cellsByAsset = Object.create(null);
 
-for (let i = 0; i < nBox; i++) {
-  const o = i * S;
-  const aid = box[o + 10];
-  const cx = box[o], cy = box[o + 1], cz = box[o + 2];
-  const hx = box[o + 3], hy = box[o + 4], hz = box[o + 5];
-  const qx = box[o + 6], qy = box[o + 7], qz = box[o + 8], qw = box[o + 9];
+const assetPath = meta.assetPaths || {};
 
+/** Which pass a placement belongs to, or null when it is never geometry. */
+function classify(i) {
+  const o = i * S;
+  const hx = box[o + 3], hy = box[o + 4], hz = box[o + 5];
   const largest = Math.max(hx, hy, hz) * 2;
-  if (largest < MIN_SIZE) { skippedSmall++; continue; }
+  if (largest < MIN_SIZE) { skippedSmall++; return null; }
   const nodeType = TYPE[box[o + 11]];
-  if (NEVER.has(nodeType)) { skippedNever++; continue; }
-  if (S >= 13 && AREA_PROXY.has(nodeType) && box[o + 12] >= PROXY_L) { skippedProxy++; continue; }
+  if (NEVER.has(nodeType)) { skippedNever++; return null; }
+  const p = assetPath[box[o + 10]] || '';
+  if (isTerrain(p)) { skippedNever++; return null; }
+  // At L5 and above a proxy stands in for a whole subdistrict whatever the
+  // node type says. exterior.mesh is typed BuildingProxyMesh and sits at L6,
+  // and it is a shell the size of the district, so the "a building proxy IS a
+  // building" exemption only holds below that level.
+  if (S >= 13 && box[o + 12] >= PROXY_L && (AREA_PROXY.has(nodeType) || isProxy(p))) { skippedProxy++; return null; }
   // A placement bigger than any building is not a building. ncz_assets.csv
   // carries sentinel bounds (100 km meshes) alongside genuinely world-scale
   // geometry like ocean patches, and one of them fills the whole grid. This is
   // the size classifier doing its job, so it reports what it drops.
   if (largest > MAX_SIZE) {
     skippedHuge++;
-    if (hugeSamples.length < 8) hugeSamples.push(`${(hx * 2).toFixed(0)} x ${(hy * 2).toFixed(0)} x ${(hz * 2).toFixed(0)} m at ${cx.toFixed(0)},${cy.toFixed(0)},${cz.toFixed(0)}`);
-    continue;
+    if (hugeSamples.length < 8) {
+      hugeSamples.push(`${(hx * 2).toFixed(0)} x ${(hy * 2).toFixed(0)} x ${(hz * 2).toFixed(0)} m ` +
+                       `at ${box[o].toFixed(0)},${box[o + 1].toFixed(0)},${box[o + 2].toFixed(0)}`);
+    }
+    return null;
   }
+  return isProxy(p) ? 'proxy' : 'real';
+}
+
+/**
+ * Visit every grid cell the oriented box i covers.
+ * `mode` 'mark' writes them solid; 'probe' only counts how many are already
+ * solid, which is how a proxy asks whether real geometry got there first.
+ */
+function visit(i, mode) {
+  const o = i * S;
+  const aid = box[o + 10];
+  const cx = box[o], cy = box[o + 1], cz = box[o + 2];
+  const hx = box[o + 3], hy = box[o + 4], hz = box[o + 5];
+  const qx = box[o + 6], qy = box[o + 7], qz = box[o + 8], qw = box[o + 9];
+  let seen = 0, occupied = 0;
 
   // World AABB of the oriented box: the rotated half-extent projection.
   const m00 = 1 - 2 * (qy * qy + qz * qz), m01 = 2 * (qx * qy - qz * qw), m02 = 2 * (qx * qz + qy * qw);
@@ -143,7 +190,7 @@ for (let i = 0; i < nBox; i++) {
   let x0 = Math.floor((cx - ex - minX) / VOXEL), x1 = Math.floor((cx + ex - minX) / VOXEL);
   let y0 = Math.floor((cy - ey - minY) / VOXEL), y1 = Math.floor((cy + ey - minY) / VOXEL);
   let z0 = Math.floor((cz - ez - minZ) / VOXEL), z1 = Math.floor((cz + ez - minZ) / VOXEL);
-  if (x1 < 0 || y1 < 0 || z1 < 0 || x0 >= NX || y0 >= NY || z0 >= NZ) continue;
+  if (x1 < 0 || y1 < 0 || z1 < 0 || x0 >= NX || y0 >= NY || z0 >= NZ) return { seen: 0, occupied: 0 };
   x0 = Math.max(0, x0); y0 = Math.max(0, y0); z0 = Math.max(0, z0);
   x1 = Math.min(NX - 1, x1); y1 = Math.min(NY - 1, y1); z1 = Math.min(NZ - 1, z1);
 
@@ -173,23 +220,70 @@ for (let i = 0; i < nBox; i++) {
           if (Math.abs(bx) > hx + sx || Math.abs(by) > hy + sy || Math.abs(bz) > hz + sz) continue;
         }
         const k = idx(x, y, z);
-        if (!solid[k]) { solid[k] = 1; voxelised++; cellsByAsset[aid] = (cellsByAsset[aid] || 0) + 1; }
+        seen++;
+        if (solid[k]) { occupied++; continue; }
+        if (mode === 'mark') { solid[k] = 1; voxelised++; cellsByAsset[aid] = (cellsByAsset[aid] || 0) + 1; }
       }
     }
   }
+  return { seen, occupied };
 }
+
+// Pass 1: real geometry only.
+const proxies = [];
+for (let i = 0; i < nBox; i++) {
+  const kind = classify(i);
+  if (kind === null) continue;
+  if (kind === 'proxy') { proxies.push(i); continue; }
+  visit(i, 'mark');
+}
+const realCells = voxelised;
+
+// Pass 2: a proxy fills in only where real geometry did not reach. Sorted
+// SMALLEST first: a building-scale proxy fills its own gap, and by the time a
+// larger shell is tested the space it claims is already solid, so it is
+// rejected. Largest first inverts that and lets the emptiest grid accept the
+// coarsest geometry.
+let proxyUsed = 0, proxyCovered = 0;
+proxies.sort((a, b) =>
+  box[a * S + 3] * box[a * S + 4] * box[a * S + 5] - box[b * S + 3] * box[b * S + 4] * box[b * S + 5]);
+for (const i of proxies) {
+  const { seen, occupied } = visit(i, 'probe');
+  if (seen === 0) continue;
+  if (occupied / seen >= PROXY_COVER) { proxyCovered++; continue; }
+  visit(i, 'mark');
+  proxyUsed++;
+}
+
 console.log(`  voxelised ${voxelised.toLocaleString()} cells occupied (${(100 * voxelised / N).toFixed(1)}% of the grid)`);
+console.log(`  real      ${realCells.toLocaleString()} cells from real geometry`);
+console.log(`  proxies   ${proxyUsed.toLocaleString()} used where nothing real stood, ${proxyCovered.toLocaleString()} rejected as already covered (>= ${(PROXY_COVER * 100).toFixed(0)}%)`);
 console.log(`  skipped   ${skippedSmall.toLocaleString()} under ${MIN_SIZE} m, ${skippedHuge.toLocaleString()} over ${MAX_SIZE} m, ` +
-            `${skippedProxy.toLocaleString()} area proxies at L${PROXY_L}+, ${tests.toLocaleString()} cell tests`);
+            `${skippedNever.toLocaleString()} never-geometry, ${skippedProxy.toLocaleString()} area proxies at L${PROXY_L}+, ${tests.toLocaleString()} cell tests`);
 if (hugeSamples.length) hugeSamples.forEach(s => console.log(`            dropped as too large: ${s}`));
 
 const paths = meta.assetPaths || {};
-const topCells = Object.entries(cellsByAsset).sort((a, b) => b[1] - a[1]).slice(0, 20)
+const ranked = Object.entries(cellsByAsset).sort((a, b) => b[1] - a[1])
   .map(([id, c]) => ({ id: +id, cells: c, path: paths[id] || '?' }));
-if (process.argv.includes('--why')) {
+const topCells = ranked.slice(0, 20);
+if (args.includes('--why')) {
   console.log('\n  cells marked, by asset:');
   topCells.forEach(t => console.log(`    ${String(t.cells).padStart(9)}  ${t.path.slice(0, 92)}`));
   console.log();
+}
+// The full ledger: every asset that marked a cell, ranked. This is the list to
+// read when the cloud looks wrong, because "what is in this cloud" is
+// otherwise unanswerable once the boxes are merged.
+{
+  const rows = ['cells,type,level,path'];
+  const typeOf = new Map(), lvlOf = new Map();
+  for (let i = 0; i < nBox; i++) {
+    const o = i * S, aid = box[o + 10];
+    if (!typeOf.has(aid)) { typeOf.set(aid, TYPE[box[o + 11]] || '?'); lvlOf.set(aid, box[o + 12]); }
+  }
+  for (const r of ranked) rows.push(`${r.cells},${typeOf.get(r.id) || '?'},L${lvlOf.get(r.id)},"${r.path}"`);
+  fs.writeFileSync(path.join(dataDir, `hull-assets-${name}.csv`), rows.join('\n'));
+  console.log(`  ledger    ${ranked.length.toLocaleString()} assets -> data/hull-assets-${name}.csv`);
 }
 
 // ── 2. Fill enclosed space ────────────────────────────────────────────────
