@@ -237,7 +237,10 @@ function loadExposure() {
     Buffer.from(boxArr.buffer, 0, boxArr.byteLength),
   ];
   const bin = Buffer.concat(parts);
-  const base = `spike-${sector}-${prefab}`;
+  // A separate name, so the two can be loaded side by side: whether a hole in
+  // the render closes when the never-visible placements come back is the test
+  // of whether the visibility verdict is cutting too much.
+  const base = `spike-${sector}-${prefab}${KEEP_HIDDEN ? '-all' : ''}`;
   const outDir = path.join(__dirname, '..', 'data');
   fs.writeFileSync(path.join(outDir, `${base}.bin`), bin);
 

@@ -44,8 +44,12 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+// The hash is read as well as the query because `serve` rewrites clean URLs
+// and drops the query string, which silently loads the default build instead
+// of the one asked for.
 const params = new URLSearchParams(location.search);
-const NAME = params.get('b') || 'spike--8_0_0_L2-298522';
+const hashParams = new URLSearchParams(location.hash.replace(/^#/, ''));
+const NAME = params.get('b') || hashParams.get('b') || 'spike--8_0_0_L2-298522';
 const hud = document.getElementById('hud');
 const errBox = document.getElementById('err');
 
@@ -98,7 +102,12 @@ const centre = cetPos(
 
 // ── 1. Kit: one InstancedMesh per unique mesh ─────────────────────────────
 const kitGroup = new THREE.Group();
-const fillMat = new THREE.MeshBasicNodeMaterial({ color: 0x2a4a6b });
+// DoubleSide is not a preference. A kit panel is a single-sided quad whose
+// winding faces the room it was authored for, so front-face culling opens a
+// hole in the building from whichever side the artist did not expect. The
+// game hides this by never letting the camera outside the shell; a map camera
+// is outside by definition.
+const fillMat = new THREE.MeshBasicNodeMaterial({ color: 0x2a4a6b, side: THREE.DoubleSide });
 const lineMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.55 });
 
 const byMesh = new Map();
