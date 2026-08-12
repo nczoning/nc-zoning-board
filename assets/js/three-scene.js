@@ -1166,6 +1166,20 @@ const ThreeScene = (() => {
         .catch((e) => console.error('[NCZ] zone-tool failed to load', e));
     }
 
+    // ?exposure: what the map's camera can actually reach, per placement
+    // (scripts/exposure.js). Lazy-loaded like ?zonetool. It honours ?only so a
+    // single district can be checked without loading watson's 49 MB alongside.
+    if (new URLSearchParams(location.search).has('exposure')) {
+      const _expOnly = new URLSearchParams(location.search).get('only');
+      const _expSet = _expOnly ? new Set(_expOnly.split(',')) : null;
+      import('./exposure-debug.js')
+        .then((m) => m.initExposureDebug({
+          scene, camera, renderer, controls, requestRender,
+          districts: DISTRICT_META.filter((d) => !_expSet || _expSet.has(d.name)),
+        }))
+        .catch((e) => console.error('[NCZ] exposure-debug failed to load', e));
+    }
+
     // ?colldebug: the GAME's own building decomposition, drawn over the scene.
     // See loadColliderDebug().
     if (new URLSearchParams(location.search).has('colldebug')) loadColliderDebug();
