@@ -78,7 +78,11 @@ const PROXY_MAX = flag('proxymax', 450);
 // placement's own transform. Census on city_center: 20,427 placements over
 // 2,589 (asset, scale) jobs, 10.2% of district volume, yaw peak at 30-35deg.
 const ROT_YAW = flag('rotyaw', 2) * Math.PI / 180;
-const ROT_MIN = flag('rotmin', 12);
+// 6 m matches MESH_MIN: every placement with triangles loaded can go oriented.
+// Measured against 12 m on city_center: rotated placements 18,686 -> 79,664,
+// within 0.5 m 67.7% -> 69.7%, depth p50 0.31 -> 0.28 m, boxes +21%. The
+// maintainer's order is accuracy first, budget later.
+const ROT_MIN = flag('rotmin', 6);
 const useRot = !args.includes('--norot');
 
 // TRIANGLES WHERE THERE ARE TRIANGLES. A bounding box has no shape: one Corpo
