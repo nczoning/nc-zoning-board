@@ -41,12 +41,18 @@ const { categorize } = require('./asset_category');
 
 const RAW = 'D:\\Modding\\CP2077 Mods\\MyMods\\map_data_export\\source\\raw\\';
 const RAW_ROOT = 'd:/Modding/CP2077 Mods/MyMods/map_data_export/source/raw';
+// The all-LOD re-export (scripts/wkit/uncook_lods.wscript) lives beside the
+// original rather than replacing it: the current pipeline reads the LOD0 root,
+// and overwriting it would move two variables at once.
+const LOD_ROOT = 'd:/Modding/CP2077 Mods/MyMods/map_data_export/source/raw_alllod';
 
 const args = process.argv.slice(2);
 const district = args[0];
 const sector = args[1];
 const prefab = args[2];
 const KEEP_HIDDEN = args.includes('--keep-hidden');
+const li = args.indexOf('--lod');
+const LOD = li > 0 ? Number(args[li + 1]) : 0;   // 0 = whatever the GLB holds
 
 if (!district || !sector || !prefab) {
   console.error('usage: node scripts/spike_assembly.js <district> <sector> <prefabId> [--keep-hidden]');
@@ -148,12 +154,18 @@ function loadExposure() {
   // ── Load the unique meshes once ─────────────────────────────────────────
   const meshes = new Map();   // depot -> { index, tris }
   let missing = 0;
+  let fromLodRoot = 0;
   for (const pl of placements) {
     if (meshes.has(pl.depot)) continue;
-    const file = glbPathFor(RAW_ROOT, pl.depot);
+    // The all-LOD root first when a level was asked for, the original as the
+    // fallback: only the meshes re-exported so far live in the new root, and a
+    // missing one should degrade to full detail rather than disappear.
+    let file = LOD ? glbPathFor(LOD_ROOT, pl.depot) : null;
+    if (file && fs.existsSync(file)) fromLodRoot++;
+    else file = glbPathFor(RAW_ROOT, pl.depot);
     let tris = null;
     if (fs.existsSync(file)) {
-      try { tris = meshTriangles(file); if (!tris.length) tris = null; } catch { tris = null; }
+      try { tris = meshTriangles(file, LOD); if (!tris.length) tris = null; } catch { tris = null; }
     }
     if (!tris) { missing++; meshes.set(pl.depot, null); continue; }
     meshes.set(pl.depot, { index: -1, tris });
@@ -166,7 +178,8 @@ function loadExposure() {
     meshList.push({ depot, tris: m.tris });
   }
   const uniqueTris = meshList.reduce((n, m) => n + m.tris.length / 9, 0);
-  console.log(`meshes     ${meshList.length} unique (${missing} without a GLB), ${uniqueTris.toLocaleString()} triangles`);
+  console.log(`meshes     ${meshList.length} unique (${missing} without a GLB), ${uniqueTris.toLocaleString()} triangles` +
+              `${LOD ? `  [lod ${LOD}, ${fromLodRoot} from the all-LOD export]` : ''}`);
 
   // ── Pack ────────────────────────────────────────────────────────────────
   // Kit: every unique mesh's triangles back to back, then one transform per
@@ -240,7 +253,7 @@ function loadExposure() {
   // A separate name, so the two can be loaded side by side: whether a hole in
   // the render closes when the never-visible placements come back is the test
   // of whether the visibility verdict is cutting too much.
-  const base = `spike-${sector}-${prefab}${KEEP_HIDDEN ? '-all' : ''}`;
+  const base = `spike-${sector}-${prefab}${KEEP_HIDDEN ? '-all' : ''}${LOD ? `-lod${LOD}` : ''}`;
   const outDir = path.join(__dirname, '..', 'data');
   fs.writeFileSync(path.join(outDir, `${base}.bin`), bin);
 

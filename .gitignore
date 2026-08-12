@@ -137,3 +137,7 @@ data/exposure-*.bin
 data/exposure-*.json
 data/exposure-boxes-*.bin
 data/exposure-boxes-*.json
+
+# Generated LOD export list: rebuild with
+#   node scripts/wkit/export_lods.js <spike json | mesh list json>
+scripts/wkit/ncz_lod_meshes.wscript

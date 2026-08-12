@@ -42,15 +42,43 @@ function accessorOffset({ json, bin }, i) {
 /**
  * Every triangle of every submesh, as CET-local vertices.
  *
+ * `lod` selects a level when the GLB carries more than one. WolvenKit names
+ * submeshes `submesh_NN_LOD_M`, where M is the game's LOD MASK: 1 is the
+ * highest detail, then 2, 4, 8. An export made without `lodFilter: false`
+ * holds mask 1 alone, so this is a no-op on those files.
+ *
+ * A mesh with no chunk at the requested level falls back to the closest one
+ * BELOW it (more detail), never above: dropping to a coarser level than asked
+ * is a visible hole, while carrying extra detail is only cost.
+ *
+ * @param file  path to the GLB
+ * @param lod   LOD mask to prefer (1, 2, 4, 8), or 0 for every submesh
  * @returns {Float32Array} 9 floats per triangle: ax ay az bx by bz cx cy cz.
  *          Empty when the file holds no indexed triangles.
  */
-function meshTriangles(file) {
+function meshTriangles(file, lod = 0) {
   const glb = readGlb(file);
   const { json } = glb;
   const out = [];
 
+  let want = null;
+  if (lod) {
+    const levels = new Set();
+    for (const m of json.meshes || []) {
+      const mm = /_LOD_(\d+)$/.exec(m.name || '');
+      if (mm) levels.add(+mm[1]);
+    }
+    if (levels.size) {
+      const at = [...levels].sort((a, b) => a - b);
+      want = at.filter(l => l <= lod).pop() ?? at[0];
+    }
+  }
+
   for (const m of json.meshes || []) {
+    if (want !== null) {
+      const mm = /_LOD_(\d+)$/.exec(m.name || '');
+      if (mm && +mm[1] !== want) continue;
+    }
     for (const p of m.primitives || []) {
       if (p.mode !== undefined && p.mode !== 4) continue;   // triangles only
       if (p.indices === undefined || p.attributes.POSITION === undefined) continue;
