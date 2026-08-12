@@ -161,6 +161,13 @@ const isSubdistrictShell = p => /_subdistrict[^\\]*\.mesh$/i.test(p);
 // road/subdistrict cuts (maintainer verdict at the render, Corpo Plaza deck,
 // prx1 plates at z 40..44 with pool.mesh 193x244x9 beside them).
 const isDeckProxy = p => /\\(prx\d*|pool)\.mesh$/i.test(p) || (/_sidewalk/i.test(p) && isProxy(p));
+// Signage is not a building either, and it does not always say Advertisement:
+// signage_city_center_glassframe_c.mesh is a 217x39x258 m sign frame typed
+// GenericProxyMesh, whose members rasterise as free-standing 2 m walls 234 m
+// tall (the maintainer zone-marked two of them). 205 signage_* meshes exist
+// across every district, placed up to 118 times each; the map renders signage
+// through its own system, so the whole family leaves the cloud by name.
+const isSignage = p => /\\signage_[^\\]*\.mesh$/i.test(p);
 
 const MIN_COL = flag('mincol', Math.round(3 * SCALE)); // drop columns with fewer than this many solid cells
 const BELOW   = flag('below', 16);   // keep this many metres below the terrain surface, cut deeper than that
@@ -216,6 +223,7 @@ function classify(i) {
   if (isTerrain(p)) { skippedNever++; return null; }
   if (isSubdistrictShell(p)) { skippedNever++; return null; }
   if (isDeckProxy(p)) { skippedNever++; return null; }
+  if (isSignage(p)) { skippedNever++; return null; }
   // At L5 and above a proxy stands in for a whole subdistrict whatever the
   // node type says. exterior.mesh is typed BuildingProxyMesh and sits at L6,
   // and it is a shell the size of the district, so the "a building proxy IS a
