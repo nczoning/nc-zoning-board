@@ -154,6 +154,13 @@ const isTerrain = p => p.includes('\\_global\\terrain\\');
 // 269 of them exist and 216 sit under PROXY_MAX, down to 102 m, so the size
 // gate cannot catch them; the name can.
 const isSubdistrictShell = p => /_subdistrict[^\\]*\.mesh$/i.test(p);
+// Ground-furniture proxies: elevated road decks, plaza pools and sidewalk
+// aprons ship as anonymous prxN.mesh / pool.mesh / *_sidewalk* proxies. They
+// are surfaces, not buildings, the roads overlay already draws that level,
+// and their filled plates were the remaining city_center slabs after the
+// road/subdistrict cuts (maintainer verdict at the render, Corpo Plaza deck,
+// prx1 plates at z 40..44 with pool.mesh 193x244x9 beside them).
+const isDeckProxy = p => /\\(prx\d*|pool)\.mesh$/i.test(p) || (/_sidewalk/i.test(p) && isProxy(p));
 
 const MIN_COL = flag('mincol', Math.round(3 * SCALE)); // drop columns with fewer than this many solid cells
 const BELOW   = flag('below', 16);   // keep this many metres below the terrain surface, cut deeper than that
@@ -208,6 +215,7 @@ function classify(i) {
   const p = assetPath[box[o + 10]] || '';
   if (isTerrain(p)) { skippedNever++; return null; }
   if (isSubdistrictShell(p)) { skippedNever++; return null; }
+  if (isDeckProxy(p)) { skippedNever++; return null; }
   // At L5 and above a proxy stands in for a whole subdistrict whatever the
   // node type says. exterior.mesh is typed BuildingProxyMesh and sits at L6,
   // and it is a shell the size of the district, so the "a building proxy IS a

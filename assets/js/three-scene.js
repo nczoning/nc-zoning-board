@@ -3440,13 +3440,14 @@ const ThreeScene = (() => {
       // carve the street grid out of the footprint → separation by city block).
       const _roadGrid = NCZ.BUILDING_ROAD_CARVE ? await ensureRoadGrid() : null;
 
-      // Debug aid: ?only=<district> renders only that DISTRICT_META entry by
-      // name (e.g. ?only=my_district, ?only=ugly_building); isolates a single
-      // building cloud for diagnosing placement/content. Sibling of ?debug /
-      // ?gamelight / ?webgpuprobe.
+      // Debug aid: ?only=<district>[,<district>...] renders only those
+      // DISTRICT_META entries by name (e.g. ?only=my_district or
+      // ?only=city_center,watson); isolates building clouds for diagnosing
+      // placement/content. Sibling of ?debug / ?gamelight / ?webgpuprobe.
       const _only = new URLSearchParams(location.search).get('only');
+      const _onlySet = _only ? new Set(_only.split(',')) : null;
       for (const meta of DISTRICT_META) {
-        if (_only && meta.name !== _only) continue;
+        if (_onlySet && !_onlySet.has(meta.name)) continue;
         // Fixed-only entries (e.g. the my_district corrections overlay) exist
         // only in the Fixed asset set; skip them entirely in CDPR mode.
         if (meta.fixedOnly && assetSet !== 'fixed') continue;
