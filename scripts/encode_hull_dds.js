@@ -78,15 +78,28 @@ for (const name of process.argv.slice(2)) {
     const q = [f[o + 6], f[o + 7], f[o + 8], f[o + 9]];
     const parts = [0, 1, 2].map(a => Math.max(1, Math.ceil(h[a] / cube)));
     if (parts[0] * parts[1] * parts[2] > 1) split++;
+    // Sub-box centres offset along the box's OWN axes: h is a LOCAL half
+    // extent, so for an oriented box the offset vector must be rotated by q
+    // before it is added. Splitting along world axes scatters a rotated box's
+    // pieces sideways (unobservable while every hull quat was identity).
+    const [qx, qy, qz, qw] = q;
+    const m00 = 1 - 2 * (qy * qy + qz * qz), m01 = 2 * (qx * qy - qz * qw), m02 = 2 * (qx * qz + qy * qw);
+    const m10 = 2 * (qx * qy + qz * qw), m11 = 1 - 2 * (qx * qx + qz * qz), m12 = 2 * (qy * qz - qx * qw);
+    const m20 = 2 * (qx * qz - qy * qw), m21 = 2 * (qy * qz + qx * qw), m22 = 1 - 2 * (qx * qx + qy * qy);
     for (let a = 0; a < parts[0]; a++) {
       for (let b = 0; b < parts[1]; b++) {
         for (let d = 0; d < parts[2]; d++) {
           const nh = [h[0] / parts[0], h[1] / parts[1], h[2] / parts[2]];
+          const off = [
+            -h[0] + nh[0] * (2 * a + 1),
+            -h[1] + nh[1] * (2 * b + 1),
+            -h[2] + nh[2] * (2 * d + 1),
+          ];
           slots.push({
             c: [
-              c[0] - h[0] + nh[0] * (2 * a + 1),
-              c[1] - h[1] + nh[1] * (2 * b + 1),
-              c[2] - h[2] + nh[2] * (2 * d + 1),
+              c[0] + m00 * off[0] + m01 * off[1] + m02 * off[2],
+              c[1] + m10 * off[0] + m11 * off[1] + m12 * off[2],
+              c[2] + m20 * off[0] + m21 * off[1] + m22 * off[2],
             ], h: nh, q,
           });
         }

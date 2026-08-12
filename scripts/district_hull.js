@@ -834,6 +834,27 @@ if (useRot && rotJobs.size) {
       for (let k = 0; k < ln; k++) { if (lg[k] === 2) lg[k] = 0; else if (lg[k] === 0) lg[k] = 1; }
     }
 
+    // Close vertical blinds. A glass tower's opaque mesh is floor plates with
+    // the curtain wall in SEPARATE glass assets, so this asset alone has no
+    // walls, the flood pours between the plates, and the tower merges into a
+    // stack of floating 2 m ledges (measured: one rotated corpo tower emitted
+    // 115 strip boxes, z 48..300, reading as a dark slab from above). In the
+    // global grid the neighbouring glass placements seal the enclosure; the
+    // local grid must use the building prior instead: a vertical gap of up to
+    // ROT_GAP cells between solid cells in one column is interior. Taller
+    // clearances (arches, overpass undersides) stay open.
+    const ROT_GAP = flag('rotgap', 9);
+    for (let y = 0; y < lny; y++) for (let x = 0; x < lnx; x++) {
+      let lastSolid = -1;
+      for (let z = 0; z < lnz; z++) {
+        if (!lg[li(x, y, z)]) continue;
+        if (lastSolid >= 0 && z - lastSolid > 1 && z - lastSolid - 1 <= ROT_GAP) {
+          for (let f = lastSolid + 1; f < z; f++) lg[li(x, y, f)] = 1;
+        }
+        lastSolid = z;
+      }
+    }
+
     const lboxes = mergeGrid(lg, lnx, lny, lnz);
 
     for (const i of job.placements) {
