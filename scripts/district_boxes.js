@@ -27,6 +27,15 @@
  * WHAT filled it. The streaming level is the second size signal: it comes off
  * the sector name's _L<n> suffix, and a level IS an object size (L0 = 64 m
  * cells = props, L5-L6 = kilometre cells = whole-subdistrict proxies).
+ *
+ * THE ASSEMBLY ID IS THE BUILDING. The dump's `prefab` column is the NodeRef
+ * that groups placements into the thing an artist actually placed, and
+ * sector|prefab is its key: `-8_0_0_L2|298522` is 1,828 placements spanning
+ * 183 m and rising 112 m, every one of them within 5 degrees of one yaw. That
+ * is one tower. Stage 3 needs it because a per-placement local frame quantises
+ * each panel of a wall independently and the seams jitter by up to a cell,
+ * which no coverage metric can see. It is emitted as a small integer here,
+ * where the dictionary is already being built, rather than re-derived later.
  */
 'use strict';
 
@@ -116,12 +125,16 @@ async function main() {
   // box (centre, half-extent, rotation), and voxelising the mesh's triangles
   // wants the placement transform itself, which the centre has already folded
   // the local bbox offset into.
-  const STRIDE = 19;
+  const STRIDE = 20;
   let cap = 1 << 20, out = new Float32Array(cap * STRIDE), count = 0;
-  let scanned = 0, inside = 0, noAsset = 0, droppedFx = 0, outsidePoly = 0;
+  let scanned = 0, inside = 0, noAsset = 0, droppedFx = 0, outsidePoly = 0, noAssembly = 0;
   const heights = [];
   const typeCode = new Map();   // node type name -> small integer
   const volByAsset = new Map(); // asset id -> total AABB volume placed
+  // sector|prefab -> assembly id. Sector is part of the key because the prefab
+  // dictionary is city-wide and the same ref can be instantiated per sector;
+  // a group must never straddle two of them.
+  const assemblyId = new Map();
 
   const rl = readline.createInterface({
     input: fs.createReadStream(path.join(dumpDir, 'ncz_instances.csv')), crlfDelay: Infinity,
@@ -177,6 +190,15 @@ async function main() {
     const lm = /_L(\d+)$/.exec(p[0]);
     const level = lm ? +lm[1] : -1;
 
+    // -1 where the node carries no prefab ref: 49.5% of placements citywide,
+    // and stage 3 keeps its per-placement path for exactly those.
+    let asm = -1;
+    if (p[4]) {
+      const key = `${p[0]}|${p[4]}`;
+      asm = assemblyId.get(key);
+      if (asm === undefined) assemblyId.set(key, asm = assemblyId.size);
+    } else noAssembly++;
+
     const o = count * STRIDE;
     out[o]      = x + rc[0]; out[o + 1] = y + rc[1]; out[o + 2] = z + rc[2];
     out[o + 3]  = hx;        out[o + 4] = hy;        out[o + 5] = hz;
@@ -184,6 +206,7 @@ async function main() {
     out[o + 10] = aid;       out[o + 11] = typeCode.get(t); out[o + 12] = level;
     out[o + 13] = x;         out[o + 14] = y;               out[o + 15] = z;
     out[o + 16] = s[0];      out[o + 17] = s[1];            out[o + 18] = s[2];
+    out[o + 19] = asm;
     count++;
     heights.push(hz * 2);
     volByAsset.set(aid, (volByAsset.get(aid) || 0) + hx * hy * hz * 8);
@@ -214,7 +237,8 @@ async function main() {
     boundary: poly ? 'district trigger polygon' : 'texture bbox',
     textureBounds: texBounds,
     stride: STRIDE,
-    layout: 'centre xyz, halfExtent xyz, quat xyzw, assetId, typeCode, streamingLevel, position xyz, scale xyz (float32)',
+    layout: 'centre xyz, halfExtent xyz, quat xyzw, assetId, typeCode, streamingLevel, position xyz, scale xyz, assemblyId (float32)',
+    assemblies: assemblyId.size,
     types: Object.fromEntries([...typeCode].map(([k, v]) => [v, k])),
     // id -> depot path for every asset this district actually places, so a
     // later stage can name what it is looking at rather than report an id.
@@ -230,6 +254,8 @@ async function main() {
   console.log(`  outside   ${outsidePoly.toLocaleString()} in the bbox but outside the district itself`);
   console.log(`  no bbox   ${noAsset.toLocaleString()} (asset id absent from ncz_assets.csv)`);
   console.log(`  fx/light  ${droppedFx.toLocaleString()} dropped (--keepfx to keep them)`);
+  console.log(`  assembly  ${assemblyId.size.toLocaleString()} sector|prefab groups over ` +
+              `${(count - noAssembly).toLocaleString()} boxes; ${noAssembly.toLocaleString()} have no prefab ref`);
   console.log(`  BOXES     ${count.toLocaleString()} -> ${path.relative(process.cwd(), binPath)}`);
   console.log('\n  height histogram (m):');
   hist.forEach((n, i) => {

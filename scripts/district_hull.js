@@ -351,7 +351,24 @@ function isRotated(i) {
   return yaw >= ROT_YAW;
 }
 
-// One local merge per (asset, scale), however many placements share it.
+/** Yaw of placement i in radians, and the same folded into 0..90 degrees. */
+function yawOf(i) {
+  const o = i * S;
+  const qx = box[o + 6], qy = box[o + 7], qz = box[o + 8], qw = box[o + 9];
+  return Math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz));
+}
+function foldedYawDeg(i) {
+  const d = yawOf(i) * 180 / Math.PI;
+  return ((d % 90) + 90) % 90;
+}
+
+// One local merge per (asset, scale), however many placements share it. This
+// is the FALLBACK frame, and it is only right for a placement standing alone:
+// each placement quantises ITS OWN grid, so two panels of one wall land on
+// lattices offset by up to a cell and the seam between them jitters. The
+// window score cannot see that (the cells are still within tolerance of the
+// glass) but the render reads it as pixel art. Assemblies take precedence
+// wherever the dump names one.
 const rotJobs = new Map();
 function recordRotJob(i, tris) {
   const o = i * S;
@@ -360,6 +377,11 @@ function recordRotJob(i, tris) {
   if (!j) rotJobs.set(key, j = { tris, sx: box[o + 16], sy: box[o + 17], sz: box[o + 18], placements: [] });
   j.placements.push(i);
 }
+
+// Every qualifying placement, held with its triangles until the assemblies are
+// known: which frame a placement belongs in is a property of its GROUP, so the
+// decision cannot be made while streaming placements one at a time.
+const rotCand = [];
 
 // Placements grouped by asset, so each GLB is read once however many times its
 // mesh is placed. Reading per placement would re-parse the same megabytes
@@ -393,7 +415,7 @@ for (const [aid, list] of byAsset) {
     // replaces only how their cells become boxes (pass 3c).
     if (tris) {
       visitMesh(i, tris); meshPlacements++;
-      if (useRot && isRotated(i)) recordRotJob(i, tris);
+      if (useRot && isRotated(i)) rotCand.push({ i, tris });
     } else visit(i, 'mark');
   }
 }
@@ -736,15 +758,362 @@ function mergeGrid(grid, nx, ny, nz) {
 }
 
 // ── 3c. Rotated placements: local merge, oriented emission ────────────────
-// Per (asset, scale) job: rasterise the scaled mesh-local triangles into a
-// small local grid, fill interiors, merge with the shared rules, then emit
-// the local boxes once per placement under the placement's own transform. A
-// yawed facade is axis-aligned in ITS OWN frame, so it merges into a few
+// A yawed facade is axis-aligned in ITS OWN frame, so it merges into a few
 // clean oriented boxes instead of a staircase of world-axis strings. Every
 // consumer of the bin (renderer, scorer, DDS encoder) already reads the
 // quaternion slots; only this writer ever left them at identity.
+//
+// WHICH frame is the whole question, and there are two:
+//
+//   assembly   one lattice shared by every placement the dump groups under
+//              one sector|prefab, which is to say by one BUILDING. Preferred.
+//   placement  the (asset, scale) mesh frame, one lattice per placement.
+//              The fallback, for the half of the dump with no prefab ref.
+//
+// The placement frame measures well and looks wrong. Each placement quantises
+// independently, so two panels of one wall snap to lattices offset by a
+// fraction of a cell and their shared seam steps back and forth. Every cell
+// is still within tolerance of the glass it stands for, so the window score
+// rises while the render stays blocky. Sharing one lattice per building
+// removes the disagreement by construction:
+// there is no second lattice to disagree with.
+const ROT_GAP = flag('rotgap', 9);
+const ASM_GAP = flag('asmgap', 0);      // blind-close for an assembly: off, its walls are real
+const ASM_TOL = flag('asmtol', 2);      // degrees a member may differ from the dominant yaw
+const ASM_MIN = flag('asmmin', 2);      // an assembly of one is just a placement
+const useAsm = S >= 20 && !args.includes('--noasm');
+
 const rotBoxes = [];
 let rotPlacementsUsed = 0, rotDroppedBoxes = 0, rotSkippedJobs = 0, rotRemarked = 0;
+let asmUsed = 0, asmMembers = 0, asmBoxes = 0, asmSkipped = 0, asmStrays = 0;
+
+/**
+ * Rasterise mesh-local triangles into a local grid, scaled, then transformed
+ * by a 3x3 matrix and an offset, on the same barycentric lattice markTriangle
+ * uses. The matrix is identity for a single placement in its own mesh frame
+ * and the placement-into-assembly rotation for a member of a building.
+ */
+function rasterInto(lg, lnx, lny, lnz, lx0, ly0, lz0, tris, sx, sy, sz, m, ox, oy, oz) {
+  const li = (x, y, z) => (z * lny + y) * lnx + x;
+  const tx = (x, y, z) => ox + m[0] * x + m[1] * y + m[2] * z;
+  const ty = (x, y, z) => oy + m[3] * x + m[4] * y + m[5] * z;
+  const tz = (x, y, z) => oz + m[6] * x + m[7] * y + m[8] * z;
+  for (let t = 0; t < tris.length; t += 9) {
+    const a0 = tris[t] * sx,     a1 = tris[t + 1] * sy, a2 = tris[t + 2] * sz;
+    const b0 = tris[t + 3] * sx, b1 = tris[t + 4] * sy, b2 = tris[t + 5] * sz;
+    const c0 = tris[t + 6] * sx, c1 = tris[t + 7] * sy, c2 = tris[t + 8] * sz;
+    const ax = tx(a0, a1, a2), ay = ty(a0, a1, a2), az = tz(a0, a1, a2);
+    const bx = tx(b0, b1, b2), by = ty(b0, b1, b2), bz = tz(b0, b1, b2);
+    const cx = tx(c0, c1, c2), cy = ty(c0, c1, c2), cz = tz(c0, c1, c2);
+    const ux = bx - ax, uy = by - ay, uz = bz - az;
+    const vx = cx - ax, vy = cy - ay, vz = cz - az;
+    const nnx = uy * vz - uz * vy, nny = uz * vx - ux * vz, nnz = ux * vy - uy * vx;
+    const area = 0.5 * Math.hypot(nnx, nny, nnz);
+    if (!(area > 0)) continue;
+    let nn = Math.ceil(Math.sqrt(area) / (VOXEL * 0.5)) + 1;
+    if (nn > 512) nn = 512;
+    for (let a = 0; a <= nn; a++) for (let b = 0; a + b <= nn; b++) {
+      const s = a / nn, t2 = b / nn;
+      const gx = ((ax + ux * s + vx * t2 - lx0) / VOXEL) | 0;
+      const gy = ((ay + uy * s + vy * t2 - ly0) / VOXEL) | 0;
+      const gz = ((az + uz * s + vz * t2 - lz0) / VOXEL) | 0;
+      if (gx < 0 || gy < 0 || gz < 0 || gx >= lnx || gy >= lny || gz >= lnz) continue;
+      lg[li(gx, gy, gz)] = 1;
+    }
+  }
+}
+
+/**
+ * Turn a rasterised local grid into a solid one: flood the outside, then close
+ * vertical blinds.
+ *
+ * Flood from every boundary face EXCEPT the bottom. Buildings have no floor
+ * mesh, so an open underside would leak the flood into the interior; blocking
+ * the bottom closes interiors the way ground contact does in the global grid.
+ *
+ * Then the blinds, up to `gap` cells. A glass tower's opaque mesh is floor
+ * plates with the curtain wall in SEPARATE glass assets, so the asset alone
+ * has no walls, the flood pours between the plates, and the tower merges into
+ * a stack of floating 2 m ledges (measured: one rotated corpo tower emitted
+ * 115 strip boxes, z 48..300, reading as a dark slab from above). In the
+ * global grid the neighbouring glass placements seal the enclosure, so a
+ * per-placement grid must use the building prior instead: a vertical gap of up
+ * to `gap` cells between solid cells in one column is interior. Taller
+ * clearances (arches, overpass undersides) stay open.
+ *
+ * An ASSEMBLY grid passes gap 0, because the prior is already satisfied: the
+ * curtain wall assets are members of the same building and rasterise into the
+ * same grid, so the enclosure is real geometry and guessing at it on top only
+ * inflates the massing past the facade.
+ */
+function fillAndClose(lg, lnx, lny, lnz, gap, seedBottom) {
+  const ln = lnx * lny * lnz;
+  const li = (x, y, z) => (z * lny + y) * lnx + x;
+  let lstack = new Int32Array(1 << 16), lsp = 0;
+  const lpush = k => {
+    if (lg[k] !== 0) return;
+    lg[k] = 2;
+    if (lsp === lstack.length) { const b = new Int32Array(lstack.length * 2); b.set(lstack); lstack = b; }
+    lstack[lsp++] = k;
+  };
+  for (let z = 0; z < lnz; z++) for (let y = 0; y < lny; y++) { lpush(li(0, y, z)); lpush(li(lnx - 1, y, z)); }
+  for (let z = 0; z < lnz; z++) for (let x = 0; x < lnx; x++) { lpush(li(x, 0, z)); lpush(li(x, lny - 1, z)); }
+  for (let y = 0; y < lny; y++) for (let x = 0; x < lnx; x++) lpush(li(x, y, lnz - 1));   // top face
+  if (seedBottom) for (let y = 0; y < lny; y++) for (let x = 0; x < lnx; x++) lpush(li(x, y, 0));
+  while (lsp > 0) {
+    const k = lstack[--lsp];
+    const x = k % lnx, y = ((k / lnx) | 0) % lny, z = (k / (lnx * lny)) | 0;
+    if (x > 0) lpush(k - 1);
+    if (x < lnx - 1) lpush(k + 1);
+    if (y > 0) lpush(k - lnx);
+    if (y < lny - 1) lpush(k + lnx);
+    if (z > 0) lpush(k - lnx * lny);
+    if (z < lnz - 1) lpush(k + lnx * lny);
+  }
+  for (let k = 0; k < ln; k++) { if (lg[k] === 2) lg[k] = 0; else if (lg[k] === 0) lg[k] = 1; }
+
+  if (gap <= 0) return;
+  for (let y = 0; y < lny; y++) for (let x = 0; x < lnx; x++) {
+    let lastSolid = -1;
+    for (let z = 0; z < lnz; z++) {
+      if (!lg[li(x, y, z)]) continue;
+      if (lastSolid >= 0 && z - lastSolid > 1 && z - lastSolid - 1 <= gap) {
+        for (let f = lastSolid + 1; f < z; f++) lg[li(x, y, f)] = 1;
+      }
+      lastSolid = z;
+    }
+  }
+}
+
+/**
+ * Emit merged local boxes into the world under a yaw-only transform, clipping
+ * to terrain, rejecting boxes the global grid does not back, and re-marking
+ * the cells they take over. Returns how many boxes survived.
+ */
+function emitOriented(lboxes, lx0, ly0, lz0, px, py, pz, qx, qy, qz, qw) {
+  const m00 = 1 - 2 * (qy * qy + qz * qz), m01 = 2 * (qx * qy - qz * qw), m02 = 2 * (qx * qz + qy * qw);
+  const m10 = 2 * (qx * qy + qz * qw), m11 = 1 - 2 * (qx * qx + qz * qz), m12 = 2 * (qy * qz - qx * qw);
+  const m20 = 2 * (qx * qz - qy * qw), m21 = 2 * (qy * qz + qx * qw), m22 = 1 - 2 * (qx * qx + qy * qy);
+  let kept = 0;
+
+  for (const [bx0, by0, bz0, bx1, by1, bz1] of lboxes) {
+    const lcx = lx0 + (bx0 + bx1 + 1) * 0.5 * VOXEL;
+    const lcy = ly0 + (by0 + by1 + 1) * 0.5 * VOXEL;
+    const lcz = lz0 + (bz0 + bz1 + 1) * 0.5 * VOXEL;
+    const hx = (bx1 - bx0 + 1) * VOXEL * 0.5;
+    const hy = (by1 - by0 + 1) * VOXEL * 0.5;
+    const hz = (bz1 - bz0 + 1) * VOXEL * 0.5;
+    const wcx = px + m00 * lcx + m01 * lcy + m02 * lcz;
+    const wcy = py + m10 * lcx + m11 * lcy + m12 * lcz;
+    const wcz = pz + m20 * lcx + m21 * lcy + m22 * lcz;
+
+    // Terrain clip. The transform is yaw-only (isRotated guarantees it for a
+    // placement, and an assembly frame is built as a yaw), so the box's
+    // vertical extent maps straight onto world z.
+    const g = heightAtCet(terrain, wcx, wcy);
+    const floor = g === null ? -Infinity : g - BELOW;
+    let zBot = wcz - hz;
+    const zTop = wcz + hz;
+    if (zTop < floor) { rotDroppedBoxes++; continue; }
+    if (zBot < floor) zBot = floor;
+
+    // Acceptance against the global grid: a rotated box standing where the
+    // underground cut, the ground strip or the clutter drop removed mass must
+    // not resurrect it. 27 samples, keep at 30%+ occupancy.
+    let seen = 0, occ = 0;
+    for (let fz = -1; fz <= 1; fz++) for (let fy = -1; fy <= 1; fy++) for (let fx = -1; fx <= 1; fx++) {
+      const sxl = lcx + fx * hx * 0.66, syl = lcy + fy * hy * 0.66, szl = lcz + fz * hz * 0.66;
+      const wx = px + m00 * sxl + m01 * syl + m02 * szl;
+      const wy = py + m10 * sxl + m11 * syl + m12 * szl;
+      const wz = pz + m20 * sxl + m21 * syl + m22 * szl;
+      const gx2 = Math.floor((wx - minX) / VOXEL), gy2 = Math.floor((wy - minY) / VOXEL), gz2 = Math.floor((wz - minZ) / VOXEL);
+      if (gx2 < 0 || gy2 < 0 || gz2 < 0 || gx2 >= NX || gy2 >= NY || gz2 >= NZ) continue;
+      seen++;
+      const v = solid[idx(gx2, gy2, gz2)];
+      if (v === 1 || v === ROTATED) occ++;
+    }
+    if (!seen || occ / seen < 0.3) { rotDroppedBoxes++; continue; }
+
+    rotBoxes.push({ c: [wcx, wcy, (zBot + zTop) * 0.5], h: [hx, hy, (zTop - zBot) * 0.5], q: [qx, qy, qz, qw] });
+    kept++;
+
+    // Re-mark: the global cells this accepted box covers leave the axis merge,
+    // so the mass is not represented twice. Walk the box's world AABB and
+    // inverse-rotate each cell centre into the emitting frame.
+    const ex2 = Math.abs(m00) * hx + Math.abs(m01) * hy + Math.abs(m02) * hz;
+    const ey2 = Math.abs(m10) * hx + Math.abs(m11) * hy + Math.abs(m12) * hz;
+    const ez2 = Math.abs(m20) * hx + Math.abs(m21) * hy + Math.abs(m22) * hz;
+    const rx0 = Math.max(0, Math.floor((wcx - ex2 - minX) / VOXEL)), rx1 = Math.min(NX - 1, Math.floor((wcx + ex2 - minX) / VOXEL));
+    const ry0 = Math.max(0, Math.floor((wcy - ey2 - minY) / VOXEL)), ry1 = Math.min(NY - 1, Math.floor((wcy + ey2 - minY) / VOXEL));
+    const rz0 = Math.max(0, Math.floor((wcz - ez2 - minZ) / VOXEL)), rz1 = Math.min(NZ - 1, Math.floor((wcz + ez2 - minZ) / VOXEL));
+    for (let z2 = rz0; z2 <= rz1; z2++) {
+      const dz = minZ + (z2 + 0.5) * VOXEL - pz;
+      for (let y2 = ry0; y2 <= ry1; y2++) {
+        const dy = minY + (y2 + 0.5) * VOXEL - py;
+        for (let x2 = rx0; x2 <= rx1; x2++) {
+          const k2 = idx(x2, y2, z2);
+          if (solid[k2] !== 1) continue;
+          const dx = minX + (x2 + 0.5) * VOXEL - px;
+          const bxl = m00 * dx + m10 * dy + m20 * dz;
+          const byl = m01 * dx + m11 * dy + m21 * dz;
+          const bzl = m02 * dx + m12 * dy + m22 * dz;
+          if (Math.abs(bxl - lcx) > hx || Math.abs(byl - lcy) > hy || Math.abs(bzl - lcz) > hz) continue;
+          solid[k2] = ROTATED; rotRemarked++;
+        }
+      }
+    }
+  }
+  return kept;
+}
+
+// ── Partition: which candidates are a building, which stand alone ─────────
+// A group is taken as one building when the dump names it and its members
+// agree on a yaw. A member that disagrees (a tower's annex set at its own
+// angle) leaves the assembly and keeps the per-placement path rather than
+// dragging the building's frame off true.
+const inAssembly = new Set();
+const assemblies = [];
+if (useAsm && rotCand.length) {
+  const byAsm = new Map();
+  for (const c of rotCand) {
+    const a = box[c.i * S + 19];
+    if (!(a >= 0)) continue;
+    let g = byAsm.get(a); if (!g) byAsm.set(a, g = []);
+    g.push(c);
+  }
+  for (const members of byAsm.values()) {
+    if (members.length < ASM_MIN) continue;
+    // Dominant yaw in 1-degree buckets folded mod 90: a rectangle is symmetric
+    // under quarter turns, so a member at 88.5 degrees and one at -1.5 are the
+    // same frame and must land in the same bucket. Buckets wrap.
+    const hist = new Array(90).fill(0);
+    for (const c of members) hist[Math.floor(foldedYawDeg(c.i)) % 90]++;
+    let best = 0;
+    for (let b = 0; b < 90; b++) if (hist[b] > hist[best]) best = b;
+    const keep = [];
+    for (const c of members) {
+      const d = Math.abs(foldedYawDeg(c.i) - (best + 0.5));
+      if (Math.min(d, 90 - d) <= ASM_TOL) keep.push(c); else asmStrays++;
+    }
+    if (keep.length < ASM_MIN) continue;
+    assemblies.push(keep);
+    for (const c of keep) inAssembly.add(c.i);
+  }
+}
+for (const c of rotCand) if (!inAssembly.has(c.i)) recordRotJob(c.i, c.tris);
+
+// ── The assembly frame: one lattice per building ──────────────────────────
+for (const members of assemblies) {
+  // Anchor and yaw come from the first member. Any member serves: they agree
+  // to within ASM_TOL, and a frame 90 degrees around is the same lattice.
+  const a0 = members[0].i * S;
+  const ax = box[a0 + 13], ay = box[a0 + 14], az = box[a0 + 15];
+  const yaw = yawOf(members[0].i);
+  const ca = Math.cos(yaw), sa = Math.sin(yaw);
+  // World -> assembly is the inverse rotation, which for a yaw is its transpose.
+  const wx2l = (dx, dy) => ca * dx + sa * dy;
+  const wy2l = (dx, dy) => -sa * dx + ca * dy;
+
+  // Bounds from each member's oriented box, which contains its triangles by
+  // construction, and cheaper than transforming every vertex twice.
+  //
+  // The member faces are collected on the way past because the lattice PHASE
+  // is free and worth spending. A shared lattice is the point of an assembly,
+  // but nothing says where its cell boundaries fall, and a facade landing
+  // mid-cell is displaced by up to half a cell. Measured on pacifica with an
+  // arbitrary phase: windows within 0.5 m fell 10.2 points while within 1 m
+  // moved 1.4, the signature of a sub-metre shift rather than lost massing.
+  const faces = [[], [], []];   // per axis: [coordinate, weight]
+  let lx0 = Infinity, ly0 = Infinity, lz0 = Infinity, lx1 = -Infinity, ly1 = -Infinity, lz1 = -Infinity;
+  for (const c of members) {
+    const o = c.i * S;
+    const qx = box[o + 6], qy = box[o + 7], qz = box[o + 8], qw = box[o + 9];
+    const m00 = 1 - 2 * (qy * qy + qz * qz), m01 = 2 * (qx * qy - qz * qw), m02 = 2 * (qx * qz + qy * qw);
+    const m10 = 2 * (qx * qy + qz * qw), m11 = 1 - 2 * (qx * qx + qz * qz), m12 = 2 * (qy * qz - qx * qw);
+    const m20 = 2 * (qx * qz - qy * qw), m21 = 2 * (qy * qz + qx * qw), m22 = 1 - 2 * (qx * qx + qy * qy);
+    let mx0 = Infinity, my0 = Infinity, mz0 = Infinity, mx1 = -Infinity, my1 = -Infinity, mz1 = -Infinity;
+    for (let s0 = -1; s0 <= 1; s0 += 2) for (let s1 = -1; s1 <= 1; s1 += 2) for (let s2 = -1; s2 <= 1; s2 += 2) {
+      const ex = s0 * box[o + 3], ey = s1 * box[o + 4], ez = s2 * box[o + 5];
+      const wx = box[o]     + m00 * ex + m01 * ey + m02 * ez;
+      const wy = box[o + 1] + m10 * ex + m11 * ey + m12 * ez;
+      const wz = box[o + 2] + m20 * ex + m21 * ey + m22 * ez;
+      const dx = wx - ax, dy = wy - ay;
+      const px2 = wx2l(dx, dy), py2 = wy2l(dx, dy), pz2 = wz - az;
+      if (px2 < mx0) mx0 = px2; if (px2 > mx1) mx1 = px2;
+      if (py2 < my0) my0 = py2; if (py2 > my1) my1 = py2;
+      if (pz2 < mz0) mz0 = pz2; if (pz2 > mz1) mz1 = pz2;
+    }
+    if (mx0 < lx0) lx0 = mx0; if (mx1 > lx1) lx1 = mx1;
+    if (my0 < ly0) ly0 = my0; if (my1 > ly1) ly1 = my1;
+    if (mz0 < lz0) lz0 = mz0; if (mz1 > lz1) lz1 = mz1;
+    // A face is worth as much as it is big: the area of the other two spans.
+    const sx2 = mx1 - mx0, sy2 = my1 - my0, sz2 = mz1 - mz0;
+    faces[0].push([mx0, sy2 * sz2], [mx1, sy2 * sz2]);
+    faces[1].push([my0, sx2 * sz2], [my1, sx2 * sz2]);
+    faces[2].push([mz0, sx2 * sy2], [mz1, sx2 * sy2]);
+  }
+
+  // The phase that puts the most facade ON a cell boundary, by scanning
+  // candidates and scoring the displacement each one leaves. A mean is the
+  // wrong summary here: a building's faces sit at SEVERAL offsets within a
+  // cell, and both the straight and the circular mean answer with a point
+  // between the modes, which is the one phase that suits none of them.
+  const PHASES = 32;
+  const phaseOf = (list) => {
+    let bestP = 0, bestCost = Infinity;
+    for (let k = 0; k < PHASES; k++) {
+      const p = k * VOXEL / PHASES;
+      let cost = 0;
+      for (const [v, w] of list) {
+        const d = (((v - p) % VOXEL) + VOXEL) % VOXEL;
+        cost += w * Math.min(d, VOXEL - d);
+      }
+      if (cost < bestCost) { bestCost = cost; bestP = p; }
+    }
+    return bestP;
+  };
+  const align = (v, list) => {
+    const p = phaseOf(list);
+    return v - ((((v - p) % VOXEL) + VOXEL) % VOXEL);   // down to the nearest boundary in phase
+  };
+  lx0 = align(lx0 - VOXEL, faces[0]);
+  ly0 = align(ly0 - VOXEL, faces[1]);
+  lz0 = align(lz0 - VOXEL, faces[2]);
+  lx1 += VOXEL; ly1 += VOXEL; lz1 += VOXEL;
+  const lnx = Math.max(1, Math.ceil((lx1 - lx0) / VOXEL));
+  const lny = Math.max(1, Math.ceil((ly1 - ly0) / VOXEL));
+  const lnz = Math.max(1, Math.ceil((lz1 - lz0) / VOXEL));
+  const ln = lnx * lny * lnz;
+  if (!Number.isFinite(ln) || ln > 64e6) { asmSkipped++; for (const c of members) recordRotJob(c.i, c.tris); continue; }
+  const lg = new Uint8Array(ln);
+
+  for (const c of members) {
+    const o = c.i * S;
+    const qx = box[o + 6], qy = box[o + 7], qz = box[o + 8], qw = box[o + 9];
+    const m00 = 1 - 2 * (qy * qy + qz * qz), m01 = 2 * (qx * qy - qz * qw), m02 = 2 * (qx * qz + qy * qw);
+    const m10 = 2 * (qx * qy + qz * qw), m11 = 1 - 2 * (qx * qx + qz * qz), m12 = 2 * (qy * qz - qx * qw);
+    const m20 = 2 * (qx * qz - qy * qw), m21 = 2 * (qy * qz + qx * qw), m22 = 1 - 2 * (qx * qx + qy * qy);
+    // Mesh -> assembly in one matrix: the member's own rotation, then the
+    // assembly's inverse yaw.
+    const m = [
+      ca * m00 + sa * m10, ca * m01 + sa * m11, ca * m02 + sa * m12,
+      -sa * m00 + ca * m10, -sa * m01 + ca * m11, -sa * m02 + ca * m12,
+      m20, m21, m22,
+    ];
+    const dx = box[o + 13] - ax, dy = box[o + 14] - ay;
+    rasterInto(lg, lnx, lny, lnz, lx0, ly0, lz0, c.tris,
+      box[o + 16], box[o + 17], box[o + 18], m,
+      wx2l(dx, dy), wy2l(dx, dy), box[o + 15] - az);
+  }
+
+  if (!args.includes('--asmnofill')) fillAndClose(lg, lnx, lny, lnz, ASM_GAP, args.includes('--asmfloor'));
+  const lboxes = mergeGrid(lg, lnx, lny, lnz);
+  const qz2 = Math.sin(yaw * 0.5), qw2 = Math.cos(yaw * 0.5);
+  asmBoxes += emitOriented(lboxes, lx0, ly0, lz0, ax, ay, az, 0, 0, qz2, qw2);
+  asmUsed++; asmMembers += members.length;
+  rotPlacementsUsed += members.length;
+}
+
 if (useRot && rotJobs.size) {
   for (const job of rotJobs.values()) {
     const { tris, sx, sy, sz } = job;
@@ -764,160 +1133,28 @@ if (useRot && rotJobs.size) {
     const ln = lnx * lny * lnz;
     if (!Number.isFinite(ln) || ln > 64e6) { rotSkippedJobs++; continue; }
     const lg = new Uint8Array(ln);
-    const li = (x, y, z) => (z * lny + y) * lnx + x;
 
-    // Rasterise, same barycentric lattice as markTriangle.
-    for (let t = 0; t < tris.length; t += 9) {
-      const ax = tris[t] * sx,     ay = tris[t + 1] * sy, az = tris[t + 2] * sz;
-      const bx = tris[t + 3] * sx, by = tris[t + 4] * sy, bz = tris[t + 5] * sz;
-      const cx = tris[t + 6] * sx, cy = tris[t + 7] * sy, cz = tris[t + 8] * sz;
-      const ux = bx - ax, uy = by - ay, uz = bz - az;
-      const vx = cx - ax, vy = cy - ay, vz = cz - az;
-      const nnx = uy * vz - uz * vy, nny = uz * vx - ux * vz, nnz = ux * vy - uy * vx;
-      const area = 0.5 * Math.hypot(nnx, nny, nnz);
-      if (!(area > 0)) continue;
-      let nn = Math.ceil(Math.sqrt(area) / (VOXEL * 0.5)) + 1;
-      if (nn > 512) nn = 512;
-      for (let a = 0; a <= nn; a++) for (let b = 0; a + b <= nn; b++) {
-        const s = a / nn, t2 = b / nn;
-        const gx = ((ax + ux * s + vx * t2 - lx0) / VOXEL) | 0;
-        const gy = ((ay + uy * s + vy * t2 - ly0) / VOXEL) | 0;
-        const gz = ((az + uz * s + vz * t2 - lz0) / VOXEL) | 0;
-        if (gx < 0 || gy < 0 || gz < 0 || gx >= lnx || gy >= lny || gz >= lnz) continue;
-        lg[li(gx, gy, gz)] = 1;
-      }
-    }
-
-    // Fill: flood from every boundary face EXCEPT the bottom. Buildings have
-    // no floor mesh, so an open underside would leak the flood into the
-    // interior; blocking the bottom closes interiors the way ground contact
-    // does in the global grid.
-    {
-      let lstack = new Int32Array(1 << 16), lsp = 0;
-      const lpush = k => {
-        if (lg[k] !== 0) return;
-        lg[k] = 2;
-        if (lsp === lstack.length) { const b = new Int32Array(lstack.length * 2); b.set(lstack); lstack = b; }
-        lstack[lsp++] = k;
-      };
-      for (let z = 0; z < lnz; z++) for (let y = 0; y < lny; y++) { lpush(li(0, y, z)); lpush(li(lnx - 1, y, z)); }
-      for (let z = 0; z < lnz; z++) for (let x = 0; x < lnx; x++) { lpush(li(x, 0, z)); lpush(li(x, lny - 1, z)); }
-      for (let y = 0; y < lny; y++) for (let x = 0; x < lnx; x++) lpush(li(x, y, lnz - 1));   // top face; the bottom stays sealed
-      while (lsp > 0) {
-        const k = lstack[--lsp];
-        const x = k % lnx, y = ((k / lnx) | 0) % lny, z = (k / (lnx * lny)) | 0;
-        if (x > 0) lpush(k - 1);
-        if (x < lnx - 1) lpush(k + 1);
-        if (y > 0) lpush(k - lnx);
-        if (y < lny - 1) lpush(k + lnx);
-        if (z > 0) lpush(k - lnx * lny);
-        if (z < lnz - 1) lpush(k + lnx * lny);
-      }
-      for (let k = 0; k < ln; k++) { if (lg[k] === 2) lg[k] = 0; else if (lg[k] === 0) lg[k] = 1; }
-    }
-
-    // Close vertical blinds. A glass tower's opaque mesh is floor plates with
-    // the curtain wall in SEPARATE glass assets, so this asset alone has no
-    // walls, the flood pours between the plates, and the tower merges into a
-    // stack of floating 2 m ledges (measured: one rotated corpo tower emitted
-    // 115 strip boxes, z 48..300, reading as a dark slab from above). In the
-    // global grid the neighbouring glass placements seal the enclosure; the
-    // local grid must use the building prior instead: a vertical gap of up to
-    // ROT_GAP cells between solid cells in one column is interior. Taller
-    // clearances (arches, overpass undersides) stay open.
-    const ROT_GAP = flag('rotgap', 9);
-    for (let y = 0; y < lny; y++) for (let x = 0; x < lnx; x++) {
-      let lastSolid = -1;
-      for (let z = 0; z < lnz; z++) {
-        if (!lg[li(x, y, z)]) continue;
-        if (lastSolid >= 0 && z - lastSolid > 1 && z - lastSolid - 1 <= ROT_GAP) {
-          for (let f = lastSolid + 1; f < z; f++) lg[li(x, y, f)] = 1;
-        }
-        lastSolid = z;
-      }
-    }
-
+    rasterInto(lg, lnx, lny, lnz, lx0, ly0, lz0, tris, sx, sy, sz,
+      [1, 0, 0, 0, 1, 0, 0, 0, 1], 0, 0, 0);
+    fillAndClose(lg, lnx, lny, lnz, ROT_GAP, false);
     const lboxes = mergeGrid(lg, lnx, lny, lnz);
 
     for (const i of job.placements) {
       const o = i * S;
-      const px = box[o + 13], py = box[o + 14], pz = box[o + 15];
-      const qx = box[o + 6], qy = box[o + 7], qz = box[o + 8], qw = box[o + 9];
-      const m00 = 1 - 2 * (qy * qy + qz * qz), m01 = 2 * (qx * qy - qz * qw), m02 = 2 * (qx * qz + qy * qw);
-      const m10 = 2 * (qx * qy + qz * qw), m11 = 1 - 2 * (qx * qx + qz * qz), m12 = 2 * (qy * qz - qx * qw);
-      const m20 = 2 * (qx * qz - qy * qw), m21 = 2 * (qy * qz + qx * qw), m22 = 1 - 2 * (qx * qx + qy * qy);
-
-      for (const [bx0, by0, bz0, bx1, by1, bz1] of lboxes) {
-        const lcx = lx0 + (bx0 + bx1 + 1) * 0.5 * VOXEL;
-        const lcy = ly0 + (by0 + by1 + 1) * 0.5 * VOXEL;
-        const lcz = lz0 + (bz0 + bz1 + 1) * 0.5 * VOXEL;
-        const hx = (bx1 - bx0 + 1) * VOXEL * 0.5;
-        const hy = (by1 - by0 + 1) * VOXEL * 0.5;
-        const hz = (bz1 - bz0 + 1) * VOXEL * 0.5;
-        const wcx = px + m00 * lcx + m01 * lcy + m02 * lcz;
-        const wcy = py + m10 * lcx + m11 * lcy + m12 * lcz;
-        const wcz = pz + m20 * lcx + m21 * lcy + m22 * lcz;
-
-        // Terrain clip. The placement is yaw-only (isRotated guarantees it),
-        // so the box's vertical extent maps straight onto world z.
-        const g = heightAtCet(terrain, wcx, wcy);
-        const floor = g === null ? -Infinity : g - BELOW;
-        let zBot = wcz - hz;
-        const zTop = wcz + hz;
-        if (zTop < floor) { rotDroppedBoxes++; continue; }
-        if (zBot < floor) zBot = floor;
-
-        // Acceptance against the global grid: a rotated box standing where
-        // the underground cut, the ground strip or the clutter drop removed
-        // mass must not resurrect it. 27 samples, keep at 30%+ occupancy.
-        let seen = 0, occ = 0;
-        for (let fz = -1; fz <= 1; fz++) for (let fy = -1; fy <= 1; fy++) for (let fx = -1; fx <= 1; fx++) {
-          const sxl = lcx + fx * hx * 0.66, syl = lcy + fy * hy * 0.66, szl = lcz + fz * hz * 0.66;
-          const wx = px + m00 * sxl + m01 * syl + m02 * szl;
-          const wy = py + m10 * sxl + m11 * syl + m12 * szl;
-          const wz = pz + m20 * sxl + m21 * syl + m22 * szl;
-          const gx2 = Math.floor((wx - minX) / VOXEL), gy2 = Math.floor((wy - minY) / VOXEL), gz2 = Math.floor((wz - minZ) / VOXEL);
-          if (gx2 < 0 || gy2 < 0 || gz2 < 0 || gx2 >= NX || gy2 >= NY || gz2 >= NZ) continue;
-          seen++;
-          const v = solid[idx(gx2, gy2, gz2)];
-          if (v === 1 || v === ROTATED) occ++;
-        }
-        if (!seen || occ / seen < 0.3) { rotDroppedBoxes++; continue; }
-
-        rotBoxes.push({ c: [wcx, wcy, (zBot + zTop) * 0.5], h: [hx, hy, (zTop - zBot) * 0.5], q: [qx, qy, qz, qw] });
-
-        // Re-mark: the global cells this accepted box covers leave the axis
-        // merge, so the mass is not represented twice. Walk the box's world
-        // AABB and inverse-rotate each cell centre into placement-local space.
-        const ex2 = Math.abs(m00) * hx + Math.abs(m01) * hy + Math.abs(m02) * hz;
-        const ey2 = Math.abs(m10) * hx + Math.abs(m11) * hy + Math.abs(m12) * hz;
-        const ez2 = Math.abs(m20) * hx + Math.abs(m21) * hy + Math.abs(m22) * hz;
-        const rx0 = Math.max(0, Math.floor((wcx - ex2 - minX) / VOXEL)), rx1 = Math.min(NX - 1, Math.floor((wcx + ex2 - minX) / VOXEL));
-        const ry0 = Math.max(0, Math.floor((wcy - ey2 - minY) / VOXEL)), ry1 = Math.min(NY - 1, Math.floor((wcy + ey2 - minY) / VOXEL));
-        const rz0 = Math.max(0, Math.floor((wcz - ez2 - minZ) / VOXEL)), rz1 = Math.min(NZ - 1, Math.floor((wcz + ez2 - minZ) / VOXEL));
-        for (let z2 = rz0; z2 <= rz1; z2++) {
-          const dz = minZ + (z2 + 0.5) * VOXEL - pz;
-          for (let y2 = ry0; y2 <= ry1; y2++) {
-            const dy = minY + (y2 + 0.5) * VOXEL - py;
-            for (let x2 = rx0; x2 <= rx1; x2++) {
-              const k2 = idx(x2, y2, z2);
-              if (solid[k2] !== 1) continue;
-              const dx = minX + (x2 + 0.5) * VOXEL - px;
-              const bxl = m00 * dx + m10 * dy + m20 * dz;
-              const byl = m01 * dx + m11 * dy + m21 * dz;
-              const bzl = m02 * dx + m12 * dy + m22 * dz;
-              if (Math.abs(bxl - lcx) > hx || Math.abs(byl - lcy) > hy || Math.abs(bzl - lcz) > hz) continue;
-              solid[k2] = ROTATED; rotRemarked++;
-            }
-          }
-        }
-      }
+      emitOriented(lboxes, lx0, ly0, lz0,
+        box[o + 13], box[o + 14], box[o + 15],
+        box[o + 6], box[o + 7], box[o + 8], box[o + 9]);
       rotPlacementsUsed++;
     }
   }
-  console.log(`  rotated   ${rotPlacementsUsed.toLocaleString()} placements over ${rotJobs.size.toLocaleString()} local merges -> ` +
-              `${rotBoxes.length.toLocaleString()} oriented boxes (${rotDroppedBoxes.toLocaleString()} dropped by clip/mask, ` +
-              `${rotSkippedJobs} jobs skipped, ${rotRemarked.toLocaleString()} global cells re-owned)`);
+}
+if (useRot && (rotJobs.size || asmUsed)) {
+  console.log(`  rotated   ${rotPlacementsUsed.toLocaleString()} placements -> ${rotBoxes.length.toLocaleString()} oriented boxes ` +
+              `(${rotDroppedBoxes.toLocaleString()} dropped by clip/mask, ${rotSkippedJobs} jobs skipped, ` +
+              `${rotRemarked.toLocaleString()} global cells re-owned)`);
+  console.log(`  assembly  ${asmUsed.toLocaleString()} buildings over ${asmMembers.toLocaleString()} placements -> ` +
+              `${asmBoxes.toLocaleString()} boxes; ${rotJobs.size.toLocaleString()} per-placement merges carry the rest ` +
+              `(${asmStrays.toLocaleString()} members off the dominant yaw, ${asmSkipped} assemblies too big)`);
 }
 
 // ── 4. Greedy-merge the remaining grid into axis-aligned boxes ────────────

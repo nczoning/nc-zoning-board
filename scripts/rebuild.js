@@ -61,7 +61,25 @@ function run(cmd, args) {
 
 const num = (s, re) => { const m = s.match(re); return m ? Number(m[1].replace(/,/g, '')) : null; };
 
+/**
+ * Stage 1 is part of the pipeline, so it reruns when its script is newer than
+ * the bin it produced. Without this the box layout can change (a new slot, a
+ * new field) and every district except the one rebuilt by hand keeps feeding
+ * the old layout to stage 2, which reads the stride from the meta and carries
+ * on quietly with the new code disabled. That is the stale-DDS failure again
+ * one stage earlier: the run looks clean and the change is simply not in it.
+ */
+function stage1IfStale(district) {
+  const bin = path.join(dataDir, `district-boxes-${district}.bin`);
+  const src = path.join(repo, 'scripts', 'district_boxes.js');
+  if (fs.existsSync(bin) && fs.statSync(bin).mtimeMs >= fs.statSync(src).mtimeMs) return false;
+  console.log('  stage 1   rerunning district_boxes.js (bin older than the script)');
+  run('node', ['scripts/district_boxes.js', district]);
+  return true;
+}
+
 function metricsFor(district) {
+  stage1IfStale(district);
   const hull = run('node', ['--max-old-space-size=12288', 'scripts/district_hull.js', district, '--voxel', '2', ...extraHull]);
   const score = run('node', ['scripts/score_hull.js', district, '--cloud', 'hull']);
   const enc = run('node', ['scripts/encode_hull_dds.js', district]);
