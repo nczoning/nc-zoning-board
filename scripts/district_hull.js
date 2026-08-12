@@ -109,20 +109,6 @@ const AREA_PROXY = new Set([
   'DestructibleProxyMesh', 'InvalidProxyMesh',
 ]);
 
-// Never geometry, at any level. An occluder is an invisible helper volume the
-// engine uses to cull what is behind it, and city_center places one editor
-// occluder box that alone marks 30,708 cells. Terrain is not a building and
-// the hull is clipped against the terrain surface anyway. Roads are not
-// buildings either, and they already have their own overlay: a RoadProxyMesh
-// is a 200 m street segment up to 30 m thick, streets have no real geometry
-// above them so the coverage probe always accepts it, and its filled shell
-// renders as a block-wide slab (probed at CET -1590,297: prx0.mesh 209x118x36
-// under the visible slab top).
-const NEVER = new Set([
-  'StaticOccluderMesh', 'StaticLight', 'Advertisement', 'WaterPatch', 'Foliage', 'Mirror',
-  'TerrainProxyMesh', 'RoadProxyMesh',
-]);
-
 /**
  * A PROXY is the game's low-detail stand-in for geometry that is not streamed
  * at distance: one coarse box where the real building is a hundred kit panels.
@@ -138,36 +124,15 @@ const NEVER = new Set([
  * They cannot simply be dropped: thousands of tall glazed towers exist in the
  * dump ONLY as their proxy. So real geometry wins, and a proxy is voxelised
  * only where nothing real already occupies its footprint.
+ *
+ * WHAT a placement is (building, proxy, signage, infrastructure, boundary,
+ * terrain, never) is decided by scripts/asset_category.js, shared with the
+ * signage night-light extractor: identity lives in one module so the cloud
+ * excluding a family and another consumer collecting it cannot drift apart.
+ * Only building and proxy enter the cloud; everything else lands in the
+ * skippedNever counter here. Size and level policy stay in this file.
  */
-// Proxies live in three places, not one. Matching only the first lets a
-// subdistrict proxy through as if it were real geometry, and it then wins the
-// grid outright because nothing tests it for redundancy:
-//   sectors\_external\proxy\<hash>\<name>.mesh
-//   ...\_proxyhelper\<name>_mproxy.mesh   (beside the sector or the prefab)
-//   any file whose name ends _mproxy
-const isProxy = p =>
-  p.includes('\\_external\\proxy\\') || p.includes('\\_proxyhelper\\') || p.endsWith('_mproxy.mesh');
-const isTerrain = p => p.includes('\\_global\\terrain\\');
-// A subdistrict shell is the trigger volume's geometry, not a building: an
-// extruded boundary polygon that renders as a smooth vertical-walled slab
-// across whole blocks (spotted at the render by the maintainer, 2026-08-12).
-// 269 of them exist and 216 sit under PROXY_MAX, down to 102 m, so the size
-// gate cannot catch them; the name can.
-const isSubdistrictShell = p => /_subdistrict[^\\]*\.mesh$/i.test(p);
-// Ground-furniture proxies: elevated road decks, plaza pools and sidewalk
-// aprons ship as anonymous prxN.mesh / pool.mesh / *_sidewalk* proxies. They
-// are surfaces, not buildings, the roads overlay already draws that level,
-// and their filled plates were the remaining city_center slabs after the
-// road/subdistrict cuts (maintainer verdict at the render, Corpo Plaza deck,
-// prx1 plates at z 40..44 with pool.mesh 193x244x9 beside them).
-const isDeckProxy = p => /\\(prx\d*|pool)\.mesh$/i.test(p) || (/_sidewalk/i.test(p) && isProxy(p));
-// Signage is not a building either, and it does not always say Advertisement:
-// signage_city_center_glassframe_c.mesh is a 217x39x258 m sign frame typed
-// GenericProxyMesh, whose members rasterise as free-standing 2 m walls 234 m
-// tall (the maintainer zone-marked two of them). 205 signage_* meshes exist
-// across every district, placed up to 118 times each; the map renders signage
-// through its own system, so the whole family leaves the cloud by name.
-const isSignage = p => /\\signage_[^\\]*\.mesh$/i.test(p);
+const { categorize } = require('./asset_category');
 
 const MIN_COL = flag('mincol', Math.round(3 * SCALE)); // drop columns with fewer than this many solid cells
 const BELOW   = flag('below', 16);   // keep this many metres below the terrain surface, cut deeper than that
@@ -218,17 +183,14 @@ function classify(i) {
   const largest = Math.max(hx, hy, hz) * 2;
   if (largest < MIN_SIZE) { skippedSmall++; return null; }
   const nodeType = TYPE[box[o + 11]];
-  if (NEVER.has(nodeType)) { skippedNever++; return null; }
   const p = assetPath[box[o + 10]] || '';
-  if (isTerrain(p)) { skippedNever++; return null; }
-  if (isSubdistrictShell(p)) { skippedNever++; return null; }
-  if (isDeckProxy(p)) { skippedNever++; return null; }
-  if (isSignage(p)) { skippedNever++; return null; }
+  const cat = categorize(p, nodeType);
+  if (cat !== 'building' && cat !== 'proxy') { skippedNever++; return null; }
   // At L5 and above a proxy stands in for a whole subdistrict whatever the
   // node type says. exterior.mesh is typed BuildingProxyMesh and sits at L6,
   // and it is a shell the size of the district, so the "a building proxy IS a
   // building" exemption only holds below that level.
-  if (S >= 13 && box[o + 12] >= PROXY_L && (AREA_PROXY.has(nodeType) || isProxy(p))) { skippedProxy++; return null; }
+  if (S >= 13 && box[o + 12] >= PROXY_L && (AREA_PROXY.has(nodeType) || cat === 'proxy')) { skippedProxy++; return null; }
   // A placement bigger than any building is not a building. ncz_assets.csv
   // carries sentinel bounds (100 km meshes) alongside genuinely world-scale
   // geometry like ocean patches, and one of them fills the whole grid. This is
@@ -241,7 +203,7 @@ function classify(i) {
     }
     return null;
   }
-  if (isProxy(p)) {
+  if (cat === 'proxy') {
     if (largest > PROXY_MAX) { skippedProxy++; return null; }
     return 'proxy';
   }

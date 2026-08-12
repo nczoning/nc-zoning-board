@@ -111,6 +111,11 @@ scripts/wkit/ncz_mesh_list.wscript
 #   node scripts/wkit/uncook_remaining.js
 scripts/wkit/ncz_remaining.wscript
 
+# Generated signage-emitter data (night lighting). Rebuild with
+#   node scripts/extract_signage.js <districts>, then the emissive wscript + --merge
+data/signage-*.json
+scripts/wkit/ncz_signage_meshes.wscript
+
 # Generated D1 seed SQL: rebuild with `node worker/scripts/import-locations.mjs`
 worker/.import/
 
