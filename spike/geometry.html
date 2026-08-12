@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NCZ spike: one building, three representations</title>
+<!--
+  Renders ONE sector|prefab assembly three ways so the choice between
+  representations is made by looking and by measuring, not by argument:
+
+    1 kit      the real meshes, instanced. One draw call per unique mesh.
+    2 merged   the same triangles baked to world space. One draw call.
+    3 boxes    what the current pipeline ships for the same volume.
+
+  The blueprint outline is crease edges (EdgesGeometry at 30 degrees) built
+  per unique mesh and instance-transformed into one buffer, which is one of
+  the two production options. The other is a screen-space depth/normal pass,
+  which gives true silhouettes and costs a full-screen pass rather than
+  geometry; this spike does not settle which.
+
+  Data comes from scripts/spike_assembly.js. CET (x, y, z) maps to world
+  (x, z, -y), matching three-scene.js.
+-->
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0a192f; color: #00f0ff; font: 13px/1.6 ui-monospace, monospace; overflow: hidden; }
+  #hud { position: fixed; top: 12px; left: 12px; z-index: 10; background: rgba(10,25,47,.9);
+         border: 1px solid #00f0ff; border-radius: 4px; padding: 10px 14px; white-space: pre; }
+  #hud b { color: #ffb300; }
+  #err { position: fixed; inset: 20% 10% auto; z-index: 20; color: #ff2d3a; display: none; white-space: pre-wrap; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three":         "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.webgpu.min.js",
+  "three/webgpu":  "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.webgpu.min.js",
+  "three/tsl":     "https://cdn.jsdelivr.net/npm/three@0.185.1/build/three.tsl.min.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.185.1/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="hud">loading…</div>
+<div id="err"></div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const params = new URLSearchParams(location.search);
+const NAME = params.get('b') || 'spike--8_0_0_L2-298522';
+const hud = document.getElementById('hud');
+const errBox = document.getElementById('err');
+
+const fail = (e) => { errBox.style.display = 'block'; errBox.textContent = String(e && e.stack || e); console.error(e); };
+window.addEventListener('error', (e) => fail(e.error || e.message));
+
+// ── Scene ─────────────────────────────────────────────────────────────────
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0x0a192f, 1);
+document.body.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 1, 20000);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+// The map's own limits, so the spike is judged from poses the product allows.
+controls.minPolarAngle = 0;
+controls.maxPolarAngle = Math.PI * 0.39;
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// ── Load ──────────────────────────────────────────────────────────────────
+const meta = await fetch(`../data/${NAME}.json`).then(r => {
+  if (!r.ok) throw new Error(`no ../data/${NAME}.json: run scripts/spike_assembly.js first`);
+  return r.json();
+}).catch(fail);
+const buf = await fetch(`../data/${NAME}.bin`).then(r => r.arrayBuffer());
+
+const L = meta.layout;
+const kitGeo = new Float32Array(buf, L.kit.byteOffset, L.kit.byteLength / 4);
+const instData = new Float32Array(buf, L.instances.byteOffset, L.instances.byteLength / 4);
+const mergedPos = new Float32Array(buf, L.merged.byteOffset, L.merged.byteLength / 4);
+const boxData = new Float32Array(buf, L.boxes.byteOffset, L.boxes.byteLength / 4);
+
+// CET -> world. Positions swap Y and Z; the quaternion swaps the same way.
+const cetPos = (x, y, z) => new THREE.Vector3(x, z, -y);
+const cetQuat = (x, y, z, w) => new THREE.Quaternion(x, z, -y, w);
+
+const centre = cetPos(
+  (meta.bounds.min[0] + meta.bounds.max[0]) / 2,
+  (meta.bounds.min[1] + meta.bounds.max[1]) / 2,
+  (meta.bounds.min[2] + meta.bounds.max[2]) / 2,
+);
+
+// ── 1. Kit: one InstancedMesh per unique mesh ─────────────────────────────
+const kitGroup = new THREE.Group();
+const fillMat = new THREE.MeshBasicNodeMaterial({ color: 0x2a4a6b });
+const lineMat = new THREE.LineBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.55 });
+
+const byMesh = new Map();
+const nInst = instData.length / 11;
+for (let i = 0; i < nInst; i++) {
+  const mi = instData[i * 11 + 10];
+  if (!byMesh.has(mi)) byMesh.set(mi, []);
+  byMesh.get(mi).push(i);
+}
+
+const dummy = new THREE.Object3D();
+// Crease edges are built once per unique mesh and then instance-transformed
+// into a single buffer: 3,548 LineSegments objects would be 3,548 draw calls
+// and would measure the wrong thing.
+const edgeVerts = [];
+let kitTriangles = 0;
+
+for (const [mi, list] of byMesh) {
+  const m = meta.meshes[mi];
+  const tris = kitGeo.subarray(m.floatOffset, m.floatOffset + m.triangles * 9);
+  // CET -> world on the mesh's own vertices, so the instance transform below
+  // is a plain rotation and never has to re-swap axes.
+  const pos = new Float32Array(tris.length);
+  for (let v = 0; v < tris.length; v += 3) {
+    pos[v] = tris[v]; pos[v + 1] = tris[v + 2]; pos[v + 2] = -tris[v + 1];
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  g.computeVertexNormals();
+
+  const im = new THREE.InstancedMesh(g, fillMat, list.length);
+  im.frustumCulled = false;
+  const edges = new THREE.EdgesGeometry(g, 30);
+  const ep = edges.getAttribute('position');
+
+  list.forEach((idx, k) => {
+    const o = idx * 11;
+    dummy.position.copy(cetPos(instData[o], instData[o + 1], instData[o + 2]));
+    dummy.quaternion.copy(cetQuat(instData[o + 3], instData[o + 4], instData[o + 5], instData[o + 6]));
+    dummy.scale.set(instData[o + 7], instData[o + 9], instData[o + 8]);
+    dummy.updateMatrix();
+    im.setMatrixAt(k, dummy.matrix);
+    const v = new THREE.Vector3();
+    for (let e = 0; e < ep.count; e++) {
+      v.fromBufferAttribute(ep, e).applyMatrix4(dummy.matrix);
+      edgeVerts.push(v.x, v.y, v.z);
+    }
+  });
+  im.instanceMatrix.needsUpdate = true;
+  kitGroup.add(im);
+  kitTriangles += m.triangles * list.length;
+  edges.dispose();
+}
+
+const edgeGeo = new THREE.BufferGeometry();
+edgeGeo.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(edgeVerts), 3));
+const kitEdges = new THREE.LineSegments(edgeGeo, lineMat);
+kitEdges.frustumCulled = false;
+kitGroup.add(kitEdges);
+scene.add(kitGroup);
+
+// ── 2. Merged: the same triangles, one draw call ──────────────────────────
+const mergedGeo = new THREE.BufferGeometry();
+{
+  const p = new Float32Array(mergedPos.length);
+  for (let v = 0; v < mergedPos.length; v += 3) {
+    p[v] = mergedPos[v]; p[v + 1] = mergedPos[v + 2]; p[v + 2] = -mergedPos[v + 1];
+  }
+  mergedGeo.setAttribute('position', new THREE.BufferAttribute(p, 3));
+  mergedGeo.computeVertexNormals();
+}
+const mergedMesh = new THREE.Mesh(mergedGeo, fillMat);
+mergedMesh.frustumCulled = false;
+mergedMesh.visible = false;
+scene.add(mergedMesh);
+
+// ── 3. Boxes: the current representation ──────────────────────────────────
+const nBox = boxData.length / 10;
+const boxMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), fillMat, Math.max(1, nBox));
+boxMesh.frustumCulled = false;
+boxMesh.visible = false;
+const boxEdgeVerts = [];
+{
+  const unit = new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1), 30);
+  const up = unit.getAttribute('position');
+  const v = new THREE.Vector3();
+  for (let i = 0; i < nBox; i++) {
+    const o = i * 10;
+    dummy.position.copy(cetPos(boxData[o], boxData[o + 1], boxData[o + 2]));
+    dummy.quaternion.copy(cetQuat(boxData[o + 6], boxData[o + 7], boxData[o + 8], boxData[o + 9]));
+    dummy.scale.set(boxData[o + 3] * 2, boxData[o + 5] * 2, boxData[o + 4] * 2);
+    dummy.updateMatrix();
+    boxMesh.setMatrixAt(i, dummy.matrix);
+    for (let e = 0; e < up.count; e++) {
+      v.fromBufferAttribute(up, e).applyMatrix4(dummy.matrix);
+      boxEdgeVerts.push(v.x, v.y, v.z);
+    }
+  }
+  boxMesh.instanceMatrix.needsUpdate = true;
+}
+const boxEdgeGeo = new THREE.BufferGeometry();
+boxEdgeGeo.setAttribute('position', new THREE.BufferAttribute(Float32Array.from(boxEdgeVerts), 3));
+const boxEdges = new THREE.LineSegments(boxEdgeGeo, lineMat);
+boxEdges.frustumCulled = false;
+boxEdges.visible = false;
+scene.add(boxMesh, boxEdges);
+
+// ── Modes ─────────────────────────────────────────────────────────────────
+const MODES = ['kit', 'merged', 'boxes'];
+let mode = 0, outlines = true;
+
+function apply() {
+  const m = MODES[mode];
+  kitGroup.visible = m === 'kit';
+  kitEdges.visible = m === 'kit' && outlines;
+  mergedMesh.visible = m === 'merged';
+  boxMesh.visible = m === 'boxes';
+  boxEdges.visible = m === 'boxes' && outlines;
+}
+
+addEventListener('keydown', (e) => {
+  if (e.key === '1') mode = 0;
+  else if (e.key === '2') mode = 1;
+  else if (e.key === '3') mode = 2;
+  else if (e.key === 'o' || e.key === 'O') outlines = !outlines;
+  else return;
+  apply();
+});
+
+// ── Frame ─────────────────────────────────────────────────────────────────
+camera.position.copy(centre).add(new THREE.Vector3(0, 190, 260));
+controls.target.copy(centre);
+controls.update();
+apply();
+
+const times = [];
+let last = performance.now();
+renderer.setAnimationLoop(() => {
+  const now = performance.now();
+  times.push(now - last); if (times.length > 60) times.shift();
+  last = now;
+  controls.update();
+  renderer.render(scene, camera);
+
+  const ms = times.reduce((a, b) => a + b, 0) / times.length;
+  const info = renderer.info.render;
+  hud.textContent =
+    `${meta.sector}|${meta.prefab}   ${MODES[mode]}   (1 kit  2 merged  3 boxes  O outlines)\n` +
+    `frame      ${ms.toFixed(1)} ms  (${(1000 / ms).toFixed(0)} fps)\n` +
+    `draw calls ${info.drawCalls}\n` +
+    `triangles  ${info.triangles.toLocaleString()}\n` +
+    `\n` +
+    `placements ${meta.placements.toLocaleString()} kept, ${meta.droppedNeverVisible.toLocaleString()} dropped as never visible\n` +
+    `kit        ${meta.uniqueMeshes} meshes, ${meta.uniqueTriangles.toLocaleString()} unique triangles\n` +
+    `merged     ${meta.drawnTriangles.toLocaleString()} triangles\n` +
+    `boxes      ${meta.hullBoxes.toLocaleString()} (${(meta.hullBoxes * 12).toLocaleString()} triangles)`;
+});
+</script>
+</body>
+</html>

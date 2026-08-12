@@ -18,6 +18,9 @@
 !/scripts/
 !/docs/
 !/test/
+# Standalone comparison pages that answer one question and are kept as the
+# record of how it was answered. Their DATA stays ignored below.
+!/spike/
 !/package.json
 !/package-lock.json
 !/worker/
@@ -125,3 +128,12 @@ worker/.import/
 *.pem
 *.key
 data/run-log.jsonl
+
+# Spike inputs: one building extracted as real geometry (scripts/spike_assembly.js)
+data/spike-*.bin
+data/spike-*.json
+# Camera-reachability verdicts and their debug payload (scripts/exposure.js)
+data/exposure-*.bin
+data/exposure-*.json
+data/exposure-boxes-*.bin
+data/exposure-boxes-*.json
