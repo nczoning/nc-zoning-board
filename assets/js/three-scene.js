@@ -1674,7 +1674,17 @@ const ThreeScene = (() => {
           // materials were built; the grade has no such dependency).
           applyEdgeGlow(themeEdgeGlowDefault());
           hideLoading();
-          playIntro();
+          // Debug aid: ?cam=px,py,pz,tx,ty,tz (Three.js scene coords, the
+          // getCameraState pose) pins the camera instead of the intro fly-in,
+          // so a verification screenshot is navigate + snap and a camera can
+          // be shared as a URL. Sibling of ?only / ?zonetool.
+          const _cam = new URLSearchParams(location.search).get('cam');
+          if (_cam) {
+            const v = _cam.split(',').map(Number);
+            if (v.length === 6 && v.every(Number.isFinite)) {
+              setCameraState({ position: [v[0], v[1], v[2]], target: [v[3], v[4], v[5]] });
+            } else playIntro();
+          } else playIntro();
         });
 
     } catch (err) {

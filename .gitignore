@@ -124,3 +124,4 @@ worker/.import/
 # outside the repo entirely.
 *.pem
 *.key
+data/run-log.jsonl
