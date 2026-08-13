@@ -1,0 +1,24 @@
+{
+    "id": "ae03469e-bc7a-4cfb-8357-ba5aaf93ccea",
+    "name": "K's H10 Apartment Plus - Blade Runner 2049",
+    "nexus_id": "32605",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1388.0806,
+        1271.1577,
+        123.0649
+    ],
+    "yaw": -97.4005,
+    "tags": [
+        "apartment",
+        "entropism"
+    ],
+    "authors": [
+        "DZxLA"
+    ],
+    "credits": "lbpdude6",
+    "description": "With lbpdude6's ok I'm sharing my version of his solid Officer K's apartment at Megabuilding H10, built on top of his template with World Builder & packed into an archive. I cleaned some stuff up. I added quite a bit to give the apartment varied immersion.",
+    "status": "published",
+    "added_at": "2026-08-12T20:02:50.886Z",
+    "modified_at": "2026-08-12T20:02:50.886Z"
+}
