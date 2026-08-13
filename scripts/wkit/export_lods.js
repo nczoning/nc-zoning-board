@@ -16,9 +16,16 @@
  * uncook_remaining.js exists: the V8 host inside WolvenKit cannot read the
  * filesystem, so anything that depends on what is on disk happens out here.
  *
+ * RESUMABLE, because 32,859 meshes do not fit in one run_wscript window.
+ * Anything already sitting in the all-LOD root is dropped from the list, so
+ * the loop is: generate, run, generate, run, until the list comes back empty.
+ * The same split uncook_remaining.js uses, for the same reason: the V8 host
+ * inside WolvenKit cannot see the filesystem.
+ *
  * Usage:
+ *   node scripts/wkit/export_lods.js data/mesh-export-list.json
  *   node scripts/wkit/export_lods.js data/spike--8_0_0_L2-298522-all.json
- *   node scripts/wkit/export_lods.js --list mylist.json
+ *   node scripts/wkit/export_lods.js data/mesh-export-list.json --all
  *
  * Writes: scripts/wkit/ncz_lod_meshes.wscript
  */
@@ -37,16 +44,26 @@ if (!source) {
 }
 
 const raw = JSON.parse(fs.readFileSync(source, 'utf8'));
-// Accept either a spike bundle (meshes[].depot) or a bare array of paths.
+// A spike bundle (meshes[].depot), the full export list (meshList[].path), or
+// a bare array of paths. Three shapes because the list is wanted at three
+// scales: one building, one district, the whole city.
 const meshes = Array.isArray(raw) ? raw
-  : Array.isArray(raw.meshes) ? raw.meshes.map(m => m.depot || m)
-    : null;
+  : Array.isArray(raw.meshList) ? raw.meshList.map(m => m.path || m)
+    : Array.isArray(raw.meshes) ? raw.meshes.map(m => m.depot || m)
+      : null;
 if (!meshes || !meshes.length) {
   console.error(`no mesh paths in ${source}`);
   process.exit(1);
 }
 
-const uniq = [...new Set(meshes)];
+const LOD_ROOT = 'd:\\Modding\\CP2077 Mods\\MyMods\\map_data_export\\source\\raw_alllod';
+const all = [...new Set(meshes)];
+// Skip what is already exported unless --all is passed. A GLB on disk is the
+// only resume state there is, and it is the honest one: the run that wrote it
+// is over and nothing needs to remember how far it got.
+const uniq = args.includes('--all') ? all
+  : all.filter(p => !fs.existsSync(path.join(LOD_ROOT, p.replace(/\.mesh$/i, '.glb'))));
+
 const out = path.join(__dirname, 'ncz_lod_meshes.wscript');
 // JSON.stringify escapes the backslashes in a depot path correctly. Building
 // this string by hand, or piping it through a shell, is how the last three
@@ -56,5 +73,6 @@ fs.writeFileSync(out,
   `// ${uniq.length} meshes, from ${path.basename(source)}\n` +
   `export const LOD_MESHES = ${JSON.stringify(uniq, null, 2)};\n`);
 
-console.log(`${uniq.length} meshes -> ${path.relative(process.cwd(), out)}`);
-console.log('now run scripts/wkit/uncook_lods.wscript through run_wscript');
+console.log(`${uniq.length} of ${all.length} meshes still to export -> ${path.relative(process.cwd(), out)}`);
+if (!uniq.length) console.log('nothing left: the all-LOD export is complete');
+else console.log('now run scripts/wkit/uncook_lods.wscript through run_wscript, then run this again');
