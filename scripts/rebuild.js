@@ -3,10 +3,10 @@
  * rebuild.js: the whole per-district pipeline as ONE command, with the
  * previous-run comparison built into the output.
  *
- * For each district: district_hull -> score_hull -> encode_hull_dds, metrics
- * parsed from their stdout, appended to data/run-log.jsonl, and DIFFED against
- * the district's previous run. Two controls this session kept paying for are
- * automatic here:
+ * For each district: district_hull -> snap_hull -> score_hull ->
+ * encode_hull_dds, metrics parsed from their stdout, appended to
+ * data/run-log.jsonl, and DIFFED against the district's previous run. Two
+ * controls this session kept paying for are automatic here:
  *
  *   - identical metrics after a change that should move them means the change
  *     did not fire; the diff says IDENTICAL loudly instead of leaving it to
@@ -81,6 +81,13 @@ function stage1IfStale(district) {
 function metricsFor(district) {
   stage1IfStale(district);
   const hull = run('node', ['--max-old-space-size=12288', 'scripts/district_hull.js', district, '--voxel', '2', ...extraHull]);
+  // Snapping is part of building the cloud, not a thing done to it afterwards.
+  // district_hull.js writes a fresh bin every run, so leaving this out of the
+  // pipeline means every rebuild silently discards it and the scores quietly
+  // fall back by six or seven points with nothing to say why. --nosnap skips
+  // it, for measuring the grid on its own.
+  const snap = own.includes('--nosnap') ? ''
+    : run('node', ['--max-old-space-size=12288', 'scripts/snap_hull.js', district]);
   const score = run('node', ['scripts/score_hull.js', district, '--cloud', 'hull']);
   const enc = run('node', ['scripts/encode_hull_dds.js', district]);
   return {
@@ -95,6 +102,7 @@ function metricsFor(district) {
     within2: num(score, /within {4}2 m\s+([\d.]+)%/),
     swallowedPct: num(score, /= ([\d.]+)% of every window/),
     depthP50: num(score, /depth p50 ([\d.]+) m/),
+    facesMoved: num(snap, /MOVED\s+([\d,]+)/),
     slots: num(enc, /([\d,]+) slots/),
     ddsMB: num(enc, /([\d.]+) MB/),
   };
@@ -119,9 +127,9 @@ for (const district of districts) {
   fs.appendFileSync(logFile, JSON.stringify(entry) + '\n');
 
   const rows = [
-    ['boxes', 'boxes'], ['oriented', 'oriented'], ['within 0.5 m %', 'within05'],
-    ['within 1 m %', 'within1'], ['swallowed %', 'swallowedPct'], ['depth p50 m', 'depthP50'],
-    ['dds MB', 'ddsMB'],
+    ['boxes', 'boxes'], ['oriented', 'oriented'], ['faces snapped', 'facesMoved'],
+    ['within 0.5 m %', 'within05'], ['within 1 m %', 'within1'],
+    ['swallowed %', 'swallowedPct'], ['depth p50 m', 'depthP50'], ['dds MB', 'ddsMB'],
   ];
   let allSame = prev !== null;
   for (const [label, key] of rows) {
