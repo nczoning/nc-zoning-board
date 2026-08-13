@@ -222,8 +222,15 @@ class MeshBvh {
    *
    * Moller-Trumbore, two-sided: a kit panel is a single-sided quad and its
    * winding is not something to bet an occlusion test on.
+   *
+   * `tMin` ignores anything nearer than that along the ray. Kit panels butt
+   * against each other, so a ray leaving a facade immediately meets whatever
+   * is bolted to it and every direction reads blocked. Moving the origin off
+   * the surface instead is what a first attempt did, and it pushed the origin
+   * clean through any panel thinner than the offset: 0.18 m panels were cut
+   * 207 times out of 207 while the 0.60 m version beside them survived.
    */
-  hit(ox, oy, oz, dx, dy, dz, tMax) {
+  hit(ox, oy, oz, dx, dy, dz, tMax, tMin = 1e-6) {
     const idx = 1 / dx, idy = 1 / dy, idz = 1 / dz;
     const { nodes, order, tris } = this;
     let best = tMax;
@@ -257,7 +264,7 @@ class MeshBvh {
         const v = (dx * qx + dy * qy + dz * qz) * inv;
         if (v < 0 || u + v > 1) continue;
         const hit = (e2x * qx + e2y * qy + e2z * qz) * inv;
-        if (hit > 1e-6 && hit < best) best = hit;
+        if (hit > tMin && hit < best) best = hit;
       }
     }
     return best;
@@ -339,10 +346,12 @@ class SceneBvh {
    * First hit along a world-space ray.
    *
    * `skip` is an instance index the ray ignores, so a surface can cast from
-   * itself without immediately hitting itself.
+   * itself without immediately hitting itself. `tMin` ignores every instance's
+   * geometry nearer than that along the ray, which is what handles the
+   * NEIGHBOURING placement a kit panel is bolted to.
    * @returns {{t: number, instance: number}} t is Infinity when nothing is hit.
    */
-  hit(ox, oy, oz, dx, dy, dz, tMax, skip = -1) {
+  hit(ox, oy, oz, dx, dy, dz, tMax, skip = -1, tMin = 1e-6) {
     if (!this.built) this.build();
     const { nodes, order } = this.built;
     const idx = 1 / dx, idy = 1 / dy, idz = 1 / dz;
@@ -373,7 +382,7 @@ class SceneBvh {
         const ldz = m[8] * dx + m[9] * dy + m[10] * dz;
         // t is in units of the direction vector, and the transform scales
         // origin and direction alike, so it carries across unchanged.
-        const t = inst.blas.hit(lox, loy, loz, ldx, ldy, ldz, best);
+        const t = inst.blas.hit(lox, loy, loz, ldx, ldy, ldz, best, tMin);
         if (t < best) { best = t; hitInst = ii; }
       }
     }
@@ -381,8 +390,8 @@ class SceneBvh {
   }
 
   /** True when anything blocks the segment. Cheaper than hit(): stops early. */
-  occluded(ox, oy, oz, dx, dy, dz, tMax, skip = -1) {
-    return this.hit(ox, oy, oz, dx, dy, dz, tMax, skip).t < tMax;
+  occluded(ox, oy, oz, dx, dy, dz, tMax, skip = -1, tMin = 1e-6) {
+    return this.hit(ox, oy, oz, dx, dy, dz, tMax, skip, tMin).t < tMax;
   }
 }
 

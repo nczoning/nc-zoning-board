@@ -67,11 +67,23 @@ const RAYS    = flag('rays', 48);      // directions sampled inside the camera c
 // Math.PI * 0.39. Kept as a flag so a future camera change is one number here,
 // but it is a property of the product, not a tuning knob.
 const TILT    = flag('tilt', 180 * 0.39);
-const SAMPLES = flag('samples', 8);    // surface points per placement, at least
+const SAMPLES = flag('samples', 8);    // triangles sampled per placement, at least
 const MAX_SAMPLES = flag('maxsamples', 24);
+// Occluders nearer than this along a ray are ignored: a kit panel is bolted
+// to its neighbours, and without it every direction off a facade reads blocked
+// by the trim in front of it. Anything real that hides a surface is further
+// away than a fitting, and the ray carries on past what is skipped, so a
+// panel with a whole building behind it is still occluded by the building.
+const NEAR_HIT = flag('nearhit', 0.35);
 const MIN_DIM = flag('mindim', 1);     // ignore placements smaller than this
 const LIMIT   = flag('limit', 0);      // test at most this many, spread evenly (0 = all)
 const ONLY_INT = args.includes('--only-int');
+// Test one asset across the whole district. An aggregate cannot answer "is
+// this mesh being cut when it should not be", and a whole-population wipe on
+// one asset is the signature that finds a bug: `207 cut / 0 kept` said more
+// than any percentage did.
+const ai = args.indexOf('--asset');
+const ONLY_ASSET = ai > 0 ? args[ai + 1].toLowerCase() : null;
 
 /**
  * What may occlude. A subdistrict shell is a kilometre-wide extruded boundary
@@ -191,6 +203,7 @@ const candidates = [];
 for (let i = 0; i < nBox; i++) {
   if (instOfBox[i] < 0) { verdict[i] = 3; continue; }
   if (ONLY_INT && !INT_NAME.test(PATHS[box[i * S + 10]] || '')) { verdict[i] = 0; continue; }
+  if (ONLY_ASSET && !(PATHS[box[i * S + 10]] || '').toLowerCase().includes(ONLY_ASSET)) { verdict[i] = 0; continue; }
   candidates.push(i);
 }
 let todo = candidates;
@@ -223,10 +236,18 @@ for (const i of todo) {
   // Sample count follows mesh complexity: eight points describe a wall panel
   // and say almost nothing about a whole building shell. Square root keeps the
   // cost of the big meshes bounded while still walking their length.
-  const want = Math.min(MAX_SAMPLES, Math.max(SAMPLES, Math.round(Math.sqrt(nTri))));
-  const step = Math.max(1, Math.floor(nTri / want));
+  //
+  // THE BUDGET IS TRIANGLES, NOT POINTS, and the difference is not cosmetic.
+  // Budgeting points while pushing two per triangle stops the walk halfway
+  // down the triangle list, so a mesh whose outward face is authored in the
+  // second half is never sampled at all. Measured on one building:
+  // wat_lch_building_c_facade_bottom_b was cut 207 times out of 207, an
+  // exterior wall declared unreachable because the test only ever looked at
+  // its inside.
+  const wantTris = Math.min(MAX_SAMPLES, Math.max(SAMPLES, Math.round(Math.sqrt(nTri))));
+  const step = Math.max(1, Math.floor(nTri / wantTris));
   const pts = [];
-  for (let k = 0; k < nTri && pts.length < want; k += step) {
+  for (let k = 0, taken = 0; k < nTri && taken < wantTris; k += step, taken++) {
     const t = k * 9;
     // Centroid and normal in mesh space, then scaled and rotated into world.
     const lx = (tri[t] + tri[t + 3] + tri[t + 6]) / 3 * sx0;
@@ -246,15 +267,21 @@ for (const i of todo) {
     const wnz = m20 * nx + m21 * ny + m22 * nz;
     // Both sides: a kit panel is one-sided geometry whose winding says
     // nothing about which face is the room and which is the street.
-    pts.push([wx + wnx * 0.05, wy + wny * 0.05, wz + wnz * 0.05]);
-    if (pts.length < want) pts.push([wx - wnx * 0.05, wy - wny * 0.05, wz - wnz * 0.05]);
+    //
+    // The origin stays ON the surface, a couple of centimetres clear. Pushing
+    // it further to escape the neighbour is what NEAR_HIT does instead, and it
+    // has to: a 0.20 m offset lands past the far face of a 0.18 m panel, which
+    // cut wat_lch_building_c_facade_bottom_b 207 times out of 207 while the
+    // 0.60 m panel beside it survived.
+    pts.push([wx + wnx * 0.02, wy + wny * 0.02, wz + wnz * 0.02]);
+    pts.push([wx - wnx * 0.02, wy - wny * 0.02, wz - wnz * 0.02]);
   }
 
   let free = false;
   for (const [px, py, pz] of pts) {
     for (let d = 0; d < RAYS; d++) {
       rays++;
-      if (!scene.occluded(px, py, pz, dirs[d * 3], dirs[d * 3 + 1], dirs[d * 3 + 2], SKY, inst)) { free = true; break; }
+      if (!scene.occluded(px, py, pz, dirs[d * 3], dirs[d * 3 + 1], dirs[d * 3 + 2], SKY, inst, NEAR_HIT)) { free = true; break; }
     }
     if (free) break;
   }
