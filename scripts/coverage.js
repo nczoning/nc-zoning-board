@@ -149,8 +149,6 @@ function trisFor(depot) {
   return t;
 }
 
-const NOT_A_BUILDING = /\\backdrops\\|global_ocean_patch/i;
-let skippedFlat = 0;
 const eligible = [];
 for (let i = 0; i < meta.boxes; i++) {
   const o = i * S;
@@ -159,19 +157,23 @@ for (let i = 0; i < meta.boxes; i++) {
   if (!depot) continue;
   const kind = categorize(depot, TYPE[box[o + 11]] || '');
   if (kind !== 'building') continue;
-  // NOT BUILDINGS, and asset_category does not know it yet. A backdrop is the
-  // painted distant city on a handful of triangles, and an ocean patch is the
-  // sea: between them they were 93% of everything this metric called a hole,
-  // 211,821 m2 of 228,655, and no box cloud should be representing either.
-  if (NOT_A_BUILDING.test(depot)) { skippedFlat++; continue; }
   eligible.push(i);
 }
 const step = Math.max(1, Math.floor(eligible.length / Math.max(1, Math.floor(WANT / 8))));
 console.log(`district ${name}   cloud ${CLOUD}: ${B.length.toLocaleString()} boxes`);
 console.log(`  sampling  every ${step} of ${eligible.length.toLocaleString()} building placements\n`);
 
+// The pipeline deliberately cuts geometry buried deeper than BELOW metres
+// under the terrain surface (basements, metro, quest blackout volumes), so the
+// metric must not ask about it: on pacifica, one buried quest shroud
+// (q110_black_box, sheets at z -80 to -650) was 66% of all sampled area and
+// drowned every real number.
+const { loadTerrain, indexTris, heightAtCet } = require('./terrain_lib');
+const BELOW = Number(flag('below', 16));
+const terrain = indexTris(loadTerrain());
+
 const hist = new Array(THRESH.length + 1).fill(0);
-let area = 0, uncovered = 0, samples = 0;
+let area = 0, uncovered = 0, samples = 0, buried = 0;
 const holes = new Map();   // 32 m cell -> uncovered area, for somewhere to look
 const byAsset = new Map(); // depot path -> uncovered area, for what kind of thing it is
 
@@ -204,6 +206,9 @@ for (let e = 0; e < eligible.length; e += step) {
     const wy = py0 + m10 * lx + m11 * ly + m12 * lz;
     const wz = pz0 + m20 * lx + m21 * ly + m22 * lz;
 
+    const g = heightAtCet(terrain, wx, wy);
+    if (g !== null && wz < g - BELOW) { buried++; continue; }
+
     const d = distToCloud(wx, wy, wz);
     samples++; area += a2;
     let bucket = THRESH.length;
@@ -225,7 +230,8 @@ for (let e = 0; e < eligible.length; e += step) {
   }
 }
 
-console.log(`  samples   ${samples.toLocaleString()} triangles, ${Math.round(area).toLocaleString()} m2 of real surface\n`);
+console.log(`  samples   ${samples.toLocaleString()} triangles, ${Math.round(area).toLocaleString()} m2 of real surface ` +
+            `(${buried.toLocaleString()} buried > ${BELOW} m below terrain, skipped)\n`);
 console.log('  real surface within D of a box, by AREA:');
 let cum = 0;
 for (let b = 0; b < THRESH.length; b++) {

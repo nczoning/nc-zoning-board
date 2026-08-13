@@ -80,7 +80,12 @@ function stage1IfStale(district) {
 
 function metricsFor(district) {
   stage1IfStale(district);
-  const hull = run('node', ['--max-old-space-size=12288', 'scripts/district_hull.js', district, '--voxel', '2', ...extraHull]);
+  // --footprint swaps the stage-2 generator: coarse oriented massing
+  // (footprint_hull.js) instead of the voxel hull. Same output file, so the
+  // rest of the pipeline and the run diff are identical either way.
+  const hull = own.includes('--footprint')
+    ? run('node', ['--max-old-space-size=12288', 'scripts/footprint_hull.js', district, ...extraHull])
+    : run('node', ['--max-old-space-size=12288', 'scripts/district_hull.js', district, '--voxel', '2', ...extraHull]);
   // Snapping is part of building the cloud, not a thing done to it afterwards.
   // district_hull.js writes a fresh bin every run, so leaving this out of the
   // pipeline means every rebuild silently discards it and the scores quietly
@@ -91,7 +96,7 @@ function metricsFor(district) {
   const score = run('node', ['scripts/score_hull.js', district, '--cloud', 'hull']);
   const enc = run('node', ['scripts/encode_hull_dds.js', district]);
   return {
-    boxes: num(hull, /BOXES\s+([\d,]+) after greedy merge/),
+    boxes: num(hull, /BOXES\s+([\d,]+) after /),
     axis: num(hull, /\(([\d,]+) axis/),
     oriented: num(hull, /axis \+ ([\d,]+) oriented/),
     rotatedPlacements: num(hull, /rotated\s+([\d,]+) placements/),
