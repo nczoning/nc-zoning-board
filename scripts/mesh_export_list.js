@@ -36,12 +36,25 @@ const argOf = (k, d) => { const i = args.indexOf(`--${k}`); return i > 0 ? args[
 const dumpDir = argOf('dump', DEFAULT_DUMP);
 const only = argOf('districts', null);
 
-const MIN_SIZE = 2;      // below this a box is a fine approximation of a bollard
-const MAX_SIZE = 1000;   // above this it is not a building
+// 2 m was the floor while every placement became a box, on the argument that a
+// box approximates a bollard well enough. Real geometry has no such fallback:
+// below the floor an asset is absent, not coarse. A railing along a roof edge
+// or a cluster of vents is what makes a roofline read as a building rather than
+// an extruded slab, and in a blueprint style, where the drawing is silhouette
+// and edge, small vertical relief earns more per triangle than it would in a
+// lit render. It also costs nothing at distance, because it only ever needs to
+// exist in the near LOD tier.
+const MIN_SIZE = Number(argOf('minsize', 0.3));
+const MAX_SIZE = Number(argOf('maxsize', 1000));   // above this it is not a building
 const NEVER = new Set([
   'StaticOccluderMesh', 'StaticLight', 'Advertisement', 'WaterPatch', 'Foliage', 'Mirror',
   'TerrainProxyMesh',
 ]);
+// Destructible pools are LITTER, measured: 59.8% of them are under 0.5 m and
+// 98.3% under 2 m, and the top assets are soda cans, beer bottles, bloody rags
+// and takeout cups. Lowering the size floor would sweep all of it in, so the
+// floor is not the gate for this class; the node type is.
+const CLUTTER = new Set(['InstancedDestructibleMesh', 'PhysicalDestruction', 'BakedDestruction']);
 
 // Every district the game defines a trigger polygon for, plus its bbox so the
 // point test runs only where it can pass. Read from subdistricts.json rather
@@ -110,7 +123,7 @@ async function main() {
     }
     inAny++;
 
-    if (NEVER.has(p[2])) return;
+    if (NEVER.has(p[2]) || CLUTTER.has(p[2])) return;
     const a = assets.get(+p[3]);
     if (!a) return;
     if (a.path.startsWith('base\\fx\\') || a.path.startsWith('base\\lighting\\')) return;
