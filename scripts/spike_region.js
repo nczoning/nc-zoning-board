@@ -47,6 +47,9 @@ const NEAR_LOD = Number(flag('nearlod', 2));   // mask 2 = LOD1
 const MID_LOD = Number(flag('midlod', 4));     // mask 4 = LOD2
 const MIN_PLACEMENTS = Number(flag('minplacements', 40));
 const SPREAD = Number(flag('spread', 0));   // metres of minimum separation between chosen buildings
+// Cell for placements with no prefab ref. 64 m is the game's own L0 sector
+// cell, so a group is a piece of city at the scale the world was authored in.
+const GRID = Number(flag('grid', 64));
 
 const dataDir = path.join(__dirname, '..', 'data');
 const meta = JSON.parse(fs.readFileSync(path.join(dataDir, `district-boxes-${district}.json`), 'utf8'));
@@ -60,16 +63,23 @@ if (S < 20) {
   process.exit(1);
 }
 
-// ── Group placements into assemblies ──────────────────────────────────────
+// ── Group placements ──────────────────────────────────────────────────────
+// SPATIAL FIRST, assembly second. Keying on sector|prefab alone drops every
+// placement the dump gives no prefab ref, which is 46.5% of this region: the
+// near and mid tiers came out missing half their geometry while the far tier,
+// built from all placements, looked the most complete of the three. A group
+// has to be a piece of the CITY, and an assembly is a good name for one when
+// the dump supplies it, not a precondition for existing.
 const asm = new Map();
 for (let i = 0; i < nBox; i++) {
   const o = i * S;
-  const id = box[o + 19];
-  if (!(id >= 0)) continue;                       // no prefab ref: not a building group
   const depot = PATHS[box[o + 10]];
   if (!depot) continue;
   const kind = categorize(depot, TYPE[box[o + 11]] || '');
   if (kind === 'never' || kind === 'boundary' || kind === 'terrain' || kind === 'proxy') continue;
+  const aid = box[o + 19];
+  const id = aid >= 0 ? `a${aid}`
+    : `g${Math.floor(box[o] / GRID)}_${Math.floor(box[o + 1] / GRID)}_${Math.floor(box[o + 2] / GRID)}`;
   let g = asm.get(id);
   if (!g) asm.set(id, g = { id, list: [], x0: Infinity, y0: Infinity, z0: Infinity, x1: -Infinity, y1: -Infinity, z1: -Infinity });
   g.list.push(i);
@@ -211,7 +221,7 @@ for (const g of groups) {
   const boxArr = Float32Array.from(boxes);
 
   buildings.push({
-    assembly: g.id,
+    group: g.id,
     placements: live.length,
     bounds: { min: [g.x0, g.y0, g.z0], max: [g.x1, g.y1, g.z1] },
     instances: { byteOffset: instOff, count: live.length },

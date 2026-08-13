@@ -218,24 +218,34 @@ function tierFor(bld) {
 }
 
 const counts = [0, 0, 0];
+let lastColour = -1;
+
+/** Repaint one building to match its tier and the colour mode. */
+function paintBuilding(bld) {
+  const m = colour === 0 ? NEUTRAL : TIER_MAT[bld.tier];
+  bld.near.traverse(o => { if (o.isMesh) o.material = m; });
+  bld.mid.material = m;
+  bld.far.material = m;
+}
+
 function applyTiers() {
   counts[0] = counts[1] = counts[2] = 0;
+  const colourChanged = colour !== lastColour;
   for (const bld of builds) {
     const t = tierFor(bld);
     counts[t]++;
-    if (t === bld.tier) continue;
+    const tierChanged = t !== bld.tier;
+    if (!tierChanged && !colourChanged) continue;
     bld.tier = t;
     bld.near.visible = t === 0;
     bld.mid.visible = t === 1;
     bld.far.visible = t === 2;
+    // Only the buildings that actually changed. Walking every building's
+    // InstancedMeshes every frame to reassign a material it already has is
+    // work proportional to the whole region, done sixty times a second.
+    paintBuilding(bld);
   }
-  const mat = colour === 0 ? null : TIER_MAT;
-  for (const bld of builds) {
-    const m = mat ? mat[bld.tier] : NEUTRAL;
-    bld.near.traverse(o => { if (o.isMesh) o.material = m; });
-    bld.mid.material = m;
-    bld.far.material = m;
-  }
+  lastColour = colour;
 }
 
 function mkButtons(host, items, get, set) {
@@ -267,6 +277,24 @@ addEventListener('keydown', (e) => {
   else return;
   paint();
 });
+
+// ── Warm the pipelines before anything is hidden ──────────────────────────
+// Switching a building to a tier whose geometry has never been drawn is when
+// WebGPU compiles that pipeline and uploads those buffers, and it does it
+// inside the frame: the cost lands as a hitch exactly at the transition, and
+// then never again, which is why it "settles". A tier system whose every
+// boundary crossing stutters once is not fixed by the stutter being rare.
+//
+// Compiling with EVERY tier of every building visible pays all of it up front,
+// where a loading pause is expected and a hitch is not.
+hud.textContent = 'compiling pipelines…';
+for (const bld of builds) { bld.near.visible = true; bld.mid.visible = true; bld.far.visible = true; }
+if (renderer.compileAsync) {
+  await renderer.compileAsync(scene, camera);
+} else {
+  renderer.render(scene, camera);   // fallback: one warm frame with everything on
+}
+for (const bld of builds) { bld.tier = -1; }
 
 // Frame the region.
 {
