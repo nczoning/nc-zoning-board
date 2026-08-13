@@ -145,3 +145,8 @@ scripts/wkit/ncz_lod_meshes.wscript
 # Generated missing-geometry report: rebuild with
 #   node scripts/missing_geometry.js
 data/missing-geometry.json
+
+# Spike region bundle: rebuild with
+#   node scripts/spike_region.js <district> --spread 220
+data/region-*.bin
+data/region-*.json
