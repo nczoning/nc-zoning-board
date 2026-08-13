@@ -1181,6 +1181,10 @@ rotBoxes.forEach((b, j) => {
   buf[o + 6] = b.q[0]; buf[o + 7] = b.q[1]; buf[o + 8] = b.q[2]; buf[o + 9] = b.q[3];
 });
 fs.writeFileSync(path.join(dataDir, `district-hull-${name}.bin`), Buffer.from(buf.buffer));
+// A fresh cloud invalidates the pre-snap backup: snap_hull reads .presnap.bin
+// as its input whenever one exists, so a stale backup makes every rebuild
+// silently snap and ship the OLD cloud (it did, from 2026-08-12 to -14).
+fs.rmSync(path.join(dataDir, `district-hull-${name}.presnap.bin`), { force: true });
 
 const sizes = compSizes.sort((a, b) => b - a);
 fs.writeFileSync(path.join(dataDir, `district-hull-${name}.json`), JSON.stringify({
