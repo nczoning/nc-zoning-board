@@ -16,6 +16,9 @@
  *   infrastructure  road decks, plaza plates, pools, sidewalk aprons: the
  *                   roads overlay draws this level, preserved not discarded
  *   boundary        district/subdistrict trigger volumes: never rendered
+ *   backdrop        the painted distant-city planes and the ocean sheet:
+ *                   scenery for the horizon, not geometry any cloud should
+ *                   represent (downtown.mesh is 161,821 m2 on nine triangles)
  *   terrain         the terrain and its proxies: the hull clips against the
  *                   real surface instead
  *   never           occluders, lights, water, foliage, mirrors: helper
@@ -46,6 +49,9 @@ const isDeckProxy = p => /\\(prx\d*|pool)\.mesh$/i.test(p) || (/_sidewalk/i.test
 // Signage does not always say Advertisement: the 217x39x258 m
 // signage_city_center_glassframe_c is typed GenericProxyMesh.
 const isSignage = p => /\\(signage|billboard)_[^\\]*\.mesh$/i.test(p);
+// Horizon scenery: between them, backdrops and ocean patches were 93% of the
+// area the coverage metric first called holes (211,821 m2 of 228,655).
+const isBackdrop = p => p.includes('\\backdrops\\') || /global_ocean_patch/i.test(p);
 
 /** Identity category for one placement. Size and level policy stay with the consumer. */
 function categorize(path, nodeType) {
@@ -54,9 +60,10 @@ function categorize(path, nodeType) {
   if (nodeType === 'TerrainProxyMesh' || isTerrain(p)) return 'terrain';
   if (NEVER_TYPES.has(nodeType)) return 'never';
   if (nodeType === 'RoadProxyMesh' || isDeckProxy(p)) return 'infrastructure';
+  if (isBackdrop(p)) return 'backdrop';
   if (isSubdistrictShell(p)) return 'boundary';
   if (isProxy(p)) return 'proxy';
   return 'building';
 }
 
-module.exports = { categorize, isProxy, isTerrain, isSubdistrictShell, isDeckProxy, isSignage, NEVER_TYPES };
+module.exports = { categorize, isProxy, isTerrain, isSubdistrictShell, isDeckProxy, isSignage, isBackdrop, NEVER_TYPES };
