@@ -150,3 +150,7 @@ data/missing-geometry.json
 #   node scripts/spike_region.js <district> --spread 220
 data/region-*.bin
 data/region-*.json
+
+# Pre-snap hull, kept so a score can be taken either way:
+#   node scripts/snap_hull.js <district> --restore
+data/district-hull-*.presnap.bin
