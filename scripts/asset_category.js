@@ -46,9 +46,20 @@ const isProxy = p =>
 const isTerrain = p => p.includes('\\_global\\terrain\\') || /_terrain[_.]/i.test(p.split('\\').pop() || '');
 // Vegetation and rocks are scenery, not skyline. A category of their own so
 // a district that wants its landmarks back (badlands mesas) can opt in.
+// Rock folders and files both pluralise freely (generic_rocks\rocks_large_b),
+// so the folder test is a substring and the filename allows rock/rocks.
 const isNature = p =>
   /\\(vegetation|foliage|trees?|bushes|greenery)\\/i.test(p) ||
-  /\\rocks?\\/i.test(p) || /\\rock_[^\\]*\.mesh$/i.test(p) || /\\cliff[^\\]*\.mesh$/i.test(p);
+  /\\[^\\]*rocks?\\/i.test(p) || /\\rocks?_[^\\]*\.mesh$/i.test(p) || /\\cliff[^\\]*\.mesh$/i.test(p);
+// Glass canopies and skylights leave the cloud the way CDPR's own cloud
+// leaves them (the roundabout canopy and the GIM skylight read as solid
+// slabs otherwise). Signage is checked first, so glassframe signs keep
+// their category.
+const isGlass = p => /glass/i.test(p.split('\\').pop() || '');
+// Cyberspace scenery: skydomes and the Beyond-the-Blackwall set dress quest
+// space, not the city (beyondblackwall_sky.mesh is a 100 m sphere over
+// West Wind Estate).
+const isCyberspace = p => p.includes('\\beyond_blackwall\\') || /_sky\.mesh$/i.test(p);
 // A subdistrict shell is the trigger volume's geometry: an extruded boundary
 // polygon. 269 exist, 216 under any workable size gate, down to 102 m.
 const isSubdistrictShell = p => /_subdistrict[^\\]*\.mesh$/i.test(p);
@@ -74,11 +85,12 @@ function categorize(path, nodeType) {
   if (NEVER_TYPES.has(nodeType)) return 'never';
   if (nodeType === 'RoadProxyMesh' || isDeckProxy(p)) return 'infrastructure';
   if (isBackdrop(p)) return 'backdrop';
-  if (isQuestItem(p)) return 'never';
+  if (isQuestItem(p) || isCyberspace(p)) return 'never';
   if (isNature(p)) return 'nature';
+  if (isGlass(p)) return 'glass';
   if (isSubdistrictShell(p)) return 'boundary';
   if (isProxy(p)) return 'proxy';
   return 'building';
 }
 
-module.exports = { categorize, isProxy, isTerrain, isSubdistrictShell, isDeckProxy, isSignage, isBackdrop, isNature, NEVER_TYPES };
+module.exports = { categorize, isProxy, isTerrain, isSubdistrictShell, isDeckProxy, isSignage, isBackdrop, isNature, isGlass, NEVER_TYPES };
