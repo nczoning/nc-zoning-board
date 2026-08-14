@@ -42,7 +42,7 @@ function decodeWithScan(meta) {
       const scan = y * blockW + x;
       const pi = (y * texW + x) * 4;
       const si = (y * texW + x + 2 * blockW) * 4;
-      const scaleEmpty = pixels[si] < T && pixels[si + 1] < T && pixels[si + 2] < T;
+      const scaleEmpty = pixels[si] === 0 && pixels[si + 1] === 0 && pixels[si + 2] === 0;
       if (pixels[pi + 3] < T || scaleEmpty) { emptyRun++; continue; }
       const pr = pixels[pi] / U, pg = pixels[pi + 1] / U;
       const cetX = tMin[0] + (tMax[0] - tMin[0]) * pr + ofs[0];

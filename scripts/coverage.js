@@ -72,7 +72,9 @@ if (CLOUD === 'hull') {
     for (let x = 0; x < blockW; x++) {
       const pi = (y * texW + x) * 4, ri = (y * texW + x + blockW) * 4, si = (y * texW + x + 2 * blockW) * 4;
       if (px[pi + 3] < ALPHA) continue;
-      if (px[si] < ALPHA && px[si + 1] < ALPHA && px[si + 2] < ALPHA) continue;
+      // Exact zero: the 1% threshold is 1% of cubeSize and silently dropped
+      // every sub-3-m box from the decode (see three-scene.js loadBuildings).
+      if (px[si] === 0 && px[si + 1] === 0 && px[si + 2] === 0) continue;
       const c = [
         META.transMin[0] + (META.transMax[0] - META.transMin[0]) * (px[pi] / U16) + META.offset[0],
         META.transMin[1] + (META.transMax[1] - META.transMin[1]) * (px[pi + 1] / U16) + META.offset[1],

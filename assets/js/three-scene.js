@@ -3520,9 +3520,14 @@ const ThreeScene = (() => {
             // with ZERO SCALE instead (see docs/3dmap-fixed-assets.md).
             // Skip on either; on base-game data the two sets coincide, so this
             // is a no-op there.
-            const scaleEmpty = pixels[si + 0] < NCZ.DDS_ALPHA_THRESH
-                            && pixels[si + 1] < NCZ.DDS_ALPHA_THRESH
-                            && pixels[si + 2] < NCZ.DDS_ALPHA_THRESH;
+            // EXACT zero, never a threshold. The scale channels are halfExtent
+            // divided by cubeSize (the district's largest box), so a relative
+            // cutoff scales with the biggest building and deletes real sub-3-m
+            // boxes at load. A zeroed scale block is exactly zero in
+            // malgalad's empties; a real 0.3 m box encodes to at least 16.
+            const scaleEmpty = pixels[si + 0] === 0
+                            && pixels[si + 1] === 0
+                            && pixels[si + 2] === 0;
             if (pixels[pi + 3] < NCZ.DDS_ALPHA_THRESH || scaleEmpty) continue;
 
             // Decode position → CET world space

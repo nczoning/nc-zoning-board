@@ -111,7 +111,7 @@ function decodeDistrict(meta) {
       const pi = (y * texW + x) * 4;
       const ri = (y * texW + x + blockW) * 4;
       const si = (y * texW + x + 2 * blockW) * 4;
-      const scaleEmpty = pixels[si] < T && pixels[si + 1] < T && pixels[si + 2] < T;
+      const scaleEmpty = pixels[si] === 0 && pixels[si + 1] === 0 && pixels[si + 2] === 0;
       if (pixels[pi + 3] < T || scaleEmpty) continue;
 
       const pr = pixels[pi] / U, pg = pixels[pi + 1] / U, pb = pixels[pi + 2] / U;
