@@ -709,6 +709,18 @@ const ThreeScene = (() => {
       if (typeof probeAdapter?.limits?.maxStorageBuffersInVertexStage === 'number') {
         requiredLimits.maxStorageBuffersInVertexStage = 1;
       }
+      // Buffer SIZE limits, not just the visibility opt-in above. The
+      // defaults (128 MiB per storage binding, 256 MiB per buffer) cap a
+      // district's per-instance storage near 800k instances: decode and
+      // instancing succeed, the draw silently never happens. Request
+      // whatever the adapter actually has; both names are core WebGPU,
+      // recognised by every implementation.
+      if (typeof probeAdapter?.limits?.maxStorageBufferBindingSize === 'number') {
+        requiredLimits.maxStorageBufferBindingSize = probeAdapter.limits.maxStorageBufferBindingSize;
+      }
+      if (typeof probeAdapter?.limits?.maxBufferSize === 'number') {
+        requiredLimits.maxBufferSize = probeAdapter.limits.maxBufferSize;
+      }
     } catch (_) {
       // No navigator.gpu / adapter; WebGPURenderer falls back to WebGL2 on
       // its own; nothing to require here.
