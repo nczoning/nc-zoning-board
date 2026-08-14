@@ -80,12 +80,13 @@ function stage1IfStale(district) {
 
 function metricsFor(district) {
   stage1IfStale(district);
-  // --footprint swaps the stage-2 generator: coarse oriented massing
-  // (footprint_hull.js) instead of the voxel hull. Same output file, so the
-  // rest of the pipeline and the run diff are identical either way.
-  const hull = own.includes('--footprint')
-    ? run('node', ['--max-old-space-size=12288', 'scripts/footprint_hull.js', district, ...extraHull])
-    : run('node', ['--max-old-space-size=12288', 'scripts/district_hull.js', district, '--voxel', '2', ...extraHull]);
+  // --topdown / --footprint swap the stage-2 generator. Same output file, so
+  // the rest of the pipeline and the run diff are identical either way.
+  const hull = own.includes('--topdown')
+    ? run('node', ['--max-old-space-size=12288', 'scripts/topdown_hull.js', district, ...extraHull])
+    : own.includes('--footprint')
+      ? run('node', ['--max-old-space-size=12288', 'scripts/footprint_hull.js', district, ...extraHull])
+      : run('node', ['--max-old-space-size=12288', 'scripts/district_hull.js', district, '--voxel', '2', ...extraHull]);
   // Snapping is part of building the cloud, not a thing done to it afterwards.
   // district_hull.js writes a fresh bin every run, so leaving this out of the
   // pipeline means every rebuild silently discards it and the scores quietly
