@@ -55,10 +55,27 @@ const isNature = p =>
 // leaves them (the roundabout canopy and the GIM skylight read as solid
 // slabs otherwise). Signage is checked first, so glassframe signs keep
 // their category.
-// Skylight frames ride with their glazing, and "transparent window" shells
-// (arch_mproxy_transparent_window.mesh, 234 m over the GIM) are glazing by
-// name however their folder is spelled.
-const isGlass = p => /glass|skylight|transparent/i.test(p.split('\\').pop() || '');
+// Glass is a MATERIAL verdict, not a filename one: a skylight frame is metal
+// named like its glazing. build_glass_share.js joins the night dump's
+// material chains (every .mi resolved to its root shader) to each mesh; a
+// mesh mostly made of glass-rooted materials is glass. The filename fallback
+// covers only *_glass meshes absent from the dump join.
+let glassShare = null;
+function isGlass(p) {
+  if (glassShare === null) {
+    try {
+      glassShare = JSON.parse(require('fs').readFileSync(
+        require('path').join(__dirname, '..', 'data', 'asset-glass-share.json'), 'utf8'));
+    } catch { glassShare = {}; }
+  }
+  const nameGlass = /_glass[^\\]*\.mesh$/i.test(p.split('\\').pop() || '');
+  const s = glassShare[p];
+  // Share alone when it is decisive; share AND name when the mesh mixes its
+  // frame into the same chunks (the roundabout canopy is half glass by chunk
+  // count). A frame mesh has neither the share nor the name.
+  if (s !== undefined) return s >= 0.65 || (s >= 0.3 && nameGlass);
+  return nameGlass;
+}
 // Cyberspace scenery: skydomes and the Beyond-the-Blackwall set dress quest
 // space, not the city (beyondblackwall_sky.mesh is a 100 m sphere over
 // West Wind Estate).

@@ -119,7 +119,12 @@ function decompose(aid, sx, sy, sz) {
   // the city's box count went. Bigger assets keep ~24 cells across their
   // longest dimension, so towers keep their shape.
   const extent = Math.max(x1 - x0, y1 - y0, z1 - z0);
-  if (extent < 4) {
+  // Rod-like assets (track segments, rails, beams, pipes: thin cross-section,
+  // long axis) are one box by nature; decomposing them at grid resolution
+  // steps every internal curve and multiplies the count.
+  const dims = [x1 - x0, y1 - y0, z1 - z0].sort((a, b) => b - a);
+  const rodLike = dims[1] < 3 && dims[2] < 3 && dims[0] / Math.max(0.1, dims[1]) >= 3;
+  if (extent < 4 || rodLike) {
     const out1 = Float32Array.from([
       (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2,
       Math.max(0.05, (x1 - x0) / 2), Math.max(0.05, (y1 - y0) / 2), Math.max(0.05, (z1 - z0) / 2),
@@ -372,28 +377,32 @@ const MERGE_ROUNDS = flag('mergerounds', 3);
 const doMerge = !args.includes('--nomerge');
 let droppedContained = 0, fusedRuns = 0;
 if (doMerge) {
-  const passthrough = [];
+  // Buckets carry the FULL rotation (canonical sign, ~0.1 degree), so
+  // pitched and rolled kit merges in its own frame exactly like yawed kit:
+  // stair stringers, ramp panels and coaster supports repeat at one
+  // rotation the same way wall panels repeat at one yaw.
   const buckets = new Map();
   for (const b of kept) {
-    if (Math.abs(b.q[0]) > 0.01 || Math.abs(b.q[1]) > 0.01) { passthrough.push(b); continue; }
-    const yaw = Math.atan2(2 * (b.q[3] * b.q[2]), 1 - 2 * (b.q[2] * b.q[2]));
-    const key = Math.round(yaw * 1800 / Math.PI);   // 0.1 degree buckets
-    let l = buckets.get(key); if (!l) buckets.set(key, l = []);
-    l.push(b);
+    const q = b.q[3] < 0 ? [-b.q[0], -b.q[1], -b.q[2], -b.q[3]] : b.q;
+    const key = `${Math.round(q[0] * 2000)},${Math.round(q[1] * 2000)},${Math.round(q[2] * 2000)},${Math.round(q[3] * 2000)}`;
+    let l = buckets.get(key); if (!l) buckets.set(key, l = { q, list: [] });
+    l.list.push(b);
   }
 
   const merged = [];
-  for (const [key, list] of buckets) {
-    const yaw = key * Math.PI / 1800;
-    const ca = Math.cos(yaw), sa = Math.sin(yaw);
-    // Into the frame: axis-aligned intervals.
+  for (const { q, list } of buckets.values()) {
+    const m = quatToMat(q[0], q[1], q[2], q[3]);
+    // Into the frame (inverse rotation is the transpose): every box in the
+    // bucket shares this rotation, so all are axis-aligned here and their
+    // half extents carry over unchanged.
     let items = list.map(b => {
-      const fx = ca * b.c[0] + sa * b.c[1];
-      const fy = -sa * b.c[0] + ca * b.c[1];
+      const fx = m[0] * b.c[0] + m[3] * b.c[1] + m[6] * b.c[2];
+      const fy = m[1] * b.c[0] + m[4] * b.c[1] + m[7] * b.c[2];
+      const fz = m[2] * b.c[0] + m[5] * b.c[1] + m[8] * b.c[2];
       return {
         x0: fx - b.h[0], x1: fx + b.h[0],
         y0: fy - b.h[1], y1: fy + b.h[1],
-        z0: b.c[2] - b.h[2], z1: b.c[2] + b.h[2],
+        z0: fz - b.h[2], z1: fz + b.h[2],
       };
     });
 
@@ -466,17 +475,19 @@ if (doMerge) {
     }
 
     // Back to world.
-    const qz = Math.sin(yaw / 2), qw = Math.cos(yaw / 2);
     for (const it of items) {
-      const fx = (it.x0 + it.x1) / 2, fy = (it.y0 + it.y1) / 2;
+      const fx = (it.x0 + it.x1) / 2, fy = (it.y0 + it.y1) / 2, fz = (it.z0 + it.z1) / 2;
       merged.push({
-        c: [ca * fx - sa * fy, sa * fx + ca * fy, (it.z0 + it.z1) / 2],
+        c: [
+          m[0] * fx + m[1] * fy + m[2] * fz,
+          m[3] * fx + m[4] * fy + m[5] * fz,
+          m[6] * fx + m[7] * fy + m[8] * fz,
+        ],
         h: [(it.x1 - it.x0) / 2, (it.y1 - it.y0) / 2, (it.z1 - it.z0) / 2],
-        q: key === 0 ? [0, 0, 0, 1] : [0, 0, qz, qw],
+        q: [q[0], q[1], q[2], q[3]],
       });
     }
   }
-  for (const b of passthrough) merged.push(b);
   console.log(`  merge     ${kept.length.toLocaleString()} -> ${merged.length.toLocaleString()} boxes ` +
               `(${droppedContained.toLocaleString()} contained dropped, ${fusedRuns.toLocaleString()} run fusions)`);
   kept.length = 0;
