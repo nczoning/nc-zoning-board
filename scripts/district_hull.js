@@ -95,6 +95,11 @@ const useRot = !args.includes('--norot');
 // its bounding box occupy the same cells, and reading a GLB for each one costs
 // far more than it returns.
 const RAW_ROOT = 'd:/Modding/CP2077 Mods/MyMods/map_data_export/source/raw';
+const ALLLOD_ROOT = 'd:/Modding/CP2077 Mods/MyMods/map_data_export/source/raw_alllod';
+// --lod N rasterises from the game's own LOD N (fallback finer) instead of
+// full-detail LOD0. At a 2 m cell, sub-cell detail is slivers and trim:
+// cost without effect on the boxes.
+const MESH_LOD = flag('lod', 0);
 const MESH_MIN = flag('meshmin', 6);   // metres; below this a box is the same answer
 const useMeshes = !args.includes('--boxes');
 const { glbPathFor, meshTriangles } = require('./glb_lib');
@@ -189,7 +194,12 @@ function classify(i) {
   const nodeType = TYPE[box[o + 11]];
   const p = assetPath[box[o + 10]] || '';
   const cat = categorize(p, nodeType);
-  if (cat !== 'building' && cat !== 'proxy') { skippedNever++; return null; }
+  // Infrastructure enters the grid too: bridge decks, pillars and barriers
+  // are structure the skyline needs. Road SURFACES at grade come in with
+  // them and leave again via the ground strip (short columns near terrain),
+  // so what survives is exactly the elevated structure. The roads overlay
+  // keeps drawing the ribbon itself.
+  if (cat !== 'building' && cat !== 'proxy' && cat !== 'infrastructure') { skippedNever++; return null; }
   // At L5 and above a proxy stands in for a whole subdistrict whatever the
   // node type says. exterior.mesh is typed BuildingProxyMesh and sits at L6,
   // and it is a shell the size of the district, so the "a building proxy IS a
@@ -403,9 +413,10 @@ for (const [aid, list] of byAsset) {
   const p = assetPath[aid] || '';
   const big = list.some(i => Math.max(box[i * S + 3], box[i * S + 4], box[i * S + 5]) * 2 >= MESH_MIN);
   if (useMeshes && p && big) {
-    const file = glbPathFor(RAW_ROOT, p);
+    let file = MESH_LOD > 0 ? glbPathFor(ALLLOD_ROOT, p) : glbPathFor(RAW_ROOT, p);
+    if (!fs.existsSync(file)) file = glbPathFor(RAW_ROOT, p);
     if (fs.existsSync(file)) {
-      try { tris = meshTriangles(file); if (!tris.length) tris = null; } catch { tris = null; }
+      try { tris = meshTriangles(file, MESH_LOD); if (!tris.length) tris = null; } catch { tris = null; }
     }
     if (tris) { meshHits++; meshTris += tris.length / 9; } else meshMisses++;
   }
@@ -449,17 +460,43 @@ function proxyTris(aid) {
   proxyTrisCache.set(aid, tris);
   return tris;
 }
+// --proxydebug <substring> prints every gate decision for matching assets:
+// which proxies were probed, their coverage, and what they marked.
+const pdbgIdx = args.indexOf('--proxydebug');
+const PROXY_DEBUG = pdbgIdx > 0 ? String(args[pdbgIdx + 1]).toLowerCase() : null;
 proxies.sort((a, b) =>
   box[a * S + 3] * box[a * S + 4] * box[a * S + 5] - box[b * S + 3] * box[b * S + 4] * box[b * S + 5]);
+// A proxy with TRIANGLES always marks: rasterising only touches cells
+// nothing else claimed, so it is complement-filling by construction, and the
+// per-placement coverage gate it replaces was deleting buildings. A tower
+// proxy standing on its own already-voxelised lower kit arrives 37-89%
+// covered, and rejecting the whole placement deleted the rest of the tower:
+// cct_cpz_building_a_v6_uf_v2 lost six instances that way, which was Corpo
+// Plaza's missing skyline. The kilometre shells the gate was written for no
+// longer reach this loop (PROXY_MAX, the _subdistrict boundary category and
+// the backdrop category take them earlier).
+//
+// The BOX fallback keeps the gate: a proxy's bbox is mostly air, and marking
+// it over a detailed area buries the detail in one solid slab.
 for (const i of proxies) {
-  const { seen, occupied } = visit(i, 'probe');
-  if (seen === 0) continue;
-  if (occupied / seen >= PROXY_COVER) { proxyCovered++; continue; }
+  const dbg = PROXY_DEBUG && (assetPath[box[i * S + 10]] || '').toLowerCase().includes(PROXY_DEBUG);
   const tris = proxyTris(box[i * S + 10]);
+  const before = voxelised;
   if (tris) {
     visitMesh(i, tris); proxyMeshed++;
     if (useRot && isRotated(i)) recordRotJob(i, tris);
-  } else visit(i, 'mark');
+    if (dbg) console.log(`  [pdbg] ${assetPath[box[i * S + 10]]}: triangles, marked ${(voxelised - before).toLocaleString()} cells`);
+    proxyUsed++;
+    continue;
+  }
+  const { seen, occupied } = visit(i, 'probe');
+  if (seen === 0) { if (dbg) console.log(`  [pdbg] ${assetPath[box[i * S + 10]]}: seen 0, SKIPPED`); continue; }
+  if (occupied / seen >= PROXY_COVER) {
+    if (dbg) console.log(`  [pdbg] ${assetPath[box[i * S + 10]]}: box fallback, covered ${(100 * occupied / seen).toFixed(1)}% of ${seen} cells, REJECTED`);
+    proxyCovered++; continue;
+  }
+  visit(i, 'mark');
+  if (dbg) console.log(`  [pdbg] ${assetPath[box[i * S + 10]]}: box fallback, covered ${(100 * occupied / seen).toFixed(1)}%, marked ${(voxelised - before).toLocaleString()} cells`);
   proxyUsed++;
 }
 
@@ -968,7 +1005,16 @@ function emitOriented(lboxes, lx0, ly0, lz0, px, py, pz, qx, qy, qz, qw) {
     }
     if (!seen || occ / seen < 0.3) { rotDroppedBoxes++; continue; }
 
-    rotBoxes.push({ c: [wcx, wcy, (zBot + zTop) * 0.5], h: [hx, hy, (zTop - zBot) * 0.5], q: [qx, qy, qz, qw] });
+    // Shrink by 1.5 cm per axis: two placement-local merges can emit
+    // overlapping boxes whose faces land on the same plane (measured: pairs
+    // like 34x4x1 z 17..18 inside 34x3x2 z 16..18), and coincident faces
+    // z-fight. The shrink is invisible at map scale and breaks the tie.
+    const EPS = 0.015;
+    rotBoxes.push({
+      c: [wcx, wcy, (zBot + zTop) * 0.5],
+      h: [Math.max(0.05, hx - EPS), Math.max(0.05, hy - EPS), Math.max(0.05, (zTop - zBot) * 0.5 - EPS)],
+      q: [qx, qy, qz, qw],
+    });
     kept++;
 
     // Re-mark: the global cells this accepted box covers leave the axis merge,
