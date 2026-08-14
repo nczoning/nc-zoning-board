@@ -52,6 +52,10 @@ const isSignage = p => /\\(signage|billboard)_[^\\]*\.mesh$/i.test(p);
 // Horizon scenery: between them, backdrops and ocean patches were 93% of the
 // area the coverage metric first called holes (211,821 m2 of 228,655).
 const isBackdrop = p => p.includes('\\backdrops\\') || /global_ocean_patch/i.test(p);
+// Gameplay items are never architecture. The q110 blackout sheets alone stand
+// 329x664 m across Coastview (base\items\quest\q110__misc\q110_black_box.mesh,
+// z -661..2): quest scenery that reads as a black wall slicing the district.
+const isQuestItem = p => p.startsWith('base\\items\\');
 
 /** Identity category for one placement. Size and level policy stay with the consumer. */
 function categorize(path, nodeType) {
@@ -61,6 +65,7 @@ function categorize(path, nodeType) {
   if (NEVER_TYPES.has(nodeType)) return 'never';
   if (nodeType === 'RoadProxyMesh' || isDeckProxy(p)) return 'infrastructure';
   if (isBackdrop(p)) return 'backdrop';
+  if (isQuestItem(p)) return 'never';
   if (isSubdistrictShell(p)) return 'boundary';
   if (isProxy(p)) return 'proxy';
   return 'building';
