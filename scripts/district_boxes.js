@@ -95,11 +95,32 @@ async function main() {
   const texBounds = worldBounds(DISTRICTS[name]);
 
   // The district's real boundary, not its texture's bbox. See district_meta.
+  // MARGIN metres outside the polygon still belong to the cloud: a building
+  // can straddle the boundary (the NID building bridges the river between
+  // city_center and watson), and a hard polygon cut leaves its middle in
+  // neither district. Neighbouring clouds overlap in the seam, which draws
+  // twice and looks like once.
+  const MARGIN = 64;
   const poly = useBbox ? null : districtPolygon(name);
   let bounds = texBounds;
   if (poly) {
     const [px0, py0, px1, py1] = polygonBounds(poly);
-    bounds = { min: [px0, py0, texBounds.min[2]], max: [px1, py1, texBounds.max[2]] };
+    bounds = { min: [px0 - MARGIN, py0 - MARGIN, texBounds.min[2]], max: [px1 + MARGIN, py1 + MARGIN, texBounds.max[2]] };
+  }
+
+  /** Squared distance from (x, y) to the polygon's nearest edge. */
+  function distSqToPolygon(p, x, y) {
+    let best = Infinity;
+    for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+      const ax = p[j][0], ay = p[j][1], bx = p[i][0], by = p[i][1];
+      const dx = bx - ax, dy = by - ay;
+      const L2 = dx * dx + dy * dy;
+      const t = L2 > 0 ? Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L2)) : 0;
+      const px2 = ax + t * dx - x, py2 = ay + t * dy - y;
+      const d = px2 * px2 + py2 * py2;
+      if (d < best) best = d;
+    }
+    return best;
   }
 
   console.log(`district ${name}`);
@@ -148,7 +169,7 @@ async function main() {
     const p = line.split(',');
     const x = +p[5], y = +p[6], z = +p[7];
     if (!(x >= bounds.min[0] && x <= bounds.max[0] && y >= bounds.min[1] && y <= bounds.max[1])) return;
-    if (poly && !inPolygon(poly, x, y)) { outsidePoly++; return; }
+    if (poly && !inPolygon(poly, x, y) && distSqToPolygon(poly, x, y) > MARGIN * MARGIN) { outsidePoly++; return; }
     inside++;
     const a = assets.get(+p[3]);
     if (!a) { noAsset++; return; }

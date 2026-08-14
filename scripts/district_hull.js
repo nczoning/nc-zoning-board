@@ -583,17 +583,51 @@ console.log(`  under     ${cutUnder.toLocaleString()} cells cut below the terrai
 // turn out not to line up, roads sitting proud of or sunk into the terrain is
 // exactly what this step and the underground clip above will surface, and the
 // gate is then the lever for it rather than something to be reinvented.
-let strippedGround = 0;
+// ONLY COLUMNS WHOSE TOP SITS NEAR THE TERRAIN. The cell count alone cannot
+// tell a pavement from a roof: a roof over an interior the flood reached is
+// 1-2 cells in its column, so a count-only strip deletes the roofs of every
+// unfilled building mid-footprint while their taller wall columns survive.
+// Ground is short AND low; a short column 30 m up is a roof.
+const GROUND_NEAR = 4;   // m above terrain a column top may sit and still be ground
+let strippedGround = 0, keptRoofCols = 0;
 for (let y = 0; y < NY; y++) {
+  const cetY = minY + (y + 0.5) * VOXEL;
   for (let x = 0; x < NX; x++) {
-    let h = 0;
-    for (let z = 0; z < NZ; z++) if (solid[idx(x, y, z)] === 1) h++;
+    let h = 0, zTop = -1;
+    for (let z = 0; z < NZ; z++) if (solid[idx(x, y, z)] === 1) { h++; zTop = z; }
     if (h > 0 && h < MIN_COL) {
+      const g = heightAtCet(terrain, minX + (x + 0.5) * VOXEL, cetY);
+      const topWorld = minZ + (zTop + 1) * VOXEL;
+      if (g !== null && topWorld > g + GROUND_NEAR) { keptRoofCols++; continue; }
       for (let z = 0; z < NZ; z++) if (solid[idx(x, y, z)] === 1) { solid[idx(x, y, z)] = 0; strippedGround++; }
     }
   }
 }
-console.log(`  ground    ${strippedGround.toLocaleString()} cells stripped from columns under ${MIN_COL} cells tall`);
+console.log(`  ground    ${strippedGround.toLocaleString()} cells stripped from columns under ${MIN_COL} cells within ${GROUND_NEAR} m of terrain ` +
+            `(${keptRoofCols.toLocaleString()} short-but-high columns kept)`);
+
+// ── 2b2. Close the vertical blinds ────────────────────────────────────────
+// A short air gap between two solid cells in one column is interior: floor
+// plates sit 3-4 m apart, so a curtain-wall tower whose glass never
+// voxelises reads as stacked ledges, and any wall gap shows the void behind
+// it. The per-placement grids have closed blinds since the rotated path
+// shipped; the global grid never did. The gap cap stays under street
+// clearance so underpasses and arches keep their air.
+const BLIND = flag('blind', Math.round(4 / VOXEL));   // cells; 4 m at any resolution
+let blindFilled = 0;
+if (BLIND > 0) {
+  for (let y = 0; y < NY; y++) for (let x = 0; x < NX; x++) {
+    let lastSolid = -1;
+    for (let z = 0; z < NZ; z++) {
+      if (solid[idx(x, y, z)] !== 1) continue;
+      if (lastSolid >= 0 && z - lastSolid > 1 && z - lastSolid - 1 <= BLIND) {
+        for (let f = lastSolid + 1; f < z; f++) { solid[idx(x, y, f)] = 1; blindFilled++; }
+      }
+      lastSolid = z;
+    }
+  }
+}
+console.log(`  blinds    ${blindFilled.toLocaleString()} interior cells filled in vertical gaps <= ${BLIND} cells`);
 
 // ── 2c. Close the facade noise ────────────────────────────────────────────
 // A rasterised shell is one cell thick and carries every ledge, mullion and
