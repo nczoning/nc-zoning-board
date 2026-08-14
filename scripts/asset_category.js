@@ -55,7 +55,10 @@ const isNature = p =>
 // leaves them (the roundabout canopy and the GIM skylight read as solid
 // slabs otherwise). Signage is checked first, so glassframe signs keep
 // their category.
-const isGlass = p => /glass/i.test(p.split('\\').pop() || '');
+// Skylight frames ride with their glazing, and "transparent window" shells
+// (arch_mproxy_transparent_window.mesh, 234 m over the GIM) are glazing by
+// name however their folder is spelled.
+const isGlass = p => /glass|skylight|transparent/i.test(p.split('\\').pop() || '');
 // Cyberspace scenery: skydomes and the Beyond-the-Blackwall set dress quest
 // space, not the city (beyondblackwall_sky.mesh is a 100 m sphere over
 // West Wind Estate).

@@ -114,7 +114,22 @@ function decompose(aid, sx, sy, sz) {
     if (vy < y0) y0 = vy; if (vy > y1) y1 = vy;
     if (vz < z0) z0 = vz; if (vz > z1) z1 = vz;
   }
-  let res = RES;
+  // Resolution scales with the asset: at map distance a 3 m prop IS its
+  // bounding box, and paying eight boxes for a bin lid is where a fifth of
+  // the city's box count went. Bigger assets keep ~24 cells across their
+  // longest dimension, so towers keep their shape.
+  const extent = Math.max(x1 - x0, y1 - y0, z1 - z0);
+  if (extent < 4) {
+    const out1 = Float32Array.from([
+      (x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2,
+      Math.max(0.05, (x1 - x0) / 2), Math.max(0.05, (y1 - y0) / 2), Math.max(0.05, (z1 - z0) / 2),
+    ]);
+    cache.set(key, out1);
+    decomposed++;
+    totalAssetBoxes += 1;
+    return out1;
+  }
+  let res = Math.max(RES, Math.min(2.5, extent / 24));
   let nx, ny, nz;
   for (;;) {
     nx = Math.max(1, Math.ceil((x1 - x0) / res) + 2);
@@ -339,6 +354,134 @@ for (const i of proxies) {
   if (kept.length > before) proxyUsed++;
 }
 console.log(`  proxies   ${proxyUsed.toLocaleString()} stamped where uncovered, ${proxyCovered.toLocaleString()} rejected as covered`);
+
+// ── World-space merge: contained boxes drop, runs fuse ────────────────────
+// The count problem is kit redundancy, not detail: interpenetrating pieces
+// stamp boxes inside other boxes, and a wall is twenty identical panels in a
+// row, each carrying the same yaw. Boxes are bucketed by yaw, rotated into
+// the shared frame (where they are axis-aligned by construction), then:
+//   1. a box fully inside another is dropped;
+//   2. boxes whose cross-sections match within EPS and that touch or overlap
+//      along the remaining axis fuse into one.
+// No grid exists at any point: fused faces sit exactly where the kit put
+// them. Tilted boxes (non-yaw rotations) pass through untouched.
+const MERGE_EPS = flag('mergeeps', 0.12);   // m: faces this close count as aligned
+const MERGE_GAP = flag('mergegap', 0.05);   // m: panels this far apart still fuse
+const MERGE_SWALLOW = flag('mergeswallow', 0.9);  // fraction inside a bigger box = redundant
+const MERGE_ROUNDS = flag('mergerounds', 3);
+const doMerge = !args.includes('--nomerge');
+let droppedContained = 0, fusedRuns = 0;
+if (doMerge) {
+  const passthrough = [];
+  const buckets = new Map();
+  for (const b of kept) {
+    if (Math.abs(b.q[0]) > 0.01 || Math.abs(b.q[1]) > 0.01) { passthrough.push(b); continue; }
+    const yaw = Math.atan2(2 * (b.q[3] * b.q[2]), 1 - 2 * (b.q[2] * b.q[2]));
+    const key = Math.round(yaw * 1800 / Math.PI);   // 0.1 degree buckets
+    let l = buckets.get(key); if (!l) buckets.set(key, l = []);
+    l.push(b);
+  }
+
+  const merged = [];
+  for (const [key, list] of buckets) {
+    const yaw = key * Math.PI / 1800;
+    const ca = Math.cos(yaw), sa = Math.sin(yaw);
+    // Into the frame: axis-aligned intervals.
+    let items = list.map(b => {
+      const fx = ca * b.c[0] + sa * b.c[1];
+      const fy = -sa * b.c[0] + ca * b.c[1];
+      return {
+        x0: fx - b.h[0], x1: fx + b.h[0],
+        y0: fy - b.h[1], y1: fy + b.h[1],
+        z0: b.c[2] - b.h[2], z1: b.c[2] + b.h[2],
+      };
+    });
+
+    // Containment: a box at least MERGE_SWALLOW inside a bigger one is
+    // redundant mass. Slightly over-covering the difference is the trade
+    // CDPR's own cloud makes everywhere. Interleaved with fusion below,
+    // because fused boxes swallow more.
+    const dropContained = () => {
+      const H = 24, hh = new Map();
+      items.forEach((b, i) => {
+        for (let cx = Math.floor(b.x0 / H); cx <= Math.floor(b.x1 / H); cx++)
+          for (let cy = Math.floor(b.y0 / H); cy <= Math.floor(b.y1 / H); cy++) {
+            const k = `${cx},${cy}`;
+            let l = hh.get(k); if (!l) hh.set(k, l = []);
+            l.push(i);
+          }
+      });
+      const dead = new Uint8Array(items.length);
+      items.forEach((b, i) => {
+        if (dead[i]) return;
+        const vol = (b.x1 - b.x0) * (b.y1 - b.y0) * (b.z1 - b.z0);
+        if (!(vol > 0)) { dead[i] = 1; droppedContained++; return; }
+        const k = `${Math.floor((b.x0 + b.x1) / 2 / H)},${Math.floor((b.y0 + b.y1) / 2 / H)}`;
+        for (const j of hh.get(k) || []) {
+          if (j === i || dead[j]) continue;
+          const o = items[j];
+          const oVol = (o.x1 - o.x0) * (o.y1 - o.y0) * (o.z1 - o.z0);
+          if (oVol <= vol) continue;
+          const ix = Math.min(b.x1, o.x1) - Math.max(b.x0, o.x0);
+          const iy = Math.min(b.y1, o.y1) - Math.max(b.y0, o.y0);
+          const iz = Math.min(b.z1, o.z1) - Math.max(b.z0, o.z0);
+          if (ix > 0 && iy > 0 && iz > 0 && (ix * iy * iz) / vol >= MERGE_SWALLOW) {
+            dead[i] = 1; droppedContained++; break;
+          }
+        }
+      });
+      items = items.filter((_, i) => !dead[i]);
+    };
+
+    // Run fusion, one axis at a time; fusing along x aligns cross-sections
+    // for a later fuse along y, so rounds interleave with containment.
+    const qk = v => Math.round(v / MERGE_EPS);
+    dropContained();
+    for (let round = 0; round < MERGE_ROUNDS; round++) {
+      for (const axis of ['x', 'y', 'z']) {
+        const [a0, a1, b0, b1, c0, c1] = axis === 'x' ? ['x0', 'x1', 'y0', 'y1', 'z0', 'z1']
+          : axis === 'y' ? ['y0', 'y1', 'x0', 'x1', 'z0', 'z1'] : ['z0', 'z1', 'x0', 'x1', 'y0', 'y1'];
+        const groups = new Map();
+        for (const it of items) {
+          const k = `${qk(it[b0])},${qk(it[b1])},${qk(it[c0])},${qk(it[c1])}`;
+          let l = groups.get(k); if (!l) groups.set(k, l = []);
+          l.push(it);
+        }
+        const next = [];
+        for (const l of groups.values()) {
+          l.sort((p, q) => p[a0] - q[a0]);
+          let cur = l[0];
+          for (let i = 1; i < l.length; i++) {
+            const it = l[i];
+            if (it[a0] <= cur[a1] + MERGE_GAP) {
+              if (it[a1] > cur[a1]) cur[a1] = it[a1];
+              fusedRuns++;
+            } else { next.push(cur); cur = it; }
+          }
+          next.push(cur);
+        }
+        items = next;
+      }
+      dropContained();
+    }
+
+    // Back to world.
+    const qz = Math.sin(yaw / 2), qw = Math.cos(yaw / 2);
+    for (const it of items) {
+      const fx = (it.x0 + it.x1) / 2, fy = (it.y0 + it.y1) / 2;
+      merged.push({
+        c: [ca * fx - sa * fy, sa * fx + ca * fy, (it.z0 + it.z1) / 2],
+        h: [(it.x1 - it.x0) / 2, (it.y1 - it.y0) / 2, (it.z1 - it.z0) / 2],
+        q: key === 0 ? [0, 0, 0, 1] : [0, 0, qz, qw],
+      });
+    }
+  }
+  for (const b of passthrough) merged.push(b);
+  console.log(`  merge     ${kept.length.toLocaleString()} -> ${merged.length.toLocaleString()} boxes ` +
+              `(${droppedContained.toLocaleString()} contained dropped, ${fusedRuns.toLocaleString()} run fusions)`);
+  kept.length = 0;
+  for (const b of merged) kept.push(b);
+}
 
 // ── Shape stats + write ───────────────────────────────────────────────────
 {
