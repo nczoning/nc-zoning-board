@@ -33,13 +33,22 @@
 
 const NEVER_TYPES = new Set([
   'StaticOccluderMesh', 'StaticLight', 'WaterPatch', 'Foliage', 'Mirror',
+  'InvalidProxyMesh',
 ]);
 
 // Proxies live in three places, not one. Matching only the first lets a
 // subdistrict proxy through as if it were real geometry.
 const isProxy = p =>
   p.includes('\\_external\\proxy\\') || p.includes('\\_proxyhelper\\') || p.endsWith('_mproxy.mesh');
-const isTerrain = p => p.includes('\\_global\\terrain\\');
+// Terrain does not always say TerrainProxyMesh: pcv_03_terrain_f.mesh is a
+// Pacifica hillside typed RoadProxyMesh, and its rounded top decomposes into
+// a dome of rings when a generator takes it for structure.
+const isTerrain = p => p.includes('\\_global\\terrain\\') || /_terrain[_.]/i.test(p.split('\\').pop() || '');
+// Vegetation and rocks are scenery, not skyline. A category of their own so
+// a district that wants its landmarks back (badlands mesas) can opt in.
+const isNature = p =>
+  /\\(vegetation|foliage|trees?|bushes|greenery)\\/i.test(p) ||
+  /\\rocks?\\/i.test(p) || /\\rock_[^\\]*\.mesh$/i.test(p) || /\\cliff[^\\]*\.mesh$/i.test(p);
 // A subdistrict shell is the trigger volume's geometry: an extruded boundary
 // polygon. 269 exist, 216 under any workable size gate, down to 102 m.
 const isSubdistrictShell = p => /_subdistrict[^\\]*\.mesh$/i.test(p);
@@ -66,9 +75,10 @@ function categorize(path, nodeType) {
   if (nodeType === 'RoadProxyMesh' || isDeckProxy(p)) return 'infrastructure';
   if (isBackdrop(p)) return 'backdrop';
   if (isQuestItem(p)) return 'never';
+  if (isNature(p)) return 'nature';
   if (isSubdistrictShell(p)) return 'boundary';
   if (isProxy(p)) return 'proxy';
   return 'building';
 }
 
-module.exports = { categorize, isProxy, isTerrain, isSubdistrictShell, isDeckProxy, isSignage, isBackdrop, NEVER_TYPES };
+module.exports = { categorize, isProxy, isTerrain, isSubdistrictShell, isDeckProxy, isSignage, isBackdrop, isNature, NEVER_TYPES };
