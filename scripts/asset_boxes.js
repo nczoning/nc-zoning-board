@@ -47,6 +47,12 @@ const PROXY_COVER = flag('proxycover', 0.25);
 const BELOW    = flag('below', 16);
 const GAP      = flag('gap', 5);      // cells: vertical blind close inside one asset
 const MAX_CELLS = 24e6;               // per-asset grid budget; res coarsens to fit
+const OBB_TIGHT = flag('obbtight', 2.75); // accept an oriented component when obb volume <= this x cell volume
+const OBB_MIN  = flag('obbmin', 8);   // cells: components smaller than this stay on the grid
+const OBB_GAIN = flag('obbgain', 0.7); // obb volume must also be <= this x the component's own aabb volume:
+                                       // flat slabs have DEGENERATE eigenvalue pairs, so PCA's in-plane axes
+                                       // are noise (one stray corner cell = 42 deg) and pass the tightness
+                                       // gate at ~2x; a rotation only ships when it beats the aabb outright
 
 if (!name) { console.error('usage: node scripts/asset_boxes.js <district>'); process.exit(1); }
 
@@ -62,6 +68,77 @@ const quatToMat = (qx, qy, qz, qw) => [
   2 * (qx * qy + qz * qw), 1 - 2 * (qx * qx + qz * qz), 2 * (qy * qz - qx * qw),
   2 * (qx * qz - qy * qw), 2 * (qy * qz + qx * qw), 1 - 2 * (qx * qx + qy * qy),
 ];
+// Hamilton product: the composed rotation applies b first, then a.
+const quatMul = (a, b) => [
+  a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+  a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+  a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+  a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+];
+
+// Rotation matrix (columns = basis vectors) -> quaternion. Shepperd's method.
+function matToQuat(u, v, n) {
+  const m00 = u[0], m10 = u[1], m20 = u[2];
+  const m01 = v[0], m11 = v[1], m21 = v[2];
+  const m02 = n[0], m12 = n[1], m22 = n[2];
+  const tr = m00 + m11 + m22;
+  let x, y, z, w;
+  if (tr > 0) {
+    const s = Math.sqrt(tr + 1) * 2;
+    w = 0.25 * s; x = (m21 - m12) / s; y = (m02 - m20) / s; z = (m10 - m01) / s;
+  } else if (m00 > m11 && m00 > m22) {
+    const s = Math.sqrt(1 + m00 - m11 - m22) * 2;
+    w = (m21 - m12) / s; x = 0.25 * s; y = (m01 + m10) / s; z = (m02 + m20) / s;
+  } else if (m11 > m22) {
+    const s = Math.sqrt(1 + m11 - m00 - m22) * 2;
+    w = (m02 - m20) / s; x = (m01 + m10) / s; y = 0.25 * s; z = (m12 + m21) / s;
+  } else {
+    const s = Math.sqrt(1 + m22 - m00 - m11) * 2;
+    w = (m10 - m01) / s; x = (m02 + m20) / s; y = (m12 + m21) / s; z = 0.25 * s;
+  }
+  const l = Math.hypot(x, y, z, w) || 1;
+  return [x / l, y / l, z / l, w / l];
+}
+
+// Eigenvectors of a symmetric 3x3 (cyclic Jacobi). Returns three orthonormal
+// column vectors; the covariance of a solid box is diagonal in the box's own
+// frame, so these are the component's natural axes.
+function jacobiEigen(a00, a01, a02, a11, a12, a22) {
+  const A = [a00, a01, a02, a01, a11, a12, a02, a12, a22];
+  const V = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  for (let sweep = 0; sweep < 24; sweep++) {
+    const off = A[1] * A[1] + A[2] * A[2] + A[5] * A[5];
+    if (off < 1e-18) break;
+    for (const [p, q] of [[0, 1], [0, 2], [1, 2]]) {
+      const apq = A[p * 3 + q];
+      if (Math.abs(apq) < 1e-12) continue;
+      const app = A[p * 3 + p], aqq = A[q * 3 + q];
+      const theta = (aqq - app) / (2 * apq);
+      const t = Math.sign(theta || 1) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+      const c = 1 / Math.sqrt(t * t + 1), s = t * c;
+      for (let k = 0; k < 3; k++) {
+        const akp = A[k * 3 + p], akq = A[k * 3 + q];
+        A[k * 3 + p] = c * akp - s * akq;
+        A[k * 3 + q] = s * akp + c * akq;
+      }
+      for (let k = 0; k < 3; k++) {
+        const apk = A[p * 3 + k], aqk = A[q * 3 + k];
+        A[p * 3 + k] = c * apk - s * aqk;
+        A[q * 3 + k] = s * apk + c * aqk;
+      }
+      for (let k = 0; k < 3; k++) {
+        const vkp = V[k * 3 + p], vkq = V[k * 3 + q];
+        V[k * 3 + p] = c * vkp - s * vkq;
+        V[k * 3 + q] = s * vkp + c * vkq;
+      }
+    }
+  }
+  return [
+    [V[0], V[3], V[6]],
+    [V[1], V[4], V[7]],
+    [V[2], V[5], V[8]],
+  ];
+}
 
 console.log(`district ${name}`);
 
@@ -91,6 +168,7 @@ console.log(`  skipped   ${skippedSmall.toLocaleString()} small, ${skippedHuge.t
 // in mesh-local metres, or null when the mesh has no triangles.
 const cache = new Map();
 let decomposed = 0, noTris = 0, totalAssetBoxes = 0;
+let obbFitted = 0, obbLoose = 0, obbAxis = 0;
 
 function decompose(aid, sx, sy, sz) {
   const key = `${aid}|${sx.toFixed(2)},${sy.toFixed(2)},${sz.toFixed(2)}`;
@@ -188,8 +266,108 @@ function decompose(aid, sx, sy, sz) {
     }
   }
 
+  // Oriented-at-source: angled shapes INSIDE one mesh (vault ribs, beams,
+  // ramps) step on this axis-aligned grid. Label connected solid components;
+  // PCA over each component's cell centres proposes a frame, and when the
+  // oriented bounding box is TIGHT the whole component becomes ONE rotated
+  // box and releases its cells. Loose, small or axis-aligned components fall
+  // through to the grid merge unchanged.
+  const boxes = [];   // stride 10: c3, h3, q4 (identity quat for grid boxes)
+  {
+    const cellVol = res * res * res;
+    let comp = new Int32Array(1 << 12);
+    let stack = new Int32Array(1 << 12);
+    let sp = 0;
+    const push3 = k => {
+      if (lg[k] !== 1) return;
+      lg[k] = 3;
+      if (sp === stack.length) { const b = new Int32Array(stack.length * 2); b.set(stack); stack = b; }
+      stack[sp++] = k;
+    };
+    for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
+      if (lg[li(x, y, z)] !== 1) continue;
+      let cn = 0;
+      sp = 0; push3(li(x, y, z));
+      while (sp > 0) {
+        const k = stack[--sp];
+        if (cn === comp.length) { const b = new Int32Array(comp.length * 2); b.set(comp); comp = b; }
+        comp[cn++] = k;
+        const cx = k % nx, cy = ((k / nx) | 0) % ny, cz = (k / (nx * ny)) | 0;
+        if (cx > 0) push3(k - 1);
+        if (cx < nx - 1) push3(k + 1);
+        if (cy > 0) push3(k - nx);
+        if (cy < ny - 1) push3(k + nx);
+        if (cz > 0) push3(k - nx * ny);
+        if (cz < nz - 1) push3(k + nx * ny);
+      }
+      if (cn < OBB_MIN) continue;
+      // PCA over cell centres (cell units: uniform scale, same eigenvectors),
+      // plus the component's own axis-aligned bounds for the gain gate.
+      let sx1 = 0, sy1 = 0, sz1 = 0;
+      let ax0 = Infinity, ax1 = -Infinity, ay0 = Infinity, ay1 = -Infinity, az0 = Infinity, az1 = -Infinity;
+      for (let i = 0; i < cn; i++) {
+        const k = comp[i];
+        const px = k % nx, py = ((k / nx) | 0) % ny, pz = (k / (nx * ny)) | 0;
+        sx1 += px; sy1 += py; sz1 += pz;
+        if (px < ax0) ax0 = px; if (px > ax1) ax1 = px;
+        if (py < ay0) ay0 = py; if (py > ay1) ay1 = py;
+        if (pz < az0) az0 = pz; if (pz > az1) az1 = pz;
+      }
+      const aabbVol = (ax1 - ax0 + 1) * (ay1 - ay0 + 1) * (az1 - az0 + 1) * cellVol;
+      const mx = sx1 / cn, my = sy1 / cn, mz = sz1 / cn;
+      let c00 = 0, c01 = 0, c02 = 0, c11 = 0, c12 = 0, c22 = 0;
+      for (let i = 0; i < cn; i++) {
+        const k = comp[i];
+        const dx = (k % nx) - mx, dy = (((k / nx) | 0) % ny) - my, dz = ((k / (nx * ny)) | 0) - mz;
+        c00 += dx * dx; c01 += dx * dy; c02 += dx * dz;
+        c11 += dy * dy; c12 += dy * dz; c22 += dz * dz;
+      }
+      const [u, v, n2] = jacobiEigen(c00 / cn, c01 / cn, c02 / cn, c11 / cn, c12 / cn, c22 / cn);
+      // Near-axis-aligned frames stay on the grid: the exact merge is already
+      // exact there, and a noise rotation of a straight wall reads as jitter.
+      if (Math.max(Math.abs(u[0]), Math.abs(u[1]), Math.abs(u[2])) > 0.999 &&
+          Math.max(Math.abs(v[0]), Math.abs(v[1]), Math.abs(v[2])) > 0.999 &&
+          Math.max(Math.abs(n2[0]), Math.abs(n2[1]), Math.abs(n2[2])) > 0.999) { obbAxis++; continue; }
+      // Right-handed basis (a mirrored frame makes matToQuat return garbage).
+      const wx = u[1] * v[2] - u[2] * v[1], wy = u[2] * v[0] - u[0] * v[2], wz = u[0] * v[1] - u[1] * v[0];
+      if (wx * n2[0] + wy * n2[1] + wz * n2[2] < 0) { n2[0] = -n2[0]; n2[1] = -n2[1]; n2[2] = -n2[2]; }
+      // Project cell centres (local metres) onto the axes; pad each extent by
+      // that axis' support of an axis-aligned cell cube (exact for corners).
+      let l0 = Infinity, h0 = -Infinity, l1 = Infinity, h1 = -Infinity, l2 = Infinity, h2 = -Infinity;
+      for (let i = 0; i < cn; i++) {
+        const k = comp[i];
+        const px = gx0 + ((k % nx) + 0.5) * res;
+        const py = gy0 + ((((k / nx) | 0) % ny) + 0.5) * res;
+        const pz = gz0 + (((k / (nx * ny)) | 0) + 0.5) * res;
+        const t0 = u[0] * px + u[1] * py + u[2] * pz;
+        const t1 = v[0] * px + v[1] * py + v[2] * pz;
+        const t2 = n2[0] * px + n2[1] * py + n2[2] * pz;
+        if (t0 < l0) l0 = t0; if (t0 > h0) h0 = t0;
+        if (t1 < l1) l1 = t1; if (t1 > h1) h1 = t1;
+        if (t2 < l2) l2 = t2; if (t2 > h2) h2 = t2;
+      }
+      const pad0 = 0.5 * res * (Math.abs(u[0]) + Math.abs(u[1]) + Math.abs(u[2]));
+      const pad1 = 0.5 * res * (Math.abs(v[0]) + Math.abs(v[1]) + Math.abs(v[2]));
+      const pad2 = 0.5 * res * (Math.abs(n2[0]) + Math.abs(n2[1]) + Math.abs(n2[2]));
+      const e0 = (h0 - l0) / 2 + pad0, e1 = (h1 - l1) / 2 + pad1, e2 = (h2 - l2) / 2 + pad2;
+      const volObb = 8 * e0 * e1 * e2;
+      if (volObb > OBB_TIGHT * cn * cellVol || volObb > OBB_GAIN * aabbVol) { obbLoose++; continue; }
+      const f0 = (l0 + h0) / 2, f1 = (l1 + h1) / 2, f2 = (l2 + h2) / 2;
+      const q = matToQuat(u, v, n2);
+      boxes.push(
+        u[0] * f0 + v[0] * f1 + n2[0] * f2,
+        u[1] * f0 + v[1] * f1 + n2[1] * f2,
+        u[2] * f0 + v[2] * f1 + n2[2] * f2,
+        e0, e1, e2, q[0], q[1], q[2], q[3],
+      );
+      obbFitted++;
+      for (let i = 0; i < cn; i++) lg[comp[i]] = 0;
+    }
+    // Components that stayed on the grid go back to 1 for the merge.
+    for (let k = 0, ln = nx * ny * nz; k < ln; k++) if (lg[k] === 3) lg[k] = 1;
+  }
+
   // Greedy merge (exact cover), same growth rules as the hull's mergeGrid.
-  const boxes = [];
   {
     const CLAIMED = 4;
     const census = (x0c, x1c, y0c, y1c, z0c, z1c) => {
@@ -225,13 +403,14 @@ function decompose(aid, sx, sy, sz) {
       boxes.push(
         gx0 + (x + ex + 1) * 0.5 * res, gy0 + (y + ey + 1) * 0.5 * res, gz0 + (z + ez + 1) * 0.5 * res,
         (ex - x + 1) * res * 0.5, (ey - y + 1) * res * 0.5, (ez - z + 1) * res * 0.5,
+        0, 0, 0, 1,
       );
     }
   }
   const out = boxes.length ? Float32Array.from(boxes) : null;
   cache.set(key, out);
   decomposed++;
-  totalAssetBoxes += boxes.length / 6;
+  totalAssetBoxes += boxes.length / 10;
   return out;
 }
 
@@ -254,9 +433,15 @@ function emitPlacement(i) {
     return;
   }
   const m = quatToMat(qx, qy, qz, qw);
+  const pq = [qx, qy, qz, qw];
   const px = box[o + 13], py = box[o + 14], pz = box[o + 15];
-  for (let k = 0; k < local.length; k += 6) {
+  for (let k = 0; k < local.length; k += 10) {
     const lx = local[k], ly = local[k + 1], lz = local[k + 2];
+    // Oriented local boxes compose their frame with the placement's
+    // (placement applied last); identity local quats keep the fast path.
+    const q = (local[k + 6] === 0 && local[k + 7] === 0 && local[k + 8] === 0)
+      ? pq
+      : quatMul(pq, [local[k + 6], local[k + 7], local[k + 8], local[k + 9]]);
     out.push({
       c: [
         px + m[0] * lx + m[1] * ly + m[2] * lz,
@@ -264,7 +449,7 @@ function emitPlacement(i) {
         pz + m[6] * lx + m[7] * ly + m[8] * lz,
       ],
       h: [local[k + 3], local[k + 4], local[k + 5]],
-      q: [qx, qy, qz, qw],
+      q,
     });
   }
   stamped++;
@@ -273,6 +458,8 @@ function emitPlacement(i) {
 for (const i of builders) emitPlacement(i);
 console.log(`  decomposed ${decomposed.toLocaleString()} (asset, scale) pairs -> ${Math.round(totalAssetBoxes).toLocaleString()} local boxes ` +
             `(${noTris.toLocaleString()} assets with no triangles)`);
+console.log(`  oriented  ${obbFitted.toLocaleString()} components fitted at source ` +
+            `(${obbLoose.toLocaleString()} loose, ${obbAxis.toLocaleString()} axis-aligned stayed on grid)`);
 console.log(`  stamped   ${stamped.toLocaleString()} placements -> ${out.length.toLocaleString()} boxes (${bboxFallback.toLocaleString()} bbox fallbacks)`);
 
 // ── Terrain clip ──────────────────────────────────────────────────────────
@@ -360,6 +547,7 @@ fs.rmSync(path.join(dataDir, `district-hull-${name}.presnap.bin`), { force: true
 fs.writeFileSync(path.join(dataDir, `district-hull-${name}.json`), JSON.stringify({
   district: name, bounds: meta.bounds, generator: 'assetboxes',
   res: RES, lod: LOD, gap: GAP, minSize: MIN_SIZE, maxSize: MAX_SIZE, below: BELOW,
+  obbTight: OBB_TIGHT, obbMin: OBB_MIN, obbGain: OBB_GAIN, obbFitted, obbLoose, obbAxis,
   decomposed, noTris, stamped, bboxFallback, buried, proxyUsed, proxyCovered,
   boxes: kept.length,
   stride: 10, layout: 'centre xyz, halfExtent xyz, quat xyzw (float32)',

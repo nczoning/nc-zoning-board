@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- The per-asset decomposer fits angled shapes inside a mesh (vault ribs, beams, ramps) with rotated boxes at the source: connected solid components whose oriented bounding box beats both the cell volume and their own axis-aligned bbox become one rotated box; everything else keeps the exact grid merge.
+
 ## [2.12.0] - 2026-08-10
 
 ### Added
@@ -318,16 +324,16 @@ The registry moves out of git into a database, with a dashboard for maintainers.
 - **Night-time** lighting: the time slider now runs a full day-night cycle. As the sun sets, a real moon on its own lunar arc lights the city with cool moonlight, with a smooth dusk/dawn transition and a cool night sky. The sun and moon are visible discs that rise and set along their real paths.
 - Per-district neon **sign density**: each subdistrict's signage matches its in-game character. Kabuki, Little China and Japantown blaze, the corpo/commercial cores stay dense, and industrial, rural and spaceport zones go dark.
 - Windows and signs now light only genuinely **exterior** block faces: a load-time occlusion pass marks faces buried inside a building (about 80% of all wall area) so the emissive stops stamping them. Fixes the "circuit-board" window noise. Debug view `?facedebug`; disable with `?facemask=0`.
-- Buildings now resolve into **parts** — a tower and the podium it rises from are separate strata, which is the unit night lighting will be classified on. Debug view `?partdebug`; tune with `?partdh=`.
+- Buildings now resolve into **parts**: a tower and the podium it rises from are separate strata, which is the unit night lighting will be classified on. Debug view `?partdebug`; tune with `?partdh=`.
 - Debug view `?colldebug` overlays the game's own 3D-map collision boxes (its internal decomposition of the map into solid objects), for comparison against our inferred building segmentation.
-- **Lights** control in the Overlays box (`auto` / `on` / `off`, or `?lights=`). Night City's windows never actually switch off — the game's material is always lit and *night* is when half of it turns off — so the lights are no longer tied to the sun. `auto` keeps the old dusk ramp.
+- **Lights** control in the Overlays box (`auto` / `on` / `off`, or `?lights=`). Night City's windows never actually switch off (the game's material is always lit and *night* is when half of it turns off), so the lights are no longer tied to the sun. `auto` keeps the old dusk ramp.
 - Windows rebuilt on the game's **measured** rules: each subdistrict's glass share (from the streaming sectors, `data/night-profile.json`) sets the window size, and the game's own `AmountTurnOffAtNight` sets how many are lit. Replaces a single hand-tuned lit fraction applied to the whole city. Debug view `?glassdebug`; A/B against the old look with `?winmodel=legacy`.
-- Windows are now **placed, not estimated**: every building's glass is measured from where the game actually puts it, per building rather than per district. Buildings with no real glass — highway pylons, oil tanks, silos — go dark on their own, with no classification step.
-- A window is now the **window**, not the wall around it. Glass area comes from the window submesh in each mesh's GLB, not the facade panel that holds it — the city was being lit with 2.2× too much glass. Each instance resolves its own appearance, since 30% of them are not the default and the appearance decides which parts are glazed.
-- **Buildings are rotated, and everything that reasoned about them had been using their bounding boxes.** Only 27% of the city's boxes are square to the world; the median is turned 26°, and its bounding box is twice the volume with its walls pointing the wrong way. The renderer always drew them correctly — but every offline analysis, the window bake, the classifier and the segmenter did not. Half the game's 1.7M windows matched no wall at all and were dropped. Fixed at the source: Westbrook's largest "building" (8,259 boxes, a fifth of the district) is halved, and buildings resolve 3,181 → 3,791 across the city. A/B it with `?aabbboxes`.
-- Zone tool gains an inert **`debug`** op (now the default) — a shape you can draw on the map purely to point at something, with no effect on the scene.
-- **Glass is not a window — emissive is.** 44% of the city's glass never lights up: doors, balustrades, shopfronts, railings, the Corpo Plaza roundabout canopy. Windows are now identified by the material's own emissive parameters, per chunk, instead of by "is it glass".
-- **The extractor was reading 64% of Night City.** Its sector filter was a regex on a filename, so 2,356 `quest_` sectors — which carry placed buildings — plus the interiors and always-loaded sectors were never opened. Arasaka Waterfront's twelve identical towers came out as nine. It now reads them all, and says out loud what it skips.
+- Windows are now **placed, not estimated**: every building's glass is measured from where the game actually puts it, per building rather than per district. Buildings with no real glass (highway pylons, oil tanks, silos) go dark on their own, with no classification step.
+- A window is now the **window**, not the wall around it. Glass area comes from the window submesh in each mesh's GLB, not the facade panel that holds it; the city was being lit with 2.2× too much glass. Each instance resolves its own appearance, since 30% of them are not the default and the appearance decides which parts are glazed.
+- **Buildings are rotated, and everything that reasoned about them had been using their bounding boxes.** Only 27% of the city's boxes are square to the world; the median is turned 26°, and its bounding box is twice the volume with its walls pointing the wrong way. The renderer always drew them correctly, but every offline analysis, the window bake, the classifier and the segmenter did not. Half the game's 1.7M windows matched no wall at all and were dropped. Fixed at the source: Westbrook's largest "building" (8,259 boxes, a fifth of the district) is halved, and buildings resolve 3,181 → 3,791 across the city. A/B it with `?aabbboxes`.
+- Zone tool gains an inert **`debug`** op (now the default): a shape you can draw on the map purely to point at something, with no effect on the scene.
+- **Glass is not a window; emissive is.** 44% of the city's glass never lights up: doors, balustrades, shopfronts, railings, the Corpo Plaza roundabout canopy. Windows are now identified by the material's own emissive parameters, per chunk, instead of by "is it glass".
+- **The extractor was reading 64% of Night City.** Its sector filter was a regex on a filename, so 2,356 `quest_` sectors (which carry placed buildings) plus the interiors and always-loaded sectors were never opened. Arasaka Waterfront's twelve identical towers came out as nine. It now reads them all, and says out loud what it skips.
 - New debug views: `?windebug` (every one of the game's 1.7M windows, coloured by whether we can land it on a building face), `?windebug=xray` (drawn through the buildings), `?boxdebug` (the `.dds` boxes themselves).
 - Signage is **out of the night engine**, to be rebuilt on the same placement data.
 
