@@ -12,8 +12,8 @@
  * Bias errs toward KEEPING: a wrongly culled exterior slab is a hole, a
  * wrongly kept hidden slab is only noise; any escaping ray keeps the slab.
  *
- * Method per slab: sample points on both major faces (count scales with
- * area), nudged 5 cm off the surface. A sample INSIDE another slab is dead
+ * Method per slab: sample points on all six faces (count scales with area),
+ * nudged 5 cm off the surface. A sample INSIDE another slab is dead
  * (flush cover, the seam-cap case). Live samples cast rays over an
  * upper-hemisphere direction set (map cameras never go below grade); rays
  * walk a uniform world grid (3D-DDA) and test oriented slabs per cell. A
@@ -187,29 +187,42 @@ let done = 0;
 const t0 = Date.now();
 for (let i = 0; i < n; i++) {
   const o = i * 10, m9 = i * 9;
-  const hu = A[o + 3], hv = A[o + 4], hn = A[o + 5];
-  // Face sample offsets in the box frame (u,v on the +/-n faces).
-  const su = Math.min(MAX_S, Math.max(1, Math.round(hu)));
-  const sv = Math.min(MAX_S, Math.max(1, Math.round(hv)));
   let visible = false;
-  for (let side = -1; side <= 1 && !visible; side += 2) {
-    // Outward normal of this face in world space.
-    const nwx = mats[m9 + 2] * side, nwy = mats[m9 + 5] * side, nwz = mats[m9 + 8] * side;
-    for (let a = 0; a < su && !visible; a++) for (let b = 0; b < sv && !visible; b++) {
-      const fu = su === 1 ? 0 : (a / (su - 1) - 0.5) * 2 * hu * 0.8;
-      const fv = sv === 1 ? 0 : (b / (sv - 1) - 0.5) * 2 * hv * 0.8;
-      const off = hn + EPS;
-      const px = A[o] + mats[m9] * fu + mats[m9 + 1] * fv + mats[m9 + 2] * side * off;
-      const py = A[o + 1] + mats[m9 + 3] * fu + mats[m9 + 4] * fv + mats[m9 + 5] * side * off;
-      const pz = A[o + 2] + mats[m9 + 6] * fu + mats[m9 + 7] * fv + mats[m9 + 8] * side * off;
-      if (pointInAny(px, py, pz, i)) continue;   // flush-covered (seam cap)
-      for (const [dx, dy, dz] of DIRS) {
-        if (rayEscapes(px, py, pz, dx, dy, dz, i)) { visible = true; break; }
-      }
-      if (!visible && nwz > -0.2) {
-        // Outward normal tilted 20 degrees up.
-        const l = Math.hypot(nwx, nwy, nwz + 0.36) || 1;
-        if (rayEscapes(px, py, pz, nwx / l, nwy / l, (nwz + 0.36) / l, i)) visible = true;
+  // ALL SIX faces, not the +/-local-z pair. Sampling only that pair assumes
+  // every box is a plate thin along its own n, which is true of the surface
+  // method's slabs and false of a feature-carve box: a coaster support is
+  // 0.90 x 0.92 x 5.72 with n as its LONGEST axis, so the pair-only test
+  // judges a column by its two end caps (ground below, track above) and never
+  // sees the four long sides that are its entire visible surface. It culled
+  // every support and left the track floating.
+  for (let axis = 0; axis < 3 && !visible; axis++) {
+    const au = (axis + 1) % 3, av = (axis + 2) % 3;
+    const hu = A[o + 3 + au], hv = A[o + 3 + av], hn = A[o + 3 + axis];
+    const su = Math.min(MAX_S, Math.max(1, Math.round(hu)));
+    const sv = Math.min(MAX_S, Math.max(1, Math.round(hv)));
+    // World-space columns of the box frame for this face's u, v and normal.
+    const ux = mats[m9 + au], uy = mats[m9 + 3 + au], uz = mats[m9 + 6 + au];
+    const vx = mats[m9 + av], vy = mats[m9 + 3 + av], vz = mats[m9 + 6 + av];
+    const nx3 = mats[m9 + axis], ny3 = mats[m9 + 3 + axis], nz3 = mats[m9 + 6 + axis];
+    for (let side = -1; side <= 1 && !visible; side += 2) {
+      // Outward normal of this face in world space.
+      const nwx = nx3 * side, nwy = ny3 * side, nwz = nz3 * side;
+      for (let a = 0; a < su && !visible; a++) for (let b = 0; b < sv && !visible; b++) {
+        const fu = su === 1 ? 0 : (a / (su - 1) - 0.5) * 2 * hu * 0.8;
+        const fv = sv === 1 ? 0 : (b / (sv - 1) - 0.5) * 2 * hv * 0.8;
+        const off = hn + EPS;
+        const px = A[o] + ux * fu + vx * fv + nx3 * side * off;
+        const py = A[o + 1] + uy * fu + vy * fv + ny3 * side * off;
+        const pz = A[o + 2] + uz * fu + vz * fv + nz3 * side * off;
+        if (pointInAny(px, py, pz, i)) continue;   // flush-covered (seam cap)
+        for (const [dx, dy, dz] of DIRS) {
+          if (rayEscapes(px, py, pz, dx, dy, dz, i)) { visible = true; break; }
+        }
+        if (!visible && nwz > -0.2) {
+          // Outward normal tilted 20 degrees up.
+          const l = Math.hypot(nwx, nwy, nwz + 0.36) || 1;
+          if (rayEscapes(px, py, pz, nwx / l, nwy / l, (nwz + 0.36) / l, i)) visible = true;
+        }
       }
     }
   }
