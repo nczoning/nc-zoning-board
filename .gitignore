@@ -107,6 +107,7 @@ data/mesh-export-list.json
 assets/dds/rebuilt/
 assets/dds/planes/
 assets/dds/carve/
+assets/dds/carve24/
 data/debug-asset.json
 
 # The generated mesh export list, 3 MB of depot paths. Rebuild with
