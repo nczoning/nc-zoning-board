@@ -24,8 +24,10 @@
  * Usage:
  *   node scripts/encode_hull_dds.js city_center
  *   node scripts/encode_hull_dds.js city_center watson
+ *   node scripts/encode_hull_dds.js pacifica --outdir planes
  *
- * Output: assets/dds/rebuilt/<district>_data.dds  (view with ?assets=rebuilt)
+ * Output: assets/dds/<outdir>/<district>_data.dds, default outdir 'rebuilt'
+ * (view with ?assets=<outdir>; experiment clouds go in sibling folders)
  */
 'use strict';
 
@@ -35,7 +37,10 @@ const { DISTRICTS, worldBounds } = require('./district_meta');
 
 const U16 = 65535;
 const dataDir = path.join(__dirname, '..', 'data');
-const outDir = path.join(__dirname, '..', 'assets', 'dds', 'rebuilt');
+const outIdx = process.argv.indexOf('--outdir');
+const outName = outIdx > 0 ? process.argv[outIdx + 1] : 'rebuilt';
+if (outIdx > 0) process.argv.splice(outIdx, 2);
+const outDir = path.join(__dirname, '..', 'assets', 'dds', outName);
 fs.mkdirSync(outDir, { recursive: true });
 
 /** 128-byte DDS header plus the 20-byte DX10 extension, uncompressed RGBA16. */
