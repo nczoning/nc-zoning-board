@@ -21,6 +21,26 @@ Query-string flags the app reads at load time. Append to the site URL, e.g.
 | `?shapemark` | flag | **Shape-detection** verification view: labelled beacon pillars (S/C/R/X + number) at every shape-detector candidate: red = sphere, cyan = cylinder, amber = ring, magenta = round-ish. Candidate list is currently the prototype detector's baked output; verdicts in `_lighting_demo/shape_candidates.txt`. | `three-scene.js` |
 | `?glassdebug` | flag | **Measured glass share**, as baked per building: blue → green → yellow → red over 0–30%. Verifies the *data path*, not the look: every building in one subdistrict must be a single flat colour, and the colours must rank as `data/night-profile.json` does. A building disagreeing with its neighbours is tagged to the wrong polygon; a whole district reading black means the profile failed to load or its `subId` doesn't join. Both are silent under the real shader; they just look "a bit dark". | `three-scene.js` |
 | `?noglassprof` | flag | Bakes a flat 0.2 glass share for every building, ignoring the measured profile: isolates the shader from the data. (Sign-density twin: `?nosignprof`.) | `three-scene.js` |
+| `?nosignprof` | flag | The sign-density twin of `?noglassprof`: ignores the measured per-subdistrict signage profile so the signage shader can be judged apart from its data. | `three-scene.js` |
+| `?night` | flag | Opens with the time-of-day slider at night so the city lights are visible immediately for calibration (and drops the overlays). Only sets the slider's **initial** value; it stays fully scrubbable. | `app.js` |
+| `?nolandmarks` | flag | Skips the hand-placed landmark GLBs (ferris wheel, coaster and friends). They are real meshes standing in the same space as the box cloud, so they hide the boxes when the **cloud** is what is being judged at the bench. | `three-scene.js` |
+| `?exposure` | flag | Lazy-loads the exposure debug tool (`exposure-debug.js`). Honours `?only`, so one district can be checked without loading watson's 49 MB alongside. | `three-scene.js` |
+| `?windebug[=all\|xray]` | flag/value | **Real window positions** from the game dump, as a point cloud coloured by landing verdict (cyan LANDED, red TOO DEEP, orange OFF SIDE, magenta NO BOX, yellow NO FACE). Bare = failures only; `=all` = every point; `=xray` = draw through the buildings, the only view that shows the real windows sitting *inside* our boxes (2.12 m at the median). Point size: `?winptsize=` (3). | `three-scene.js` |
+| `?panelnodepth` | flag | Renders baked window panels with depth testing off, so panels sunk inside their box still show. Pair with `?panelpush=<metres>` to shift panels along their normal instead. | `three-scene.js` |
+| `?aabbboxes` | flag | Segments buildings from **world AABBs** instead of the true oriented boxes: the pre-oriented baseline, kept so an A/B has the baseline it claims (santo_domingo segments to 520 buildings with orientation, 285 without). | `three-scene.js` |
+
+## Box-cloud experiments (`?assets` and friends)
+
+The box cloud the map draws is a `_data.dds` per district. `?assets=` swaps which
+folder it is read from, which is how a generator experiment is A/B'd against the
+shipping cloud in two tabs on one camera.
+
+| Parameter | Type | What it does | Read in |
+| --- | --- | --- | --- |
+| `?assets=<folder>` | value | Reads each district's cloud from `assets/dds/<folder>/` instead of the shipped one. `rebuilt` is the main rebuild (`scripts/rebuild.js`), other names hold experiments: `planes` (surface decomposition, `asset_planes.js`), `carve` (feature carve, `asset_carve.js`). A district with no texture in that folder falls back to its shipped cloud and logs a warning, so a partial experiment renders beside the shipped city rather than vanishing. | `three-scene.js` |
+| `?cam=px,py,pz,tx,ty,tz` | value | Pins the camera to an exact position and target (Three.js space) and **skips the intro flight**, so a verification screenshot is navigate-then-snap and a camera is shareable as a URL. Read the current pose with `getCameraState()`. | `three-scene.js` |
+| `?boxdebug` | flag | Draws every cloud box as a translucent cage over the city (`depthWrite` off, double-sided, because you will be inside one). `?boxwire` renders it unfilled, `?boxalpha=` sets opacity, `?boxcolor=` sets the colour. The structure is deliberately colourless so anything coloured on screen means something. | `three-scene.js` |
+| `?mindist=` / `?maxdist=` | value | Camera zoom limits in CET units. The shipped minimum is 800, the game's own TweakDB `zoomMin`; the carve cloud carries more detail than that distance can resolve, so `?mindist=200` gets close enough to inspect one asset's boxes. Judge the **look** at the shipped limit. | `constants.js` |
 
 ## City lights (window + signage emissive)
 

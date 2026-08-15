@@ -7,9 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `?nolandmarks` skips the hand-placed landmark meshes, and `?mindist=` / `?maxdist=` override the camera zoom limits, so a box cloud can be inspected up close without a real mesh standing in front of it.
+
 ### Changed
 
 - The per-asset decomposer fits angled shapes inside a mesh (vault ribs, beams, ramps) with rotated boxes at the source: connected solid components whose oriented bounding box beats both the cell volume and their own axis-aligned bbox become one rotated box; everything else keeps the exact grid merge.
+
+### Documentation
+
+- `docs/url-parameters.md` covers the parameters added since it was written: the box-cloud experiment set (`?assets`, `?cam`, `?boxdebug`), `?windebug`, `?exposure`, `?night`, `?aabbboxes`, `?panelnodepth` and `?nosignprof`.
 
 ## [2.12.0] - 2026-08-10
 

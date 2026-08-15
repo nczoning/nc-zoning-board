@@ -1324,6 +1324,12 @@ NCZ.PIN_3D_SCALE_TARGET_PX          = 100; // ideal scale-bar width in pixels; t
     glassgain: "GLASS_SHARE_GAIN",
     litglass:  "WINDOW_LIT_IN_GLASS",
     winaspect: "WINDOW_PANE_ASPECT",
+    // Camera zoom limits. The shipped 800 is the game's own TweakDB zoomMin,
+    // and the box cloud now carries more detail than that distance can show,
+    // so ?mindist=200 gets close enough to inspect a single asset's boxes.
+    // Judging the LOOK still happens at the shipped limit.
+    mindist:  "SCHEMA_CAMERA_MIN_DISTANCE",
+    maxdist:  "SCHEMA_CAMERA_MAX_DISTANCE",
   };
   // Params whose value is an ENUM, not a number; MAP above parseFloats everything,
   // so a string-valued constant needs its own pass or it lands as NaN.

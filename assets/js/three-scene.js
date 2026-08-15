@@ -2196,8 +2196,20 @@ const ThreeScene = (() => {
     { file: 'rcr_park_ferris_wheel.glb',            cetX:   445.2, cetY: -1672.2, cetZ:  10.87, qi: -0.4513, qj: -0.2239, qk:  0.4591, qr:  0.7317 },
   ];
 
+  // ?nolandmarks: skip the hand-placed landmark GLBs entirely. They are real
+  // meshes standing in the same space as the box cloud, so when the cloud is
+  // the thing under judgement (the ferris wheel over the GIM bench) they hide
+  // the boxes being compared. Skipping beats hiding: nothing loads, nothing
+  // casts a shadow onto the cloud.
+  const NO_LANDMARKS = new URLSearchParams(location.search).has('nolandmarks');
+
   async function loadLandmarks() {
     registerLoadStep(1);
+    if (NO_LANDMARKS) {
+      console.log('[NCZ] Landmarks: skipped (?nolandmarks)');
+      stepProgress();
+      return;
+    }
     try {
       landmarkMat = new THREE.MeshLambertNodeMaterial({
         color: readThemeColor('--scene-landmarks', '#8aacbf'),
