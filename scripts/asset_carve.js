@@ -47,13 +47,28 @@ const flag = (k, d) => { const i = args.indexOf(`--${k}`); return i > 0 ? Number
 const strFlag = (k) => { const i = args.indexOf(`--${k}`); return i > 0 ? args[i + 1] : null; };
 
 const ASSET     = strFlag('asset');       // single-asset unit mode
-const MAXPLANES = flag('maxplanes', 24);  // dominant planes kept per mesh
+// Dominant planes kept per mesh. 48, not 24: the GIM skylight frame clusters
+// into 630 planes and emits 12 boxes at 24 against 62 at 48 (oriented 4 to
+// 38), which is the difference between a bare roof and its beams. 80 hits the
+// cell cap and gains one box, so this is the knee, not a slider. It costs:
+// pacifica carves in 1,399 s at 48 against 197 s at 24.
+const MAXPLANES = flag('maxplanes', 48);
 const NTOL      = flag('ntol', 8);        // degrees: plane clustering cone
 const DTOL      = flag('dtol', 0.15);     // metres: coplanar offset tolerance (shells stay separate)
 const MIN_SUPPORT = flag('minsupport', 0.5); // m^2: a plane needs this much triangle area to carve
+const MIN_SUPPORT_FRAC = flag('minsupportfrac', 0.05); // or this share of its own component's area, whichever is less
+const MERGE_FRAC = flag('mergefrac', 0.05); // a component under this share of the mesh, inside a bigger one, is its detail
+const MERGE_SPAN = flag('mergespan', 4);    // and only if that bigger one is within this many times its size
 const MIN_CELL  = flag('mincell', 0.05);  // metres: cells thinner than this are slivers
 const MIN_BACKED = flag('minbacked', 0.5);// share of a cell's skin that must be real mesh
 const MAX_CELLS = flag('maxcells', 4000); // safety valve: a BSP is exponential in the worst case
+// metres: how far past its own triangles a carve plane still cuts. OFF by
+// default, because per-component carving already stops a plane from reaching
+// geometry it has nothing to do with, and limiting it further costs real
+// detail: the skylight frame is ONE component and drops 62 boxes to 35 at
+// 0.5 m, while the wheel gains 2 and the landmark proxy loses 6. It stays as a
+// speed knob: the proxy carves in 1.7 s at 0.5 m against 8.7 s uncapped.
+const EXTENT_PAD = flag('extentpad', Infinity);
 const LOD       = flag('lod', 2);
 const MIN_SIZE  = flag('minsize', 0.3);
 const MAX_SIZE  = flag('maxsize', 1000);
@@ -244,10 +259,138 @@ function carveMesh(tris, sx, sy, sz, verbose) {
     td[t] = nx * tc[t * 3] + ny * tc[t * 3 + 1] + nz * tc[t * 3 + 2];
   }
 
+  // ── Connected components, carved independently ─────────────────────────
+  // A mesh is not necessarily one solid. A ferris wheel is a rim, spokes and
+  // cabins; a lattice is its members. Carving all of it at once lets a plane
+  // from the rim cut the spokes 30 m away, which shreds the mesh into cells
+  // bounded by surfaces that are not there: the wheel dropped 457 of 478
+  // voted cells and emitted 21 arbitrary fragments. Per component, a plane
+  // can never leave the member it belongs to, and each member carves the way
+  // a coaster support does, as itself.
+  const vkey = new Map();
+  const parent = new Int32Array(T);
+  for (let t = 0; t < T; t++) parent[t] = t;
+  const find = (a) => { while (parent[a] !== a) { parent[a] = parent[parent[a]]; a = parent[a]; } return a; };
+  const union = (a, b) => { a = find(a); b = find(b); if (a !== b) parent[b] = a; };
+  for (let t = 0; t < T; t++) {
+    const o9 = t * 9;
+    for (let v = 0; v < 9; v += 3) {
+      // Weld at 1 mm: kit meshes repeat vertices per face, and a shared
+      // corner is what makes two triangles one member.
+      const k = `${Math.round(tv[o9 + v] * 1000)},${Math.round(tv[o9 + v + 1] * 1000)},${Math.round(tv[o9 + v + 2] * 1000)}`;
+      const prev = vkey.get(k);
+      if (prev === undefined) vkey.set(k, t); else union(prev, t);
+    }
+  }
+  const compOf = new Map();
+  for (let t = 0; t < T; t++) {
+    const r = find(t);
+    let list = compOf.get(r);
+    if (!list) compOf.set(r, list = []);
+    list.push(t);
+  }
+  let components = [...compOf.values()];
+
+  // Detail rejoins its parent. Carving components separately breaks the
+  // carve's aggregation promise, that trim inside a cell vanishes into it: a
+  // 1 m pillar is one body plus four 0.10 x 0.09 x 0.98 m corner strips, and
+  // carved apart that is 5 boxes where the mesh reads as 1. A component under
+  // MERGE_FRAC of the mesh's area whose bounds sit inside a bigger
+  // component's is that component's detail, so its triangles go back in and
+  // the carve absorbs them as it always did. A ferris wheel keeps its 185
+  // members, because none of them is small next to the rest.
+  {
+    const info = components.map(idx => {
+      let a = 0, x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+      for (const t of idx) {
+        a += ta[t];
+        const o9 = t * 9;
+        for (let v = 0; v < 9; v += 3) {
+          if (tv[o9 + v] < x0) x0 = tv[o9 + v]; if (tv[o9 + v] > x1) x1 = tv[o9 + v];
+          if (tv[o9 + v + 1] < y0) y0 = tv[o9 + v + 1]; if (tv[o9 + v + 1] > y1) y1 = tv[o9 + v + 1];
+          if (tv[o9 + v + 2] < z0) z0 = tv[o9 + v + 2]; if (tv[o9 + v + 2] > z1) z1 = tv[o9 + v + 2];
+        }
+      }
+      return { idx, a, b: [x0, y0, z0, x1, y1, z1], merged: false };
+    }).sort((p, q) => q.a - p.a);
+    const meshArea = info.reduce((s, c) => s + c.a, 0);
+    for (let i = info.length - 1; i > 0; i--) {
+      const c = info[i];
+      if (c.a >= meshArea * MERGE_FRAC) continue;
+      for (let j = 0; j < i; j++) {
+        const p = info[j];
+        if (p.merged) continue;
+        if (c.b[0] < p.b[0] - DTOL || c.b[1] < p.b[1] - DTOL || c.b[2] < p.b[2] - DTOL ||
+            c.b[3] > p.b[3] + DTOL || c.b[4] > p.b[4] + DTOL || c.b[5] > p.b[5] + DTOL) continue;
+        // Detail is the size of the thing it details. Containment alone is not
+        // enough: a ferris wheel's rim hoop is a 73 m ring whose bounds enclose
+        // the whole wheel, so every cabin reads as its trim and the wheel loses
+        // a third of its boxes. A 0.98 m strip on a 1 m pillar is trim; a 3 m
+        // cabin on a 73 m rim is a member.
+        const cSpan = Math.max(c.b[3] - c.b[0], c.b[4] - c.b[1], c.b[5] - c.b[2]);
+        const pSpan = Math.max(p.b[3] - p.b[0], p.b[4] - p.b[1], p.b[5] - p.b[2]);
+        if (pSpan > cSpan * MERGE_SPAN) continue;
+        p.idx = p.idx.concat(c.idx);
+        c.merged = true;
+        break;
+      }
+    }
+    components = info.filter(c => !c.merged).map(c => c.idx);
+  }
+
+  if (verbose) {
+    console.log(`${components.length} connected component(s)`);
+    const rows = components.map(idx => {
+      let a = 0, x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+      for (const t of idx) {
+        a += ta[t];
+        const o9 = t * 9;
+        for (let v = 0; v < 9; v += 3) {
+          if (tv[o9 + v] < x0) x0 = tv[o9 + v]; if (tv[o9 + v] > x1) x1 = tv[o9 + v];
+          if (tv[o9 + v + 1] < y0) y0 = tv[o9 + v + 1]; if (tv[o9 + v + 1] > y1) y1 = tv[o9 + v + 1];
+          if (tv[o9 + v + 2] < z0) z0 = tv[o9 + v + 2]; if (tv[o9 + v + 2] > z1) z1 = tv[o9 + v + 2];
+        }
+      }
+      return { n: idx.length, a, size: [x1 - x0, y1 - y0, z1 - z0] };
+    }).sort((p, q) => q.a - p.a);
+    for (const r of rows.slice(0, 10)) {
+      console.log(`  component ${String(r.n).padStart(5)} tris  area ${r.a.toFixed(2)} m^2  size ${r.size.map(v => v.toFixed(2)).join(' x ')}`);
+    }
+  }
+
+  const allSolid = [];
+  for (const idx of components) {
+    const s = carveComponent(idx, verbose && components.length <= 4);
+    if (s) allSolid.push(...s);
+  }
+  if (verbose) console.log(`${allSolid.length} boxes total, ${allSolid.filter(r => r.oriented).length} with a non-identity frame`);
+  if (!allSolid.length) return null;
+
+  const outArr = new Float32Array(allSolid.length * 10);
+  allSolid.forEach((r, i) => {
+    const o = i * 10;
+    outArr[o] = r.centre[0]; outArr[o + 1] = r.centre[1]; outArr[o + 2] = r.centre[2];
+    outArr[o + 3] = r.half[0]; outArr[o + 4] = r.half[1]; outArr[o + 5] = r.half[2];
+    outArr[o + 6] = r.quat[0]; outArr[o + 7] = r.quat[1]; outArr[o + 8] = r.quat[2]; outArr[o + 9] = r.quat[3];
+  });
+  return outArr;
+
+  // ── One component: planes, BSP, vote, skin test ────────────────────────
+  function carveComponent(idx, verbose) {
+
+  // "Dominant" is relative to the component, not to the world. A flat 0.5 m^2
+  // floor is right for a wall and wrong for a 0.1 x 0.1 x 2 m rod, whose every
+  // face is smaller than that: carved as part of the whole mesh it borrowed a
+  // plane from its parallel siblings, and carved alone it has no qualifying
+  // plane at all and vanishes.
+  let totalArea = 0;
+  for (const t of idx) totalArea += ta[t];
+  const support = Math.min(MIN_SUPPORT, totalArea * MIN_SUPPORT_FRAC);
+
   // Dominant planes: cluster by SIGNED normal cone + offset. Signed, so the
   // two shells of a wall stay two planes: each is an oriented boundary.
   const planes = [];
-  const order = Array.from({ length: T }, (_, t) => t).sort((a, b) => ta[b] - ta[a]);
+  const order = idx.slice().sort((a, b) => ta[b] - ta[a]);
   for (const t of order) {
     if (!(ta[t] > 0)) continue;
     const nx = tn[t * 3], ny = tn[t * 3 + 1], nz = tn[t * 3 + 2];
@@ -262,27 +405,39 @@ function carveMesh(tris, sx, sy, sz, verbose) {
     bestP.tris.push(t);
   }
   planes.sort((a, b) => b.area - a.area);
-  const carvers = planes.filter(p => p.area >= MIN_SUPPORT).slice(0, MAXPLANES);
+  const carvers = planes.filter(p => p.area >= support).slice(0, MAXPLANES);
+  // Carve coverage: the share of the mesh's own surface that the carvers
+  // actually stand on. This is the carve's premise stated as a number. A wall
+  // is 1.00 (three planes ARE the wall); a ferris wheel is a few per cent,
+  // because a circle has no dominant planes and 48 facets out of 624 carry
+  // almost none of its area. Below MIN_COVERAGE the premise is false and the
+  // BSP emits arbitrary fragments, so the mesh goes to the component fallback.
+  let carverArea = 0;
+  for (const p of carvers) carverArea += p.area;
+  const coverage = totalArea > 0 ? carverArea / totalArea : 0;
   if (verbose) {
-    console.log(`${planes.length} planes clustered, ${carvers.length} carvers (>= ${MIN_SUPPORT} m^2, top ${MAXPLANES})`);
+    console.log(`${planes.length} planes clustered, ${carvers.length} carvers (>= ${support.toFixed(2)} m^2, top ${MAXPLANES}), coverage ${(coverage * 100).toFixed(1)}%`);
     for (const p of carvers.slice(0, 12)) {
       console.log(`  n(${p.nx.toFixed(2)},${p.ny.toFixed(2)},${p.nz.toFixed(2)}) d=${p.d.toFixed(2)} area=${p.area.toFixed(1)} tris=${p.tris.length}`);
     }
   }
-  if (!carvers.length) return null;
+  if (!carvers.length) return null;      // no plane in this component carries enough area to cut with
 
   let bx0 = Infinity, by0 = Infinity, bz0 = Infinity, bx1 = -Infinity, by1 = -Infinity, bz1 = -Infinity;
-  for (let i = 0; i < tv.length; i += 3) {
-    if (tv[i] < bx0) bx0 = tv[i]; if (tv[i] > bx1) bx1 = tv[i];
-    if (tv[i + 1] < by0) by0 = tv[i + 1]; if (tv[i + 1] > by1) by1 = tv[i + 1];
-    if (tv[i + 2] < bz0) bz0 = tv[i + 2]; if (tv[i + 2] > bz1) bz1 = tv[i + 2];
+  for (const t of idx) {
+    const o9 = t * 9;
+    for (let v = 0; v < 9; v += 3) {
+      if (tv[o9 + v] < bx0) bx0 = tv[o9 + v]; if (tv[o9 + v] > bx1) bx1 = tv[o9 + v];
+      if (tv[o9 + v + 1] < by0) by0 = tv[o9 + v + 1]; if (tv[o9 + v + 1] > by1) by1 = tv[o9 + v + 1];
+      if (tv[o9 + v + 2] < bz0) bz0 = tv[o9 + v + 2]; if (tv[o9 + v + 2] > bz1) bz1 = tv[o9 + v + 2];
+    }
   }
 
   // Triangles lying on an arbitrary plane, either facing: the skin test asks
   // whether a face is real mesh, not which way that mesh looks.
   function bboxPlane(nx, ny, nz, d) {
     const list = [];
-    for (let t = 0; t < T; t++) {
+    for (const t of idx) {
       if (Math.abs(tn[t * 3] * nx + tn[t * 3 + 1] * ny + tn[t * 3 + 2] * nz) < COS_NTOL) continue;
       if (Math.abs(nx * tc[t * 3] + ny * tc[t * 3 + 1] + nz * tc[t * 3 + 2] - d) > DTOL) continue;
       list.push(t);
@@ -302,18 +457,42 @@ function carveMesh(tris, sx, sy, sz, verbose) {
     ],
   }];
   let capped = false;
+  let localSkips = 0;
   for (const p of carvers) {
     if (cells.length >= MAX_CELLS) { capped = true; break; }
+    // The plane's own extent. A BSP plane is infinite, so without this a facet
+    // on the near side of a ferris wheel cuts cells 30 m away on the far side,
+    // where none of its surface exists. That is what shreds a curved or
+    // latticed mesh into thousands of cells bounded by surfaces that are not
+    // there, which the skin test then correctly kills: the wheel dropped 457
+    // of 478 voted cells and emitted 21 arbitrary fragments. Every cut is an
+    // authored surface, so every cut happens where that surface is.
+    let px0 = Infinity, py0 = Infinity, pz0 = Infinity, px1 = -Infinity, py1 = -Infinity, pz1 = -Infinity;
+    for (const t of p.tris) {
+      const o9 = t * 9;
+      for (let v = 0; v < 9; v += 3) {
+        if (tv[o9 + v] < px0) px0 = tv[o9 + v]; if (tv[o9 + v] > px1) px1 = tv[o9 + v];
+        if (tv[o9 + v + 1] < py0) py0 = tv[o9 + v + 1]; if (tv[o9 + v + 1] > py1) py1 = tv[o9 + v + 1];
+        if (tv[o9 + v + 2] < pz0) pz0 = tv[o9 + v + 2]; if (tv[o9 + v + 2] > pz1) pz1 = tv[o9 + v + 2];
+      }
+    }
     const next = [];
     for (const cell of cells) {
       const V = cellVertices(cell.planes);
       if (V.length < 4) continue;   // degenerate
       let neg = 0, pos = 0;
+      let cx0 = Infinity, cy0 = Infinity, cz0 = Infinity, cx1 = -Infinity, cy1 = -Infinity, cz1 = -Infinity;
       for (const [x, y, z] of V) {
         const s = p.nx * x + p.ny * y + p.nz * z - p.d;
         if (s > 1e-6) pos++; else if (s < -1e-6) neg++;
+        if (x < cx0) cx0 = x; if (x > cx1) cx1 = x;
+        if (y < cy0) cy0 = y; if (y > cy1) cy1 = y;
+        if (z < cz0) cz0 = z; if (z > cz1) cz1 = z;
       }
       if (!pos || !neg) { next.push(cell); continue; }
+      if (px1 < cx0 - EXTENT_PAD || px0 > cx1 + EXTENT_PAD ||
+          py1 < cy0 - EXTENT_PAD || py0 > cy1 + EXTENT_PAD ||
+          pz1 < cz0 - EXTENT_PAD || pz0 > cz1 + EXTENT_PAD) { localSkips++; next.push(cell); continue; }
       // Both halves keep the plane's triangle list: it is the same geometric
       // surface, and the skin test needs it without re-searching the mesh.
       next.push({ planes: [...cell.planes, { nx: p.nx, ny: p.ny, nz: p.nz, d: p.d, area: p.area, tris: p.tris }] });
@@ -323,7 +502,7 @@ function carveMesh(tris, sx, sy, sz, verbose) {
   }
   if (capped) carveStats.capped++;
   carveStats.cells += cells.length;
-  if (verbose) console.log(`${cells.length} cells after carve${capped ? ` (CAPPED at ${MAX_CELLS})` : ''}`);
+  if (verbose) console.log(`${cells.length} cells after carve${capped ? ` (CAPPED at ${MAX_CELLS})` : ''}, ${localSkips} splits skipped as out of the plane's own extent`);
 
   // Candidate cells: measured in their own frame, slivers dropped there too,
   // because an axis-aligned min/max reads a thin slanted cell as a fat one.
@@ -373,7 +552,7 @@ function carveMesh(tris, sx, sy, sz, verbose) {
   for (const r of results) {
     let outVote = 0, inVote = 0;
     const [vx0, vy0, vz0, vx1, vy1, vz1] = r.bbox;
-    for (let t = 0; t < T; t++) {
+    for (const t of idx) {
       const mx = tc[t * 3], my = tc[t * 3 + 1], mz = tc[t * 3 + 2];
       if (mx < vx0 - 0.05 || mx > vx1 + 0.05 || my < vy0 - 0.05 || my > vy1 + 0.05 ||
           mz < vz0 - 0.05 || mz > vz1 + 0.05) continue;
@@ -430,16 +609,8 @@ function carveMesh(tris, sx, sy, sz, verbose) {
     }
     console.log(`${solid.filter(r => r.oriented).length}/${solid.length} boxes carry a non-identity frame`);
   }
-  if (!solid.length) return null;
-
-  const outArr = new Float32Array(solid.length * 10);
-  solid.forEach((r, i) => {
-    const o = i * 10;
-    outArr[o] = r.centre[0]; outArr[o + 1] = r.centre[1]; outArr[o + 2] = r.centre[2];
-    outArr[o + 3] = r.half[0]; outArr[o + 4] = r.half[1]; outArr[o + 5] = r.half[2];
-    outArr[o + 6] = r.quat[0]; outArr[o + 7] = r.quat[1]; outArr[o + 8] = r.quat[2]; outArr[o + 9] = r.quat[3];
-  });
-  return outArr;
+  return solid;
+  }
 }
 
 // ── Per-asset carve, cached by (asset, scale) ─────────────────────────────
