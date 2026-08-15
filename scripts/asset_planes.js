@@ -39,7 +39,7 @@ const args = process.argv.slice(2);
 const name = args[0];
 const flag = (k, d) => { const i = args.indexOf(`--${k}`); return i > 0 ? Number(args[i + 1]) : d; };
 
-const BBOX_SMALL = flag('bboxsmall', 4); // metres: assets under this become ONE oriented bbox,
+let BBOX_SMALL = flag('bboxsmall', 4);   // metres: assets under this become ONE oriented bbox,
                                          // not plates; a crate IS a box, and shelling props
                                          // into six thin faces reads as scattered squares
 const AGG_SMALL = flag('aggsmall', 4);   // m^2: slabs under this can be absorbed or clustered
@@ -49,9 +49,25 @@ const AGG_RATIO = flag('aggratio', 3);   // a parent must have this many times t
                                          // parent), so the world-merge union error cannot compound
 const NTOL     = flag('ntol', 8);       // degrees: normal tolerance joining a plane cluster
 const DTOL     = flag('dtol', 0.5);     // metres: offset tolerance (covers double shells)
-const MIN_AREA = flag('minarea', 0.6);  // m^2: smaller rectangles drop (counted)
+let MIN_AREA   = flag('minarea', 0.6);  // m^2: smaller rectangles drop (counted)
+// --faithful: geometry exactly as the meshes state it, nothing dropped,
+// nothing boxed, nothing aggregated. The validation baseline the removal
+// passes must be judged against: right first, remove later.
+const FAITHFUL = args.includes('--faithful');
+if (FAITHFUL) { MIN_AREA = 0; BBOX_SMALL = 0; }
+const KEEP_INTERIORS = args.includes('--keepinteriors');
+const INTERIOR_RE = /[\\/]int_|interior|[\\/]decoration[\\/]|[\\/]furniture[\\/]|[\\/]shop[\\/]/i;
+// --debugasset <substring>: decompose ONLY the first asset whose path
+// matches, dump {tris, slabs} JSON for the visual debugger, and exit.
+const dbgIdx = args.indexOf('--debugasset');
+const DEBUG_ASSET = dbgIdx > 0 ? args[dbgIdx + 1] : null;
 const MIN_THICK = flag('minthick', 0.3);// metres: slab minimum thickness
 const CELL2D   = flag('cell', 1.0);     // metres: in-plane connectivity cell
+const COV_MIN  = flag('covmin', 0.5);   // rect must hold this share of real triangle area,
+                                        // else the patch splits: a bounding rectangle on a
+                                        // gable or a drift-clustered curve is mostly empty
+                                        // and juts out of the building as a phantom slab
+const COV_DEPTH = flag('covdepth', 4);  // max recursive splits per patch
 const LOD      = flag('lod', 2);
 const MIN_SIZE = flag('minsize', 0.3);
 const MAX_SIZE = flag('maxsize', 1000);
@@ -110,7 +126,7 @@ console.log(`district ${name} (surface decomposition, no grid)`);
 // ── Classify placements (identical policy to asset_boxes.js) ──────────────
 const builders = [];
 const proxies = [];
-let skippedSmall = 0, skippedHuge = 0, skippedNever = 0, skippedProxy = 0;
+let skippedSmall = 0, skippedHuge = 0, skippedNever = 0, skippedProxy = 0, skippedInterior = 0;
 for (let i = 0; i < meta.boxes; i++) {
   const o = i * S;
   const largest = Math.max(box[o + 3], box[o + 4], box[o + 5]) * 2;
@@ -121,6 +137,12 @@ for (let i = 0; i < meta.boxes; i++) {
   // squares each. The by-NAME terrain rule in categorize() misses them; kept
   // local to this experiment until the grid path judges the same exclusion.
   if (assetPath.includes('\\terrain\\') || assetPath.includes('/terrain/')) { skippedNever++; continue; }
+  // Interior kit and furnishings: the measured GIM window is 21,374 interior
+  // placements to 125 exterior; surfaced as opaque plates they ARE the
+  // persistent jutting squares (the grid path entombs them in fused mass
+  // instead). Culled by category as the cheap probe of the removal pass;
+  // --keepinteriors restores them.
+  if (!KEEP_INTERIORS && INTERIOR_RE.test(assetPath)) { skippedInterior++; continue; }
   const cat = categorize(assetPath, TYPE[box[o + 11]] || '');
   if (cat !== 'building' && cat !== 'proxy' && cat !== 'infrastructure') { skippedNever++; continue; }
   if (largest > MAX_SIZE) { skippedHuge++; continue; }
@@ -130,12 +152,21 @@ for (let i = 0; i < meta.boxes; i++) {
   } else builders.push(i);
 }
 console.log(`  input     ${builders.length.toLocaleString()} placements + ${proxies.length.toLocaleString()} proxies held back`);
-console.log(`  skipped   ${skippedSmall.toLocaleString()} small, ${skippedHuge.toLocaleString()} huge, ${skippedNever.toLocaleString()} never, ${skippedProxy.toLocaleString()} area proxies`);
+console.log(`  skipped   ${skippedSmall.toLocaleString()} small, ${skippedHuge.toLocaleString()} huge, ${skippedNever.toLocaleString()} never, ${skippedProxy.toLocaleString()} area proxies, ${skippedInterior.toLocaleString()} interior/furnishing`);
 
 // ── Per-asset surface decomposition, cached ───────────────────────────────
 const cache = new Map();
 let decomposed = 0, noTris = 0, totalAssetBoxes = 0, droppedSmallPatch = 0;
 let aggAbsorbed = 0, aggClusters = 0, aggClustered = 0;
+const aggChainStats = [];
+// Coverage: patch triangle area vs fitted rectangle area. A rectangle far
+// larger than the geometry inside it is a manufactured jutting slab (a
+// triangular gable bounding-boxed, a drifted cluster). Raw triangle area
+// counts both shells of a wall, so ~2.0 is a fully-covered double shell,
+// ~1.0 a fully-covered single face, and well below that the rectangle is
+// mostly empty.
+const coverage = [];   // per-slab area/rectArea, STATS only
+const coverageByAsset = new Map();
 // --stats: per-asset accounting of the small near-square slabs that read as
 // visual noise, to name the top contributors instead of guessing.
 const STATS = args.includes('--stats');
@@ -215,20 +246,24 @@ function decompose(aid, sx, sy, sz) {
   if (!valid) { cache.set(key, null); noTris++; return null; }
   order.sort((a, b) => ta[b] - ta[a]);   // big triangles seed clusters
 
-  // Running plane clusters: area-weighted normal + offset.
-  const clusters = [];   // {nx,ny,nz, d, area, tris: []}
+  // Running plane clusters: area-weighted normal + offset. Membership tests
+  // against the SEED normal, not the running average: an average drifts, and
+  // a drifting cone lets a curved roof chain into one arbitrary mega-plane
+  // whose rectangle is a giant tilted shard. Seed-anchored cones keep curves
+  // as narrow strips that follow the surface.
+  const clusters = [];   // {nx,ny,nz (running), snx,sny,snz (seed), d, area, tris: []}
   for (const t of order) {
     const nx = tn[t * 3], ny = tn[t * 3 + 1], nz = tn[t * 3 + 2];
     let best = null;
     for (const c of clusters) {
-      if (nx * c.nx + ny * c.ny + nz * c.nz < COS_NTOL) continue;
+      if (nx * c.snx + ny * c.sny + nz * c.snz < COS_NTOL) continue;
       // Offset against the CLUSTER plane, so a tilted triangle far along the
       // plane does not drift the test.
       const d = c.nx * tc[t * 3] + c.ny * tc[t * 3 + 1] + c.nz * tc[t * 3 + 2];
       if (Math.abs(d - c.d) > DTOL) continue;
       best = c; break;
     }
-    if (!best) { clusters.push({ nx, ny, nz, d: td[t], area: ta[t], tris: [t] }); continue; }
+    if (!best) { clusters.push({ nx, ny, nz, snx: nx, sny: ny, snz: nz, d: td[t], area: ta[t], tris: [t] }); continue; }
     const w = best.area, w2 = ta[t];
     best.nx = (best.nx * w + nx * w2); best.ny = (best.ny * w + ny * w2); best.nz = (best.nz * w + nz * w2);
     const l = Math.hypot(best.nx, best.ny, best.nz) || 1;
@@ -255,57 +290,73 @@ function decompose(aid, sx, sy, sz) {
       n2[0] * e1[1] - n2[1] * e1[0],
     ];
 
-    // 2D connectivity split over a coarse in-plane hash of triangle cells.
+    // 2D connectivity: a triangle occupies EVERY in-plane cell its bbox
+    // covers, not just its centroid's. LOD2 triangles run metres to tens of
+    // metres, so centroid dots are almost never adjacent at 1 m cells and
+    // every large triangle became its own singleton patch; a lone triangle's
+    // min-area rectangle is half empty (coverage exactly 0.5, the measured
+    // median), jutting past its hypotenuse: the phantom squares.
     const cellOf = new Map();   // "cx,cy" -> cell id
-    const cellTris = [];        // cell id -> [tri...]
     const cellXY = [];
+    const parent = [];          // union-find over cells
+    const findC = i0 => { let i = i0; while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+    const unionC = (a, b) => { const ra = findC(a), rb = findC(b); if (ra !== rb) parent[ra] = rb; };
+    const triCell0 = [];        // an occupied cell per triangle
     for (const t of c.tris) {
-      const px = tc[t * 3], py = tc[t * 3 + 1], pz = tc[t * 3 + 2];
-      const cx = Math.floor((e1[0] * px + e1[1] * py + e1[2] * pz) / CELL2D);
-      const cy = Math.floor((e2[0] * px + e2[1] * py + e2[2] * pz) / CELL2D);
-      const k = `${cx},${cy}`;
-      let id = cellOf.get(k);
-      if (id === undefined) { id = cellTris.length; cellOf.set(k, id); cellTris.push([]); cellXY.push([cx, cy]); }
-      cellTris[id].push(t);
-    }
-    const cellComp = new Int32Array(cellTris.length).fill(-1);
-    let nComp = 0;
-    for (let seed = 0; seed < cellTris.length; seed++) {
-      if (cellComp[seed] !== -1) continue;
-      const stack = [seed];
-      cellComp[seed] = nComp;
-      while (stack.length) {
-        const id = stack.pop();
-        const [cx, cy] = cellXY[id];
-        for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
-          if (!dx && !dy) continue;
-          const nid = cellOf.get(`${cx + dx},${cy + dy}`);
-          if (nid !== undefined && cellComp[nid] === -1) { cellComp[nid] = nComp; stack.push(nid); }
-        }
+      const o9 = t * 9;
+      let pu0 = Infinity, pu1 = -Infinity, pv0 = Infinity, pv1 = -Infinity;
+      for (let v = 0; v < 3; v++) {
+        const px = tris[o9 + v * 3] * sx, py = tris[o9 + v * 3 + 1] * sy, pz = tris[o9 + v * 3 + 2] * sz;
+        const pu = e1[0] * px + e1[1] * py + e1[2] * pz;
+        const pv = e2[0] * px + e2[1] * py + e2[2] * pz;
+        if (pu < pu0) pu0 = pu; if (pu > pu1) pu1 = pu;
+        if (pv < pv0) pv0 = pv; if (pv > pv1) pv1 = pv;
       }
-      nComp++;
+      let first = -1;
+      for (let cx = Math.floor(pu0 / CELL2D); cx <= Math.floor(pu1 / CELL2D); cx++)
+        for (let cy = Math.floor(pv0 / CELL2D); cy <= Math.floor(pv1 / CELL2D); cy++) {
+          const k = `${cx},${cy}`;
+          let id = cellOf.get(k);
+          if (id === undefined) { id = cellXY.length; cellOf.set(k, id); cellXY.push([cx, cy]); parent.push(id); }
+          if (first < 0) first = id; else unionC(first, id);
+        }
+      triCell0.push(first);
     }
+    for (let id = 0; id < cellXY.length; id++) {
+      const [cx, cy] = cellXY[id];
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+        if (!dx && !dy) continue;
+        const nid = cellOf.get(`${cx + dx},${cy + dy}`);
+        if (nid !== undefined) unionC(id, nid);
+      }
+    }
+    const compTris = new Map();   // component root -> [tri...]
+    c.tris.forEach((t, i) => {
+      const r = findC(triCell0[i]);
+      let l = compTris.get(r); if (!l) compTris.set(r, l = []);
+      l.push(t);
+    });
 
-    // One slab per connected patch: min-area rectangle over the patch's
-    // projected VERTICES (convex hull + rotating calipers), thickness from
-    // the offset spread.
-    for (let comp = 0; comp < nComp; comp++) {
+    // One or MORE slabs per connected patch: min-area rectangle over the
+    // patch's projected VERTICES (convex hull + rotating calipers),
+    // thickness from the offset spread. A rectangle holding less than
+    // COV_MIN of its patch's real triangle area SPLITS along its long axis
+    // and refits each half: bounding boxes on gables and drift-clustered
+    // curves otherwise manufacture phantom slabs jutting past the geometry.
+    const fitTris = (ids, depth) => {
       const pts = [];   // projected vertices [x,y]
       let d0 = Infinity, d1 = -Infinity, area = 0;
-      for (let id = 0; id < cellTris.length; id++) {
-        if (cellComp[id] !== comp) continue;
-        for (const t of cellTris[id]) {
-          area += ta[t];
-          const o9 = t * 9;
-          for (let v = 0; v < 3; v++) {
-            const px = tris[o9 + v * 3] * sx, py = tris[o9 + v * 3 + 1] * sy, pz = tris[o9 + v * 3 + 2] * sz;
-            pts.push([e1[0] * px + e1[1] * py + e1[2] * pz, e2[0] * px + e2[1] * py + e2[2] * pz]);
-            const d = n2[0] * px + n2[1] * py + n2[2] * pz;
-            if (d < d0) d0 = d; if (d > d1) d1 = d;
-          }
+      for (const t of ids) {
+        area += ta[t];
+        const o9 = t * 9;
+        for (let v = 0; v < 3; v++) {
+          const px = tris[o9 + v * 3] * sx, py = tris[o9 + v * 3 + 1] * sy, pz = tris[o9 + v * 3 + 2] * sz;
+          pts.push([e1[0] * px + e1[1] * py + e1[2] * pz, e2[0] * px + e2[1] * py + e2[2] * pz]);
+          const d = n2[0] * px + n2[1] * py + n2[2] * pz;
+          if (d < d0) d0 = d; if (d > d1) d1 = d;
         }
       }
-      if (area < MIN_AREA) { droppedSmallPatch++; continue; }
+      if (area < MIN_AREA) { droppedSmallPatch++; return; }
 
       // Convex hull (Andrew monotone chain).
       pts.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
@@ -322,7 +373,7 @@ function decompose(aid, sx, sy, sz) {
         upper.push(pt);
       }
       const hull = lower.slice(0, -1).concat(upper.slice(0, -1));
-      if (hull.length < 3) { droppedSmallPatch++; continue; }
+      if (hull.length < 3) { droppedSmallPatch++; return; }
 
       // Rotating calipers: the min-area rectangle has one side on a hull edge.
       let bestA = Infinity, bestFrame = null;
@@ -340,8 +391,42 @@ function decompose(aid, sx, sy, sz) {
         const a = (u1 - u0) * (v1 - v0);
         if (a < bestA) { bestA = a; bestFrame = { ux, uy, u0, u1, v0, v1 }; }
       }
-      if (!bestFrame) { droppedSmallPatch++; continue; }
+      if (!bestFrame) { droppedSmallPatch++; return; }
       const { ux, uy, u0, u1, v0, v1 } = bestFrame;
+
+      // Coverage gate: split a mostly-empty rectangle at the largest
+      // centroid gap along its longer axis (median when no gap), refit each
+      // half.
+      if (area / Math.max(1e-6, bestA) < COV_MIN && depth < COV_DEPTH && ids.length > 1 && bestA > 2) {
+        const axis = (u1 - u0) >= (v1 - v0) ? [ux, uy] : [-uy, ux];
+        const proj = ids.map(t => {
+          const px = tc[t * 3], py = tc[t * 3 + 1], pz = tc[t * 3 + 2];
+          const pu = e1[0] * px + e1[1] * py + e1[2] * pz;
+          const pv = e2[0] * px + e2[1] * py + e2[2] * pz;
+          return { t, s: axis[0] * pu + axis[1] * pv };
+        }).sort((a2, b2) => a2.s - b2.s);
+        let cut = proj.length >> 1, bestGap = 0;
+        for (let i = 1; i < proj.length; i++) {
+          const gap = proj[i].s - proj[i - 1].s;
+          if (gap > bestGap) { bestGap = gap; cut = i; }
+        }
+        if (bestGap < 1.5 * CELL2D) cut = proj.length >> 1;
+        if (cut > 0 && cut < proj.length) {
+          fitTris(proj.slice(0, cut).map(x => x.t), depth + 1);
+          fitTris(proj.slice(cut).map(x => x.t), depth + 1);
+          return;
+        }
+      }
+
+      if (STATS) {
+        const cov = area / Math.max(1e-6, bestA);
+        coverage.push(cov);
+        if (cov < 0.4 && bestA > 1) {
+          const e = coverageByAsset.get(p) || { count: 0, rectArea: 0 };
+          e.count++; e.rectArea += bestA;
+          coverageByAsset.set(p, e);
+        }
+      }
 
       // Back to 3D: slab axes and centre.
       const U = [ux * e1[0] + uy * e2[0], ux * e1[1] + uy * e2[1], ux * e1[2] + uy * e2[2]];
@@ -359,7 +444,8 @@ function decompose(aid, sx, sy, sz) {
       const N = (wx * n2[0] + wy * n2[1] + wz * n2[2] < 0) ? [-n2[0], -n2[1], -n2[2]] : n2;
       const q = matToQuat(U, V, N);
       slabs.push({ c: [ccx, ccy, ccz], h: [hu, hv, hn], U, V, N, q, area });
-    }
+    };
+    for (const l of compTris.values()) fitTris(l, 0);
   }
 
   // ── Aggregation, no grid ────────────────────────────────────────────────
@@ -381,9 +467,10 @@ function decompose(aid, sx, sy, sz) {
       return out8;
     };
 
+    const dead = new Uint8Array(slabs.length);
+    if (!FAITHFUL) {
     // Absorption: smalls ascending, parents descending, first fit wins.
     const byArea = slabs.map((s, i) => i).sort((a, b) => slabs[a].area - slabs[b].area);
-    const dead = new Uint8Array(slabs.length);
     for (const si of byArea) {
       const s = slabs[si];
       if (s.area >= AGG_SMALL) break;
@@ -402,7 +489,11 @@ function decompose(aid, sx, sy, sz) {
           if (au > mu) mu = au; if (av > mv) mv = av; if (an > mn) mn = an;
         }
         if (!ok) continue;
-        p.h[0] = Math.max(p.h[0], mu); p.h[1] = Math.max(p.h[1], mv); p.h[2] = Math.max(p.h[2], mn);
+        // A detail must fit the parent's existing FOOTPRINT; only thickness
+        // may grow. In-plane growth pushed facade slabs past their building
+        // corners, which read as stray planes.
+        if (mu > p.h[0] + 0.1 || mv > p.h[1] + 0.1) continue;
+        p.h[2] = Math.max(p.h[2], mn);
         dead[si] = 1; aggAbsorbed++;
         break;
       }
@@ -421,9 +512,20 @@ function decompose(aid, sx, sy, sz) {
       const e = AGG_D / 2;
       return [s.c[0] - rx - e, s.c[0] + rx + e, s.c[1] - ry - e, s.c[1] + ry + e, s.c[2] - rz - e, s.c[2] + rz + e];
     });
+    // Adjacency requires ORIENTATION AGREEMENT, not just proximity: a chain
+    // may only form through pieces sharing one frame (a sill run, a pipe
+    // rail). Proximity-only edges let unrelated geometry daisy-chain into
+    // one union-find component and fuse at an arbitrary member's rotation.
+    const framesAgree = (s1, s2) => {
+      if (Math.abs(s1.N[0] * s2.N[0] + s1.N[1] * s2.N[1] + s1.N[2] * s2.N[2]) < 0.966) return false;
+      const uu = Math.abs(s1.U[0] * s2.U[0] + s1.U[1] * s2.U[1] + s1.U[2] * s2.U[2]);
+      const uv = Math.abs(s1.U[0] * s2.V[0] + s1.U[1] * s2.V[1] + s1.U[2] * s2.V[2]);
+      return Math.max(uu, uv) > 0.9;
+    };
     for (let a = 0; a < smallIdx.length; a++) for (let b = a + 1; b < smallIdx.length; b++) {
       const A = aabbs[a], B = aabbs[b];
       if (A[0] <= B[1] && B[0] <= A[1] && A[2] <= B[3] && B[2] <= A[3] && A[4] <= B[5] && B[4] <= A[5]) {
+        if (!framesAgree(slabs[smallIdx[a]], slabs[smallIdx[b]])) continue;
         const ra = find(a), rb = find(b);
         if (ra !== rb) uf[ra] = rb;
       }
@@ -450,7 +552,23 @@ function decompose(aid, sx, sy, sz) {
         }
         dead[i] = 1;
       }
+      // Fat-union cap: a legitimate run (sills, a pipe) grows in ONE
+      // direction and stays thin; a union fat in two directions relative to
+      // its members has fused geometry that is not a run. Keep the members
+      // separate instead: small honest pieces beat one confident wrong box.
+      {
+        const leadMax = Math.max(lead.h[0], lead.h[1], lead.h[2]) * 2;
+        const dims = [u1 - u0, v1 - v0, n1 - n0].sort((x, y) => y - x);
+        if (dims[1] > 2 * leadMax) { for (const i of g) dead[i] = 0; continue; }
+      }
       aggClustered += g.length; aggClusters++;
+      if (STATS) {
+        // Chaining diagnostic: a cluster box much larger than its largest
+        // member has fused geometry that does not belong together.
+        const leadMax = Math.max(lead.h[0], lead.h[1], lead.h[2]) * 2;
+        const boxMax = Math.max(u1 - u0, v1 - v0, n1 - n0);
+        aggChainStats.push({ members: g.length, leadMax, boxMax, ratio: boxMax / Math.max(0.1, leadMax) });
+      }
       const cu2 = (u0 + u1) / 2, cv2 = (v0 + v1) / 2, cn2 = (n0 + n1) / 2;
       slabs.push({
         c: [
@@ -463,6 +581,7 @@ function decompose(aid, sx, sy, sz) {
         area: (u1 - u0) * (v1 - v0),
       });
     }
+    }   // end !FAITHFUL
 
     var boxes = [];
     for (let i = 0; i < slabs.length; i++) {
@@ -485,6 +604,35 @@ function decompose(aid, sx, sy, sz) {
     assetStats.set(key, { path: p, slabs: boxes.length / 10, smallSq, stamps: 0 });
   }
   return out;
+}
+
+// ── --debugasset: one asset in, JSON out, exit ────────────────────────────
+if (DEBUG_ASSET) {
+  let found = null;
+  for (let i = 0; i < meta.boxes && !found; i++) {
+    const o = i * S;
+    const ap = PATHS[box[o + 10]] || '';
+    if (ap.toLowerCase().includes(DEBUG_ASSET.toLowerCase())) {
+      found = { aid: box[o + 10], path: ap, sx: box[o + 16], sy: box[o + 17], sz: box[o + 18] };
+    }
+  }
+  if (!found) { console.error(`no asset matching "${DEBUG_ASSET}"`); process.exit(1); }
+  console.log(`debug asset: ${found.path} scale ${found.sx},${found.sy},${found.sz}`);
+  const local = decompose(found.aid, found.sx, found.sy, found.sz);
+  let file = glbPathFor(LOD_ROOT, found.path);
+  if (!fs.existsSync(file)) file = glbPathFor(RAW_ROOT, found.path);
+  const tris2 = meshTriangles(file, LOD);
+  const scaled = [];
+  for (let t = 0; t < tris2.length; t += 3) {
+    scaled.push(tris2[t] * found.sx, tris2[t + 1] * found.sy, tris2[t + 2] * found.sz);
+  }
+  const outFile = path.join(__dirname, '..', 'data', 'debug-asset.json');
+  fs.writeFileSync(outFile, JSON.stringify({
+    path: found.path, scale: [found.sx, found.sy, found.sz],
+    tris: scaled, slabs: local ? Array.from(local) : [],
+  }));
+  console.log(`  ${scaled.length / 9} triangles, ${(local ? local.length : 0) / 10} slabs -> ${outFile}`);
+  process.exit(0);
 }
 
 // ── Stamp placements (identical to asset_boxes.js) ────────────────────────
@@ -600,6 +748,32 @@ for (const i of proxies) {
 }
 console.log(`  proxies   ${proxyUsed.toLocaleString()} stamped where uncovered, ${proxyCovered.toLocaleString()} rejected as covered`);
 
+// ── --stats: rectangle coverage (manufactured jutting slabs) ──────────────
+if (STATS && coverage.length) {
+  const c = coverage.slice().sort((a, b) => a - b);
+  const q = f => c[(c.length * f) | 0].toFixed(2);
+  const under = t => (100 * c.filter(v => v < t).length / c.length).toFixed(1);
+  console.log(`\n  COVERAGE (triangle area / rect area) over ${c.length.toLocaleString()} patches:`);
+  console.log(`    p10 ${q(0.1)}  p25 ${q(0.25)}  p50 ${q(0.5)}  p90 ${q(0.9)}`);
+  console.log(`    under 0.4 (mostly-empty rectangle): ${under(0.4)}%   under 0.2: ${under(0.2)}%`);
+  const worst = [...coverageByAsset.entries()].sort((a, b) => b[1].rectArea - a[1].rectArea).slice(0, 12);
+  console.log('  worst empty-rectangle area by asset:');
+  for (const [ap, e] of worst) console.log(`    ${Math.round(e.rectArea).toLocaleString().padStart(8)} m^2 in ${e.count} patches  ${ap}`);
+}
+
+// ── --stats: chaining diagnostic over cluster boxes ───────────────────────
+if (STATS && aggChainStats.length) {
+  const chained = aggChainStats.filter(s => s.ratio > 2);
+  const ratios = aggChainStats.map(s => s.ratio).sort((a, b) => a - b);
+  const boxMaxes = aggChainStats.map(s => s.boxMax).sort((a, b) => a - b);
+  console.log(`\n  CLUSTER diagnostic: ${aggChainStats.length.toLocaleString()} cluster boxes, ` +
+              `${chained.length.toLocaleString()} (${(100 * chained.length / aggChainStats.length).toFixed(0)}%) over 2x their largest member`);
+  console.log(`    box max-dim p50/p90/max: ${boxMaxes[(boxMaxes.length * 0.5) | 0].toFixed(1)} / ` +
+              `${boxMaxes[(boxMaxes.length * 0.9) | 0].toFixed(1)} / ${boxMaxes[boxMaxes.length - 1].toFixed(1)} m`);
+  console.log(`    ratio p50/p90/max: ${ratios[(ratios.length * 0.5) | 0].toFixed(1)} / ` +
+              `${ratios[(ratios.length * 0.9) | 0].toFixed(1)} / ${ratios[ratios.length - 1].toFixed(1)}`);
+}
+
 // ── --stats: top contributors of small near-square slabs ──────────────────
 if (STATS) {
   const rows = [...assetStats.values()]
@@ -631,7 +805,7 @@ kept.forEach((b, i) => {
 fs.writeFileSync(path.join(dataDir, `district-hull-${name}.bin`), Buffer.from(buf.buffer));
 fs.rmSync(path.join(dataDir, `district-hull-${name}.presnap.bin`), { force: true });
 fs.writeFileSync(path.join(dataDir, `district-hull-${name}.json`), JSON.stringify({
-  district: name, bounds: meta.bounds, generator: 'assetplanes',
+  district: name, bounds: meta.bounds, generator: 'assetplanes', faithful: FAITHFUL,
   ntol: NTOL, dtol: DTOL, minArea: MIN_AREA, minThick: MIN_THICK, cell2d: CELL2D,
   lod: LOD, minSize: MIN_SIZE, maxSize: MAX_SIZE, below: BELOW,
   decomposed, noTris, droppedSmallPatch, stamped, bboxFallback, buried, proxyUsed, proxyCovered,
