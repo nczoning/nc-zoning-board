@@ -135,6 +135,105 @@ for (let i = 0; i < tv.length; i += 3) {
   if (tv[i + 2] < bz0) bz0 = tv[i + 2]; if (tv[i + 2] > bz1) bz1 = tv[i + 2];
 }
 
+// ── Small vector helpers and the matrix -> quaternion used by every generator
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const norm3 = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+const IDENT = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+// A carve plane within a whisker of a world axis is one: snapping keeps the
+// axis-aligned majority on identity quats instead of float-dusty ones.
+const AXIS_SNAP = 0.9999;
+const snapAxis = (a) => {
+  for (let k = 0; k < 3; k++) {
+    if (a[k] > AXIS_SNAP) { const u = [0, 0, 0]; u[k] = 1; return u; }
+    if (a[k] < -AXIS_SNAP) { const u = [0, 0, 0]; u[k] = -1; return u; }
+  }
+  return a;
+};
+const isUnitAxis = (a) => Math.abs(a[0]) + Math.abs(a[1]) + Math.abs(a[2]) === 1;
+
+// Rotation matrix (columns = basis vectors) -> quaternion. Shepperd's method.
+function matToQuat(u, v, n) {
+  const m00 = u[0], m10 = u[1], m20 = u[2];
+  const m01 = v[0], m11 = v[1], m21 = v[2];
+  const m02 = n[0], m12 = n[1], m22 = n[2];
+  const tr = m00 + m11 + m22;
+  let x, y, z, w;
+  if (tr > 0) {
+    const s = Math.sqrt(tr + 1) * 2;
+    w = 0.25 * s; x = (m21 - m12) / s; y = (m02 - m20) / s; z = (m10 - m01) / s;
+  } else if (m00 > m11 && m00 > m22) {
+    const s = Math.sqrt(1 + m00 - m11 - m22) * 2;
+    w = (m21 - m12) / s; x = 0.25 * s; y = (m01 + m10) / s; z = (m02 + m20) / s;
+  } else if (m11 > m22) {
+    const s = Math.sqrt(1 + m11 - m00 - m22) * 2;
+    w = (m02 - m20) / s; x = (m01 + m10) / s; y = 0.25 * s; z = (m12 + m21) / s;
+  } else {
+    const s = Math.sqrt(1 + m22 - m00 - m11) * 2;
+    w = (m10 - m01) / s; x = (m02 + m20) / s; y = (m12 + m21) / s; z = 0.25 * s;
+  }
+  const l = Math.hypot(x, y, z, w) || 1;
+  return [x / l, y / l, z / l, w / l];
+}
+
+// Area of this cell's own face on one of its bounding planes. Ranking the
+// planes by their MESH-wide area picks the mesh's biggest surfaces, which is
+// not the same question: a slanted cell bounded by one huge axis-aligned wall
+// would be measured along the wall and lose its slope. The face the cell
+// actually has is what the box should sit on.
+function faceArea(plane, V) {
+  const on = V.filter(([x, y, z]) => Math.abs(plane.nx * x + plane.ny * y + plane.nz * z - plane.d) < 1e-4);
+  if (on.length < 3) return 0;
+  const c = [0, 0, 0];
+  for (const p of on) { c[0] += p[0]; c[1] += p[1]; c[2] += p[2]; }
+  c[0] /= on.length; c[1] /= on.length; c[2] /= on.length;
+  const n = [plane.nx, plane.ny, plane.nz];
+  const a = Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  const k = dot3(a, n);
+  const e1 = norm3([a[0] - n[0] * k, a[1] - n[1] * k, a[2] - n[2] * k]);
+  const e2 = cross3(n, e1);
+  const pts = on.map(p => {
+    const d = [p[0] - c[0], p[1] - c[1], p[2] - c[2]];
+    return [dot3(d, e1), dot3(d, e2)];
+  }).sort((p, q) => Math.atan2(p[1], p[0]) - Math.atan2(q[1], q[0]));
+  let s = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length];
+    s += p[0] * q[1] - q[0] * p[1];
+  }
+  return Math.abs(s) / 2;
+}
+
+// The cell's own frame: a cell is bounded by authored surfaces, so its box
+// should be measured along them, not along the world axes. Its largest
+// authored face gives N; the most nearly perpendicular next one gives U.
+function cellFrame(cellPlanes, V) {
+  const carved = cellPlanes.filter(p => p.area > 0)
+    .map(p => ({ p, a: faceArea(p, V) }))
+    .filter(e => e.a > 1e-6)
+    .sort((x, y) => y.a - x.a)
+    .map(e => e.p);
+  if (!carved.length) return IDENT;
+  const n = norm3([carved[0].nx, carved[0].ny, carved[0].nz]);
+  let u = null;
+  for (let i = 1; i < carved.length && !u; i++) {
+    const c = [carved[i].nx, carved[i].ny, carved[i].nz];
+    const k = dot3(c, n);
+    const p = [c[0] - n[0] * k, c[1] - n[1] * k, c[2] - n[2] * k];
+    if (Math.hypot(p[0], p[1], p[2]) < 0.15) continue;  // parallel: no new axis
+    u = norm3(p);
+  }
+  if (!u) {
+    // Only one plane direction bounds this cell: the roll about N is free, so
+    // take the world axis least aligned with it and keep the box level.
+    const a = Math.abs(n[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+    const k = dot3(a, n);
+    u = norm3([a[0] - n[0] * k, a[1] - n[1] * k, a[2] - n[2] * k]);
+  }
+  const f = [snapAxis(u), snapAxis(cross3(n, u)), snapAxis(n)];
+  return f.every(isUnitAxis) ? IDENT : f;
+}
+
 // Cells as corner-point sets (convex hull implicit): clip a box's 8 corners
 // is not enough once planes are oblique, so each cell keeps its bounding
 // planes and derives vertices by 3-plane intersection (exact for the small
@@ -165,12 +264,32 @@ function cellVertices(cellPlanes) {
   return V;
 }
 
+// Triangles lying on an arbitrary plane, either facing: the skin test asks
+// whether a face is real mesh, not which way that mesh looks.
+function bboxPlane(nx, ny, nz, d) {
+  const tris = [];
+  for (let t = 0; t < T; t++) {
+    if (Math.abs(tn[t * 3] * nx + tn[t * 3 + 1] * ny + tn[t * 3 + 2] * nz) < COS_NTOL) continue;
+    const o9 = t * 9;
+    const mx = (tv[o9] + tv[o9 + 3] + tv[o9 + 6]) / 3;
+    const my = (tv[o9 + 1] + tv[o9 + 4] + tv[o9 + 7]) / 3;
+    const mz = (tv[o9 + 2] + tv[o9 + 5] + tv[o9 + 8]) / 3;
+    if (Math.abs(nx * mx + ny * my + nz * mz - d) > DTOL) continue;
+    tris.push(t);
+  }
+  return { nx, ny, nz, d, area: 0, tris };
+}
+
 // Root cell: the mesh bbox as 6 inward planes (n.x <= d form).
 let cells = [{
   planes: [
-    { nx: 1, ny: 0, nz: 0, d: bx1 }, { nx: -1, ny: 0, nz: 0, d: -bx0 },
-    { nx: 0, ny: 1, nz: 0, d: by1 }, { nx: 0, ny: -1, nz: 0, d: -by0 },
-    { nx: 0, ny: 0, nz: 1, d: bz1 }, { nx: 0, ny: 0, nz: -1, d: -bz0 },
+    // area 0 marks a bbox wall: it is not an authored carve, so it never
+    // votes on the cell's frame. It still carries its triangles, because the
+    // bbox is the mesh's own extent and its faces usually sit exactly on the
+    // outer shell, which the skin test has to count.
+    bboxPlane(1, 0, 0, bx1), bboxPlane(-1, 0, 0, -bx0),
+    bboxPlane(0, 1, 0, by1), bboxPlane(0, -1, 0, -by0),
+    bboxPlane(0, 0, 1, bz1), bboxPlane(0, 0, -1, -bz0),
   ],
 }];
 for (const p of carvers) {
@@ -185,8 +304,10 @@ for (const p of carvers) {
       if (s > 1e-6) pos++; else if (s < -1e-6) neg++;
     }
     if (!pos || !neg) { next.push(cell); continue; }
-    next.push({ planes: [...cell.planes, { nx: p.nx, ny: p.ny, nz: p.nz, d: p.d }] });
-    next.push({ planes: [...cell.planes, { nx: -p.nx, ny: -p.ny, nz: -p.nz, d: -p.d }] });
+    // Both halves keep the plane's triangle list: it is the same geometric
+    // surface, and the backed-area test needs it without re-searching the mesh.
+    next.push({ planes: [...cell.planes, { nx: p.nx, ny: p.ny, nz: p.nz, d: p.d, area: p.area, tris: p.tris }] });
+    next.push({ planes: [...cell.planes, { nx: -p.nx, ny: -p.ny, nz: -p.nz, d: -p.d, area: p.area, tris: p.tris }] });
   }
   cells = next;
 }
@@ -210,9 +331,34 @@ for (const cell of cells) {
     if (y < vy0) vy0 = y; if (y > vy1) vy1 = y;
     if (z < vz0) vz0 = z; if (z > vz1) vz1 = z;
   }
-  if (vx1 - vx0 < MIN_CELL || vy1 - vy0 < MIN_CELL || vz1 - vz0 < MIN_CELL) continue;
 
-  results.push({ cell, V, c: [cx, cy, cz], bbox: [vx0, vy0, vz0, vx1, vy1, vz1], outVote: 0, inVote: 0 });
+  // Measure the cell along its own carve planes. An axis-aligned min/max
+  // would flatten every angle the carve just recovered, and would read a
+  // thin slanted cell as a fat one, so the sliver test lives here too.
+  const F = cellFrame(cell.planes, V);
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (const p of V) {
+    for (let k = 0; k < 3; k++) {
+      const s = dot3(p, F[k]);
+      if (s < lo[k]) lo[k] = s;
+      if (s > hi[k]) hi[k] = s;
+    }
+  }
+  const half = [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, (hi[2] - lo[2]) / 2];
+  if (half[0] * 2 < MIN_CELL || half[1] * 2 < MIN_CELL || half[2] * 2 < MIN_CELL) continue;
+  const mid = [(hi[0] + lo[0]) / 2, (hi[1] + lo[1]) / 2, (hi[2] + lo[2]) / 2];
+  const centre = [
+    F[0][0] * mid[0] + F[1][0] * mid[1] + F[2][0] * mid[2],
+    F[0][1] * mid[0] + F[1][1] * mid[1] + F[2][1] * mid[2],
+    F[0][2] * mid[0] + F[1][2] * mid[1] + F[2][2] * mid[2],
+  ];
+  const quat = F === IDENT ? [0, 0, 0, 1] : matToQuat(F[0], F[1], F[2]);
+
+  results.push({
+    cell, V, c: [cx, cy, cz], bbox: [vx0, vy0, vz0, vx1, vy1, vz1],
+    centre, half, quat, oriented: F !== IDENT, outVote: 0, inVote: 0,
+    nCarve: cell.planes.filter(p => p.area > 0).length,
+  });
 }
 
 // Solid vote: every mesh triangle lying on a cell's boundary votes with its
@@ -240,20 +386,62 @@ for (const r of results) {
   r.outVote = outVote; r.inVote = inVote;
 }
 
-const solid = results.filter(r => r.outVote > 0.2 && r.outVote > r.inVote * 2);
+// ── Skin test: is this box's boundary actually the mesh? ──────────────────
+// The vote alone calls phantom cells solid: the volume spanning two distant
+// ribs is backed by surface on a face or two and open everywhere else, and
+// those faces out-vote nothing. The carve's own premise settles it: every
+// box face is supposed to BE an authored surface, so a cell whose boundary
+// is mostly not mesh is a BSP artifact, not a feature.
+//
+// Ray parity does not separate these, so do not reach for it: phantom slabs
+// escape the mesh 6/6 and so does a legitimate wall core (1/6), whose end
+// caps fall under MIN_SUPPORT. Backed fraction separates cleanly: wall and
+// pillar 0.98/0.99, real skylight members 0.75-0.98, phantoms 0.00-0.46.
+const MIN_BACKED = flag('minbacked', 0.5);  // majority of the skin must be real mesh
+for (const r of results) {
+  let faceTot = 0, faceBacked = 0;
+  for (const cp of r.cell.planes) {
+    const fa = faceArea(cp, r.V);
+    if (fa <= 1e-6) continue;
+    faceTot += fa;
+    if (!cp.tris) continue;              // a bbox wall is never backed
+    let backed = 0;
+    for (const t of cp.tris) {
+      const o9 = t * 9;
+      const mx = (tv[o9] + tv[o9 + 3] + tv[o9 + 6]) / 3;
+      const my = (tv[o9 + 1] + tv[o9 + 4] + tv[o9 + 7]) / 3;
+      const mz = (tv[o9 + 2] + tv[o9 + 5] + tv[o9 + 8]) / 3;
+      let inside = true;
+      for (const q of r.cell.planes) {
+        if (q === cp) continue;
+        if (q.nx * mx + q.ny * my + q.nz * mz > q.d + DTOL) { inside = false; break; }
+      }
+      if (inside) backed += ta[t];
+    }
+    faceBacked += Math.min(backed, fa);
+  }
+  r.backedFrac = faceTot > 0 ? faceBacked / faceTot : 0;
+}
+
+const voted = results.filter(r => r.outVote > 0.2 && r.outVote > r.inVote * 2);
+const solid = voted.filter(r => r.backedFrac >= MIN_BACKED);
+console.log(`${voted.length - solid.length} voted cells dropped as unbacked (< ${MIN_BACKED} of skin is mesh)`);
 console.log(`${results.length} candidate cells, ${solid.length} solid`);
 const boxesOut = [];
+let orientedCount = 0;
 for (const r of solid) {
-  const [vx0, vy0, vz0, vx1, vy1, vz1] = r.bbox;
+  if (r.oriented) orientedCount++;
   boxesOut.push(
-    (vx0 + vx1) / 2, (vy0 + vy1) / 2, (vz0 + vz1) / 2,
-    (vx1 - vx0) / 2, (vy1 - vy0) / 2, (vz1 - vz0) / 2,
-    0, 0, 0, 1,
+    r.centre[0], r.centre[1], r.centre[2],
+    r.half[0], r.half[1], r.half[2],
+    r.quat[0], r.quat[1], r.quat[2], r.quat[3],
   );
-  console.log(`  box c(${((vx0 + vx1) / 2).toFixed(2)},${((vy0 + vy1) / 2).toFixed(2)},${((vz0 + vz1) / 2).toFixed(2)}) ` +
-              `size(${(vx1 - vx0).toFixed(2)},${(vy1 - vy0).toFixed(2)},${(vz1 - vz0).toFixed(2)}) ` +
-              `votes out=${r.outVote.toFixed(2)} in=${r.inVote.toFixed(2)}`);
+  console.log(`  box c(${r.centre.map(v => v.toFixed(2)).join(',')}) ` +
+              `size(${r.half.map(v => (v * 2).toFixed(2)).join(',')}) ` +
+              `${r.oriented ? `quat(${r.quat.map(v => v.toFixed(3)).join(',')}) ` : 'axis-aligned '}` +
+              `votes out=${r.outVote.toFixed(2)} in=${r.inVote.toFixed(2)} carve=${r.nCarve} backed=${r.backedFrac.toFixed(2)}`);
 }
+console.log(`${orientedCount}/${solid.length} boxes carry a non-identity frame`);
 
 const outFile = path.join(dataDir, 'debug-asset.json');
 fs.writeFileSync(outFile, JSON.stringify({
