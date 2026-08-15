@@ -105,6 +105,8 @@ data/hull-assets-*.csv
 data/mesh-export-list.txt
 data/mesh-export-list.json
 assets/dds/rebuilt/
+assets/dds/planes/
+data/debug-asset.json
 
 # The generated mesh export list, 3 MB of depot paths. Rebuild with
 #   node scripts/mesh_export_list.js
