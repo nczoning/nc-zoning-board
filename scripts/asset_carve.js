@@ -65,6 +65,7 @@ const MERGE_SPAN = flag('mergespan', 4);    // and only if that bigger one is wi
 const FILL_MIN = flag('fillmin', 0.85);
 const REFINE_DEPTH = flag('refinedepth', 4); // splits allowed while chasing that fill
 const MAX_FACETS = flag('maxfacets', 4);    // normal clusters a box may hold before it counts as spanning a curve
+const REFINE_GAIN = flag('refinegain', 0.05); // fill a split must add before it is worth the extra boxes
 const MIN_CELL  = flag('mincell', 0.05);  // metres: cells thinner than this are slivers
 const MIN_BACKED = flag('minbacked', 0.5);// share of a cell's skin that must be real mesh
 const MAX_CELLS = flag('maxcells', 4000); // safety valve: a BSP is exponential in the worst case
@@ -401,7 +402,11 @@ function carveMesh(tris, sx, sy, sz, verbose) {
     const s = carveComponent(idx, verbose && components.length <= 4);
     if (s) allSolid.push(...s);
   }
-  if (verbose) console.log(`${allSolid.length} boxes total, ${allSolid.filter(r => r.oriented).length} with a non-identity frame`);
+  lastPoor = allSolid.reduce((s, r) => s + (r.poor || 0), 0);
+  if (verbose) {
+    console.log(`${allSolid.length} boxes total, ${allSolid.filter(r => r.oriented).length} with a non-identity frame, ` +
+                `${lastPoor} still failing fill/facet after refit`);
+  }
   if (!allSolid.length) return null;
 
   const outArr = new Float32Array(allSolid.length * 10);
@@ -808,7 +813,17 @@ function carveMesh(tris, sx, sy, sz, verbose) {
       centre, half, quat: F === IDENT ? [0, 0, 0, 1] : matToQuat(F[0], F[1], F[2]),
       oriented: F !== IDENT, outVote: 0, inVote: 0, backedFrac: 0,
     };
-    if (depth >= REFINE_DEPTH) return [box];
+    // A box that leaves the refit still failing its own tests is the honest
+    // definition of a random square: the pipeline could not make it match the
+    // geometry. Marked, counted and attributed to its asset so the worst
+    // offenders can be named instead of hunted by eye in the render.
+    const grade = () => {
+      box.fill = faceFill(list, F, centre, half);
+      box.facets = normalClusters(list);
+      box.poor = (box.fill < FILL_MIN || box.facets > MAX_FACETS) ? 1 : 0;
+      return [box];
+    };
+    if (depth >= REFINE_DEPTH) return grade();
     // Two reasons a box is the wrong shape, and fill only catches one. A
     // triangular fin leaves its box half EMPTY. A chunk of a 73 m rim fills
     // its box completely and is still wrong, because the surface inside is
@@ -819,15 +834,36 @@ function carveMesh(tris, sx, sy, sz, verbose) {
     // Split along the longest axis at the midpoint, then let each side find
     // its own frame and extent.
     const ax = half.indexOf(Math.max(...half));
-    if (half[ax] * 2 < MIN_CELL * 2) return [box];
+    if (half[ax] * 2 < MIN_CELL * 2) return grade();
     const mid = dot3(centre, F[ax]);
     const lo = [], hi = [];
     for (const t of list) {
       (dot3([tc[t * 3], tc[t * 3 + 1], tc[t * 3 + 2]], F[ax]) < mid ? lo : hi).push(t);
     }
-    if (!lo.length || !hi.length) return [box];
+    if (!lo.length || !hi.length) return grade();
+
+    // A split has to earn itself. Splitting a triangular fin raises its fill,
+    // so it earns the extra box. Splitting a round cable raises nothing: no
+    // arrangement of boxes ever matches a tube, so without this the refit
+    // recurses to the depth cap on everything organic and multiplies it, a
+    // 6 x 6 x 0.2 m ceiling panel into 34 boxes and a 30 m cable into 2,888,
+    // every one of them still failing. Cheap because it grades one level
+    // before recursing, so a hopeless branch is never explored.
+    const parentFill = faceFill(list, F, centre, half);
+    const parentFacets = normalClusters(list);
+    let bestFill = 0, worstFacets = 0, ok = true;
+    for (const part of [lo, hi]) {
+      const pf = pcaFrame(part) || F;
+      const fit = fitBox(part, pf);
+      if (fit.half.some(h => h * 2 < MIN_CELL)) { ok = false; break; }
+      bestFill += faceFill(part, pf, fit.centre, fit.half) * part.length / list.length;
+      worstFacets = Math.max(worstFacets, normalClusters(part));
+    }
+    if (!ok) return grade();
+    if (bestFill < parentFill + REFINE_GAIN && worstFacets >= parentFacets) return grade();
+
     const out = refit(lo, F, depth + 1).concat(refit(hi, F, depth + 1));
-    return out.length ? out : [box];
+    return out.length ? out : grade();
   }
   }
 }
@@ -835,6 +871,10 @@ function carveMesh(tris, sx, sy, sz, verbose) {
 // ── Per-asset carve, cached by (asset, scale) ─────────────────────────────
 const cache = new Map();
 let decomposed = 0, noTris = 0, totalAssetBoxes = 0, noSolid = 0;
+let lastPoor = 0;
+// Per asset: boxes the refit could not make match the geometry, and how many
+// times the asset is stamped. poor x stamps ranks what the eye actually sees.
+const poorByAsset = new Map();
 const t0 = Date.now();
 
 function trisFor(aid) {
@@ -852,10 +892,14 @@ function decompose(aid, sx, sy, sz) {
   if (hit !== undefined) return hit;
   const tris = trisFor(aid);
   if (!tris) { cache.set(key, null); noTris++; return null; }
+  lastPoor = 0;
   const local = carveMesh(tris, sx, sy, sz, false);
   cache.set(key, local);
   decomposed++;
   if (!local) noSolid++; else totalAssetBoxes += local.length / 10;
+  if (local) {
+    poorByAsset.set(key, { path: PATHS[aid] || '', poor: lastPoor, boxes: local.length / 10, stamps: 0 });
+  }
   if (decomposed % 250 === 0) {
     console.log(`    carved ${decomposed.toLocaleString()} (asset, scale) pairs, ${Math.round(totalAssetBoxes).toLocaleString()} local boxes, ${((Date.now() - t0) / 1000).toFixed(0)} s`);
   }
@@ -927,6 +971,8 @@ const droppedBigAssets = new Map();
 function emitPlacement(i) {
   const o = i * S;
   const local = decompose(box[o + 10], box[o + 16], box[o + 17], box[o + 18]);
+  const st = poorByAsset.get(`${box[o + 10]}|${box[o + 16].toFixed(2)},${box[o + 17].toFixed(2)},${box[o + 18].toFixed(2)}`);
+  if (st) st.stamps++;
   const qx = box[o + 6], qy = box[o + 7], qz = box[o + 8], qw = box[o + 9];
   if (!local) {
     const largest = Math.max(box[o + 3], box[o + 4], box[o + 5]) * 2;
@@ -1041,6 +1087,19 @@ for (const i of proxies) {
   if (kept.length > before) proxyUsed++;
 }
 console.log(`  proxies   ${proxyUsed.toLocaleString()} stamped where uncovered, ${proxyCovered.toLocaleString()} rejected as covered`);
+
+// ── Where the unmatched boxes actually are ────────────────────────────────
+{
+  const rows = [...poorByAsset.values()]
+    .map(r => ({ ...r, total: r.poor * r.stamps }))
+    .filter(r => r.total > 0)
+    .sort((a, b) => b.total - a.total);
+  const totalPoor = rows.reduce((s, r) => s + r.total, 0);
+  console.log(`  unmatched ${totalPoor.toLocaleString()} stamped boxes still fail fill/facet after refit; worst assets:`);
+  for (const r of rows.slice(0, 20)) {
+    console.log(`    ${String(r.total).padStart(7)} = ${String(r.poor).padStart(4)} poor of ${String(r.boxes).padStart(4)} boxes x ${String(r.stamps).padStart(5)} stamps  ${r.path}`);
+  }
+}
 
 // ── Shape stats + write ───────────────────────────────────────────────────
 {
