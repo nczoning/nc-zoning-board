@@ -52,6 +52,9 @@ const BUDGET  = flag('budget', 120000); // voxels a component's mould may use
 // or a mesh thinner than one voxel loses every box it has: a 0.10 m wall casts
 // 0.10 m boxes, and a 0.15 m floor deletes the wall entirely.
 const MIN_BOX = flag('minbox', 0.1);
+const OCCUPANCY = flag('occupancy', 0.7); // share of a box's voxels that must be solid for it to stand
+const MAX_DEPTH = flag('depth', 7);       // splits allowed while chasing that occupancy
+const SPLIT_TRIES = flag('splittries', 8); // candidate cut positions tried per axis
 
 // ── Pipeline parameters, identical in meaning to the siblings' ────────────
 const LOD       = flag('lod', 2);
@@ -252,9 +255,15 @@ function mouldMesh(tris, sx, sy, sz, verbose) {
     // Voxel size from a BUDGET, not a fixed metre value: a 1 m prop and a
     // 100 m frame both get a mould they can afford, and neither decides the
     // resolution by hand.
+    // Resolution follows the THINNEST span as well as the volume. A 0.10 m
+    // wall measured at 0.10 m voxels straddles two layers and reads 53% solid,
+    // which splits a slab that is one box; three voxels across its thickness
+    // reads it as the slab it is. The budget still caps the total.
     let vox = Math.cbrt(span[0] * span[1] * span[2] / BUDGET);
     if (!(vox > 0)) vox = MIN_VOXEL;
-    vox = Math.max(vox, MIN_VOXEL, Math.max(...span) / 256);
+    vox = Math.min(vox, Math.min(...span) / 3);
+    vox = Math.max(vox, MIN_VOXEL / 4, Math.max(...span) / 256,
+                   Math.cbrt(span[0] * span[1] * span[2] / (BUDGET * 4)));
     const nx = Math.max(1, Math.ceil(span[0] / vox)) + 2;
     const ny = Math.max(1, Math.ceil(span[1] / vox)) + 2;
     const nz = Math.max(1, Math.ceil(span[2] / vox)) + 2;
@@ -328,40 +337,99 @@ function mouldMesh(tris, sx, sy, sz, verbose) {
     }
     if (!solidCount) return [];
 
-    // Grow boxes greedily through the solid. Each box expands a face at a
-    // time while the whole new layer is solid and unclaimed, which keeps a
-    // slab a slab instead of a field of cubes.
-    const boxes = [];
-    const claimed = new Uint8Array(total);
-    for (let z0 = 0; z0 < nz; z0++) for (let y0 = 0; y0 < ny; y0++) for (let x0 = 0; x0 < nx; x0++) {
-      const k0 = at(x0, y0, z0);
-      if (!solid[k0] || claimed[k0]) continue;
-      let x1 = x0, y1 = y0, z1 = z0;
-      const free = (ax0, ax1, ay0, ay1, az0, az1) => {
-        for (let z = az0; z <= az1; z++) for (let y = ay0; y <= ay1; y++) for (let x = ax0; x <= ax1; x++) {
-          const k = at(x, y, z);
-          if (!solid[k] || claimed[k]) return false;
-        }
-        return true;
-      };
-      let grew = true;
-      while (grew) {
-        grew = false;
-        if (x1 + 1 < nx && free(x1 + 1, x1 + 1, y0, y1, z0, z1)) { x1++; grew = true; }
-        if (y1 + 1 < ny && free(x0, x1, y1 + 1, y1 + 1, z0, z1)) { y1++; grew = true; }
-        if (z1 + 1 < nz && free(x0, x1, y0, y1, z1 + 1, z1 + 1)) { z1++; grew = true; }
-        if (x0 - 1 >= 0 && free(x0 - 1, x0 - 1, y0, y1, z0, z1)) { x0--; grew = true; }
-        if (y0 - 1 >= 0 && free(x0, x1, y0 - 1, y0 - 1, z0, z1)) { y0--; grew = true; }
-        if (z0 - 1 >= 0 && free(x0, x1, y0, y1, z0 - 1, z0 - 1)) { z0--; grew = true; }
-      }
-      for (let z = z0; z <= z1; z++) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) claimed[at(x, y, z)] = 1;
+    // Summed-volume table, so "how much of this region is solid" is eight
+    // lookups rather than a scan. Every decision below is that one number,
+    // exactly, where the earlier generators each estimated it differently.
+    const px = nx + 1, py = ny + 1, pz = nz + 1;
+    const P = new Int32Array(px * py * pz);
+    const pat = (x, y, z) => (z * py + y) * px + x;
+    for (let z = 1; z <= nz; z++) for (let y = 1; y <= ny; y++) for (let x = 1; x <= nx; x++) {
+      P[pat(x, y, z)] = solid[at(x - 1, y - 1, z - 1)]
+        + P[pat(x - 1, y, z)] + P[pat(x, y - 1, z)] + P[pat(x, y, z - 1)]
+        - P[pat(x - 1, y - 1, z)] - P[pat(x - 1, y, z - 1)] - P[pat(x, y - 1, z - 1)]
+        + P[pat(x - 1, y - 1, z - 1)];
+    }
+    const countIn = (x0, x1, y0, y1, z0, z1) =>
+      P[pat(x1 + 1, y1 + 1, z1 + 1)]
+      - P[pat(x0, y1 + 1, z1 + 1)] - P[pat(x1 + 1, y0, z1 + 1)] - P[pat(x1 + 1, y1 + 1, z0)]
+      + P[pat(x0, y0, z1 + 1)] + P[pat(x0, y1 + 1, z0)] + P[pat(x1 + 1, y0, z0)]
+      - P[pat(x0, y0, z0)];
 
-      const half = [(x1 - x0 + 1) * vox / 2, (y1 - y0 + 1) * vox / 2, (z1 - z0 + 1) * vox / 2];
+    // Shrink a region onto the solid it actually contains, so a box never
+    // reports emptiness it could simply have excluded.
+    function tighten(r) {
+      while (r[0] <= r[1] && countIn(r[0], r[0], r[2], r[3], r[4], r[5]) === 0) r[0]++;
+      while (r[1] >= r[0] && countIn(r[1], r[1], r[2], r[3], r[4], r[5]) === 0) r[1]--;
+      while (r[2] <= r[3] && countIn(r[0], r[1], r[2], r[2], r[4], r[5]) === 0) r[2]++;
+      while (r[3] >= r[2] && countIn(r[0], r[1], r[3], r[3], r[4], r[5]) === 0) r[3]--;
+      while (r[4] <= r[5] && countIn(r[0], r[1], r[2], r[3], r[4], r[4]) === 0) r[4]++;
+      while (r[5] >= r[4] && countIn(r[0], r[1], r[2], r[3], r[5], r[5]) === 0) r[5]--;
+      return r[0] <= r[1] && r[2] <= r[3] && r[4] <= r[5];
+    }
+    const volOf = (r) => (r[1] - r[0] + 1) * (r[3] - r[2] + 1) * (r[5] - r[4] + 1);
+    const fillOf = (r) => countIn(r[0], r[1], r[2], r[3], r[4], r[5]) / volOf(r);
+
+    // Propose a box, keep it if it is mostly solid, split it where that
+    // removes the most empty space otherwise. The stop test is the occupancy
+    // itself, so nothing here is a proxy for solidity.
+    const regions = [];
+    (function describe(r, depth) {
+      if (!tighten(r)) return;
+      const dims = [(r[1] - r[0] + 1) * vox, (r[3] - r[2] + 1) * vox, (r[5] - r[4] + 1) * vox];
+      if (fillOf(r) >= OCCUPANCY || depth >= MAX_DEPTH || dims.every(d => d <= MIN_BOX * 2)) {
+        regions.push(r);
+        return;
+      }
+      let best = null;
+      for (let ax = 0; ax < 3; ax++) {
+        const lo = r[ax * 2], hi = r[ax * 2 + 1];
+        if (hi - lo < 1) continue;
+        for (let q = 1; q < SPLIT_TRIES; q++) {
+          const cut = lo + Math.floor((hi - lo + 1) * q / SPLIT_TRIES);
+          if (cut <= lo || cut > hi) continue;
+          const a = r.slice(), b = r.slice();
+          a[ax * 2 + 1] = cut - 1;
+          b[ax * 2] = cut;
+          const av = tighten(a) ? volOf(a) : 0;
+          const bv = tighten(b) ? volOf(b) : 0;
+          const sum = av + bv;
+          if (!best || sum < best.sum) best = { sum, a, b, av, bv };
+        }
+      }
+      if (!best || best.sum >= volOf(r)) { regions.push(r); return; }
+      if (best.av) describe(best.a, depth + 1);
+      if (best.bv) describe(best.b, depth + 1);
+    })([0, nx - 1, 0, ny - 1, 0, nz - 1], 0);
+
+    // The same test, inverted: two regions collapse into one when the union is
+    // still mostly solid, so a split that isolates a detail smaller than its
+    // own box does not survive.
+    let changed = true;
+    while (changed && regions.length > 1 && regions.length <= 300) {
+      changed = false;
+      for (let i = 0; i < regions.length && !changed; i++) {
+        for (let j = i + 1; j < regions.length && !changed; j++) {
+          const u = [
+            Math.min(regions[i][0], regions[j][0]), Math.max(regions[i][1], regions[j][1]),
+            Math.min(regions[i][2], regions[j][2]), Math.max(regions[i][3], regions[j][3]),
+            Math.min(regions[i][4], regions[j][4]), Math.max(regions[i][5], regions[j][5]),
+          ];
+          if (fillOf(u) < OCCUPANCY) continue;
+          regions[i] = u;
+          regions.splice(j, 1);
+          changed = true;
+        }
+      }
+    }
+
+    const boxes = [];
+    for (const r of regions) {
+      const half = [(r[1] - r[0] + 1) * vox / 2, (r[3] - r[2] + 1) * vox / 2, (r[5] - r[4] + 1) * vox / 2];
       if (half.some(h => h * 2 < MIN_BOX)) continue;
       const mid = [
-        org[0] + (x0 + (x1 - x0 + 1) / 2) * vox,
-        org[1] + (y0 + (y1 - y0 + 1) / 2) * vox,
-        org[2] + (z0 + (z1 - z0 + 1) / 2) * vox,
+        org[0] + (r[0] + (r[1] - r[0] + 1) / 2) * vox,
+        org[1] + (r[2] + (r[3] - r[2] + 1) / 2) * vox,
+        org[2] + (r[4] + (r[5] - r[4] + 1) / 2) * vox,
       ];
       boxes.push({
         centre: [
@@ -375,7 +443,7 @@ function mouldMesh(tris, sx, sy, sz, verbose) {
       });
     }
     stats.boxes += boxes.length;
-    if (verbose) console.log(`  -> ${boxes.length} boxes`);
+    if (verbose) console.log(`  -> ${regions.length} regions, ${boxes.length} boxes`);
     return boxes;
   }
 }
