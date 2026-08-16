@@ -55,6 +55,7 @@ const MIN_BOX = flag('minbox', 0.1);
 const OCCUPANCY = flag('occupancy', 0.7); // share of a box's voxels that must be solid for it to stand
 const MAX_DEPTH = flag('depth', 7);       // splits allowed while chasing that occupancy
 const SPLIT_TRIES = flag('splittries', 8); // candidate cut positions tried per axis
+const CLOSE_M = flag('close', 0.3);       // metres: gaps narrower than this are sealed before the flood
 
 // ── Pipeline parameters, identical in meaning to the siblings' ────────────
 const LOD       = flag('lod', 2);
@@ -301,9 +302,22 @@ function mouldMesh(tris, sx, sy, sz, verbose) {
       }
     }
 
-    // Flood the air in from the outside. Anything it cannot reach is solid,
-    // whether the mesh states it or not, so solidity needs no vote, no skin
-    // test and no silhouette measure.
+    // Close the shell before flooding. A flood is exact for a closed mesh and
+    // for a lattice, and degenerates to bare surface voxels on the open shells
+    // most kit is built from: a 14-triangle wall has no top or bottom cap, so
+    // the air walks in and only 37% of a solid wall fills. Closing seals gaps
+    // narrower than CLOSE_M and leaves wider ones open, which is the
+    // difference between a wall's 0.10 m interior and a skylight frame's
+    // metre-wide bays. Dilate, flood, then erode the same amount so the
+    // geometry keeps its real thickness.
+    // Rounding UP to one voxel would seal by a whole voxel, and on a coarse
+    // mould that is far wider than CLOSE_M: the skylight frame at 1.18 m
+    // voxels closes its metre-wide bays and casts as one solid block. Below
+    // one voxel the resolution cannot express the gap being sealed, so no
+    // closing happens at all.
+    const rad = Math.round(CLOSE_M / vox);
+    const sealed = rad >= 1 ? dilate(grid, rad) : grid;
+
     const outside = new Uint8Array(total);
     const stack = [0];
     outside[0] = 1;
@@ -319,16 +333,21 @@ function mouldMesh(tris, sx, sy, sz, verbose) {
         const ax = x + dx, ay = y + dy, az = z + dz;
         if (ax < 0 || ay < 0 || az < 0 || ax >= nx || ay >= ny || az >= nz) continue;
         const k = at(ax, ay, az);
-        if (outside[k] || grid[k]) continue;
+        if (outside[k] || sealed[k]) continue;
         outside[k] = 1;
         stack.push(k);
       }
     }
 
+    // Erode the seal back off, then put the mesh's own surface back: the
+    // closing exists to stop the flood leaking, not to fatten the geometry.
+    const filled = new Uint8Array(total);
+    for (let k = 0; k < total; k++) filled[k] = outside[k] ? 0 : 1;
+    const shrunk = rad >= 1 ? erode(filled, rad) : filled;
     const solid = new Uint8Array(total);
     let solidCount = 0;
     for (let k = 0; k < total; k++) {
-      if (!outside[k]) { solid[k] = 1; solidCount++; }
+      if (shrunk[k] || grid[k]) { solid[k] = 1; solidCount++; }
     }
     stats.solid += solidCount;
     if (verbose) {
@@ -336,6 +355,39 @@ function mouldMesh(tris, sx, sy, sz, verbose) {
                   `voxel ${vox.toFixed(2)} m  grid ${nx}x${ny}x${nz}  solid ${solidCount}`);
     }
     if (!solidCount) return [];
+
+    // Separable binary morphology: a 1D prefix sum per axis makes "is there a
+    // set voxel within rad along this axis" a subtraction, so a 3D dilation is
+    // three linear passes instead of a neighbourhood scan.
+    function dilate(src, rad) {
+      let cur = src;
+      for (let axis = 0; axis < 3; axis++) {
+        const next = new Uint8Array(total);
+        const n = axis === 0 ? nx : axis === 1 ? ny : nz;
+        const stride = axis === 0 ? 1 : axis === 1 ? nx : nx * ny;
+        const outer1 = axis === 0 ? ny : axis === 1 ? nx : nx;
+        const outer2 = axis === 0 ? nz : axis === 1 ? nz : ny;
+        const cum = new Int32Array(n + 1);
+        for (let a = 0; a < outer1; a++) for (let b = 0; b < outer2; b++) {
+          const base = axis === 0 ? at(0, a, b) : axis === 1 ? at(a, 0, b) : at(a, b, 0);
+          for (let i = 0; i < n; i++) cum[i + 1] = cum[i] + cur[base + i * stride];
+          for (let i = 0; i < n; i++) {
+            const lo = Math.max(0, i - rad), hi = Math.min(n - 1, i + rad);
+            if (cum[hi + 1] - cum[lo] > 0) next[base + i * stride] = 1;
+          }
+        }
+        cur = next;
+      }
+      return cur;
+    }
+    function erode(src, rad) {
+      const inv = new Uint8Array(total);
+      for (let k = 0; k < total; k++) inv[k] = src[k] ? 0 : 1;
+      const d = dilate(inv, rad);
+      const out2 = new Uint8Array(total);
+      for (let k = 0; k < total; k++) out2[k] = d[k] ? 0 : 1;
+      return out2;
+    }
 
     // Summed-volume table, so "how much of this region is solid" is eight
     // lookups rather than a scan. Every decision below is that one number,
