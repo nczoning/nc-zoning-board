@@ -59,6 +59,12 @@ const MIN_SUPPORT = flag('minsupport', 0.5); // m^2: a plane needs this much tri
 const MIN_SUPPORT_FRAC = flag('minsupportfrac', 0.05); // or this share of its own component's area, whichever is less
 const MERGE_FRAC = flag('mergefrac', 0.05); // a component under this share of the mesh, inside a bigger one, is its detail
 const MERGE_SPAN = flag('mergespan', 4);    // and only if that bigger one is within this many times its size
+// Share of a box's largest face that must have geometry over it. 0.85 is the
+// plateau: 0.92 gives an identical result on every unit asset, and 0.75 costs
+// the wheel a quarter of its boxes (45 against 59) and the skylight three.
+const FILL_MIN = flag('fillmin', 0.85);
+const REFINE_DEPTH = flag('refinedepth', 4); // splits allowed while chasing that fill
+const MAX_FACETS = flag('maxfacets', 4);    // normal clusters a box may hold before it counts as spanning a curve
 const MIN_CELL  = flag('mincell', 0.05);  // metres: cells thinner than this are slivers
 const MIN_BACKED = flag('minbacked', 0.5);// share of a cell's skin that must be real mesh
 const MAX_CELLS = flag('maxcells', 4000); // safety valve: a BSP is exponential in the worst case
@@ -227,8 +233,40 @@ function cellFrame(faces) {
   return f.every(isUnitAxis) ? IDENT : f;
 }
 
+// Eigenvectors of a symmetric 3x3 by cyclic Jacobi. Used to frame a box on
+// the geometry it contains rather than on the planes that bounded its cell.
+function eigen3(m) {
+  const a = [m[0].slice(), m[1].slice(), m[2].slice()];
+  let v = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  for (let sweep = 0; sweep < 12; sweep++) {
+    let off = 0;
+    for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) off += a[i][j] * a[i][j];
+    if (off < 1e-18) break;
+    for (let p = 0; p < 3; p++) for (let q = p + 1; q < 3; q++) {
+      if (Math.abs(a[p][q]) < 1e-18) continue;
+      const theta = (a[q][q] - a[p][p]) / (2 * a[p][q]);
+      const t = Math.sign(theta || 1) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+      const c = 1 / Math.sqrt(t * t + 1), s = t * c;
+      for (let k = 0; k < 3; k++) {
+        const akp = a[k][p], akq = a[k][q];
+        a[k][p] = c * akp - s * akq; a[k][q] = s * akp + c * akq;
+      }
+      for (let k = 0; k < 3; k++) {
+        const apk = a[p][k], aqk = a[q][k];
+        a[p][k] = c * apk - s * aqk; a[q][k] = s * apk + c * aqk;
+      }
+      for (let k = 0; k < 3; k++) {
+        const vkp = v[k][p], vkq = v[k][q];
+        v[k][p] = c * vkp - s * vkq; v[k][q] = s * vkp + c * vkq;
+      }
+    }
+  }
+  const order = [0, 1, 2].sort((x, y) => a[y][y] - a[x][x]);
+  return order.map(k => norm3([v[0][k], v[1][k], v[2][k]]));
+}
+
 // ── The carve itself: triangles in, local stride-10 boxes out ─────────────
-const carveStats = { capped: 0, unbacked: 0, slivers: 0, cells: 0 };
+const carveStats = { capped: 0, unbacked: 0, slivers: 0, cells: 0, refined: 0, refinedInto: 0 };
 
 function carveMesh(tris, sx, sy, sz, verbose) {
   const T = tris.length / 9;
@@ -609,7 +647,188 @@ function carveMesh(tris, sx, sy, sz, verbose) {
     }
     console.log(`${solid.filter(r => r.oriented).length}/${solid.length} boxes carry a non-identity frame`);
   }
-  return solid;
+
+  // ── Fit the box to the geometry, not just to the cell ──────────────────
+  // A cell's box comes from its bounding planes, so nothing ever asks whether
+  // the mesh fills it. A triangular fin fills half of one, and 26 of them read
+  // as a solid block instead of a row of fins. A chord across a 73 m rim fills
+  // a sliver. Measure the coverage of the box's largest face and, when the box
+  // is mostly empty, split it along its longest axis and re-fit each half to
+  // the triangles that fall inside it. A fin becomes a tapering staircase, a
+  // ring becomes a chain of arcs, and a well-filled wall or rail is untouched.
+  const refined = [];
+  for (const r of solid) {
+    const inside = trisInBox(idx, r.centre, r.half, frameOf(r));
+    if (!inside.length) { refined.push(r); continue; }
+    const parts = refit(inside, frameOf(r), 0);
+    if (parts.length !== 1 || parts[0] !== r) { carveStats.refined++; carveStats.refinedInto += parts.length; }
+    refined.push(...parts);
+  }
+  if (verbose && refined.length !== solid.length) {
+    console.log(`refit ${solid.length} boxes -> ${refined.length} (fill floor ${FILL_MIN})`);
+  }
+  return refined;
+
+  function frameOf(r) {
+    if (!r.oriented) return IDENT;
+    const q = r.quat, m = quatToMat(q[0], q[1], q[2], q[3]);
+    return [[m[0], m[3], m[6]], [m[1], m[4], m[7]], [m[2], m[5], m[8]]];
+  }
+
+  // Triangles whose centroid sits in the box, with a skin of tolerance: the
+  // geometry backing a plate lies exactly ON its faces.
+  function trisInBox(list, centre, half, F) {
+    const out = [];
+    for (const t of list) {
+      const dx = tc[t * 3] - centre[0], dy = tc[t * 3 + 1] - centre[1], dz = tc[t * 3 + 2] - centre[2];
+      let ok = true;
+      for (let k = 0; k < 3 && ok; k++) {
+        if (Math.abs(F[k][0] * dx + F[k][1] * dy + F[k][2] * dz) > half[k] + DTOL) ok = false;
+      }
+      if (ok) out.push(t);
+    }
+    return out;
+  }
+
+  // The frame of the geometry itself: principal axes of its vertices. A chord
+  // of an arc gets a frame along the chord, which is what lets a split follow
+  // a curve instead of stepping around it in world axes.
+  function pcaFrame(list) {
+    let cx = 0, cy = 0, cz = 0, n = 0;
+    for (const t of list) {
+      const o9 = t * 9;
+      for (let v = 0; v < 9; v += 3) { cx += tv[o9 + v]; cy += tv[o9 + v + 1]; cz += tv[o9 + v + 2]; n++; }
+    }
+    if (n < 3) return null;
+    cx /= n; cy /= n; cz /= n;
+    const m = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    for (const t of list) {
+      const o9 = t * 9;
+      for (let v = 0; v < 9; v += 3) {
+        const d = [tv[o9 + v] - cx, tv[o9 + v + 1] - cy, tv[o9 + v + 2] - cz];
+        for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) m[i][j] += d[i] * d[j];
+      }
+    }
+    const e = eigen3(m);
+    const f = [snapAxis(e[0]), snapAxis(norm3(cross3(e[2], e[0]))), snapAxis(e[2])];
+    if (!f.every(v => Number.isFinite(v[0]) && Number.isFinite(v[1]) && Number.isFinite(v[2]))) return null;
+    return f.every(isUnitAxis) ? IDENT : f;
+  }
+
+  function fitBox(list, F) {
+    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+    for (const t of list) {
+      const o9 = t * 9;
+      for (let v = 0; v < 9; v += 3) {
+        const p = [tv[o9 + v], tv[o9 + v + 1], tv[o9 + v + 2]];
+        for (let k = 0; k < 3; k++) {
+          const s = dot3(p, F[k]);
+          if (s < lo[k]) lo[k] = s;
+          if (s > hi[k]) hi[k] = s;
+        }
+      }
+    }
+    const half = [(hi[0] - lo[0]) / 2, (hi[1] - lo[1]) / 2, (hi[2] - lo[2]) / 2];
+    const mid = [(hi[0] + lo[0]) / 2, (hi[1] + lo[1]) / 2, (hi[2] + lo[2]) / 2];
+    const centre = [
+      F[0][0] * mid[0] + F[1][0] * mid[1] + F[2][0] * mid[2],
+      F[0][1] * mid[0] + F[1][1] * mid[1] + F[2][1] * mid[2],
+      F[0][2] * mid[0] + F[1][2] * mid[1] + F[2][2] * mid[2],
+    ];
+    return { centre, half };
+  }
+
+  // Coverage, not area: what share of the box's largest face has any geometry
+  // over it. Two shells of a wall cover the same cells and still read 1.0; a
+  // triangle covers half of its own bounding rectangle whatever its shells do.
+  function faceFill(list, F, centre, half) {
+    const k = half.indexOf(Math.min(...half));   // thin axis; the face spans the other two
+    const a = (k + 1) % 3, b = (k + 2) % 3;
+    if (half[a] < 1e-6 || half[b] < 1e-6) return 1;
+    const G = 12;
+    const grid = new Uint8Array(G * G);
+    for (const t of list) {
+      const o9 = t * 9;
+      const p = [];
+      for (let v = 0; v < 9; v += 3) {
+        const d = [tv[o9 + v] - centre[0], tv[o9 + v + 1] - centre[1], tv[o9 + v + 2] - centre[2]];
+        p.push([
+          (dot3(d, F[a]) / half[a] + 1) / 2 * G,
+          (dot3(d, F[b]) / half[b] + 1) / 2 * G,
+        ]);
+      }
+      const gx0 = Math.max(0, Math.floor(Math.min(p[0][0], p[1][0], p[2][0])));
+      const gx1 = Math.min(G - 1, Math.ceil(Math.max(p[0][0], p[1][0], p[2][0])));
+      const gy0 = Math.max(0, Math.floor(Math.min(p[0][1], p[1][1], p[2][1])));
+      const gy1 = Math.min(G - 1, Math.ceil(Math.max(p[0][1], p[1][1], p[2][1])));
+      const d1x = p[1][0] - p[0][0], d1y = p[1][1] - p[0][1];
+      const d2x = p[2][0] - p[0][0], d2y = p[2][1] - p[0][1];
+      const den = d1x * d2y - d2x * d1y;
+      for (let gy = gy0; gy <= gy1; gy++) for (let gx = gx0; gx <= gx1; gx++) {
+        if (grid[gy * G + gx]) continue;
+        const qx = gx + 0.5 - p[0][0], qy = gy + 0.5 - p[0][1];
+        if (Math.abs(den) < 1e-12) { grid[gy * G + gx] = 1; continue; }
+        const w1 = (qx * d2y - d2x * qy) / den;
+        const w2 = (d1x * qy - qx * d1y) / den;
+        if (w1 >= -0.02 && w2 >= -0.02 && w1 + w2 <= 1.02) grid[gy * G + gx] = 1;
+      }
+    }
+    let hit = 0;
+    for (let i = 0; i < grid.length; i++) hit += grid[i];
+    return hit / (G * G);
+  }
+
+  // Is the surface in this box DISCRETE or CONTINUOUS? Angular spread cannot
+  // tell: a closed box's six faces genuinely span 90 degrees once folded to a
+  // hemisphere, so spread flags every solid and the wall stops being one box.
+  // A flat-faced solid has a handful of normal clusters however large it is;
+  // a curved one has a cluster per facet. Count them, unsigned, ignoring
+  // slivers, and a chord across a rim is the only thing that scores high.
+  function normalClusters(list) {
+    let area = 0;
+    for (const t of list) area += ta[t];
+    if (!(area > 0)) return 0;
+    const groups = [];
+    for (const t of list) {
+      const n = [tn[t * 3], tn[t * 3 + 1], tn[t * 3 + 2]];
+      let g = null;
+      for (const q of groups) {
+        if (Math.abs(q.n[0] * n[0] + q.n[1] * n[1] + q.n[2] * n[2]) >= COS_NTOL) { g = q; break; }
+      }
+      if (g) g.a += ta[t]; else groups.push({ n, a: ta[t] });
+    }
+    return groups.filter(g => g.a >= area * 0.05).length;
+  }
+
+  function refit(list, F0, depth) {
+    const F = depth === 0 ? F0 : (pcaFrame(list) || F0);
+    const { centre, half } = fitBox(list, F);
+    if (half[0] * 2 < MIN_CELL || half[1] * 2 < MIN_CELL || half[2] * 2 < MIN_CELL) return [];
+    const box = {
+      centre, half, quat: F === IDENT ? [0, 0, 0, 1] : matToQuat(F[0], F[1], F[2]),
+      oriented: F !== IDENT, outVote: 0, inVote: 0, backedFrac: 0,
+    };
+    if (depth >= REFINE_DEPTH) return [box];
+    // Two reasons a box is the wrong shape, and fill only catches one. A
+    // triangular fin leaves its box half EMPTY. A chunk of a 73 m rim fills
+    // its box completely and is still wrong, because the surface inside is
+    // turning: the box is a chord across a curve. Normal spread catches that.
+    // Folded to a hemisphere, so a wall's two shells read as agreement, not as
+    // 180 degrees of disagreement.
+    if (faceFill(list, F, centre, half) >= FILL_MIN && normalClusters(list) <= MAX_FACETS) return [box];
+    // Split along the longest axis at the midpoint, then let each side find
+    // its own frame and extent.
+    const ax = half.indexOf(Math.max(...half));
+    if (half[ax] * 2 < MIN_CELL * 2) return [box];
+    const mid = dot3(centre, F[ax]);
+    const lo = [], hi = [];
+    for (const t of list) {
+      (dot3([tc[t * 3], tc[t * 3 + 1], tc[t * 3 + 2]], F[ax]) < mid ? lo : hi).push(t);
+    }
+    if (!lo.length || !hi.length) return [box];
+    const out = refit(lo, F, depth + 1).concat(refit(hi, F, depth + 1));
+    return out.length ? out : [box];
+  }
   }
 }
 
