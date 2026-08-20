@@ -1,0 +1,25 @@
+{
+    "id": "a8ffd24c-2cbe-4b44-9db0-963b51afa49f",
+    "name": "Little House in the Badlands",
+    "nexus_id": "32834",
+    "category": "new-location",
+    "coordinates": [
+        2161.8293,
+        -694.1193,
+        61.0752
+    ],
+    "yaw": -93.4299,
+    "tags": [
+        "apartment",
+        "entropism",
+        "house",
+        "nomad"
+    ],
+    "authors": [
+        "DevilDevil868"
+    ],
+    "description": "A little house in the badlands. That's it, nothing special.",
+    "status": "published",
+    "added_at": "2026-08-19T19:56:33.032Z",
+    "modified_at": "2026-08-19T19:56:33.032Z"
+}
