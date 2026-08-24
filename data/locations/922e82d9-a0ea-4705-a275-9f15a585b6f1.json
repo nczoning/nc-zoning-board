@@ -1,0 +1,25 @@
+{
+    "id": "922e82d9-a0ea-4705-a275-9f15a585b6f1",
+    "name": "Biotechnica canopy",
+    "nexus_id": "33057",
+    "category": "new-location",
+    "coordinates": [
+        -1971.3939,
+        -4409.7544,
+        80.1035
+    ],
+    "yaw": 92.1917,
+    "tags": [
+        "apartment",
+        "corpo",
+        "house",
+        "kitsch"
+    ],
+    "authors": [
+        "K4g3K1tsun3"
+    ],
+    "description": "A premium, fully interactive player home hidden in the Badlands. Formerly owned by Biotechnica, this modern concrete and glass estate features a main house, two guest houses, a private forest, a swimming pool, and custom smart-home tech controls.",
+    "status": "published",
+    "added_at": "2026-08-24T16:09:00.113Z",
+    "modified_at": "2026-08-24T16:09:00.113Z"
+}

@@ -1,0 +1,23 @@
+{
+    "id": "c94bde98-ed85-41c3-822d-80adb6fe7d74",
+    "name": "Secret DogTown Apartments",
+    "nexus_id": "33077",
+    "category": "location-overhaul",
+    "coordinates": [
+        -2151.197,
+        -2531.1694,
+        45.1462
+    ],
+    "yaw": 37.1354,
+    "tags": [
+        "apartment",
+        "house"
+    ],
+    "authors": [
+        "ValkyrianDreams"
+    ],
+    "description": "Complete overhaul of old abandoned party hideaway!",
+    "status": "published",
+    "added_at": "2026-08-24T16:09:11.851Z",
+    "modified_at": "2026-08-24T16:09:11.851Z"
+}
