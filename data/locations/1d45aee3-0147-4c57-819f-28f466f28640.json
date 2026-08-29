@@ -1,0 +1,22 @@
+{
+    "id": "1d45aee3-0147-4c57-819f-28f466f28640",
+    "name": "deus ex machina",
+    "nexus_id": "33270",
+    "category": "new-location",
+    "coordinates": [
+        176.97444,
+        1339.2194,
+        154.21437
+    ],
+    "tags": [
+        "house",
+        "photos"
+    ],
+    "authors": [
+        "thumbsuckerr"
+    ],
+    "description": "north oak home inspired by the house in ex machina",
+    "status": "published",
+    "added_at": "2026-08-29T05:01:02.172Z",
+    "modified_at": "2026-08-29T05:01:02.172Z"
+}
