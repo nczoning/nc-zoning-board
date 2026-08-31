@@ -1,0 +1,24 @@
+{
+    "id": "3d65d0cf-c7b5-497e-81d1-848f43db5bd4",
+    "name": "Beach house Badlands 2",
+    "nexus_id": "33318",
+    "category": "location-overhaul",
+    "coordinates": [
+        -2968.2146,
+        -2465.0747,
+        3.8237
+    ],
+    "yaw": -94.6103,
+    "tags": [
+        "apartment",
+        "house",
+        "kitsch"
+    ],
+    "authors": [
+        "K4g3K1tsun3"
+    ],
+    "description": "A small, interactive player house on the beach between Badlands and Pacifica",
+    "status": "published",
+    "added_at": "2026-08-30T19:42:18.528Z",
+    "modified_at": "2026-08-30T19:42:18.528Z"
+}
