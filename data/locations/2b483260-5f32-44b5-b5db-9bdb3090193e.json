@@ -1,0 +1,25 @@
+{
+    "id": "2b483260-5f32-44b5-b5db-9bdb3090193e",
+    "name": "Underground SafeHouse",
+    "nexus_id": "33394",
+    "category": "location-overhaul",
+    "coordinates": [
+        1892.8689,
+        16.7343,
+        59.574
+    ],
+    "yaw": 175.8561,
+    "tags": [
+        "apartment",
+        "entropism",
+        "house",
+        "nomad"
+    ],
+    "authors": [
+        "fluffyking888"
+    ],
+    "description": "Hey choom, did you piss off every gang in NC? Need a place to lay low? How about a Safe House in a underground tunnel?",
+    "status": "published",
+    "added_at": "2026-09-02T09:12:37.106Z",
+    "modified_at": "2026-09-02T09:12:37.106Z"
+}

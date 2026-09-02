@@ -1,0 +1,22 @@
+{
+    "id": "ee384d18-769c-45c6-8a81-0ea5639b2415",
+    "name": "Real Roses Flower Field",
+    "nexus_id": "33005",
+    "category": "other",
+    "coordinates": [
+        -1266.5143,
+        -5980.1914,
+        100.4281
+    ],
+    "yaw": 0,
+    "tags": [
+        "photos"
+    ],
+    "authors": [
+        "ashmix"
+    ],
+    "description": "A roses field in Badlands with extensive colour customization.",
+    "status": "published",
+    "added_at": "2026-09-02T10:07:17.846Z",
+    "modified_at": "2026-09-02T10:07:17.846Z"
+}
