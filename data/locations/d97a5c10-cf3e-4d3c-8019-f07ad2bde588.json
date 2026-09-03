@@ -1,0 +1,24 @@
+{
+    "id": "d97a5c10-cf3e-4d3c-8019-f07ad2bde588",
+    "name": "South West Shore Fixed and Expanded",
+    "nexus_id": "33331",
+    "category": "new-location",
+    "coordinates": [
+        -5610.646,
+        -3584.351,
+        105.684
+    ],
+    "tags": [
+        "entropism",
+        "infrastructure",
+        "nomad",
+        "photos"
+    ],
+    "authors": [
+        "LordTrilobite"
+    ],
+    "description": "Fixes and details the south west shore and mountains west of the Bio Technica flats.",
+    "status": "published",
+    "added_at": "2026-09-03T16:05:44.940Z",
+    "modified_at": "2026-09-03T16:05:44.940Z"
+}

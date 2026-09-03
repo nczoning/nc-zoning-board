@@ -1,0 +1,25 @@
+{
+    "id": "215491df-1c33-421c-a366-59f96df52180",
+    "name": "Canyon lake house",
+    "nexus_id": "33414",
+    "category": "new-location",
+    "coordinates": [
+        5648.4409,
+        -357.4019,
+        97.7918
+    ],
+    "yaw": -178.3067,
+    "tags": [
+        "apartment",
+        "house",
+        "nomad",
+        "photos"
+    ],
+    "authors": [
+        "K4g3K1tsun3"
+    ],
+    "description": "Escape from the busy life in NC. This is a version of my Beach house Badlands 2, adapted for the lake in the canyon forest.",
+    "status": "published",
+    "added_at": "2026-09-02T20:04:57.235Z",
+    "modified_at": "2026-09-02T20:04:57.235Z"
+}
