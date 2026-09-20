@@ -1,0 +1,23 @@
+{
+    "id": "11a515a0-091a-4c93-834b-da83e8b73791",
+    "name": "Night City Medical Center - JC's Interiors",
+    "nexus_id": "33880",
+    "category": "new-location",
+    "coordinates": [
+        -1361.5461,
+        1744.8293,
+        18.19
+    ],
+    "yaw": -4.45,
+    "tags": [
+        "infrastructure",
+        "streetkid"
+    ],
+    "authors": [
+        "JudoChopMods"
+    ],
+    "description": "Night City Medical Center adds an enclosed hospital interior to the building in Watson.",
+    "status": "published",
+    "added_at": "2026-09-20T11:14:24.671Z",
+    "modified_at": "2026-09-20T14:49:36.842Z"
+}

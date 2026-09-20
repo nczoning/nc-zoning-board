@@ -1,0 +1,23 @@
+{
+    "id": "5f392a8d-59e2-44b1-ac41-587896d73d78",
+    "name": "NCPD Little China Precinct - JC's Interiors",
+    "nexus_id": "34125",
+    "category": "new-location",
+    "coordinates": [
+        -1454.5464,
+        1230.0852,
+        23
+    ],
+    "yaw": 126.292,
+    "tags": [
+        "infrastructure",
+        "streetkid"
+    ],
+    "authors": [
+        "JudoChopMods"
+    ],
+    "description": "Adds a working interior to the NCPD precinct in Little China near the H10 Building",
+    "status": "published",
+    "added_at": "2026-09-20T14:49:17.112Z",
+    "modified_at": "2026-09-20T14:49:17.112Z"
+}

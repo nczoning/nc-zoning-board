@@ -1,0 +1,23 @@
+{
+    "id": "83fc0d4f-5a82-4206-9f04-5511b360f03c",
+    "name": "Cozy Coronado Crib (apartment)",
+    "nexus_id": "33384",
+    "category": "new-location",
+    "coordinates": [
+        380.2115,
+        -1143.0204,
+        64.0433
+    ],
+    "yaw": 52.7355,
+    "tags": [
+        "apartment",
+        "house"
+    ],
+    "authors": [
+        "ashmix"
+    ],
+    "description": "A new apartment in Rancho Coronado.",
+    "status": "published",
+    "added_at": "2026-09-20T11:08:13.606Z",
+    "modified_at": "2026-09-20T11:08:13.606Z"
+}

@@ -1,0 +1,26 @@
+{
+    "id": "bd2a6d78-6c72-420a-a62f-6c3a60b11d85",
+    "name": "Little Lantern Cafe and Apartment",
+    "nexus_id": "34103",
+    "category": "new-location",
+    "coordinates": [
+        -1028.6709,
+        1486.4731,
+        3.7871
+    ],
+    "yaw": 178.2981,
+    "tags": [
+        "apartment",
+        "entertainment",
+        "house",
+        "shop",
+        "streetkid"
+    ],
+    "authors": [
+        "Mazamp"
+    ],
+    "description": "This little Cafe/Kiosk is located in lower Kabuki on a colorful street. It also has a charming apartment with balcony above.",
+    "status": "published",
+    "added_at": "2026-09-20T09:13:55.182Z",
+    "modified_at": "2026-09-20T09:13:55.182Z"
+}

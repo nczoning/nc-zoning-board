@@ -1,0 +1,24 @@
+{
+    "id": "6a17c477-7687-40a1-a8fb-ffb6dbc47285",
+    "name": "Vista Del Ray Skyline Apartment",
+    "nexus_id": "34117",
+    "category": "new-location",
+    "coordinates": [
+        -690.3397,
+        -383.925,
+        152.8659
+    ],
+    "yaw": 53.3222,
+    "tags": [
+        "apartment",
+        "house",
+        "kitsch"
+    ],
+    "authors": [
+        "K4g3K1tsun3"
+    ],
+    "description": "A small rooftop apartment for V located at the top of a high-rise building in Vista Del Rey, Heywood.",
+    "status": "published",
+    "added_at": "2026-09-20T09:13:46.984Z",
+    "modified_at": "2026-09-20T09:13:46.984Z"
+}

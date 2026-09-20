@@ -1,0 +1,24 @@
+{
+    "id": "b5b4e8f0-9522-4637-b4c5-32bf2740efef",
+    "name": "Garage Location - El Cap's",
+    "nexus_id": "30297",
+    "category": "location-overhaul",
+    "coordinates": [
+        -860.933,
+        2777.366,
+        38.5794
+    ],
+    "yaw": -71.2572,
+    "tags": [
+        "infrastructure",
+        "photos",
+        "shop"
+    ],
+    "authors": [
+        "theCyanideX"
+    ],
+    "description": "The garage that does it all. Realtime customization, claim & sell, repair & clear, custom music and user-created dynamic locations.",
+    "status": "published",
+    "added_at": "2026-09-20T00:55:22.460Z",
+    "modified_at": "2026-09-20T00:55:22.460Z"
+}
