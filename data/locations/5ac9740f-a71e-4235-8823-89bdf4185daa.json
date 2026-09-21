@@ -1,0 +1,25 @@
+{
+    "id": "5ac9740f-a71e-4235-8823-89bdf4185daa",
+    "name": "Wellsprings Industrial",
+    "nexus_id": "33481",
+    "category": "new-location",
+    "coordinates": [
+        -2514.7346,
+        -484.2032,
+        16.9928
+    ],
+    "yaw": 94.0075,
+    "tags": [
+        "apartment",
+        "house",
+        "infrastructure",
+        "kitsch"
+    ],
+    "authors": [
+        "DevilDevil868"
+    ],
+    "description": "A house in Heywood located near Cannery Plaza.",
+    "status": "published",
+    "added_at": "2026-09-21T18:41:58.129Z",
+    "modified_at": "2026-09-21T18:41:58.129Z"
+}

@@ -1,0 +1,24 @@
+{
+    "id": "f18bf378-27b0-4258-84ae-f3301f11a63c",
+    "name": "BeachHome_small",
+    "nexus_id": "33154",
+    "category": "location-overhaul",
+    "coordinates": [
+        -2216.7791,
+        -1892.1,
+        4.3233
+    ],
+    "yaw": 129.2646,
+    "tags": [
+        "apartment",
+        "entropism",
+        "house"
+    ],
+    "authors": [
+        "fluffyking888"
+    ],
+    "description": "Adds Small home on a beach in Pacifica",
+    "status": "published",
+    "added_at": "2026-09-21T14:25:36.151Z",
+    "modified_at": "2026-09-21T14:25:36.151Z"
+}

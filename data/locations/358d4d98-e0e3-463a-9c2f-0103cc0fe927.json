@@ -1,0 +1,24 @@
+{
+    "id": "358d4d98-e0e3-463a-9c2f-0103cc0fe927",
+    "name": "The Eclectic Glen (world edit)",
+    "nexus_id": "33436",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1525.7317,
+        -968.98,
+        86.97
+    ],
+    "yaw": 179.5958,
+    "tags": [
+        "apartment",
+        "kitsch",
+        "streetkid"
+    ],
+    "authors": [
+        "djchromatoze"
+    ],
+    "description": "A warm, colourful refurb of the Glen apartment with new features: balcony, DJ rig, walk-in wardrobe, 2 extra rooms, and added interactions!",
+    "status": "published",
+    "added_at": "2026-09-21T14:29:04.363Z",
+    "modified_at": "2026-09-21T14:29:04.363Z"
+}
