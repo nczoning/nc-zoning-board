@@ -1,0 +1,22 @@
+{
+    "id": "f734ebdf-07fe-4d02-8ca6-23d01e95df6b",
+    "name": "Cozy Neon - Apartment H10 Preset",
+    "nexus_id": "34209",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1388.2058,
+        1271.0664,
+        123.0751
+    ],
+    "yaw": -94.3002,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "lycanicorn"
+    ],
+    "description": "A little preset with some neon lights for the H10 Apartment",
+    "status": "published",
+    "added_at": "2026-09-22T15:17:13.066Z",
+    "modified_at": "2026-09-22T15:17:13.066Z"
+}
