@@ -1,0 +1,22 @@
+{
+    "id": "85c5143f-2db5-45a9-8f64-51a6601daedd",
+    "name": "Christmas with the Aldecaldos (Panam)",
+    "nexus_id": "26297",
+    "category": "location-overhaul",
+    "coordinates": [
+        1803.542,
+        2249.821,
+        180.254
+    ],
+    "yaw": 141.1519,
+    "tags": [
+        "nomad"
+    ],
+    "authors": [
+        "Akiway"
+    ],
+    "description": "Illuminate the Aldecaldos camp with Christmas decorations.",
+    "status": "published",
+    "added_at": "2026-09-23T19:13:34.977Z",
+    "modified_at": "2026-09-23T19:13:34.977Z"
+}

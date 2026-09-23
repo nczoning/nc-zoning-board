@@ -1,0 +1,22 @@
+{
+    "id": "66366f36-3458-46a4-a58d-6e8c9a05a1b9",
+    "name": "Christmas with Judy (appartment and Laguna Bend)",
+    "nexus_id": "26361",
+    "category": "location-overhaul",
+    "coordinates": [
+        -906.6779,
+        1868.8052,
+        42.36
+    ],
+    "yaw": -101.6,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "Akiway"
+    ],
+    "description": "Illuminate Judy's appartment and her bungalow at Laguna Bend with Christmas decorations.",
+    "status": "published",
+    "added_at": "2026-09-23T19:13:38.539Z",
+    "modified_at": "2026-09-23T19:13:38.539Z"
+}

@@ -1,0 +1,23 @@
+{
+    "id": "f64c6bef-f529-479d-a476-cbcf1899a9aa",
+    "name": "Brutalist H10 Apartment - ArchiveXL",
+    "nexus_id": "34113",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1388.2058,
+        1271.0664,
+        123.0751
+    ],
+    "yaw": -94.3002,
+    "tags": [
+        "apartment",
+        "neokitsch"
+    ],
+    "authors": [
+        "RedCatch22"
+    ],
+    "description": "Brutalist makeover of V's H10 apartment.",
+    "status": "published",
+    "added_at": "2026-09-22T21:35:35.071Z",
+    "modified_at": "2026-09-22T21:35:35.071Z"
+}

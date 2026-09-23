@@ -1,0 +1,23 @@
+{
+    "id": "d7ca6411-5f99-44ed-9049-1a11c84373dd",
+    "name": "Japantown Cozy-Glam Apartment - ArchiveXL and AMM Preset",
+    "nexus_id": "33907",
+    "category": "location-overhaul",
+    "coordinates": [
+        -784.1976,
+        978.4833,
+        28.2095
+    ],
+    "yaw": 96.4,
+    "tags": [
+        "apartment",
+        "kitsch"
+    ],
+    "authors": [
+        "RedCatch22"
+    ],
+    "description": "A decor preset for the Japantown apartment, available with ArchiveXL or AMM. Wood, marble, gold and dimmed lights for a glam and cozy feel. Kept key elements of the apartment for compatability with several Japantown mods and to make it feel like V gave the place a glow-up (instead of a rebuild).",
+    "status": "published",
+    "added_at": "2026-09-22T21:35:25.454Z",
+    "modified_at": "2026-09-22T21:35:25.454Z"
+}

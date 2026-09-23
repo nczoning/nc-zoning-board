@@ -1,0 +1,24 @@
+{
+    "id": "de102466-b1de-4319-991f-36f78f433719",
+    "name": "Network 54 News Tower Interior - JC's Interiors",
+    "nexus_id": "34225",
+    "category": "new-location",
+    "coordinates": [
+        -717.9599,
+        638.8828,
+        34.0743
+    ],
+    "yaw": 139.806,
+    "tags": [
+        "corpo",
+        "entertainment",
+        "infrastructure"
+    ],
+    "authors": [
+        "JudoChopMods"
+    ],
+    "description": "Explore a standalone, 22-room Network 54 newsroom interior in Westbrook.",
+    "status": "published",
+    "added_at": "2026-09-23T10:23:57.678Z",
+    "modified_at": "2026-09-23T10:23:57.678Z"
+}

@@ -1,0 +1,22 @@
+{
+    "id": "67294856-f3c0-41dc-8d9c-fe894f853b62",
+    "name": "Christmas with the Kutchers (River)",
+    "nexus_id": "26324",
+    "category": "location-overhaul",
+    "coordinates": [
+        1236.3961,
+        -504.6361,
+        36.4271
+    ],
+    "yaw": -158,
+    "tags": [
+        "house"
+    ],
+    "authors": [
+        "Akiway"
+    ],
+    "description": "Illuminate the Kutchers house with Christmas decorations.",
+    "status": "published",
+    "added_at": "2026-09-23T19:13:41.511Z",
+    "modified_at": "2026-09-23T19:13:41.511Z"
+}
