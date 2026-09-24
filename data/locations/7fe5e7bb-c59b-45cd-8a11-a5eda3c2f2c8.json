@@ -1,0 +1,24 @@
+{
+    "id": "7fe5e7bb-c59b-45cd-8a11-a5eda3c2f2c8",
+    "name": "Dlake House - Christmas Tree AMM prop -",
+    "nexus_id": "26256",
+    "category": "location-overhaul",
+    "coordinates": [
+        1116.0911,
+        -3477.8901,
+        181.2523
+    ],
+    "yaw": -79.1656,
+    "tags": [
+        "apartment",
+        "christmas",
+        "house"
+    ],
+    "authors": [
+        "yuyu69"
+    ],
+    "description": "A quiet home in the Laguna area, offering peace far from Night City’s chaos. + NPC features.",
+    "status": "published",
+    "added_at": "2026-09-23T19:58:20.515Z",
+    "modified_at": "2026-09-23T20:12:44.210Z"
+}
