@@ -1,0 +1,24 @@
+{
+    "id": "c30e2e0b-12fe-493d-aa76-2ae9719b312f",
+    "name": "Ultra Luxe Corpo Plaza Apartment",
+    "nexus_id": "34445",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1606.4951,
+        360.0862,
+        49.2
+    ],
+    "yaw": -175.4106,
+    "tags": [
+        "apartment",
+        "corpo",
+        "kitsch"
+    ],
+    "authors": [
+        "RedCatch22"
+    ],
+    "description": "A truly luxe makeover of V's Corpo Plaza apartment (with optional iguana!)",
+    "status": "published",
+    "added_at": "2026-09-29T19:27:16.798Z",
+    "modified_at": "2026-09-29T19:27:16.798Z"
+}

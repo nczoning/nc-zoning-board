@@ -1,0 +1,23 @@
+{
+    "id": "6bf23df4-ef1e-4704-97be-9c2df97a27d2",
+    "name": "Dogtown Container Apartment",
+    "nexus_id": "34461",
+    "category": "new-location",
+    "coordinates": [
+        -2328.7046,
+        -2650.7944,
+        27.8379
+    ],
+    "yaw": 26.1338,
+    "tags": [
+        "apartment",
+        "entropism"
+    ],
+    "authors": [
+        "ashmix"
+    ],
+    "description": "A small hideout located near Longshore Stacks, Dogtown.",
+    "status": "published",
+    "added_at": "2026-09-29T19:27:28.903Z",
+    "modified_at": "2026-09-29T19:27:28.903Z"
+}
