@@ -1,0 +1,22 @@
+{
+    "id": "8ef1f4ea-daed-4755-8556-b4cc74ab878b",
+    "name": "Glen Apartment Netrunners Den",
+    "nexus_id": "34484",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1533.8018,
+        -972.1234,
+        86.96
+    ],
+    "yaw": 89.2422,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "ThaFunktopus"
+    ],
+    "description": "adds a new netrunning room to V's Glen apartment",
+    "status": "published",
+    "added_at": "2026-09-30T19:59:30.843Z",
+    "modified_at": "2026-09-30T19:59:30.843Z"
+}

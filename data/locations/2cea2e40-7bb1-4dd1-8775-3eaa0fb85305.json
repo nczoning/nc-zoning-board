@@ -1,0 +1,24 @@
+{
+    "id": "2cea2e40-7bb1-4dd1-8775-3eaa0fb85305",
+    "name": "Wellsprings Coast Apartment",
+    "nexus_id": "34489",
+    "category": "new-location",
+    "coordinates": [
+        -2424.926,
+        -925.761,
+        8.3572
+    ],
+    "yaw": -89.7115,
+    "tags": [
+        "apartment",
+        "house",
+        "streetkid"
+    ],
+    "authors": [
+        "Poeller969"
+    ],
+    "description": "A New Apartment on the Wellsprings \"Coast\"",
+    "status": "published",
+    "added_at": "2026-09-30T19:59:39.397Z",
+    "modified_at": "2026-09-30T19:59:39.397Z"
+}
