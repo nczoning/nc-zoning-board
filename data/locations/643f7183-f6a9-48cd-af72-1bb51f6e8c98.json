@@ -1,0 +1,23 @@
+{
+    "id": "643f7183-f6a9-48cd-af72-1bb51f6e8c98",
+    "name": "Dogtown Public Shower",
+    "nexus_id": "34544",
+    "category": "new-location",
+    "coordinates": [
+        -1956.0522,
+        -2950.0969,
+        98.216
+    ],
+    "yaw": -37.5262,
+    "tags": [
+        "entropism",
+        "infrastructure"
+    ],
+    "authors": [
+        "ashmix"
+    ],
+    "description": "A makeshift public shower in Dogtown.",
+    "status": "published",
+    "added_at": "2026-10-01T22:26:49.739Z",
+    "modified_at": "2026-10-01T22:26:49.739Z"
+}
