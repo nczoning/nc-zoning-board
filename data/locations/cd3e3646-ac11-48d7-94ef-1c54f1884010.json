@@ -1,0 +1,23 @@
+{
+    "id": "cd3e3646-ac11-48d7-94ef-1c54f1884010",
+    "name": "Brutalist Japantown Apartment",
+    "nexus_id": "34594",
+    "category": "location-overhaul",
+    "coordinates": [
+        -784.1976,
+        978.4833,
+        28.2095
+    ],
+    "yaw": 96.4,
+    "tags": [
+        "apartment",
+        "kitsch"
+    ],
+    "authors": [
+        "RedCatch22"
+    ],
+    "description": "Brutalist makeover of V's Japantown apartment. Using Archive XL.",
+    "status": "published",
+    "added_at": "2026-10-03T07:31:45.398Z",
+    "modified_at": "2026-10-03T07:31:45.398Z"
+}
