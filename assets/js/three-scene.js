@@ -282,8 +282,10 @@ const ThreeScene = (() => {
   // dataDdsFixed: optional alignment-fixed _data from malgalad's "3D World Map
   //   Fixed" mod (Nexus #26500). Same dimensions/transforms as the vanilla
   //   dataDds (texel placement corrected), so it's a straight texture swap when
-  //   the Fixed asset set is selected. ep1_spaceport has no fixed version → it
-  //   stays on dataDds in both sets. See docs/3dmap-fixed-assets.md.
+  //   the Fixed asset set is selected. See docs/3dmap-fixed-assets.md.
+  // offsetFixed: optional offset used instead of `offset` in the Fixed set.
+  //   The mod's entity patch moves a district's component (santo_domingo,
+  //   since 1.5.0), so its fixed texture is authored against the new position.
   // mDds:    _m.dds   (DXGI_FORMAT_R8_UNORM: 8-bit greyscale surface detail, 10 mips)
   // transMin/transMax: district-local CET XYZ bounds (before district offset)
   // offset: world XY offset applied to decoded positions (no Z offset)
@@ -297,10 +299,10 @@ const ThreeScene = (() => {
     { name: 'city_center',   dataDds: 'assets/dds/city_center_data.dds',  dataDdsFixed: 'assets/dds/fixed/city_center_data.dds',  mDds: 'assets/dds/city_center_m.dds',  cubeSize: 168.289993,   transMin: [ -770.609192, -530.549133, -40.6581497],  transMax: [1316.82483,    649.75531,  642.893127],  offset: [-2116.637,    106.508], edgeThickness: 0.0001, edgeSharpness: 30 },
     { name: 'heywood',       dataDds: 'assets/dds/heywood_data.dds',      dataDdsFixed: 'assets/dds/fixed/heywood_data.dds',      mDds: 'assets/dds/heywood_m.dds',      cubeSize: 197.236832,   transMin: [-1080.35107,  -418.153046, -38.4002304],  transMax: [1136.94556,   1372.15979,  374.181305],  offset: [-1576.732,  -1002.811], edgeThickness: 0.0005, edgeSharpness: 50 },
     { name: 'pacifica',      dataDds: 'assets/dds/pacifica_data.dds',     dataDdsFixed: 'assets/dds/fixed/pacifica_data.dds',     mDds: 'assets/dds/pacifica_m.dds',     cubeSize: 305.600006,   transMin: [-4008.396,   -4575.14941, -51.9539986],  transMax: [8258.31641,   7254.10059,  264.306946],  offset: [-2422.441,  -2368.156], edgeThickness: 0.0005, edgeSharpness: 50 },
-    { name: 'santo_domingo', dataDds: 'assets/dds/santo_domingo_data.dds',dataDdsFixed: 'assets/dds/fixed/santo_domingo_data.dds',mDds: 'assets/dds/santo_domingo_m.dds',cubeSize: 139.342102,   transMin: [-1328.95288, -1880.02502, -37.5960007],  transMax: [1555.26318,   1369.01294,  332.348328],  offset: [  -15.944,  -1610.080], edgeThickness: 0.0001, edgeSharpness: 30 },
+    { name: 'santo_domingo', dataDds: 'assets/dds/santo_domingo_data.dds',dataDdsFixed: 'assets/dds/fixed/santo_domingo_data.dds',mDds: 'assets/dds/santo_domingo_m.dds',cubeSize: 139.342102,   transMin: [-1328.95288, -1880.02502, -37.5960007],  transMax: [1555.26318,   1369.01294,  332.348328],  offset: [  -15.944,  -1610.080], offsetFixed: [-16, -1615], edgeThickness: 0.0001, edgeSharpness: 30 },
     { name: 'watson',        dataDds: 'assets/dds/watson_data.dds',       dataDdsFixed: 'assets/dds/fixed/watson_data.dds',       mDds: 'assets/dds/watson_m.dds',       cubeSize: 237.175003,   transMin: [-1254.46997, -1258.68469, -24.7028503],  transMax: [1988.5448,    2032.52405,  475.268005],  offset: [-1979.372,   1873.951], edgeThickness: 0.0005, edgeSharpness: 50 },
     { name: 'ep1_dogtown',   dataDds: 'assets/dds/dogtown_data.dds',      dataDdsFixed: 'assets/dds/fixed/dogtown_data.dds',      mDds: 'assets/dds/dogtown_m.dds',      cubeSize: 198.020691,   transMin: [-2650.0,     -3126.6084,   -0.750015974], transMax: [-1025.51855, -1803.58118,  493.576111],  offset: [    0.0,        0.0  ], edgeThickness: 0.0005, edgeSharpness: 50 },
-    { name: 'ep1_spaceport', dataDds: 'assets/dds/spaceport_data.dds',    mDds: 'assets/dds/spaceport_m.dds',    cubeSize: 115.298218,   transMin: [-1168.5874,   -765.104614, -41.4592323],  transMax: [1219.45483,   1018.70129,  296.498138],  offset: [-4200.000,    200.000], edgeThickness: 0.0005, edgeSharpness: 50 },
+    { name: 'ep1_spaceport', dataDds: 'assets/dds/spaceport_data.dds',    dataDdsFixed: 'assets/dds/fixed/spaceport_data.dds',    mDds: 'assets/dds/spaceport_m.dds',    cubeSize: 115.298218,   transMin: [-1168.5874,   -765.104614, -41.4592323],  transMax: [1219.45483,   1018.70129,  296.498138],  offset: [-4200.000,    200.000], edgeThickness: 0.0005, edgeSharpness: 50 },
     // Fixed-only "corrections overlay": malgalad's combined my_district cloud
     // (world-space, offset 0). The per-district fixed textures remove the game's
     // broken blocks but don't replace them; my_district fills those gaps (e.g.
@@ -1897,8 +1899,8 @@ const ThreeScene = (() => {
 
       // Asset set (user preference): 'fixed' uses malgalad's alignment-fixed
       // textures where available (meta.dataDdsFixed), 'cdpr' uses the base-game
-      // textures. Districts without a fixed variant (ep1_spaceport) fall back to
-      // dataDds in either set. Read once per (re)load.
+      // textures. A district without a fixed variant falls back to dataDds in
+      // either set. Read once per (re)load.
       const assetSet = (typeof localStorage !== 'undefined' && localStorage.getItem(NCZ.ASSET_SET_KEY)) || NCZ.ASSET_SET_DEFAULT;
 
       // Debug aid: ?only=<district> renders only that DISTRICT_META entry by
@@ -1906,7 +1908,8 @@ const ThreeScene = (() => {
       // building cloud for diagnosing placement/content. Sibling of ?debug /
       // ?gamelight / ?webgpuprobe.
       const _only = new URLSearchParams(location.search).get('only');
-      for (const meta of DISTRICT_META) {
+      for (const entry of DISTRICT_META) {
+        const meta = (assetSet === 'fixed' && entry.offsetFixed) ? { ...entry, offset: entry.offsetFixed } : entry;
         if (_only && meta.name !== _only) continue;
         // Fixed-only entries (e.g. the my_district corrections overlay) exist
         // only in the Fixed asset set; skip them entirely in CDPR mode.
