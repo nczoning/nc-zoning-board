@@ -454,11 +454,12 @@ NCZ.SUN_SPHERE_RADIUS  =   600;  // CET units: ≈1.7° apparent diameter at SUN
 // Each pixel encodes one building instance across three horizontal blocks: position | rotation | scale.
 NCZ.DDS_PIXEL_OFFSET  = 148;      // byte offset to pixel data: 128-byte standard DDS header + 20-byte DX10 extension
 NCZ.UINT16_MAX        = 65535.0;  // normalisation denominator: pixel channels are 0–65535
-// 0.01 × UINT16_MAX: the "empty slot" cutoff. Used two ways in loadBuildings:
-// base-game textures mark empties with near-zero position ALPHA below this;
-// malgalad's "3D World Map Fixed" textures keep alpha full and mark empties by
-// zeroing the SCALE block instead (see docs/3dmap-fixed-assets.md).
-// Same 1% threshold serves both tests.
+// 0.01 × UINT16_MAX: the "empty slot" cutoff for the position block's ALPHA,
+// which base-game textures drop to near zero on an empty cell. It is NOT used
+// on the scale block: malgalad's "3D World Map Fixed" textures mark empties by
+// zeroing the SCALE block exactly, and scale is halfExtent / cubeSize, so a
+// relative cutoff there deletes every real box under ~2% of the district's
+// largest (3–6 m) at load (see docs/3dmap-fixed-assets.md).
 NCZ.DDS_ALPHA_THRESH  = 655;
 
 // 3D-map building asset set: 'fixed' = malgalad's "3D World Map Fixed" textures
