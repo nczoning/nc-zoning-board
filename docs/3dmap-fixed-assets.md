@@ -18,9 +18,9 @@ representations**, encoded differently. Understanding which is which is the key
 to the integration:
 
 1. **Fixed per-district textures**:
-   `base/fx/textures/3dmap/static/<district>_data.xbm` for 7 districts
+   `base/fx/textures/3dmap/static/<district>_data.xbm` for all 8 districts
    (city_center, heywood, pacifica, santo_domingo, watson, westbrook,
-   ep1_dogtown, **no spaceport**). These sit at the **vanilla depot paths** and
+   ep1_dogtown, and ep1_spaceport since 1.5.0). These sit at the **vanilla depot paths** and
    are the same dimensions as the base-game textures (DX10 header byte-identical;
    only the pixel data differs). They **remove** the game's broken blocks but do
    **not** add replacements.
@@ -52,10 +52,15 @@ it was first added); the two are byte-identical, so the overlays **reuse
 
 All in `assets/js/three-scene.js` (`DISTRICT_META` + `loadBuildings()`):
 
-- **`DISTRICT_META.dataDdsFixed`**: the 7 per-district entries gain a
+- **`DISTRICT_META.dataDdsFixed`**: every per-district entry has a
   `dataDdsFixed` path (`assets/dds/fixed/<district>_data.dds`) alongside the
-  base-game `dataDds`. `ep1_spaceport` has no fixed version → it stays on
-  `dataDds` in both sets.
+  base-game `dataDds`. A district without one stays on `dataDds` in both sets.
+- **`DISTRICT_META.offsetFixed`**: the mod's `3dmap_view.ent` is an ArchiveXL
+  *patch*, and since 1.5.0 it redefines the vanilla `santo_domingo_data`
+  component at `[-16, -1615]` (vanilla `[-15.944, -1610.080]`). The fixed
+  texture is authored against the moved position, so `loadBuildings()` swaps
+  in `offsetFixed` when the Fixed set is active. Check the patch's component
+  names against vanilla on every update: a same-named component is a move.
 - **`my_district` and `ugly_building`** are extra `DISTRICT_META` entries flagged
   `fixedOnly: true`, loaded only when the Fixed set is active. Their `offset` is
   the **entity world position** decoded from the mod's `.ent`
@@ -103,7 +108,7 @@ The mod is in active development (more districts / fixes planned). To refresh:
 
 | File(s) | Source | Notes |
 | --- | --- | --- |
-| `assets/dds/fixed/<district>_data.dds` ×7 | mod, vanilla depot path | alignment-fixed per-district clouds |
+| `assets/dds/fixed/<district>_data.dds` ×8 | mod, vanilla depot path | alignment-fixed per-district clouds |
 | `assets/dds/fixed/my_district_data.dds` | mod (`my_district.xbm`) | combined corrections overlay |
 | `assets/dds/fixed/ugly_building_data.dds` | mod (`ugly_building.xbm`) | optional "ugly building" add-on |
 | `assets/dds/<district>_data.dds` / `_m.dds` | base game | original CDPR set (toggle = off) |
