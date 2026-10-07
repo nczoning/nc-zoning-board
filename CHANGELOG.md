@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.2] - 2026-10-07
+
+### Fixed
+
+- Small building boxes are drawn again. The texture decoder skipped any box whose scale channels were all under 1% of the range, but scale is relative to the district's largest box, so every real box under 3–6 m in all dimensions was dropped at load. Empty slots are exactly zero, and the test now says so. Dogtown gains ~3,000 boxes and the my_district overlay ~5,000.
+- The WebGPU device now requests the adapter's real storage-buffer and buffer size limits instead of the 128 MiB / 256 MiB defaults, which silently stopped a district drawing past ~800k instances.
+
 ## [2.12.1] - 2026-10-07
 
 ### Changed
