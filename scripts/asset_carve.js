@@ -66,6 +66,8 @@ const FILL_MIN = flag('fillmin', 0.85);
 const REFINE_DEPTH = flag('refinedepth', 4); // splits allowed while chasing that fill
 const MAX_FACETS = flag('maxfacets', 4);    // normal clusters a box may hold before it counts as spanning a curve
 const REFINE_GAIN = flag('refinegain', 0.05); // fill a split must add before it is worth the extra boxes
+const MERGE_GAP = flag('mergegap', 0.5);    // metres apart two boxes may be and still be considered for merging
+const MERGE_MAX = flag('mergemax', 400);    // boxes in a component above which the pairwise merge is skipped
 const MIN_CELL  = flag('mincell', 0.05);  // metres: cells thinner than this are slivers
 const MIN_BACKED = flag('minbacked', 0.5);// share of a cell's skin that must be real mesh
 const MAX_CELLS = flag('maxcells', 4000); // safety valve: a BSP is exponential in the worst case
@@ -399,7 +401,7 @@ function carveMesh(tris, sx, sy, sz, verbose) {
 
   const allSolid = [];
   for (const idx of components) {
-    const s = carveComponent(idx, verbose && components.length <= 4);
+    const s = carveComponent(idx, verbose && components.length <= 12);
     if (s) allSolid.push(...s);
   }
   lastPoor = allSolid.reduce((s, r) => s + (r.poor || 0), 0);
@@ -672,7 +674,49 @@ function carveMesh(tris, sx, sy, sz, verbose) {
   if (verbose && refined.length !== solid.length) {
     console.log(`refit ${solid.length} boxes -> ${refined.length} (fill floor ${FILL_MIN})`);
   }
-  return refined;
+
+  // ── Merge back what one box describes just as well ─────────────────────
+  // The carve splits on every authored plane, including distinctions the eye
+  // cannot see at map scale: a ceiling panel is four quadrants tilted 5 apart,
+  // which is wider than the clustering cone, so it carves into 8 overlapping
+  // thin plates over one 6 x 6 m surface. The test is the refit's, inverted:
+  // if the union's box still covers its geometry and still has few facets, one
+  // box says everything the parts did. A rim's arcs fail on facets and a fin's
+  // staircase fails on fill, so neither collapses back.
+  const merged = refined.filter(b => b.tris && b.tris.length);
+  const noTrisBoxes = refined.filter(b => !b.tris || !b.tris.length);
+  if (merged.length > 1 && merged.length <= MERGE_MAX) {
+    const radius = (b) => Math.hypot(b.half[0], b.half[1], b.half[2]);
+    let changed = true;
+    while (changed && merged.length > 1) {
+      changed = false;
+      for (let i = 0; i < merged.length && !changed; i++) {
+        for (let j = i + 1; j < merged.length && !changed; j++) {
+          const a = merged[i], b = merged[j];
+          const gap = Math.hypot(a.centre[0] - b.centre[0], a.centre[1] - b.centre[1], a.centre[2] - b.centre[2])
+                    - radius(a) - radius(b);
+          if (gap > MERGE_GAP) continue;
+          const list = a.tris.concat(b.tris);
+          const F = pcaFrame(list) || IDENT;
+          const fit = fitBox(list, F);
+          if (faceFill(list, F, fit.centre, fit.half) < FILL_MIN) continue;
+          if (normalClusters(list) > MAX_FACETS) continue;
+          merged[i] = {
+            centre: fit.centre, half: fit.half,
+            quat: F === IDENT ? [0, 0, 0, 1] : matToQuat(F[0], F[1], F[2]),
+            oriented: F !== IDENT, outVote: 0, inVote: 0, backedFrac: 0, tris: list, poor: 0,
+          };
+          merged.splice(j, 1);
+          changed = true;
+        }
+      }
+    }
+  }
+  const out = merged.concat(noTrisBoxes);
+  if (verbose && out.length !== refined.length) {
+    console.log(`merge ${refined.length} boxes -> ${out.length}`);
+  }
+  return out;
 
   function frameOf(r) {
     if (!r.oriented) return IDENT;
@@ -811,7 +855,7 @@ function carveMesh(tris, sx, sy, sz, verbose) {
     if (half[0] * 2 < MIN_CELL || half[1] * 2 < MIN_CELL || half[2] * 2 < MIN_CELL) return [];
     const box = {
       centre, half, quat: F === IDENT ? [0, 0, 0, 1] : matToQuat(F[0], F[1], F[2]),
-      oriented: F !== IDENT, outVote: 0, inVote: 0, backedFrac: 0,
+      oriented: F !== IDENT, outVote: 0, inVote: 0, backedFrac: 0, tris: list,
     };
     // A box that leaves the refit still failing its own tests is the honest
     // definition of a random square: the pipeline could not make it match the

@@ -50,6 +50,7 @@ const MIN_BOX  = flag('minbox', 0.1);     // metres: a box thinner than this in 
 const MAX_DEPTH = flag('depth', 8);       // subdivisions allowed before a box is accepted as it is
 const VOL_GAIN = flag('volgain', 0.1);    // share of a box's volume a split must remove to be worth taking
 const SPLIT_TRIES = flag('splittries', 8); // candidate cut positions tried per axis
+const HOLLOW = flag('hollow', 0.45);      // worst silhouette below which a box splits regardless of volume gain
 
 // ── Pipeline parameters, identical in meaning to the carve's ──────────────
 const LOD       = flag('lod', 2);
@@ -206,12 +207,14 @@ function fitMesh(tris, sx, sy, sz, verbose) {
   if (verbose) console.log(`${T} triangles, ${components.length} connected component(s)`);
 
   const boxes = [];
+  const biggest = Math.max(...components.map(c => c.length));
   for (const idx of components) {
-    if (verbose && components.length <= 6) {
+    if (verbose && (components.length <= 6 || idx.length >= biggest)) {
       const F = frameOf(idx);
       const fit = fitBox(idx, F);
-      const sil = [0, 1, 2].map(k => silhouette(idx, F, fit.centre, fit.half, k).toFixed(2)).join(' / ');
-      console.log(`  component ${idx.length} tris  size ${fit.half.map(h => (h * 2).toFixed(1)).join(' x ')}  silhouettes ${sil}  facets ${facets(idx)}`);
+      const sil = [0, 1, 2].map(k => silhouette(idx, F, fit.centre, fit.half, k));
+      console.log(`  component ${idx.length} tris  size ${fit.half.map(h => (h * 2).toFixed(1)).join(' x ')}  ` +
+                  `silhouettes ${sil.map(s => s.toFixed(2)).join(' / ')}  min ${Math.min(...sil).toFixed(2)}  facets ${facets(idx)}`);
     }
     boxes.push(...describe(idx, 0));
   }
@@ -418,12 +421,20 @@ function fitMesh(tris, sx, sy, sz, verbose) {
     // solid gains nothing, because its halves tile the same volume. A straight
     // cable gains nothing either, so it stops; a curved one does, so it
     // follows the curve.
-    // A split is worth taking when it removes empty space, and not otherwise.
-    // Low fill is the wrong trigger on its own: almost nothing reaches 0.85 on
-    // all three silhouettes (a plain wall reads 0.91 / 0.83 / 0.99), so every
-    // asset splits to the depth cap and a 30 m cable becomes 844 boxes.
+    // A hollow box splits whatever the volume says; a merely imperfect one has
+    // to earn it. Volume gain alone hands back one solid block for a beam
+    // lattice, because no planar cut through something that spans its own
+    // extent removes any: the skylight frame keeps a full cross-section on
+    // both sides of every cut. The two cases separate cleanly on the worst
+    // silhouette. Things that should stay whole bottom out at 0.50 (coaster
+    // support 1.00, wall 0.83, ceiling panel 0.58, pillar 0.51, stairs 0.50)
+    // and things that must come apart are 0.44 and below (container platform
+    // 0.44, building ground floor 0.31, skylight 0.26, tunnel fin 0.21, ferris
+    // wheel 0.19, cable 0.03). HOLLOW sits in that gap. A floor above it takes
+    // the wall with it and everything shatters to the depth cap.
     const parentVol = 8 * fit.half[0] * fit.half[1] * fit.half[2];
-    if (best.vol > parentVol * (1 - VOL_GAIN)) { stats.boxes++; return [box]; }
+    const hollow = faceFill(list, F, fit.centre, fit.half) < HOLLOW;
+    if (!hollow && best.vol > parentVol * (1 - VOL_GAIN)) { stats.boxes++; return [box]; }
 
     return describe(lo, depth + 1).concat(describe(hi, depth + 1));
   }
