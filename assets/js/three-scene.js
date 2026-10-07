@@ -702,34 +702,11 @@ const ThreeScene = (() => {
       hideLoading();
       return;
     }
-    // r185's #33700 "fixed" render-list sorting under reversedDepthBuffer with
-    // a wholesale list.reverse() AFTER the painter sort. The sort key is
-    // groupOrder → renderOrder → z → id, so the reverse fixes the z direction
-    // but also INVERTS renderOrder semantics: our transparent chain
-    // (water 0 → SeeThrough roads 1 → metro 2) drew backwards: metro first
-    // (then hidden under water's depthWrite) and SeeThrough roads before water
-    // had written stencil=STENCIL_WATER (tunnel roads gone). Compensate by
-    // handing the sorter comparators that are the exact NEGATION of the order
-    // we want; the engine's trailing .reverse() then lands the desired order:
-    // renderOrder ascending (the documented contract), z direction correct for
-    // reversed-depth projected z (larger z = nearer). The id tiebreaker makes
-    // the order total, so reverse(sort(-D)) == sort(D) exactly; no stability
-    // caveats. Remove when upstream replaces the wholesale reverse with a
-    // z-only fix: https://github.com/mrdoob/three.js/pull/33700
-    if (renderer.reversedDepthBuffer === true) {
-      const desiredOpaque = (a, b) =>       // front-to-back: z DESC (reversed z, near is larger)
-        a.groupOrder !== b.groupOrder ? a.groupOrder - b.groupOrder :
-        a.renderOrder !== b.renderOrder ? a.renderOrder - b.renderOrder :
-        a.z !== b.z ? b.z - a.z :
-        a.id - b.id;
-      const desiredTransparent = (a, b) =>  // back-to-front: z ASC (reversed z, far is smaller)
-        a.groupOrder !== b.groupOrder ? a.groupOrder - b.groupOrder :
-        a.renderOrder !== b.renderOrder ? a.renderOrder - b.renderOrder :
-        a.z !== b.z ? a.z - b.z :
-        a.id - b.id;
-      renderer.setOpaqueSort((a, b) => -desiredOpaque(a, b));
-      renderer.setTransparentSort((a, b) => -desiredTransparent(a, b));
-    }
+    // Render-list sorting under reversedDepthBuffer: r185 reversed the whole
+    // sorted list (#33700), which inverted renderOrder, and this scene carried
+    // negated sort comparators to compensate. r186 negates projected z at
+    // the source instead (#33945), so renderOrder ascending holds again and
+    // the default sorters are correct. Do NOT reintroduce custom sorts here.
     // Make the sRGB-correct colour pipeline explicit. These match Three.js r170
     // defaults (since r152 / r155 respectively) but stating them here protects
     // the scene's appearance against future Three.js default changes; both flags
@@ -764,7 +741,10 @@ const ThreeScene = (() => {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, NCZ.MAX_DEVICE_PIXEL_RATIO));
     renderer.setSize(container.clientWidth, container.clientHeight, false);
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+    // PCFShadowMap: r186 removed PCFSoftShadowMap under WebGPURenderer and
+    // made PCFShadowMap soft (upstream #33987). SHADOW_RADIUS still sets the
+    // blur kernel.
+    renderer.shadowMap.type    = THREE.PCFShadowMap;
     // Shadow render-on-demand is driven on the LIGHT, not here. Under
     // WebGPURenderer the shadow pass is gated by
     // `light.shadow.needsUpdate || light.shadow.autoUpdate`, and
@@ -1458,11 +1438,26 @@ const ThreeScene = (() => {
       // Tier 2+3: start all concurrent tasks, hide loading only when all complete.
       // Add future loaders (loadLandmarks etc.) to this array.
       Promise.all([loadRoadsMetro(), loadDistricts(), loadBuildings(), loadLandmarks()])
-        .then(() => {
+        .then(async () => {
           // Buildings now exist; apply the active theme's edge-glow default to
           // their uniforms (updateMaterials' early applyEdgeGlow ran before the
           // materials were built; the grade has no such dependency).
           applyEdgeGlow(themeEdgeGlowDefault());
+          // Precompile every render and compute pipeline behind the loading
+          // screen, so the first visible frame does not pay for them. r186
+          // made this safe for this scene: compile() handles node materials
+          // (#34232), skips the shadow pass while precompiling (#33924), and
+          // compileComputeAsync() exists (#32551). Best effort: a failure here
+          // only means the first frame compiles on demand as before.
+          try {
+            await renderer.compileAsync(scene, camera);
+            for (const c of _cullComputes) {
+              await renderer.compileComputeAsync(c.reset);
+              await renderer.compileComputeAsync(c.cull);
+            }
+          } catch (err) {
+            console.warn('[NCZ] Pipeline precompile skipped:', err);
+          }
           hideLoading();
           playIntro();
         });
@@ -1536,14 +1531,15 @@ const ThreeScene = (() => {
       // The vertex path is identical between the two passes, so rasterised
       // depth matches exactly.
       const depthPrepassMat = new THREE.MeshBasicNodeMaterial({ transparent: true, colorWrite: false });
-      // r185 routes material.depthFunc through ReversedDepthFuncs under
-      // reversedDepthBuffer and wrongly inverts EqualDepth → NotEqualDepth
+      // r185 and r186 route material.depthFunc through ReversedDepthFuncs under
+      // reversedDepthBuffer and wrongly invert EqualDepth → NotEqualDepth
       // (equality is direction-independent; the upstream map blanket-inverts
       // every comparator). Hand it NotEqual so the broken inversion lands on
       // the Equal we actually want, the same pre-compensation pattern as the
       // render-list sort comparators above. Symptom if this regresses: roads
       // invisible over terrain/water but visible through buildings.
-      // Remove together with the sort compensation when upstream fixes.
+      // Still wrong in r186 core (the map also swaps Always ↔ Never). Remove
+      // when upstream stops inverting the direction-independent comparators.
       const equalDepth = renderer.reversedDepthBuffer === true ? THREE.NotEqualDepth : THREE.EqualDepth;
       normalRoadsMat   = new THREE.MeshBasicNodeMaterial({ color: roadColor,   transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending, depthFunc: equalDepth, depthWrite: false, ...roadOverstamp });
       normalBordersMat = new THREE.MeshBasicNodeMaterial({ color: borderColor, transparent: true, opacity: 1.0, blending: THREE.AdditiveBlending, depthFunc: equalDepth, depthWrite: false, ...roadOverstamp });

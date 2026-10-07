@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Three.js r185.1 → r186. `PCFSoftShadowMap` is gone under WebGPU, so the scene uses `PCFShadowMap`, which r186 made soft; the blur radius is unchanged.
+- The reversed-depth render-list sort compensation is removed: r186 fixes the ordering upstream, and keeping the negated comparators would have drawn the water / tunnel-road / metro chain backwards again. The Equal-depth comparator workaround stays; r186 core still inverts it.
+- Render and compute pipelines precompile behind the loading screen, so the first frame no longer pays for them.
+
 ## [2.12.2] - 2026-10-07
 
 ### Fixed
