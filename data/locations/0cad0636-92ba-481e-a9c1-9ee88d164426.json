@@ -1,0 +1,25 @@
+{
+    "id": "0cad0636-92ba-481e-a9c1-9ee88d164426",
+    "name": "Totentanz Tacticool Base",
+    "nexus_id": "34942",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1734.4788,
+        2197.5691,
+        94.2324
+    ],
+    "yaw": 33.4999,
+    "tags": [
+        "apartment",
+        "entertainment",
+        "entropism",
+        "infrastructure"
+    ],
+    "authors": [
+        "Roxterfox"
+    ],
+    "description": "Apartment Base of tacticoolness in the Totentanz Club. More info in the description and recommended to read up.",
+    "status": "published",
+    "added_at": "2026-10-10T20:41:29.610Z",
+    "modified_at": "2026-10-10T20:41:29.610Z"
+}

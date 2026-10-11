@@ -1,0 +1,23 @@
+{
+    "id": "dbe20d07-f583-4855-9066-47dadd6f7eb0",
+    "name": "Retrofuturistic The Glen Apartment",
+    "nexus_id": "34945",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1525.7317,
+        -968.98,
+        86.97
+    ],
+    "yaw": 179.5958,
+    "tags": [
+        "apartment",
+        "kitsch"
+    ],
+    "authors": [
+        "RedCatch22"
+    ],
+    "description": "Retrofuturistic makeover of V's apartment in The Glen. Using Archive XL.",
+    "status": "published",
+    "added_at": "2026-10-10T20:41:35.443Z",
+    "modified_at": "2026-10-10T20:41:35.443Z"
+}
