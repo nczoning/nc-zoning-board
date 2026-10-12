@@ -1,0 +1,23 @@
+{
+    "id": "0cb471e9-1991-4121-9583-0b1cf6b7f883",
+    "name": "Lizzie's Bar- Joytoy Apartment",
+    "nexus_id": "31986",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1168.792,
+        1582.5132,
+        26.9151
+    ],
+    "yaw": -6.5714,
+    "tags": [
+        "apartment",
+        "entertainment"
+    ],
+    "authors": [
+        "Acired"
+    ],
+    "description": "A brand-new private apartment on the second floor of Lizzie's Bar, purchasable for 10,000E$; with amenities such as smart-frames, bed, shower, coffee maker, laptop, stash, wardrobe, appearance changer, fast-travel terminal, & television with remote. Perfect for any joytoy, within arms reach of Regina's Kabuki Gigs.",
+    "status": "published",
+    "added_at": "2026-10-11T22:41:20.856Z",
+    "modified_at": "2026-10-11T22:41:20.856Z"
+}
