@@ -1,21 +1,23 @@
 {
     "id": "e6d67bb8-6cef-4b16-b453-a0d192ddab5b",
-    "name": "charter hill penthouse",
+    "name": "westbrook charter hill penthouse",
     "nexus_id": "34527",
     "category": "new-location",
     "coordinates": [
-        -195.6242,
-        -13.324455,
-        70.751816
+        -194.0221,
+        -15.9784,
+        70.5258
     ],
+    "yaw": 58.0143,
     "tags": [
-        "apartment"
+        "apartment",
+        "kitsch"
     ],
     "authors": [
         "thumbsuckerr"
     ],
-    "description": "dark neon spacious penthouse in westbrook",
+    "description": "obby featuring receptionist leading up to your swanky, dark, neon  penthouse apartment right in westbrook. super spaceous. wrap around balcony with 360 views. private swimmable pool and steamy bubbling hot tub you can sit and smoke in.  an intimate balcony off the bedroom. private access to roof top AV landing pad.pool table, coffee, tea, full bar.",
     "status": "published",
     "added_at": "2026-10-01T04:54:57.308Z",
-    "modified_at": "2026-10-01T04:54:57.308Z"
+    "modified_at": "2026-10-14T19:41:53.119Z"
 }
