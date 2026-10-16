@@ -1,0 +1,23 @@
+{
+    "id": "968155f2-7408-48a9-9348-8b8b2bef143f",
+    "name": "Roadside Diner - Southern Expansion (WIP)",
+    "nexus_id": "35322",
+    "category": "new-location",
+    "coordinates": [
+        -3239.9084,
+        -6089.5229,
+        97.3381
+    ],
+    "yaw": 8.3696,
+    "tags": [
+        "entertainment",
+        "nomad"
+    ],
+    "authors": [
+        "notnotghosty"
+    ],
+    "description": "A Roadside Diner beyond the southern border. A part of my larger project to add locations and quests in the southern badlands past the border.",
+    "status": "published",
+    "added_at": "2026-10-16T19:19:11.249Z",
+    "modified_at": "2026-10-16T19:19:11.249Z"
+}

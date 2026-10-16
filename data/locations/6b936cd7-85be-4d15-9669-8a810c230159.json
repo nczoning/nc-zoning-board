@@ -1,0 +1,26 @@
+{
+    "id": "6b936cd7-85be-4d15-9669-8a810c230159",
+    "name": "Metal Heaven Bar and Apartment",
+    "nexus_id": "35335",
+    "category": "new-location",
+    "coordinates": [
+        -2400.9712,
+        -2643.0447,
+        45.0331
+    ],
+    "yaw": 120.4534,
+    "tags": [
+        "apartment",
+        "entertainment",
+        "entropism",
+        "house",
+        "streetkid"
+    ],
+    "authors": [
+        "PixxieStyx"
+    ],
+    "description": "Metal Heaven is a fully furnished dive bar tucked away in Dogtown’s Longshore Stacks. You’ll find three vendors, an upstairs apartment, a bar-wide radio, NPCs on a schedule, loads of interactions, and more.",
+    "status": "published",
+    "added_at": "2026-10-16T19:19:23.578Z",
+    "modified_at": "2026-10-16T19:19:23.578Z"
+}
