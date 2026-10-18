@@ -1,0 +1,22 @@
+{
+    "id": "d5382d1f-5d74-4f02-bb56-d0a70784c596",
+    "name": "Brutalist Bond Hideout - Northside Apartment",
+    "nexus_id": "35396",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1504.45,
+        2227.1587,
+        22.2319
+    ],
+    "yaw": 30.1198,
+    "tags": [
+        "apartment"
+    ],
+    "authors": [
+        "RedCatch22"
+    ],
+    "description": "A brutalist makeover of V's Northside apartment, inspired by Bond villain lairs. Using Archive XL",
+    "status": "published",
+    "added_at": "2026-10-17T20:42:23.422Z",
+    "modified_at": "2026-10-17T20:42:23.422Z"
+}
