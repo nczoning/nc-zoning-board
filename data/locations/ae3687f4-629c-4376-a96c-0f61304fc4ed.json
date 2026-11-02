@@ -1,0 +1,24 @@
+{
+    "id": "ae3687f4-629c-4376-a96c-0f61304fc4ed",
+    "name": "Villa V - North Oak Player Mansion",
+    "nexus_id": "36764",
+    "category": "location-overhaul",
+    "coordinates": [
+        512.6096,
+        1253.1552,
+        229.4936
+    ],
+    "yaw": -1.7125,
+    "tags": [
+        "apartment",
+        "house",
+        "neokitsch"
+    ],
+    "authors": [
+        "FlyingNanoPenguin"
+    ],
+    "description": "A fully-featured luxury player home for V in scenic North Oak. Features a private car showroom, art gallery, theater room and more!",
+    "status": "published",
+    "added_at": "2026-11-02T21:19:24.068Z",
+    "modified_at": "2026-11-02T21:19:24.068Z"
+}

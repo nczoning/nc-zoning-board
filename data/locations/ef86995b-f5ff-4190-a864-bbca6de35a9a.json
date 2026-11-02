@@ -1,0 +1,23 @@
+{
+    "id": "ef86995b-f5ff-4190-a864-bbca6de35a9a",
+    "name": "Lived-In H10 - Little China - Mox Safehouse",
+    "nexus_id": "36907",
+    "category": "location-overhaul",
+    "coordinates": [
+        -1388.2058,
+        1271.0664,
+        123.0751
+    ],
+    "yaw": -94.3002,
+    "tags": [
+        "apartment",
+        "kitsch"
+    ],
+    "authors": [
+        "shineespeon"
+    ],
+    "description": "A decorated version of H10 with a subtle aquatic theme. Perfect for a Mox or Little China merc. Act 1 friendly.",
+    "status": "published",
+    "added_at": "2026-11-02T21:19:21.418Z",
+    "modified_at": "2026-11-02T21:19:21.418Z"
+}

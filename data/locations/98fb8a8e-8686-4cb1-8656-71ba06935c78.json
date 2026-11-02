@@ -1,0 +1,24 @@
+{
+    "id": "98fb8a8e-8686-4cb1-8656-71ba06935c78",
+    "name": "RATHOLE ONE",
+    "nexus_id": "36963",
+    "category": "new-location",
+    "coordinates": [
+        -1225.9039,
+        884.1216,
+        14.5305
+    ],
+    "yaw": 1.0999,
+    "tags": [
+        "apartment",
+        "entropism",
+        "house"
+    ],
+    "authors": [
+        "RATH0L3"
+    ],
+    "description": "A new “home” on the oil rig outside Watson. Exclusively for rats.",
+    "status": "published",
+    "added_at": "2026-11-02T21:19:18.355Z",
+    "modified_at": "2026-11-02T21:19:18.355Z"
+}
