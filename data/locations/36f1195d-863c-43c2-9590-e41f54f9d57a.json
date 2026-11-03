@@ -1,0 +1,25 @@
+{
+    "id": "36f1195d-863c-43c2-9590-e41f54f9d57a",
+    "name": "Mid-Century Mansion",
+    "nexus_id": "36445",
+    "category": "new-location",
+    "coordinates": [
+        300.8492,
+        783.627,
+        146.0428
+    ],
+    "yaw": -71.3409,
+    "tags": [
+        "apartment",
+        "corpo",
+        "house",
+        "kitsch"
+    ],
+    "authors": [
+        "RedCatch22"
+    ],
+    "description": "A brand-new mid-century mansion, located in North Oak's hills. Featuring one of Night City's best views. An offshoot of my brutalist apartment series.",
+    "status": "published",
+    "added_at": "2026-11-03T20:21:35.251Z",
+    "modified_at": "2026-11-03T20:21:35.251Z"
+}
