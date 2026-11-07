@@ -1,0 +1,25 @@
+{
+    "id": "c5f984c6-2aa4-41b9-a23c-f12681c9dcb4",
+    "name": "RATHOLE TWO",
+    "nexus_id": "37616",
+    "category": "new-location",
+    "coordinates": [
+        -1064.8676,
+        1628.7013,
+        4.7026
+    ],
+    "yaw": -16.4442,
+    "tags": [
+        "apartment",
+        "entropism",
+        "house",
+        "quest"
+    ],
+    "authors": [
+        "RATH0L3"
+    ],
+    "description": "A runner got lost in the graffitied bowels of Kabuki. Now her den's empty. It could be YOURS!",
+    "status": "published",
+    "added_at": "2026-11-07T20:07:51.348Z",
+    "modified_at": "2026-11-07T20:07:51.348Z"
+}
