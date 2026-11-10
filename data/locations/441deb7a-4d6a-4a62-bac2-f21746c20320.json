@@ -10,7 +10,11 @@
     ],
     "yaw": -107.4471,
     "tags": [
-        "apartment"
+        "apartment",
+        "corpo",
+        "neokitsch",
+        "neomilitarism",
+        "photos"
     ],
     "authors": [
         "lovewich"
@@ -18,5 +22,5 @@
     "description": "Industrial-chic penthouse with 360° views and a rooftop sanctuary",
     "status": "published",
     "added_at": "2026-06-12T23:15:24.000Z",
-    "modified_at": "2026-06-12T23:15:24.000Z"
+    "modified_at": "2026-11-08T20:57:03.215Z"
 }
